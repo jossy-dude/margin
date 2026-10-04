@@ -21,7 +21,7 @@ function Hand({ xml, size, angle }: { xml: string; size: number; angle: SharedVa
 }
 /** A live dial. One frame callback drives every moving part on the UI thread; nothing re-renders per frame. */
 export const ClockFace = memo(function ClockFace({ id, size, live = true, hands = true, time }: { id: string; size: number; live?: boolean; hands?: boolean; time?: { h: number; m: number; s: number } }) {
-  const { dark, c } = useTheme(), reduce = useReduceMotion(), face = faceById(id), pal = useMemo(() => dialPal(face, dark, c.acc), [face, dark, c.acc]), k = size / 200;
+  const { dark, c } = useTheme(), reduce = useReduceMotion(), face = faceById(id), pal = useMemo(() => dialPal(face, c, dark), [face, c, dark]), k = size / 200;
   const base = useMemo(() => staticSvg(face, pal, FONT.serifB), [face, pal]), layers = useMemo(() => spinLayers(face.id, pal), [face, pal]);
   const hx = useMemo(() => ({ hour: handSvg('hour', pal), minute: handSvg('minute', pal), second: handSvg('second', pal) }), [pal]);
   const clock = useSharedValue(0), ha = useSharedValue(0), ma = useSharedValue(0), sa = useSharedValue(0);
@@ -47,7 +47,7 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
 });
 /** Static thumbnail for pickers (no frame loop at all) */
 export const FaceThumb = memo(function FaceThumb({ id, size }: { id: string; size: number }) {
-  const { dark, c } = useTheme(), face = faceById(id), pal = useMemo(() => dialPal(face, dark, c.acc), [face, dark, c.acc]);
+  const { dark, c } = useTheme(), face = faceById(id), pal = useMemo(() => dialPal(face, c, dark), [face, c, dark]);
   const xml = useMemo(() => compositeSvg(face, pal, FONT.serifB), [face, pal]);
   return <SvgXml xml={xml} width={size} height={size} />;
 });

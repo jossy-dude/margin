@@ -54,7 +54,9 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
     .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
   const gripS = useAnimatedStyle(() => ({ transform: [{ rotate: `${knob.value}deg` }] })), handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
   const tickS = useAnimatedStyle(() => ({ transformOrigin: '50% 50%', transform: [{ scale: 1 + tick.value * 0.045 }] })), washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 })), warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
-  const bed = dark ? '#3A342C' : '#EDE4D0', ink = c.ink;
+  /** The bed is the tone the page surface takes one step off: deeper than the paper in light, raised above the
+   *  desk in dark. Read from the theme so it follows the palette instead of staying warm-tinted under Original. */
+  const bed = dark ? c.card : c.desk, ink = c.ink;
   const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360;
   const grip = useMemo(() => <Svg width={D} height={D}>
     <Path d={BED_RING} fill={bed} fillRule="evenodd" /><Path d={BED_RING} fill={hexA(ink, 0.13)} fillRule="evenodd" />
@@ -90,7 +92,7 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
 }
 
 function BreakSticker({ leftMs, totalMs, falling, onGone, onBack, nudge }: { leftMs: number; totalMs: number; falling: boolean; onGone: () => void; onBack: () => void; nudge: number }) {
-  const { c, dark } = useTheme(), reduce = useReduceMotion(), p = useSharedValue(0), sw = useSharedValue(0), wig = useSharedValue(0), size = 96;
+  const { c } = useTheme(), reduce = useReduceMotion(), p = useSharedValue(0), sw = useSharedValue(0), wig = useSharedValue(0), size = 96;
   useEffect(() => { if (nudge && !falling && !reduce) wig.value = withSequence(withTiming(1, { duration: 70 }), withTiming(-1, { duration: 110 }), withTiming(0.7, { duration: 90 }), withTiming(-0.5, { duration: 90 }), withTiming(0, { duration: 90 })); }, [nudge, falling, reduce, wig]);
   useEffect(() => {
     if (!falling) return;
@@ -108,7 +110,7 @@ function BreakSticker({ leftMs, totalMs, falling, onGone, onBack, nudge }: { lef
     <Animated.View style={[{ position: 'absolute', left: 332, top: 540, width: size, height: size, zIndex: 20 }, st]}>
       <Pressable onPress={onBack} disabled={falling} accessibilityRole="button" accessibilityLabel={`Break, ${fmtClock(leftMs / 1000)} left. Tap to go back to work.`} style={{ width: size, height: size, transform: [{ rotate: '4deg' }] }}>
         <Svg width={size + 8} height={size + 8} style={{ position: 'absolute' }} viewBox={`-2 -2 ${size + 8} ${size + 8}`}>
-          <Path d={d} transform="translate(3 4)" fill={hexA(c.shadow, 0.28)} /><Path d={d} fill={dark ? '#3A342C' : '#FFFBF1'} stroke={c.ink} strokeWidth={1.8} />
+          <Path d={d} transform="translate(3 4)" fill={hexA(c.shadow, 0.28)} /><Path d={d} fill={c.card} stroke={c.ink} strokeWidth={1.8} />
           <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={hexA(c.ink, 0.18)} strokeWidth={4} />
           <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={c.acc} strokeWidth={4} strokeLinecap="round" strokeDasharray={`${circ * prog} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
         </Svg>

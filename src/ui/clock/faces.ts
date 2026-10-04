@@ -1,3 +1,5 @@
+import type { Colors } from '../../tokens/theme';
+
 /**
  * Dial engine — a TypeScript port of the clock-variations engine. Pure: it returns SVG strings (viewBox -100 -100 200 200 unless noted),
  * so the same code draws the live clock, the Settings thumbnails and the Focus dial, and can be rendered offline in tests.
@@ -14,11 +16,13 @@ export const FACES: FaceSpec[] = [
   { id: 's', n: 'Skeleton Movement', native: 'dark', ns: 11, nr: 78, tk: 'line', rings: [] },
 ];
 export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id) ?? (FACES[1] as FaceSpec);
-/** Dial palette for a face in a theme. Dark-native faces stay onyx in both themes, ivory faces follow the theme.
+/** Dial palette for a face in a theme, read from the resolved theme colours so it follows the palette as well as
+ *  light/dark. Dark-native faces keep their onyx dial in both themes, so their engraving takes whichever of the
+ *  theme's two extremes contrasts with it: the ink in dark, the card tone in light.
  *  Takes only `native`, so a bitmap plate (always light artwork) can pass `{ native: 'light' }` without a cast. */
-export function dialPal(f: Pick<FaceSpec, 'native'>, dark: boolean, accent: string): Pal {
-  if (f.native === 'light') return dark ? { ink: '#F2EAD8', dial: '#3A342C', accent } : { ink: '#2A241C', dial: '#FFFBF1', accent };
-  return dark ? { ink: '#F2EAD8', dial: '#17130F', accent } : { ink: '#F2EAD8', dial: '#26201A', accent };
+export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): Pal {
+  if (f.native === 'light') return { ink: c.ink, dial: c.card, accent: c.acc };
+  return { ink: dark ? c.ink : c.card, dial: dark ? '#17130F' : '#26201A', accent: c.acc };
 }
 /**
  * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the
