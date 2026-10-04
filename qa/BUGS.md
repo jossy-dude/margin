@@ -53,7 +53,7 @@ packages before packaging.
 
 ---
 
-## BUG-004 — open — Major
+## BUG-004 — fixed — Major
 **Screen:** all screens (chrome, not a route)
 **Found by:** STATIC AUDITOR · `src/App.tsx`
 **Repro:** 1. Set Settings → Look & feel → Theme → Dark. 2. Read the status bar.
@@ -66,13 +66,60 @@ packages before packaging.
 **Evidence:** `src/App.tsx:135` + `:155` + `:154`; `src/ui/theme-context.tsx:6`.
 **Note:** `src/ui/CrashBoundary.tsx:13-14` documents this exact hazard ("`useTheme()` outside a `ThemeProvider`
 returns the context default") — the pattern was known and missed here.
-**Root cause:** `src/App.tsx:135` (Fixer)
-**Needs a decision:** the fix is to move `<StatusBar>` into a child of `ThemeProvider` (e.g. into `Shell`, which
-already reads `useTheme()` correctly at `src/App.tsx:34`). That is a restructure of the boot tree — the Fixer
-should decide whether to add a tiny `<StatusBarForTheme/>` child or move the element.
+**Root cause:** `src/App.tsx:135` — `useTheme()` called in the component that renders `ThemeProvider`.
+**Fix commit:** `d9a3da0`
+**Fix:** the runtime subtree moved into a new `Themed` component (`src/App.tsx:134-140`) that is a *child* of
+`ThemeProvider`, so `useTheme()` resolves for real. It renders `<StatusBar style={dark ? 'light' : 'dark'} />`
+inside a `<View style={{ flex: 1, backgroundColor: c.paper }}>`. The crash-boundary structure is unchanged:
+`Themed` sits inside `CrashBoundary phase="runtime"`, inside `ThemeProvider`, inside `CrashBoundary phase="boot"`.
+**Why a wrapper and not a bare `<StatusBarForTheme/>`:** see the black-band note below — the band needs a themed
+opaque paint behind it, not just a corrected `style`, so the component that reads the theme also owns the paint.
+The wrapper replaces the fragment that was already there, so it adds no new level of nesting beyond the one that
+existed.
+**The `backgroundColor` prop in the Fixer brief does not exist.** `expo-status-bar@57.0.1` dropped it:
+`StatusBarProps` is only `style`, `animated`, `hidden`, `hideTransitionAnimation`
+(`node_modules/expo-status-bar/build/types.d.ts`). Passing it would not compile, and RN's own `StatusBar` would be
+a swap of libraries plus a device-dependent hack (`statusBarColor` is a no-op from Android 15). Under this build
+the app is already edge-to-edge — `android/gradle.properties:47 edgeToEdgeEnabled=true`, and
+`android/app/src/main/res/values/styles.xml` sets `android:statusBarColor` to `@android:color/transparent` — so
+the band shows whatever the app paints there. Painting it `c.paper` on the runtime root is the mechanism that
+actually works.
+**Device re-check still required (I have no device):**
+1. Icon brightness must differ between light and dark. This is now a direct consequence of the fix, not a
+   prediction, but it is only observable on device.
+2. **Whether the pure-black band was ever an app bug is still unresolved, and I could not reproduce it
+   statically.** The measured band sat above `Shell`'s `backgroundColor: c.desk` and the pages' `PaperBg`, both
+   opaque and full-bleed, so in a standalone build the band should have been paper or desk — never black. The
+   black most likely came from the Expo Go host activity's own window, exactly as the caveat above predicted.
+   Please re-measure on the release build. If it is still black there, the cause is native
+   (`android/app/src/main/res/values/colors.xml:4`, see BUG-019) and this fix will not have removed it.
 **Device confirmation needed:** whether the illegibility is visible at the 411dp baseline.
 
-## BUG-005 — open — Major
+**ORCHESTRATOR device confirmation 2026-10-04 — CONFIRMED, and worse than predicted.**
+Measured on SM-A516N at 411dp, sampling the top 80px band of a screencap:
+
+| Theme | paper at y=90 | brightest pixel in status band |
+|---|---|---|
+| dark (`night=yes`) | (43,38,32) warm brown | (178,178,178) |
+| light (`night=no`)  | (235,229,216) cream | (178,178,178) |
+
+The icon brightness is **byte-identical across both themes** — conclusive proof the
+`style` prop never follows the theme, exactly as the root-cause analysis says.
+
+The visible symptom is the inverse of the prediction, and is worse: the status-bar band
+renders **pure black (0,0,0) in BOTH themes**, so in light mode there is a black strip
+above a cream page carrying a barely-visible light glyph. On a design whose stated goal
+is "warm dark brown, NOT pitch black" (prompt.md V15), a hard black band is a glaring
+defect in the light theme especially.
+Evidence: `qa/shots/v19_statusbar_dark.png`, `qa/shots/v19_statusbar_light.png`.
+**Attribution caveat:** this was measured in Expo Go. A pure-black band could be the app
+failing to paint behind the status bar (likely — SDK 57 / RN 0.86 are edge-to-edge and
+`<StatusBar>` at `src/App.tsx:155` sets no `backgroundColor`), or it could be an Expo Go
+window artefact. **Must be re-checked on the standalone release build before sign-off**;
+if the black band persists there, it is an app bug and the fix must paint the theme paper
+behind the status bar, not just correct `style`.
+
+## BUG-005 — fixed — Major
 **Screen:** Today clock, Focus dial + break sticker (and every clock face)
 **Found by:** STATIC AUDITOR · token-vs-literal hex audit
 **Repro:** 1. Settings → Look & feel → Theme & palette → **Original**. 2. Go to Today and compare the clock face
@@ -91,6 +138,32 @@ stay refined-toned and no longer match the page they sit on.
 **Severity honesty:** the mismatch is a static certainty (literal hex vs token value), but whether it *reads* as a
 visible defect needs eyes on device in the Original palette. If it turns out to be near-invisible, downgrade to
 Minor rather than re-litigating.
+**Root cause:** `src/ui/clock/faces.ts:19` (signature took `dark: boolean` + a literal accent, so it could not see
+the palette) and `src/screens/Focus.tsx:57,111`.
+**Fix commit:** `e4b389a`
+**Fix:**
+- `dialPal(f, c, dark)` now takes the resolved theme colours. Light-native faces (Guilloché Ivory, Rosette Blanc)
+  ink on `c.card` with `c.ink`; dark-native faces keep their onyx dial and take whichever of the theme's two
+  extremes contrasts with it — `c.ink` in dark, `c.card` in light. `accent` is `c.acc`, which also fixes the
+  Graphite / Red / Blue pen settings the old literal accent ignored.
+- `src/screens/Focus.tsx:111` sticker fill → `c.card`; `:59` bed → `dark ? c.card : c.desk`.
+- `src/test/faces.test.ts` gained a guard: for all 4 palette × theme combinations, every dial colour must be a
+  value present in that palette, and ink-on-dial must clear 4.5:1.
+**Two corrections to the finding, recorded so they are not re-derived:**
+1. **`slabInk` is not the token for "ink on a dark surface".** It looks like it, and I tried it first — the new
+   test failed, correctly. `ORIGINAL.dark` inverts the pair: `slab: '#E7E4DC'` (light) with
+   `slabInk: '#10141A'` (near-black) at `src/tokens/theme.ts:14`, the opposite of `REFINED`. Ink on onyx would
+   have been near-black on near-black. Only `ink` flips with the mode; there is no mode-independent pale token.
+2. **The two Focus hexes are not palette values.** `#EDE4D0` and `#3A342C` appear nowhere in `theme.ts`, so the
+   finding's "hardcoded *refined* palette hexes" is inaccurate for them — they were a hand-picked intermediate
+   tone with no token behind it. The bed had to be mapped onto one, and that mapping is a judgement call:
+   `dark ? c.card : c.desk` keeps the shipped refined palette within ΔRGB ≤ 7 in both modes (invisible) while
+   following both palettes, whereas `c.desk` alone would have dropped the dark-theme ring from (58,52,44) to
+   (31,27,22) — a visible change to the ring around the dial. **Worth an eyeball on device in both themes and
+   both palettes; if the dark bed reads wrong, the alternative is `c.card` in both modes, which makes the light
+   ring visibly paler.**
+3. The onyx dial colours `#17130F` / `#26201A` were **kept deliberately**: they are the face's own black-enamel
+   material, not palette values, and the face spec's `native` field exists to say so.
 
 ## BUG-006 — fixed — Minor
 **Screen:** build configuration / QA harness
@@ -135,8 +208,8 @@ it is blocking disk I/O in a text-input path.
 **Root cause:** `src/sheets/Settings.tsx:71` (Fixer) — hoist the count into a `useState` initialised once, or
 memoise it on `settingsPath`.
 
-## BUG-009 — open — Minor
-**Screen:** Settings → Sound & haptics → each group's "Play"; any notification
+## BUG-009 — fixed — Minor
+**Screen:** Settings (root) → Sound & haptics; any OS notification
 **Found by:** STATIC AUDITOR · token-vs-literal hex audit
 **Expected:** the OS notification accent follows the theme, like every other drawn surface.
 **Actual:** `src/services/notifications.ts:34` hardcodes `color: '#8A4B27'`, which is exactly
@@ -144,8 +217,17 @@ memoise it on `settingsPath`.
 Original palette, under the dark theme, and under the Graphite / Red / Blue pen settings
 (`src/tokens/theme.ts:16-18,31-32`) — all three of which are user-facing options.
 **Evidence:** `src/services/notifications.ts:34`; `src/tokens/theme.ts:9`.
-**Root cause:** `src/services/notifications.ts:34` (Fixer) — needs the resolved accent passed in from the theme;
-note `content()` is a module-level pure function, so this needs a small signature change.
+**Root cause:** `src/services/notifications.ts:34` — `content()` was a module-level pure function with no access
+to the theme, so the accent had to be a literal.
+**Fix commit:** `1a3fba7`
+**Fix:** `sync(plan, accent)` and `content(p, accent)` take the resolved accent; `resync()` passes
+`makeTheme(settings, Appearance.getColorScheme() === 'dark').c.acc` (`src/store/store.ts:59-61`). The store
+cannot use `useTheme()` because `resync` runs from store actions, not from a component, so it reads the OS scheme
+the same way `ThemeProvider` does, minus the hook — the same escape hatch `expo-status-bar` itself uses.
+**Note:** this is the same class of defect as BUG-005 and was fixed as **its own commit**, as agreed.
+**Test:** `src/test/notifications.test.ts` asserts the scheduled content colour equals the accent handed in, for
+all four pens and both palettes, and first asserts the four accents are distinct so a fixed hex cannot pass.
+Verified by mutation: reintroducing `color: '#8A4B27'` fails 2 of the 3 tests.
 
 ## BUG-010 — open — Minor
 **Screen:** build configuration / release size
@@ -282,6 +364,40 @@ on `forms.tsx:61` when the Fixer is next in that file.
 
 ---
 
+## BUG-019 — open — Minor
+**Screen:** app launch (before the first React frame); Focus page in dark mode
+**Found by:** FIXER · token-vs-literal hex audit, while fixing BUG-004/005. **Not fixed — logged, see note.**
+**Expected:** every drawn surface is palette-derived, including the native window background.
+**Actual — two more hardcoded refined-warm hexes of the same class as BUG-005, both missed by that finding:**
+1. `android/app/src/main/res/values/colors.xml:4` — `<color name="activityBackground">#FAF4E6</color>`, wired to
+   `android:windowBackground` in `styles.xml`. That is `REFINED.light.paper`, hardcoded in the native layer. It is
+   what the window shows **before the first RN frame paints**, so a cold start in dark mode (or under
+   `palette: 'original'`) flashes cream. A `values-night/colors.xml` would fix the dark case; the Original
+   palette cannot be expressed in a native resource at all.
+2. `src/screens/Focus.tsx:161` — `backgroundColor: '#1B1712'`, `opacity: 0.62`: the dim wash over the scrapbook
+   photo. Not a palette value, so like the Focus bed (see BUG-005) it is a hand-picked material tone with no token
+   behind it, and it stays warm-tinted under the Original dark palette.
+**Why not fixed:** (1) is a native resource change, which is BUG-001 territory — whether `android/` or `app.json`
+is authoritative is an undecided product call, and it can only be verified on a release build. (2) sits over a
+photograph with no token behind it, exactly like the bed, and I was scoped to BUG-004/005.
+**Evidence:** `android/app/src/main/res/values/colors.xml:4`; `android/app/src/main/res/values/styles.xml:5`;
+`src/screens/Focus.tsx:161`.
+
+## BUG-020 — open — Polish
+**Screen:** any page, during the page-placement animation (V3)
+**Found by:** FIXER, while fixing BUG-004. **Not fixed — logged, no device access.**
+**Actual:** `Placed` (`src/navigation/Book.tsx:26`) animates the incoming page with `translateY: -70`, so for the
+520 ms of the drop the top ~70 dp of the window is not covered by the page. What shows through is the navigator
+root's `backgroundColor: c.desk` (`src/navigation/Book.tsx:57`), not `c.paper`. The status-bar band therefore
+changes tone on **every tab tap** and settles 520 ms later — a visible flash at the very top edge, and it is the
+band BUG-004 is about.
+**Why not fixed:** it is a pre-existing part of the V3 "drops in from above-right" motion, not a colour defect,
+and changing it means changing the transition. Needs an eyeball on device to say whether it reads as a defect or
+as part of the motion.
+**Evidence:** `src/navigation/Book.tsx:26,57`.
+
+---
+
 ## Template — copy for each new bug
 
 ```
@@ -302,12 +418,13 @@ on `forms.tsx:61` when the Fixer is next in that file.
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 2 | 0 | 0 |
-| Minor | 12 | 1 | 0 |
-| Polish | 3 | 0 | 0 |
+| Major | 0 | 2 | 0 |
+| Minor | 12 | 3 | 0 |
+| Polish | 4 | 0 | 0 |
 
-**Totals: 18 findings — 0 Critical, 2 Major, 13 Minor (1 fixed), 3 Polish.**
-By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018).
+**Totals: 20 findings — 0 Critical, 2 Major (2 fixed), 14 Minor (3 fixed), 4 Polish.**
+By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
+(BUG-019, BUG-020), plus BUG-009 fixed by the FIXER.
 
 ### Machine gates at STATIC AUDITOR exit (2026-10-04, Node 24.16.0 / npm 11.13.0)
 
@@ -349,15 +466,38 @@ By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…
 - **Sheet focus trap is correct on Android** — `App.tsx:52` sets `no-hide-descendants` behind the sheet and
   `Overlay.tsx:21` sets `yes` over it (`accessibilityViewIsModal` is iOS-only, as the code comments correctly say).
 
+### Machine gates at FIXER exit (2026-10-05, Node 24.16.0 / npm 11.13.0)
+
+Both gates were re-run after **each** commit, not once at the end.
+
+| Gate | `d9a3da0` BUG-004 | `e4b389a` BUG-005 | `1a3fba7` BUG-009 |
+|---|---|---|---|
+| `npm run typecheck` (`tsc --noEmit`) | 0 | 0 | 0 |
+| `npm run lint` (`eslint src --max-warnings=0`) | 0 | 0 | 0 |
+| `npm run test` (`jest`) | 0 · 111 tests | 0 · 112 tests | 0 · 115 tests / 10 suites |
+| `npm run boundaries` (`depcruise`) | 0 · 127 modules | 0 · 127 modules | 0 · 128 modules |
+| `npm run check` (all four chained) | **0** | **0** | **0** |
+| `npm run bundle` (`expo export --platform android`) | **0** · 3.8 MB | **0** · 3.8 MB | **0** · 3.8 MB |
+
+> The BUG-005 run failed **once** before it passed: the new contrast guard caught `slabInk` being used as ink on
+> the onyx dial, which is wrong because `ORIGINAL.dark` inverts `slab`/`slabInk`. The fix used palette tokens
+> that are actually pale in both modes instead. No lint rule, tsconfig flag or test was relaxed anywhere.
+
 ### Needs a device to settle (cannot be determined statically)
 
-1. **BUG-004 severity** — whether dark status-bar icons on dark paper is visibly illegible, or merely off.
-2. **BUG-005 severity** — whether the refined-vs-original dial mismatch reads as a defect or is near-invisible.
-3. **BUG-013 / BUG-014 magnitude** — no frame-timing or memory data exists; both are scaling risks only.
-4. `prompt.md` **R1** items are all still untested and stay untested by this pass: the Focus dial gesture maths
+1. **BUG-004 — the black status-bar band.** Still unexplained. The style half is fixed and provable, but I could
+   not reproduce a black band from the app's own code, so I cannot say whether `d9a3da0` removed it. Needs the
+   release-build re-measurement the orchestrator already called for. If it is still black, the cause is BUG-019(1).
+2. **BUG-005 — the Focus bed and the dark dial engraving.** `dark ? c.card : c.desk` and
+   `dark ? c.ink : c.card` are judgement calls made to keep the shipped refined palette unchanged. Both are
+   within ΔRGB ≤ 7 of the old value in the default theme, but only eyes on device can confirm the ring and the
+   onyx engraving still read as intended — and whether the Original palette now reads correctly.
+3. **BUG-019 / BUG-020** — neither was verified on device; both are reasoned from code alone.
+4. **BUG-013 / BUG-014 magnitude** — no frame-timing or memory data exists; both are scaling risks only.
+5. `prompt.md` **R1** items are all still untested and stay untested by this pass: the Focus dial gesture maths
    (`measureInWindow` under `transformOrigin: '0% 0%'`), SVG `Pattern` with `patternTransform` on Android
    (`PaperBg`, `Week`, `DayBar`), `mixBlendMode` on the photo texture, `transformOrigin` on the break sticker, the
    `Placed` navigator timing, and `Directory.pickDirectoryAsync` on a standalone install.
-5. Whether the derived `testID` slugs collide anywhere that matters in practice — needs a `uiautomator` dump.
+6. Whether the derived `testID` slugs collide anywhere that matters in practice — needs a `uiautomator` dump.
 
 -
