@@ -131,8 +131,15 @@ const Splash = () => {
  *  fresh object literal. Loading imperatively also lets a failure be reported and retried. */
 const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Italic, Newsreader_600SemiBold_Italic, PermanentMarker_400Regular, SpecialElite_400Regular };
 
+/** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
+ *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default
+ *  and pin the icon brightness. The background is what the band under the status bar shows, edge-to-edge (V19). */
+function Themed({ children }: { children: React.ReactNode }) {
+  const { c, dark } = useTheme();
+  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar style={dark ? 'light' : 'dark'} />{children}</View>;
+}
+
 export default function App() {
-  const { dark } = useTheme();
   const [fonts, setFonts] = useState(false), [fontError, setFontError] = useState<string | null>(null), [fontTry, setFontTry] = useState(0), [booted, setBooted] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -151,11 +158,10 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <ThemeProvider>
             <CrashBoundary phase="runtime" getRoute={route}>
-              <>
-                <StatusBar style={dark ? 'light' : 'dark'} />
+              <Themed>
                 {fontError ? <FontsFailed message={fontError} onRetry={() => { setFontError(null); setFontTry((n) => n + 1); }} />
                   : fonts && booted ? <Gate /> : <Splash />}
-              </>
+              </Themed>
             </CrashBoundary>
           </ThemeProvider>
         </GestureHandlerRootView>
