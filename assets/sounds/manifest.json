@@ -1,0 +1,164 @@
+{
+ "place": {
+  "seconds": 0.42,
+  "peak": 0.8,
+  "dc": 0.00229,
+  "clipped": 0
+ },
+ "shuffle": {
+  "seconds": 0.5,
+  "peak": 0.7,
+  "dc": 0.00057,
+  "clipped": 0
+ },
+ "crumple": {
+  "seconds": 0.62,
+  "peak": 0.85,
+  "dc": -0.00015,
+  "clipped": 0
+ },
+ "thud": {
+  "seconds": 0.32,
+  "peak": 0.8,
+  "dc": -0.00014,
+  "clipped": 0
+ },
+ "flutter": {
+  "seconds": 0.55,
+  "peak": 0.45,
+  "dc": 0,
+  "clipped": 0
+ },
+ "tick": {
+  "seconds": 0.05,
+  "peak": 0.6,
+  "dc": -0.00044,
+  "clipped": 0
+ },
+ "tock": {
+  "seconds": 0.05,
+  "peak": 0.6,
+  "dc": 0.00025,
+  "clipped": 0
+ },
+ "stamp-here": {
+  "seconds": 0.22,
+  "peak": 0.8,
+  "dc": 0.00137,
+  "clipped": 0
+ },
+ "stamp-late": {
+  "seconds": 0.2,
+  "peak": 0.65,
+  "dc": 0.00013,
+  "clipped": 0
+ },
+ "stamp-absent": {
+  "seconds": 0.36,
+  "peak": 0.8,
+  "dc": 0.0014,
+  "clipped": 0
+ },
+ "stamp-sick": {
+  "seconds": 0.3,
+  "peak": 0.6,
+  "dc": 0.0014,
+  "clipped": 0
+ },
+ "stamp-cancel": {
+  "seconds": 0.25,
+  "peak": 0.6,
+  "dc": 0,
+  "clipped": 0
+ },
+ "done": {
+  "seconds": 0.85,
+  "peak": 0.8,
+  "dc": -0.00008,
+  "clipped": 0
+ },
+ "notify": {
+  "seconds": 1.2,
+  "peak": 0.8,
+  "dc": -0.00001,
+  "clipped": 0
+ },
+ "toggle-on": {
+  "seconds": 0.06,
+  "peak": 0.6,
+  "dc": -0.00034,
+  "clipped": 0
+ },
+ "toggle-off": {
+  "seconds": 0.06,
+  "peak": 0.55,
+  "dc": 0.00013,
+  "clipped": 0
+ },
+ "detent-1": {
+  "seconds": 0.09,
+  "peak": 0.45,
+  "dc": 0.00024,
+  "clipped": 0
+ },
+ "detent-2": {
+  "seconds": 0.09,
+  "peak": 0.6,
+  "dc": 0.00024,
+  "clipped": 0
+ },
+ "detent-3": {
+  "seconds": 0.09,
+  "peak": 0.75,
+  "dc": 0.00034,
+  "clipped": 0
+ },
+ "detent-4": {
+  "seconds": 0.09,
+  "peak": 0.8999999999999999,
+  "dc": -0.00073,
+  "clipped": 0
+ },
+ "bump": {
+  "seconds": 0.18,
+  "peak": 0.85,
+  "dc": 0.00318,
+  "clipped": 0
+ },
+ "thunk": {
+  "seconds": 0.24,
+  "peak": 0.9,
+  "dc": 0.00154,
+  "clipped": 0
+ },
+ "clack": {
+  "seconds": 0.12,
+  "peak": 0.7,
+  "dc": 0.00134,
+  "clipped": 0
+ },
+ "blip": {
+  "seconds": 0.2,
+  "peak": 0.55,
+  "dc": 0.00008,
+  "clipped": 0
+ },
+ "round-done": {
+  "seconds": 0.95,
+  "peak": 0.8,
+  "dc": 0.00032,
+  "clipped": 0
+ },
+ "break-start": {
+  "seconds": 0.9,
+  "peak": 0.7,
+  "dc": 0.00019,
+  "clipped": 0
+ },
+ "tape-peel": {
+  "seconds": 0.66,
+  "peak": 0.75,
+  "dc": -0.00003,
+  "clipped": 0
+ }
+}

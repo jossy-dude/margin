@@ -1,0 +1,11 @@
+node_modules
+.expo
+dist
+*.log
+android/.gradle
+android/build
+android/app/build
+android/.cxx
+ios/Pods
+ios/build
+qa/shots/*.tmp

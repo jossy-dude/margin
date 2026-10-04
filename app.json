@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Marginalia",
+    "slug": "marginalia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "marginalia",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#FAF4E6",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF4E6"
+    },
+    "android": {
+      "package": "app.marginalia.planner",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FAF4E6"
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FAF4E6"
+      }
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.marginalia.planner"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a1177786-3b71-4f60-89b5-30fc633d3534"
+      }
+    },
+    "experiments": {
+      "reactCompiler": true
+    },
+    "owner": "josi-20s-team"
+  }
+}
