@@ -173,6 +173,51 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 
 ---
 
+## Cross-cutting — preflight gates (STATIC AUDITOR, 2026-10-04)
+Run from the repo root on Node 24.16.0 / npm 11.13.0. These are *gates*, not device tests: they are marked
+pass/fail here so no agent re-runs them, and they were green again after the a11y commit `8aa428a`.
+
+| Gate | Status | Notes |
+|---|---|---|
+| `npm run typecheck` (`tsc --noEmit`, strict) | **pass** | clean |
+| `npm run lint` (`eslint src --max-warnings=0`) | **pass** | 0 warnings, 0 errors |
+| `npm run test` (`jest`) | **pass** | **111 tests / 9 suites** (STATE.md says 104, `prompt.md` says 82 — both stale) |
+| `npm run boundaries` (`depcruise`) | **pass** | no violations, 127 modules / 387 dependencies |
+| `npm run check` (all four chained) | **pass** | exit 0 before and after `8aa428a` |
+| `npx expo-doctor` | **fail** | 17/21 pass. 4 failures = BUG-001, BUG-002, BUG-003, **BUG-007** |
+| `npx expo install --check` | **fail** | 1 package out of date: `typescript@5.9.3` vs expected `~6.0.3` → BUG-007. Read-only run; `--fix` deliberately NOT used |
+| Unused runtime deps shipping native code | **fail** | `expo-dev-client`, `expo-asset`, `expo-linking`, `expo-system-ui` never imported from `src/` → BUG-010 |
+| Secret / hardcoded-URL sweep | **pass** | none. Only XML namespace URIs in `export.ts` + `faces.ts` |
+| `console.*` / `debugger` / `TODO` / `FIXME` / `HACK` | **pass** | zero occurrences in `src/` |
+| Store selector stability (`prompt.md` N9 / R10) | **pass** | all 74 `useStore(...)` sites return a stable reference; **no `useStore((s) => s)`**. R10 is stale |
+| `allowFontScaling={false}` / `maxFontSizeMultiplier={1}` | **pass** | zero. `FS = 1.4` is the single cap, imported at all 9 sites |
+| `Dimensions.get` | **pass** | none; all sizing via `useWindowDimensions` |
+| List virtualisation | **fail** | no `FlatList`/`SectionList` anywhere; every list is `ScrollView` + `.map()` → BUG-013 |
+| `key` props on mapped lists | **fail** | present and correct except `DayBar.tsx:98` (index key over per-second content) → BUG-016 |
+| Interactive elements missing `accessibilityLabel` | **fail → fixed** | 1 gap (`Week.tsx:58`) + **zero `testID` app-wide**; both fixed in `8aa428a` → BUG-006 |
+| Timer / listener cleanup in `useEffect` | **pass** | `Keyboard`, `BackHandler`×2, `AccessibilityInfo`, `useNow`, both double-tap guards all clean up |
+| Async calls without error handling | **pass** | every `expo-*` native call degrades silently by design; export surfaces a toast; boot has `alive` + `recordCrash` |
+
+### Static-audit note (read before driving the device)
+
+1. **`testID` now exists and is the reliable handle.** `8aa428a` derives ids from the accessibility label in
+   `src/ui/kit.tsx`, so `Btn`/`Chip`/`Toggle`/`Stepper`/`Field` are covered without touching a call site. Known
+   anchors: `tab-today` `tab-week` `tab-tasks` `tab-grades` `tab-stats` `tab-focus`, `fab-add`, `open-settings`,
+   `open-focus`, `clock-face`, `sheet-close`, `sheet-back`, `sheet-dismiss`, `toast-dismiss`,
+   `att-cell-<YYYY-MM-DD|HH:MM|courseId>`, `week-due-<taskId>`.
+   **Known collision:** every Grades card renders its own `btn-mark` and `btn-delete subject`; `Btn` takes an
+   explicit `testID` prop when the Fixer needs to disambiguate.
+2. **Expect the status bar to look wrong in dark mode (BUG-004).** It is a static certainty, not a guess — do not
+   spend a device cycle re-deriving it; capture one screenshot as evidence and move on.
+3. **Expect the clock face / Focus dial to look refined-toned under the Original palette (BUG-005).** Same: the
+   hex literals are proven. One screenshot in each palette settles the severity.
+4. **Do not treat `prompt.md` R10 as open.** Whole-store subscriptions are gone.
+5. **Two stale test counts in the docs** (`prompt.md:8` says 82, `qa/STATE.md:19` says 104; actual 111). Any agent
+   reporting "tests dropped" is reading a stale number.
+
+---
+
 ## Summary
 Screens: 6 routes + 12 sheet types. Elements enumerated: **149**.
 Pass: 2 · Fail: 0 · Untested: 147.
+(Static gates are tracked separately above and are not counted in these 149 elements.)
