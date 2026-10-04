@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { AppState as RNAppState } from 'react-native';
+import { Appearance, AppState as RNAppState } from 'react-native';
 import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings } from '../domain/types';
 import type { Repository } from '../data/repository';
 import { openRepository } from '../data/sqliteExpo';
@@ -7,6 +7,7 @@ import { seedSnapshot } from '../data/seed';
 import { withDefaults } from '../domain/defaults';
 import { ST } from '../domain/attendance';
 import { planReminders, type Planned } from '../domain/reminders';
+import { makeTheme } from '../tokens/theme';
 import { advance, endBreak, finish, initTimer, setMinutes, startBreak, toggle as timerToggle, type TimerState } from '../domain/timer';
 import { uid } from '../domain/time';
 import { configureFx, fx } from '../services/fx';
@@ -54,6 +55,9 @@ export function toast(text: string, undo?: () => void) {
 export const dismissToast = () => set({ toast: null });
 
 /* ───── notifications: plan → OS queue, debounced ───── */
+/** The OS tints a notification with the app's accent, and `resync` runs from store actions rather than from a
+ *  component, so the theme is resolved here the same way `ThemeProvider` resolves it, minus the hook. */
+const notifAccent = (s: Settings) => makeTheme(s, Appearance.getColorScheme() === 'dark').c.acc;
 let syncTimer: ReturnType<typeof setTimeout> | null = null, askedPermission = false;
 export function resync(delay = 700) {
   if (syncTimer) clearTimeout(syncTimer);
@@ -62,7 +66,7 @@ export function resync(delay = 700) {
     const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif });
     let perm = await notifs.ensurePermission(false);
     if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
-    if (perm === 'granted') await notifs.sync(plan); else if (!s.settings.notif.enabled) await notifs.cancelAll();
+    if (perm === 'granted') await notifs.sync(plan, notifAccent(s.settings)); else if (!s.settings.notif.enabled) await notifs.cancelAll();
     // Only notify subscribers when something visible actually changed — every mutation calls resync(),
     // and most recompute to the same plan (e.g. edits that don't move any reminder).
     const info: PlanInfo = { count: plan.items.length, deferred: plan.deferred, shifted: plan.items.filter((p) => p.shiftedFrom).length, next: plan.items[0] ?? null, at: now };

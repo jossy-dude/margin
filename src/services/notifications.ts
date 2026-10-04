@@ -31,15 +31,15 @@ export async function status(): Promise<NotifStatus> {
   try { const all = await N.getAllScheduledNotificationsAsync(); scheduled = all.length; const ts = all.map((x) => (x.trigger && 'value' in x.trigger && typeof x.trigger.value === 'number' ? x.trigger.value : (x.trigger as { date?: number } | null)?.date ?? 0)).filter(Boolean); next = ts.length ? Math.min(...ts) : null; canAskAgain = (await N.getPermissionsAsync()).canAskAgain; } catch { /* unavailable */ }
   return { permission, scheduled, next, canAskAgain, platform: Platform.OS };
 }
-const content = (p: Planned) => ({ title: p.title, body: p.body, data: { route: p.route, entityId: p.entityId, kind: p.kind, planned: p.id }, color: '#8A4B27' });
+const content = (p: Planned, accent: string) => ({ title: p.title, body: p.body, data: { route: p.route, entityId: p.entityId, kind: p.kind, planned: p.id }, color: accent });
 /** Make the OS queue equal the plan. Ids encode entity+minute, so unchanged items are left alone (no flicker, no duplicates). */
-export async function sync(plan: Plan): Promise<{ added: number; removed: number }> {
+export async function sync(plan: Plan, accent: string): Promise<{ added: number; removed: number }> {
   let added = 0, removed = 0;
   try {
     const have = (await N.getAllScheduledNotificationsAsync()).filter((x) => x.identifier !== 'focus-end' && x.identifier !== 'test'), want = new Map(plan.items.map((p) => [p.id, p]));
     for (const h of have) if (!want.has(h.identifier)) { await N.cancelScheduledNotificationAsync(h.identifier); removed++; }
     const haveIds = new Set(have.map((h) => h.identifier));
-    for (const p of plan.items) if (!haveIds.has(p.id)) { await N.scheduleNotificationAsync({ identifier: p.id, content: content(p), trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CH[p.channel] } }); added++; }
+    for (const p of plan.items) if (!haveIds.has(p.id)) { await N.scheduleNotificationAsync({ identifier: p.id, content: content(p, accent), trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CH[p.channel] } }); added++; }
   } catch { /* permission missing or module unavailable: surfaced by status() */ }
   return { added, removed };
 }
