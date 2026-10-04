@@ -48,7 +48,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
             <HandBox seed="nav" fill={c.card} sw={2} amp={1.6} style={{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }}>
               {TABS.map((t) => { const on = route === t.name; return (
-                <Pressable key={t.name} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPress={() => act.go(t.name)} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPress={() => act.go(t.name)} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                   <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? hexA(c.acc, 0.2) : 'transparent', borderWidth: on ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
                   <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}

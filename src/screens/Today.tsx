@@ -29,9 +29,9 @@ export function TodayScreen() {
   const nDone = open.length;
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
-      right={<Pressable accessibilityRole="button" accessibilityLabel="Start a focus session" onPress={() => act.focusOpen(null)} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={27} /></Pressable>}>
+      right={<Pressable testID="open-focus" accessibilityRole="button" accessibilityLabel="Start a focus session" onPress={() => act.focusOpen(null)} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={27} /></Pressable>}>
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Change clock face" onPress={() => { act.open({ t: 'settings' }); act.settingsPush('appearance'); act.settingsPush('clock'); }}><ClockFace id={st.settings.clock} size={124} live={st.route === 'Today'} /></Pressable>
+        <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPress={() => { act.open({ t: 'settings' }); act.settingsPush('appearance'); act.settingsPush('clock'); }}><ClockFace id={st.settings.clock} size={124} live={st.route === 'Today'} /></Pressable>
         <View style={{ flex: 1, gap: 4 }}>
           <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayOcc.length ? 'All done for today' : 'No classes today'}</Txt>
           <Txt f="marker" s={23} numberOfLines={2}>{cur?.label ?? next?.label ?? (todayOcc.length ? 'Nice work' : 'Free day')}</Txt>

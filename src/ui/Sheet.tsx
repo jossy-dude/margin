@@ -46,7 +46,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
       {/* `accessibilityViewIsModal` traps focus on iOS only, so Android gets the matching
           `importantForAccessibility`; App.tsx hides the navigator behind this sheet at the same time. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none" accessibilityViewIsModal importantForAccessibility="yes">
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, dim]}><Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" accessibilityRole="button" /></Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, dim]}><Pressable testID="sheet-dismiss" style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" accessibilityRole="button" /></Animated.View>
         <Animated.View importantForAccessibility="yes" style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
           <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={c.ink}>
             <PaperBg card />
@@ -54,9 +54,9 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
               <View style={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 6 }} accessible accessibilityRole="header" accessibilityLabel={title}>
                 <View style={{ alignSelf: 'center', width: 46, height: 5, borderRadius: 3, backgroundColor: hexA(c.ink, 0.35), marginBottom: 6 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
-                  {back ? <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 }}><Icon name="back" /></Pressable> : null}
+                  {back ? <Pressable testID="sheet-back" accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 }}><Icon name="back" /></Pressable> : null}
                   <Txt f="marker" s={25} maxFontSizeMultiplier={FS} numberOfLines={2} style={{ flex: 1 }} accessibilityLiveRegion="polite">{title}</Txt>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
+                  <Pressable testID="sheet-close" accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
                 </View>
               </View>
             </GestureDetector>

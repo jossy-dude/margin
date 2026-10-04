@@ -20,7 +20,7 @@ export function Overlay() {
     // same time, so while a sheet is open nothing behind it can be reached or read out.
     <View pointerEvents="box-none" importantForAccessibility={sheet ? 'yes' : 'auto'} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 2000 }}>
       {showFab && (
-        <Pressable accessibilityRole="button" accessibilityLabel="Add" onPress={() => { fx.tap(); act.open({ t: 'add' }); }} style={{ position: 'absolute', right: 18, bottom: navHeight(ins.bottom) + FAB_GAP }}>
+        <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={() => { fx.tap(); act.open({ t: 'add' }); }} style={{ position: 'absolute', right: 18, bottom: navHeight(ins.bottom) + FAB_GAP }}>
           <HandBox seed="fab" fill={c.acc} stroke={c.ink} sw={2.2} amp={1.8} corners={{ h: [34, 30, 34, 30], v: [30, 34, 30, 34] }} style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={32} color={c.onAcc} sw={2.6} /></HandBox>
         </Pressable>)}
       {sheet && (
@@ -34,7 +34,7 @@ export function Overlay() {
         <Animated.View key={toast.id} entering={FadeInDown.duration(220)} exiting={FadeOutDown.duration(180)} style={{ position: 'absolute', left: 14, right: 14, bottom: sheet ? navInset(ins.bottom) + 10 : toastBottom(ins.bottom), zIndex: 3000 }} accessibilityLiveRegion="polite">
           <HandBox seed="toast" fill={c.ink} stroke={c.ink} sw={2} amp={1.4} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 6, paddingVertical: 6, gap: 8, minHeight: 52 }}>
             <Txt f="bold" s={19} c="paper" style={{ flex: 1 }}>{toast.text}</Txt>
-            {toast.undo ? <Btn small kind="primary" label="Undo" onPress={() => { toast.undo?.(); dismissToast(); fx.undone(); }} /> : <Pressable accessibilityLabel="Dismiss" accessibilityRole="button" onPress={dismissToast} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={20} color={c.paper} /></Pressable>}
+            {toast.undo ? <Btn small kind="primary" label="Undo" onPress={() => { toast.undo?.(); dismissToast(); fx.undone(); }} /> : <Pressable testID="toast-dismiss" accessibilityLabel="Dismiss" accessibilityRole="button" onPress={dismissToast} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={20} color={c.paper} /></Pressable>}
           </HandBox>
         </Animated.View>)}
     </View>

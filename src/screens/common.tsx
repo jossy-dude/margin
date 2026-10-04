@@ -26,7 +26,7 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
               word and pushes the right-hand cluster off a 320 dp screen (V2). The sub-line wraps instead. */}
           <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
           {right}
-          <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}><Icon name="gear" size={26} /></Pressable>
+          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}><Icon name="gear" size={26} /></Pressable>
         </View>
         {children}
       </ScrollView>
@@ -86,13 +86,13 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   );
 }, (a, b) => a.t === b.t && Math.floor(a.now / 60_000) === Math.floor(b.now / 60_000));
 /** the 28px attendance cell; the hit area is the cell itself because the 3px gutter leaves no room for an honest bigger one */
-export function AttCell({ status, inferred, future, locked, onTap, onHold, label, pulse }: { status: AttStatus | null; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number }) {
+export function AttCell({ status, inferred, future, locked, onTap, onHold, label, pulse, testID }: { status: AttStatus | null; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), sc = useSharedValue(1), sh = useSharedValue(0);
   useEffect(() => { if (pulse && !reduce) sc.value = withSequence(withTiming(1.25, { duration: 90 }), withTiming(1, { duration: 160 })); }, [pulse, reduce, sc]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }, { translateX: sh.value }] })), col = statusColor(status, c);
   const deny = () => { fx.denied(); if (!reduce) sh.value = withSequence(withTiming(-3, { duration: 40 }), withTiming(3, { duration: 70 }), withTiming(0, { duration: 40 })); };
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={locked ? 'Locked. Unlock the grid to change.' : inferred || !status ? 'Tap to mark. After that, long press to change.' : 'Long press to change.'}
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={locked ? 'Locked. Unlock the grid to change.' : inferred || !status ? 'Tap to mark. After that, long press to change.' : 'Long press to change.'}
       onPress={() => { if (locked) return deny(); if (!status || inferred) onTap(); else deny(); }} onLongPress={() => { if (locked) return deny(); onHold(); }} delayLongPress={380} hitSlop={1}>
       <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: inferred || future ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
         {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{STATUS_GLYPH[status]}</Txt>}

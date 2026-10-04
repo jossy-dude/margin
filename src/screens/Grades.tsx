@@ -31,7 +31,7 @@ function AttendanceGrid({ course }: { course: Course }) {
         <ScrollView horizontal ref={gridRef} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 3, paddingVertical: 6, paddingRight: 8 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
           {occ.map(({ date, meeting }) => {
             const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${meeting.start}, ${spokenStatus(e)}`;
-            return <AttCell key={key} status={e.status} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
+            return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
               onTap={() => act.setAtt(key, e.status && e.inferred ? nextStatus(e.status) : 'p')} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}
         </ScrollView>)}

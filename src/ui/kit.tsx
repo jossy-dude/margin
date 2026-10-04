@@ -8,6 +8,11 @@ import { fx } from '../services/fx';
 
 type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';
 const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
+/** `testID` fallback. On RN Android a `testID` surfaces as `resource-id` in a `uiautomator` dump, which is how the
+ *  QA agents find an element without guessing at its bounds, so every interactive element gets one. It is derived
+ *  from the same string that is already the accessibility label, so no call site has to change and the id always
+ *  says what the control is. Pass `testID` explicitly only to disambiguate repeats (two "Save" buttons). */
+const tid = (s?: string) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 export interface TxtProps extends TextProps { f?: FontKey; s?: number; c?: keyof Colors | string; style?: StyleProp<TextStyle> }
 export function Txt({ f = 'hand', s = 18, c = 'ink', style, ...p }: TxtProps) {
   const { c: col } = useTheme(), color = (col as unknown as Record<string, string>)[c] ?? c;
@@ -51,13 +56,13 @@ export function Icon({ name, size = 22, color, sw = 1.8 }: { name: keyof typeof 
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color ?? c.ink} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><Path d={ICONS[name] ?? ICONS.plus} /></Svg>;
 }
 
-export interface BtnProps { label?: string; icon?: string; onPress?: () => void; kind?: 'primary' | 'ink' | 'ghost' | 'danger'; small?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; a11y?: string; flex?: boolean; quiet?: boolean; selected?: boolean }
-export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, style, a11y, flex, quiet, selected }: BtnProps) {
+export interface BtnProps { label?: string; icon?: string; onPress?: () => void; kind?: 'primary' | 'ink' | 'ghost' | 'danger'; small?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; a11y?: string; flex?: boolean; quiet?: boolean; selected?: boolean; testID?: string }
+export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, style, a11y, flex, quiet, selected, testID }: BtnProps) {
   const { c } = useTheme();
   const bg = kind === 'primary' ? c.acc : kind === 'ink' ? c.ink : kind === 'danger' ? c.bad : 'transparent', fg = kind === 'primary' ? c.onAcc : kind === 'ink' ? c.paper : kind === 'danger' ? c.card : c.ink;
   const h = small ? 40 : 52;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
+    <Pressable testID={testID ?? tid(a11y ?? label)} accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
       onPress={() => { if (!quiet) fx.tap(); onPress?.(); }} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4}
       style={[{ minHeight: h, opacity: disabled ? 0.45 : 1, flex: flex ? 1 : undefined }, style]}>
       <HandBox seed={`${label}${icon}`} fill={bg} stroke={kind === 'ghost' ? c.ink : bg === 'transparent' ? c.ink : c.ink} corners={RS} shadow={kind !== 'ghost'} style={{ minHeight: h, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: small ? 14 : 20 }}>
@@ -70,7 +75,7 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
 export function Chip({ label, on, onPress, icon, tone, small }: { label: string; on?: boolean; onPress?: () => void; icon?: string; tone?: string; small?: boolean }) {
   const { c } = useTheme(), fg = on ? c.onAcc : c.ink, bg = on ? tone ?? c.acc : c.card;
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} onPress={() => { fx.select(); onPress?.(); }} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}>
+    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} onPress={() => { fx.select(); onPress?.(); }} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}>
       <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
         {icon ? <Icon name={icon} size={16} color={fg} /> : null}
         <Txt f="bold" s={small ? 17 : 19} c={fg}>{label}</Txt>
@@ -81,7 +86,7 @@ export function Chip({ label, on, onPress, icon, tone, small }: { label: string;
 export function Toggle({ value, onChange, label, hint, disabled }: { value: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
   const { c } = useTheme();
   return (
-    <Pressable accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }}
+    <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }}
       android_ripple={{ color: hexA(c.ink, 0.12) }} style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }}>
       <View style={{ flex: 1 }}><Txt f="bold" s={21}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" style={{ marginTop: 1 }}>{hint}</Txt> : null}</View>
       <View style={{ width: 54, height: 30, borderRadius: 15, borderWidth: 1.6, borderColor: c.ink, backgroundColor: value ? c.acc : c.card, justifyContent: 'center' }}>
@@ -93,7 +98,7 @@ export function Toggle({ value, onChange, label, hint, disabled }: { value: bool
 function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: boolean; a: string }) {
   const { c } = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }}>
+    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }}>
       <Txt f="marker" s={26}>{t}</Txt>
     </Pressable>
   );
@@ -113,7 +118,7 @@ export function Field({ label, style, multiline, ...p }: TextInputProps & { labe
   return (
     <View style={style as StyleProp<ViewStyle>}>
       {label ? <Txt f="serif" s={14.5} c="mut" style={{ marginBottom: 2 }}>{label}</Txt> : null}
-      <TextInput {...p} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
+      <TextInput {...p} testID={tid(label ?? p.placeholder)} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
         style={{ fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: focus ? 2.2 : 1.4, borderBottomColor: focus ? c.acc : c.ink }} />
     </View>
   );
