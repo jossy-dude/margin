@@ -119,6 +119,29 @@ window artefact. **Must be re-checked on the standalone release build before sig
 if the black band persists there, it is an app bug and the fix must paint the theme paper
 behind the status bar, not just correct `style`.
 
+**ORCHESTRATOR resolution 2026-10-04 — attribution settled, band is an Expo Go artefact.**
+Measured the standalone release build (`app.marginalia.planner`, installed) against Expo Go
+on the same device, same dark theme:
+
+| Target | band (y=0..88) | paper (y=200) |
+|---|---|---|
+| Expo Go `host.exp.exponent` | **(0,0,0) pure black** | (43,38,32) |
+| standalone `app.marginalia.planner` | **(4,5,7)** ~ `#040507` | (16,20,26) `#10141A` |
+
+The release build's band is its own theme colour (`ORIGINAL.dark.desk` = `#030407`), so the
+app DOES paint behind the status bar. The pure-black band is **Expo Go's own window**, and in
+Expo Go the app's `<StatusBar style>` and background are not app-controlled at all.
+
+**Methodology consequence — applies to every remaining agent:** all V19 status-bar /
+edge-to-edge / "system bar legible" checks are **invalid in Expo Go** and must be re-run on
+the standalone release build. Also note the release build is running the **original** dark
+palette (paper `#10141A`), not refined.
+
+**Status of BUG-004:** the `Themed` fix (`d9a3da0`) is structurally correct but **unverifiable
+in Expo Go** — band brightness was byte-identical (255,255,255) in both themes after the fix,
+which proves Expo Go overrides it rather than proving the fix failed. Carrying BUG-004 as
+`fixed, pending release-build verification`.
+
 ## BUG-005 — fixed — Major
 **Screen:** Today clock, Focus dial + break sticker (and every clock face)
 **Found by:** STATIC AUDITOR · token-vs-literal hex audit
