@@ -29,7 +29,8 @@ export class MemoryRepository implements Repository {
   }
   async purgeDemo() { for (const e of ['task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }
   async reset() { this.t.clear(); this.set = {}; this.ob = []; this.nl.clear(); }
-  async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) { const r = this.nl.get(id) ?? { id, kind, dueAt, shownAt: null, openedAt: null }; if (event === 'shown') r.shownAt = at; else r.openedAt = at; this.nl.set(id, r); }
+  async schedNotif(id: string, kind: string, dueAt: number) { if (!this.nl.has(id)) this.nl.set(id, { id, kind, dueAt, shownAt: null, openedAt: null }); }
+  async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) { await this.schedNotif(id, kind, dueAt); const r = this.nl.get(id)!; if (event === 'shown') r.shownAt = at; else r.openedAt = at; }
   async notifLog() { return [...this.nl.values()]; }
   async pendingOutbox(limit = 200) { return this.ob.slice(0, limit); }
   async ackOutbox(upTo: number) { this.ob = this.ob.filter((r) => r.seq > upTo); }

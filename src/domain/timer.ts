@@ -9,6 +9,10 @@ export interface TimerState {
   taskId: string | null; courseId: string | null; title: string;
 }
 export const NUDGE_MS = 5 * 60_000, MIN_BREAK_AFTER_MS = 5 * 60_000;
+/** A break must be able to wiggle at least once before it ends, so the nudge step is a third of its own
+    length — never longer than NUDGE_MS, never shorter than a minute. A fixed 5-minute step silently never
+    fires on a 5-minute break, which is the default, so the sticker sat perfectly still. */
+export const nudgeStep = (breakMs: number) => Math.max(60_000, Math.min(NUDGE_MS, Math.floor(breakMs / 3 / 60_000) * 60_000));
 /** Flow keeps crediting overtime past the round, but only this much: walking away must not bill focus that never happened. */
 export const FLOW_OVER_CAP_MS = 15 * 60_000;
 const overRoom = (overMs: number) => Math.max(0, FLOW_OVER_CAP_MS - overMs);
@@ -43,21 +47,24 @@ export function advance(s0: TimerState, now: number): Advanced {
     if (s.phase === 'break') {
       if (dt >= s.breakLeftMs) {
         const rest = dt - s.breakLeftMs; s.breakElapsedMs += s.breakLeftMs; s.breakDoneMs += s.breakLeftMs; s.breakLeftMs = 0;
-        while (s.breakElapsedMs >= s.nextNudgeMs && s.nextNudgeMs < s.breakTotalMs) { events.push('nudge'); s.nextNudgeMs += NUDGE_MS; }
+        while (s.breakElapsedMs >= s.nextNudgeMs && s.nextNudgeMs < s.breakTotalMs) { events.push('nudge'); s.nextNudgeMs += nudgeStep(s.breakTotalMs); }
         events.push('breakDone'); s.phase = 'focus'; s.checkpoint = now - rest; continue; // the excess belongs to focus again
       }
       s.breakLeftMs -= dt; s.breakElapsedMs += dt; s.breakDoneMs += dt; s.checkpoint = now;
-      while (s.breakElapsedMs >= s.nextNudgeMs) { events.push('nudge'); s.nextNudgeMs += NUDGE_MS; }
+      while (s.breakElapsedMs >= s.nextNudgeMs) { events.push('nudge'); s.nextNudgeMs += nudgeStep(s.breakTotalMs); }
       break;
     }
     break;
   }
   return { state: s, events };
 }
-export interface TimerView { phase: Phase; running: boolean; leftMs: number; overMs: number; flowing: boolean; roundDone: boolean; breakLeftMs: number; progress: number; breakProgress: number }
+export interface TimerView { state: TimerState; phase: Phase; running: boolean; leftMs: number; overMs: number; flowing: boolean; roundDone: boolean; breakLeftMs: number; progress: number; breakProgress: number }
+/** `state` is the advanced (timestamp-derived) timer. The store deliberately only commits on events, so
+    anything that needs elapsed focus, the remaining minutes or the break gate must read it from here and
+    not from the store — reading the store freezes it for the whole round. */
 export function view(s0: TimerState, now: number): TimerView {
   const s = advance(s0, now).state, total = s.planMin * 60_000;
-  return { phase: s.phase, running: s.running, leftMs: s.focusLeftMs, overMs: s.overMs, flowing: s.phase !== 'set' && s.focusLeftMs === 0 && s.running, roundDone: s.focusLeftMs === 0 && s.phase !== 'set',
+  return { state: s, phase: s.phase, running: s.running, leftMs: s.focusLeftMs, overMs: s.overMs, flowing: s.phase !== 'set' && s.focusLeftMs === 0 && s.running, roundDone: s.focusLeftMs === 0 && s.phase !== 'set',
     breakLeftMs: s.breakLeftMs, progress: s.phase === 'set' ? 0 : total ? Math.min(1, 1 - s.focusLeftMs / total) : 0, breakProgress: s.breakTotalMs ? 1 - s.breakLeftMs / s.breakTotalMs : 0 };
 }
 export const canBreak = (s: TimerState) => s.phase === 'focus' && s.running && s.focusLeftMs > 0 && s.breaksUsed < s.breaksAllowed && s.focusElapsedMs >= MIN_BREAK_AFTER_MS;
@@ -74,7 +81,7 @@ export function toggle(s0: TimerState, now: number): Advanced {
 export function startBreak(s0: TimerState, now: number): TimerState {
   const { state: s } = advance(s0, now);
   if (!canBreak(s)) return s;
-  return { ...s, phase: 'break', running: true, checkpoint: now, breakLeftMs: s.breakMs, breakTotalMs: s.breakMs, breakElapsedMs: 0, nextNudgeMs: NUDGE_MS, breaksUsed: s.breaksUsed + 1 };
+  return { ...s, phase: 'break', running: true, checkpoint: now, breakLeftMs: s.breakMs, breakTotalMs: s.breakMs, breakElapsedMs: 0, nextNudgeMs: nudgeStep(s.breakMs), breaksUsed: s.breaksUsed + 1 };
 }
 export function endBreak(s0: TimerState, now: number): TimerState {
   const { state: s } = advance(s0, now);

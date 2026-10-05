@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import { Appearance, AppState as RNAppState } from 'react-native';
 import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings } from '../domain/types';
-import type { Repository } from '../data/repository';
+import type { NotifLogRow, Repository } from '../data/repository';
 import { openRepository } from '../data/sqliteExpo';
 import { seedSnapshot } from '../data/seed';
 import { withDefaults } from '../domain/defaults';
 import { ST } from '../domain/attendance';
+import { dispatchOpened, isPlannedKind } from '../domain/notifActions';
 import { planReminders, type Planned } from '../domain/reminders';
 import { makeTheme } from '../tokens/theme';
 import { advance, endBreak, finish, initTimer, setMinutes, startBreak, toggle as timerToggle, type TimerState } from '../domain/timer';
@@ -18,19 +19,20 @@ export type SheetSpec =
   | { t: 'add' } | { t: 'task'; id?: string; kind?: Task['kind']; courseId?: string | null } | { t: 'status'; mode: 'class' | 'day'; key: string; title: string; date: string }
   | { t: 'settings' } | { t: 'course'; id?: string } | { t: 'meeting'; courseId?: string; id?: string; weekday?: number } | { t: 'mark'; courseId: string; id?: string } | { t: 'notice'; id?: string } | { t: 'slip'; key: string; title: string; date: string };
 export interface Toast { id: number; text: string; undo?: () => void }
-export interface PlanInfo { count: number; deferred: number; shifted: number; next: Planned | null; at: number }
+export interface Moved { title: string; at: number; was: number; why: string }
+export interface PlanInfo { count: number; deferred: number; shifted: number; next: Planned | null; at: number; moved: Moved[]; dropped: { id: string; why: string }[] }
 export interface State {
   ready: boolean; error: string | null; now: number;
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
   tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; settings: Settings;
   timer: TimerState; sheet: SheetSpec | null; settingsPath: string[]; toast: Toast | null; route: RouteName; prevRoute: RouteName | null; focusTaskId: string | null;
-  notifStatus: notifs.NotifStatus | null; plan: PlanInfo | null; slip: { key: string; title: string; date: string } | null;
+  notifStatus: notifs.NotifStatus | null; plan: PlanInfo | null; notifLog: NotifLogRow[]; slip: { key: string; title: string; date: string } | null;
   fev: { k: string; at: number } | null;
 }
 let repo: Repository | null = null;
 let state: State = {
   ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], settings: withDefaults({}),
-  timer: initTimer(), sheet: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, slip: null, fev: null,
+  timer: initTimer(), sheet: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, notifLog: [], slip: null, fev: null,
 };
 const subs = new Set<() => void>();
 export const getState = () => state;
@@ -56,28 +58,63 @@ export const dismissToast = () => set({ toast: null });
 
 /* ───── notifications: plan → OS queue, debounced ───── */
 /** The OS tints a notification with the app's accent, and `resync` runs from store actions rather than from a
- *  component, so the theme is resolved here the same way `ThemeProvider` resolves it, minus the hook. */
-const notifAccent = (s: Settings) => makeTheme(s, Appearance.getColorScheme() === 'dark').c.acc;
+ *  component, so the theme is resolved here the same way `ThemeProvider` resolves it, minus the hook.
+ *  `Appearance.getColorScheme` is guarded because this debounce can fire after jest has torn the module
+ *  down — it used to throw inside the timer, which surfaced as an uncaught TypeError on every test run
+ *  and buried whatever real error came after it. */
+const notifAccent = (s: Settings) => makeTheme(s, typeof Appearance?.getColorScheme === 'function' && Appearance.getColorScheme() === 'dark').c.acc;
+
+/** `notif_log` is bookkeeping. It must never be the reason a scheduling pass or a notification action
+ *  fails, and a repository that is not open yet must not turn an event handler into a crash, so both
+ *  halves swallow: the `try` for the synchronous throw `R()` raises, the `catch` for the rejected write. */
+function logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
+  if (!id) return;
+  try { void R().logNotif(id, kind, dueAt, event, at).catch(() => undefined); } catch { /* repository not open yet */ }
+}
+function schedNotif(id: string, kind: string, dueAt: number) {
+  if (!id) return;
+  try { void R().schedNotif(id, kind, dueAt).catch(() => undefined); } catch { /* repository not open yet */ }
+}
+/** Only the newest few rows: the page shows a handful, and `notif_log` itself keeps everything. */
+const LOG_KEEP = 12;
+export async function refreshNotifLog() {
+  let all: NotifLogRow[];
+  try { all = await R().notifLog(); } catch { return; }
+  const rows = [...all].sort((a, b) => b.dueAt - a.dueAt).slice(0, LOG_KEEP), prev = state.notifLog;
+  // The old array is kept when nothing changed: a fresh one on every resync would re-render the page.
+  if (rows.length === prev.length && rows.every((r, i) => r.id === prev[i]!.id && r.shownAt === prev[i]!.shownAt && r.openedAt === prev[i]!.openedAt)) return;
+  set({ notifLog: rows });
+}
+/** Everything the Delivery page compares to decide whether the plan actually moved. */
+const planSig = (p: PlanInfo) => `${p.count}|${p.deferred}|${p.shifted}|${p.next?.id ?? ''}|${p.moved.map((m) => `${m.at}:${m.why}`).join()}||${p.dropped.map((d) => d.why).join()}`;
 let syncTimer: ReturnType<typeof setTimeout> | null = null, askedPermission = false;
+/** Drop a queued rebuild. A debounce that outlives the thing that asked for it is the whole defect:
+ *  it fired after jest had torn its module registry down and took the worker with it, and in the app it
+ *  can schedule against a repository that has since been re-opened. */
+export function stopResync() { if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; } }
 export function resync(delay = 700) {
-  if (syncTimer) clearTimeout(syncTimer);
+  stopResync();
   syncTimer = setTimeout(async () => {
+    syncTimer = null;
     const s = state; if (!s.ready) return;
     const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif });
     let perm = await notifs.ensurePermission(false);
     if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
-    if (perm === 'granted') await notifs.sync(plan, notifAccent(s.settings)); else if (!s.settings.notif.enabled) await notifs.cancelAll();
+    if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); for (const p of r.planned) schedNotif(p.id, p.kind, p.at); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
     // Only notify subscribers when something visible actually changed — every mutation calls resync(),
     // and most recompute to the same plan (e.g. edits that don't move any reminder).
-    const info: PlanInfo = { count: plan.items.length, deferred: plan.deferred, shifted: plan.items.filter((p) => p.shiftedFrom).length, next: plan.items[0] ?? null, at: now };
+    const moved: Moved[] = [];
+    for (const p of plan.items) if (p.shiftedFrom && moved.length < 4) moved.push({ title: p.title, at: p.at, was: p.shiftedFrom, why: p.why ?? 'moved' });
+    const info: PlanInfo = { count: plan.items.length, deferred: plan.deferred, shifted: plan.items.filter((p) => p.shiftedFrom).length, next: plan.items[0] ?? null, at: now, moved, dropped: plan.dropped.slice(0, 4) };
     const ns = await notifs.status();
     const p = state.plan, pn = state.notifStatus;
-    const planSame = p !== null && p.count === info.count && p.deferred === info.deferred && p.shifted === info.shifted && p.next?.id === info.next?.id;
-    const nsSame = pn !== null && pn.permission === ns.permission && pn.scheduled === ns.scheduled && pn.next === ns.next && pn.canAskAgain === ns.canAskAgain && pn.platform === ns.platform;
+    const planSame = p !== null && planSig(p) === planSig(info);
+    const nsSame = pn !== null && pn.permission === ns.permission && pn.scheduled === ns.scheduled && pn.next === ns.next && pn.canAskAgain === ns.canAskAgain && pn.queueRead === ns.queueRead && pn.platform === ns.platform;
     if (!planSame || !nsSame) set({ plan: planSame && p ? p : info, notifStatus: nsSame && pn ? pn : ns });
+    await refreshNotifLog();
   }, delay);
 }
-export async function refreshNotifStatus() { set({ notifStatus: await notifs.status() }); }
+export async function refreshNotifStatus() { set({ notifStatus: await notifs.status() }); await refreshNotifLog(); }
 
 /* ───── hydrate ───── */
 export async function hydrate(r: Repository) {
@@ -199,9 +236,24 @@ function applyEvents(ev: string[]) {
 
 /* ───── lifecycle ───── */
 let wired = false;
+/** The same accent `sync` tints real reminders with, so a test notification looks like the real thing. */
+export const notificationAccent = () => notifAccent(state.settings);
+/** The real effect object `dispatchOpened` writes through. Built per response, not once: it reads live
+ *  task and meeting state, so a notification left in the shade cannot resurrect a deleted row. */
+const notifEffects = () => {
+  const s = state;
+  return {
+    tasks: s.tasks, meetings: s.meetings,
+    setAtt: (key: string, status: AttStatus) => act.setAtt(key, status),
+    toggleTask: (id: string) => act.toggleTask(id),
+    toast: (text: string) => toast(text),
+    go: (route: 'Today' | 'Tasks') => set({ route }),
+    log: (id: string, kind: string, at: number) => { if (isPlannedKind(kind)) logNotif(id, kind, at, 'opened', Date.now()); },
+  };
+};
 export function wireLifecycle() {
   if (wired) return; wired = true;
   RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); } });
-  notifs.onOpened((route, kind) => { if (kind === 'ended') set({ route: 'Today' }); else set({ route }); });
-  notifs.onReceived(() => { fx.chime(); });
+  notifs.onOpened((o) => dispatchOpened(o, notifEffects()));
+  notifs.onReceived((kind, id, at) => { fx.chime(); if (isPlannedKind(kind)) logNotif(id, kind, at, 'shown', Date.now()); });
 }

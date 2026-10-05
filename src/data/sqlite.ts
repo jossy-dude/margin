@@ -76,8 +76,9 @@ export class SqliteRepository implements Repository {
   }
   async purgeDemo() { await this.db.withTransactionAsync(async () => { await this.db.runAsync('DELETE FROM task WHERE demo=1'); await this.db.runAsync('DELETE FROM focus_session WHERE demo=1'); }); }
   async reset() { await this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); }); }
+  async schedNotif(id: string, kind: string, dueAt: number) { await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
-    await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]);
+    await this.schedNotif(id, kind, dueAt);
     await this.db.runAsync(`UPDATE notif_log SET ${event === 'shown' ? 'shown_at' : 'opened_at'}=? WHERE id=?`, [at, id]);
   }
   async notifLog(): Promise<NotifLogRow[]> { return (await this.db.getAllAsync<{ id: string; kind: string; due_at: number; shown_at: number | null; opened_at: number | null }>('SELECT * FROM notif_log')).map((r) => ({ id: r.id, kind: r.kind, dueAt: r.due_at, shownAt: r.shown_at, openedAt: r.opened_at })); }

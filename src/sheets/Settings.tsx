@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Pressable, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
 import { Label, Sheet } from '../ui/Sheet';
-import { Empty } from '../screens/common';
+import { Empty, Section } from '../screens/common';
 import { FaceThumb } from '../ui/clock/ClockFace';
 import { FACES } from '../ui/clock/faces';
 import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
-import { act, getState, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
+import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS } from '../domain/defaults';
-import { DW, fmtDur, fmtTime, fmtWhen, fromMin, hm } from '../domain/time';
+import { DW, fmtDur, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
+import { logState, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
+import type { NotifLogRow } from '../data/repository';
 import { play, type SoundName } from '../services/audio';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
@@ -41,11 +43,34 @@ const Labelled = ({ label, children }: { label: string; children: React.ReactNod
 );
 const MinStep = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <Labelled label={label}><Stepper label={label} value={hm(value)} min={0} max={1425} step={15} fmt={fromMin} onChange={(m) => onChange(fromMin(m))} /></Labelled>;
 
+/* ───── Delivery status ───── */
+/** The one honest place: every number on that page is either read off this phone or computed by the
+ *  planner, and the two failure states a phone can be in — blocked, and unable to be asked — are named
+ *  separately because only one of them can still be fixed from here. The wording itself lives in
+ *  `domain/notifActions.ts`, next to the log rules it has to agree with, and is tested there. */
+const LogRow = ({ r, now }: { r: NotifLogRow; now: number }) => {
+  const { c } = useTheme();
+  return (
+    <HandBox seed={r.id} shadow={false} fill={c.card} style={{ padding: 10, gap: 2 }}>
+      <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+        <Txt f="bold" s={19} style={{ flex: 1, minWidth: 0 }} numberOfLines={1}>{r.id === notifs.TEST_ACTION_ID ? 'test · ' : ''}{KIND_WORD[r.kind] ?? r.kind}</Txt>
+        <Txt f="serif" s={15} c="mut">{r.dueAt ? fmtWhen(r.dueAt, now) : 'time unknown'}</Txt>
+      </Row>
+      <Txt f="serif" s={14.5} c="mut">{logState(r, now)}</Txt>
+    </HandBox>
+  );
+};
+
 export function SettingsSheet() {
-  const path = useStore((s) => s.settingsPath), s = useStore((s) => s.settings), notifStatus = useStore((s) => s.notifStatus), plan = useStore((s) => s.plan), courses = useStore((s) => s.courses), { c } = useTheme();
+  const path = useStore((s) => s.settingsPath), s = useStore((s) => s.settings), notifStatus = useStore((s) => s.notifStatus), plan = useStore((s) => s.plan), courses = useStore((s) => s.courses), now = useStore((s) => s.now), log = useStore((s) => s.notifLog), tasks = useStore((s) => s.tasks);
+  const { c } = useTheme();
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
   const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false);
+  /* The action test really writes — that is the point of it — so it asks twice, like Reset and the
+   * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
+   * to fire against an unmounted component. */
+  const [armed, setArmed] = useState(false);
   /* The Diagnostics hint used to call `crashCount()` twice *inside the render body*, and
      `crashCount()` is blocking disk I/O: it opens the JSONL file, reads it whole and parses each
      line. `nameDraft` is local state, so every keystroke re-rendered this sheet and re-read the
@@ -54,6 +79,7 @@ export function SettingsSheet() {
      cleared, so the count stays live without ever polling. */
   const crashes = useSyncExternalStore(subscribeCrashes, crashCount, crashCount);
   useEffect(() => { if (!sure) return; const t = setTimeout(() => setSure(false), 4000); return () => clearTimeout(t); }, [sure]);
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 4000); return () => clearTimeout(t); }, [armed]);
   /* The greeting field used to `set({name})` on EVERY keystroke — a whole-store write that re-rendered every
      screen while you typed. It now edits locally and commits after 400 ms of quiet (and on unmount, so closing
      the sheet mid-word never drops letters). */
@@ -113,7 +139,7 @@ export function SettingsSheet() {
     <Nav icon="tasks" label="Tasks & exams" hint={`${n.taskReminders ? 'on' : 'off'} · start-by ${n.startBy ? 'on' : 'off'}`} to="ntask" />
     <Nav icon="clock" label="Hours & quiet time" hint={`${n.activeFrom}–${n.activeTo} · quiet ${n.quietEnabled ? n.quietFrom + '–' + n.quietTo : 'off'} · weekends ${n.weekend}`} to="nhours" />
     <Nav icon="grad" label="Per-subject lead time" hint="Warn earlier for the classes you tend to be late to" to="ncourse" />
-    <Nav icon="bell" label="Delivery status" hint={st.notifStatus ? `${st.notifStatus.permission} · ${st.notifStatus.scheduled} scheduled` : 'Check what is actually scheduled'} to="nstatus" />
+    <Nav icon="bell" label="Delivery status" hint={statusHint(st.notifStatus)} to="nstatus" />
   </>);
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
@@ -139,25 +165,54 @@ export function SettingsSheet() {
   if (page === 'ncourse') body = st.courses.length === 0
     ? <Empty icon="grad" text="No subjects yet. Add one and it gets its own lead time here." />
     : <>{st.courses.map((co) => <Labelled key={co.id} label={co.name}><Stepper label={co.name} value={n.courseLead[co.id] ?? n.classLeadMin} min={0} max={60} step={5} fmt={(v) => `${v} min`} onChange={(v) => act.setNotif({ courseLead: { ...n.courseLead, [co.id]: v } })} /></Labelled>)}</>;
-  if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan; body = (<>
-    <HandBox seed="ns" fill={c.card} style={{ padding: 12, gap: 4 }}>
-      <Txt f="bold" s={20}>Permission: {ns?.permission ?? 'checking…'}</Txt>
-      <Txt f="bold" s={20}>{ns ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : 'Counting what is queued…'}</Txt>
-      {ns?.next ? <Txt f="serif" s={16} c="mut">Next one rings {fmtWhen(ns.next)}</Txt> : null}
-      {pl ? <Txt f="serif" s={16} c="mut">Plan: {pl.count} in the next 14 days · {pl.shifted} moved to avoid class or quiet hours · {pl.deferred} waiting for room in the queue{pl.next ? ` · next: ${pl.next.title} at ${fmtTime(pl.next.at)}` : ''}</Txt> : null}
+  if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan, target = testTarget(now, pl?.next ?? null, tasks, notifs.TEST_ACTION_ID); body = (<>
+    {/* The one honest place: every number below is either read off this phone or computed by the
+        planner, and the two failure states a phone can be in — blocked, and unable to be asked — are
+        named separately because only one of them can still be fixed from here. */}
+    <HandBox seed="ns" fill={c.card} style={{ padding: 12, gap: 5 }}>
+      {ns ? <Txt f="bold" s={21} c={PERMISSION[ns.permission].tone}>{PERMISSION[ns.permission].line}</Txt> : <Txt f="bold" s={21} c="mut">Asking this phone…</Txt>}
+      {ns && ns.permission === 'denied' && !ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone has stopped asking. Only its own settings screen can turn this back on — the button below opens it.</Txt> : null}
+      {ns && ns.permission === 'denied' && ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone will still ask once, so the button below is worth a tap.</Txt> : null}
+      <Txt f="bold" s={20}>{!ns ? 'Counting what is queued…' : !ns.queueRead ? 'This phone would not say what it has queued, so nothing here can be counted.' : ns.permission === 'granted' ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : `${ns.scheduled} still queued from before, but nothing new can be queued until it is allowed.`}</Txt>
+      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">Next one rings {fmtWhen(ns.next, now)} — {relFire(ns.next, now)}.</Txt> : null}
+      {ns?.queueRead && ns.scheduled > 0 && ns.next === null ? <Txt f="serif" s={16} c="mut">Queued, but the phone will not report when any of them fires.</Txt> : null}
+      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count > 0 && ns.permission === 'granted' ? <Txt f="serif" s={16} c="mut">The planner has {pl.count} ready, and the phone&rsquo;s queue is empty. A battery saver that stops alarms, or a phone that dropped them on reboot, is the usual reason.</Txt> : null}
+      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count === 0 ? <Txt f="serif" s={16} c="mut">{n.enabled ? `Nothing to send in the next 14 days${pl.dropped.length ? `: ${pl.dropped.length} blocked by your hours` : ' inside your active hours'}.` : 'Reminders are switched off above.'}</Txt> : null}
     </HandBox>
+    {/* Buttons above the fold: this is a bottom sheet, so anything below them is a scroll away. */}
+    <Row>
+      {ns?.permission === 'denied' && !ns.canAskAgain ? <Btn small icon="gear" label="Open phone settings" a11y="Open this phone's app settings, where notifications for Marginalia can be turned back on" onPress={() => { void Linking.openSettings().catch(() => toast('This phone would not open its settings')); }} />
+        : <Btn small icon="bell" label="Allow notifications" disabled={ns?.permission === 'granted' || ns?.permission === 'unavailable'} a11y={ns?.permission === 'granted' ? 'Allow notifications. Already allowed.' : 'Ask this phone for permission to send notifications'} onPress={async () => { const got = await notifs.ensurePermission(true); await refreshNotifStatus(); toast(got === 'granted' ? 'Allowed.' : got === 'denied' ? 'Blocked. Only the phone&rsquo;s settings can undo that.' : 'The phone has not answered yet.'); }} />}
+      <Btn small kind="ghost" label="Rebuild queue" onPress={async () => {
+        toast('Rebuilding the reminder queue…');
+        // `resync` is fire-and-forget: it debounces into a timer and reports back by writing `notifStatus`, so
+        // the only honest way to close the loop is to let it run, re-read the status, and say what it found.
+        // Without this the toast said "Rebuilding…" and then nothing ever happened again.
+        resync(0);
+        await new Promise((r) => setTimeout(r, 700));
+        await refreshNotifStatus();
+        const nq = getState().notifStatus;
+        toast(nq && nq.queueRead ? `Queue rebuilt: ${nq.scheduled} reminder${nq.scheduled === 1 ? '' : 's'} on this phone.` : 'Queue rebuilt, but the phone would not report what it holds.');
+      }} />
+    </Row>
+    <Row>
+      <Btn small kind="ghost" icon="bell" label="Test in 10 s" onPress={async () => { const ok = await notifs.sendTest(10); toast(ok ? 'Sent. Lock the phone and wait 10 seconds.' : 'Could not schedule: check permission'); }} />
+      <Btn small kind={armed ? 'danger' : 'ghost'} icon="check" disabled={!target} a11y={target ? `${armed ? 'Send the action test now' : 'Arm the action test'}. It really marks ${target.title}, and the toast can undo that.` : 'Test the buttons. No class or open task with a due date to imitate yet.'} label={armed ? 'Tap again to send' : 'Test the buttons'} onPress={() => { const t = target; if (!t) return; if (!armed) { setArmed(true); toast(`Next: ${t.title}. One more tap really marks it.`); return; } setArmed(false); void notifs.sendActionTest(t, notificationAccent(), 10).then((ok) => toast(ok ? `Sent for ${t.title} — it carries the real buttons.` : 'Could not schedule: check permission')); }} />
+    </Row>
+    <Txt f="serif" s={14.5} c="mut">{target ? `“Test the buttons” sends a copy of “${target.title}” in 10 seconds, with the same buttons a real reminder has. Pressing one really marks it — the toast that follows can undo it.` : '“Test the buttons” needs a class in the next fortnight, or an open task with a due date, to imitate.'}</Txt>
+    <Section title="The next 14 days">
+      {pl ? <>
+        <Txt f="serif" s={15.5} c="mut">{pl.count} reminder{pl.count === 1 ? '' : 's'} planned · {pl.shifted} moved out of the way · {pl.deferred} waiting for room in the queue{pl.dropped.length ? ` · ${pl.dropped.length} dropped` : ''}.</Txt>
+        {pl.moved.map((m, i) => <Txt key={`${m.at}${i}`} f="serif" s={15} c="mut">“{m.title}” moved from {fmtTime(m.was)} to {fmtTime(m.at)} — {m.why}.</Txt>)}
+        {pl.dropped.map((d, i) => <Txt key={`${d.id}${i}`} f="serif" s={15} c="mut">Dropped: {d.why}.</Txt>)}
+      </> : <Txt f="serif" s={15.5} c="mut">The plan has not been worked out yet.</Txt>}
+    </Section>
+    <Section title="What actually arrived">
+      {log.length === 0 ? <Empty icon="bell" text="Nothing has been queued on this phone yet, or the app has not been open since one was." /> : <View style={{ gap: 8 }}>{log.map((r) => <LogRow key={r.id} r={r} now={now} />)}</View>}
+      <Txt f="serif" s={14} c="mut">A reminder that rings while the app is closed is recorded as opened but never rang in the app — nothing was running to see it happen. The app will not invent a time it never witnessed.</Txt>
+    </Section>
+    <Hair />
     <Txt f="serif" s={15.5} c="mut">Local reminders only: they are scheduled on this phone and need no internet. Nothing is sent from a server, so a reminder cannot arrive if the phone has blocked the app, is in a battery-saver that kills alarms, or the app has not been opened for a while. Expo Go uses the system notification sound; custom sounds need a built app.</Txt>
-    <Row><Btn small label="Allow notifications" icon="bell" onPress={async () => { await notifs.ensurePermission(true); await refreshNotifStatus(); }} /><Btn small kind="ghost" label="Rebuild queue" onPress={async () => {
-      toast('Rebuilding the reminder queue…');
-      // `resync` is fire-and-forget: it debounces into a timer and reports back by writing `notifStatus`, so
-      // the only honest way to close the loop is to let it run, re-read the status, and say what it found.
-      // Without this the toast said "Rebuilding…" and then nothing ever happened again.
-      resync(0);
-      await new Promise((r) => setTimeout(r, 700));
-      await refreshNotifStatus();
-      const nq = getState().notifStatus;
-      toast(nq ? `Queue rebuilt: ${nq.scheduled} reminder${nq.scheduled === 1 ? '' : 's'} on this phone.` : 'Queue rebuilt.');
-    }} /><Btn small kind="ghost" label="Test in 10 s" onPress={async () => { const ok = await notifs.sendTest(10); toast(ok ? 'Sent. Lock the phone and wait 10 seconds.' : 'Could not schedule: check permission'); }} /></Row>
   </>); }
   if (page === 'sound') body = (<>
     <Toggle label="Sound" hint="Paper, stamps, dial and chimes" value={s.soundOn} onChange={(v) => set({ soundOn: v })} />

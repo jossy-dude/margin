@@ -67,4 +67,15 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     expect((await r.notifLog())[0]).toMatchObject({ id: 'n1', shownAt: NOW, openedAt: NOW + 5 });
     await r.reset(); expect((await r.load()).tasks).toHaveLength(0);
   });
+  it('a scheduled reminder is logged as queued, with neither timestamp invented', async () => {
+    const r = await make();
+    await r.schedNotif('n2', 'ended', NOW);
+    expect((await r.notifLog())[0]).toEqual({ id: 'n2', kind: 'ended', dueAt: NOW, shownAt: null, openedAt: null });
+    // …and re-scheduling the same reminder keeps what it already knows, because `Planned.id` embeds
+    // the minute and is stable until the reminder actually moves.
+    await r.schedNotif('n2', 'ended', NOW + 60_000);
+    expect((await r.notifLog())).toHaveLength(1);
+    await r.logNotif('n2', 'ended', NOW, 'opened', NOW + 120_000);
+    expect((await r.notifLog())[0]).toMatchObject({ dueAt: NOW, shownAt: null, openedAt: NOW + 120_000 });
+  });
 });

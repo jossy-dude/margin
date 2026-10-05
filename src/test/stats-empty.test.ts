@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MemoryRepository } from '../data/memory';
-import { hydrate } from '../store/store';
+import { hydrate, stopResync } from '../store/store';
 import { seedSnapshot } from '../data/seed';
 import { doneByDay, focusMinutesByDay, lastDays, statsEmptyHint } from '../domain/analytics';
 import type { FocusSession, Task } from '../domain/types';
 
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
-jest.mock('../services/notifications', () => ({ ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0 }), cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {}, status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, platform: 'test' }), onOpened: () => {}, onReceived: () => {} }));
+jest.mock('../services/notifications', () => ({ ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0, planned: [] }), cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {}, status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, platform: 'test' }), onOpened: () => {}, onReceived: () => {} }));
+
+// the store debounces a queue rebuild into a timer; without dropping it, it fires after jest has
+// torn the module registry down and takes the worker with it.
+afterEach(() => stopResync());
 
 const NOW = new Date(2026, 9, 5, 8).getTime();
 const DAY = 86_400_000;

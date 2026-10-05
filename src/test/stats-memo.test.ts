@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, set } from '../store/store';
+import { hydrate, set, stopResync } from '../store/store';
 import { StatsScreen } from '../screens/Stats';
 
 /**
@@ -13,7 +13,7 @@ import { StatsScreen } from '../screens/Stats';
  */
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
-jest.mock('../services/notifications', () => ({ ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0 }), cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {}, status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, platform: 'test' }), onOpened: () => {}, onReceived: () => {} }));
+jest.mock('../services/notifications', () => ({ ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0, planned: [] }), cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {}, status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, platform: 'test' }), onOpened: () => {}, onReceived: () => {} }));
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const Provider = ({ children }: { children: unknown }) => R.createElement(R.Fragment, null, children as React.ReactNode);
@@ -74,7 +74,7 @@ const mount = async () => {
 
 /** `useNow(60_000)` arms a real timer, so the renderer has to be torn down or jest leaks a worker. */
 let live: TestRenderer.ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; });
+afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); });
 
 /** The derivations that depend only on the data, so they need not re-run for anything else. */
 const DATA_ONLY = ['onTimeStats', 'focusBySubject', 'gradeBars', 'doneByHour', 'focusByHour', 'markSeries'];
@@ -95,7 +95,7 @@ describe('Stats does not re-derive the whole dataset on every render (BUG-014)',
     const before = { ...countsOf() };
     expect(before['gradeBars']).toBeGreaterThan(0); // they did run on mount
 
-    await act(async () => { set({ plan: { count: 7, deferred: 0, shifted: 0, next: null, at: NOW } }); });
+    await act(async () => { set({ plan: { count: 7, deferred: 0, shifted: 0, next: null, at: NOW, moved: [], dropped: [] } }); });
 
     for (const name of DATA_ONLY) expect({ name, ran: countsOf()[name], before: before[name] }).toEqual({ name, ran: before[name], before: before[name] });
     expect(s.json()).toContain('7 scheduled'); // …so it really did re-render, and really did show the new value

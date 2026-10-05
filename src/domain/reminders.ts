@@ -182,7 +182,7 @@ export function planReminders(i: PlanInput): Plan {
     const course = cn(o.meeting.courseId), name = course?.name ?? 'Class', start = atTime(o.date.getTime(), o.meeting.start), end = atTime(o.date.getTime(), o.meeting.end);
     const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = `${ymd(o.date)}${o.meeting.start}${o.meeting.courseId}`;
     if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${course?.room ?? ''}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
-    if (s.classEnded && !i.attendance[`${ymd(o.date)}|${o.meeting.start}|${o.meeting.courseId}`]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Here, late or missed? Tap to mark it.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
+    if (s.classEnded && !i.attendance[`${ymd(o.date)}|${o.meeting.start}|${o.meeting.courseId}`]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
   }
   // tasks
   for (const t of i.tasks) {

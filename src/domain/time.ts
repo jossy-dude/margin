@@ -45,4 +45,13 @@ export const fmtDay = (ms: number, now = Date.now()) => {
   const x = new Date(ms); return `${DW[weekdayOf(x)]} ${x.getDate()} ${MO[x.getMonth()]?.slice(0, 3)}`;
 };
 export const fmtWhen = (ms: number, now = Date.now()) => `${fmtDay(ms, now)} · ${fmtTime(ms)}`;
+/** How long until `at`, in words someone would say. Honest about a time that has already gone by: the
+ *  OS queue can still hold an alarm the phone never fired, and reporting it as "in -3 min" or quietly
+ *  as "next up" would be a lie about what the phone is going to do. */
+export function relFire(at: number, now = Date.now()): string {
+  const d = at - now, m = Math.round(Math.abs(d) / 60_000);
+  if (m === 0) return 'due now';
+  if (d < 0) return m < 60 ? `${m} min overdue` : m < 1440 ? `${Math.round(m / 60)} h overdue` : `${Math.round(m / 1440)} d overdue`;
+  return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : `in ${Math.round(m / 1440)} d`;
+}
 export const uid = (() => { let n = 0; return (p = 'x') => `${p}${Date.now().toString(36)}${(n++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`; })();

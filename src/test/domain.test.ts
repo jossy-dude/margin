@@ -1,6 +1,6 @@
 import { planReminders, blockedReason, workload, latestStart, freeMinutes } from '../domain/reminders';
 import { DEFAULT_NOTIF } from '../domain/defaults';
-import { advance, canBreak, endBreak, finish, initTimer, startBreak, toggle, view, FLOW_OVER_CAP_MS } from '../domain/timer';
+import { advance, canBreak, endBreak, finish, initTimer, nudgeStep, startBreak, toggle, view, FLOW_OVER_CAP_MS, NUDGE_MS } from '../domain/timer';
 import { needed, total } from '../domain/grades';
 import { effective, nextStatus, occKey } from '../domain/attendance';
 import { doneByHour, level, onTimeStats, streak } from '../domain/analytics';
@@ -87,6 +87,42 @@ describe('focus timer', () => {
   it('breaks are limited per round and can be ended early', () => {
     let s = toggle(initTimer({ planMin: 50, breaksAllowed: 1, breakMs: 5 * 60_000 }), 0).state;
     s = startBreak(s, 10 * 60_000); s = endBreak(s, 11 * 60_000); expect(s.phase).toBe('focus'); expect(canBreak(advance(s, 30 * 60_000).state)).toBe(false);
+  });
+  /* The store only commits the timer when an *event* fires, so a plain tick never lands in it. Any UI that
+     read elapsed focus, the remaining minutes or the break gate straight off the store was frozen for the
+     whole round. `view()` is the derived display state, so it has to carry the advanced state with it. */
+  it('view() carries the advanced state so a 1 Hz tick can gate on elapsed focus without a store write', () => {
+    const s = toggle(initTimer({ planMin: 25 }), 0).state;
+    expect(s.focusElapsedMs).toBe(0);                       // the store really is stale here
+    expect(canBreak(s)).toBe(false);
+    const v = view(s, 6 * 60_000);
+    expect(v.state.focusElapsedMs).toBe(6 * 60_000);
+    expect(v.state.focusLeftMs).toBe(19 * 60_000);           // the dial's ring and hand read this
+    expect(v.leftMs).toBe(v.state.focusLeftMs);              // the hub readout and the ring must agree
+    expect(v.progress).toBeCloseTo(6 / 25, 5);
+    // the literal V10c symptom: Dial computes progDeg = (1 - leftMs / (min * 60000)) * 360 from its
+    // `leftMs` prop, and Focus used to hand it the stale store value, so progDeg stayed 0 all round.
+    const progDeg = (1 - v.state.focusLeftMs / (25 * 60_000)) * 360;
+    expect(progDeg).toBeCloseTo(86.4, 1);
+    expect(canBreak(v.state)).toBe(true);                    // the gate opens 5 min in, no pause needed
+  });
+  it('the dial hand sweeps and the last 10 seconds stay visible to the UI', () => {
+    const s = toggle(initTimer({ planMin: 60 }), 0).state;
+    expect(view(s, 30 * 60_000).state.focusLeftMs).toBe(30 * 60_000);
+    expect(view(s, 60 * 60_000 - 8_000).state.focusLeftMs).toBe(8_000); // under the warn10 threshold
+  });
+  /* A fixed 5-minute nudge step can never fire on a 5-minute break, which is the default: the guard
+     `nextNudgeMs < breakTotalMs` is false from the first tick, so the sticker never wiggles. */
+  it('every break length can wiggle mid-break, not only breaks longer than the nudge step', () => {
+    expect(nudgeStep(5 * 60_000)).toBe(60_000);              // the default 5-minute break
+    expect(nudgeStep(10 * 60_000)).toBe(3 * 60_000);
+    expect(nudgeStep(15 * 60_000)).toBe(NUDGE_MS);           // never longer than the old step
+    expect(nudgeStep(60_000)).toBe(60_000);                  // a 1-minute break still gets one nudge slot
+    const s = startBreak(toggle(initTimer({ planMin: 25, breakMs: 5 * 60_000 }), 0).state, 10 * 60_000);
+    expect(s.nextNudgeMs).toBeLessThan(s.breakTotalMs);
+    expect(advance(s, 10 * 60_000 + 60_000).events).toContain('nudge');
+    expect(advance(s, 10 * 60_000 + 4 * 60_000).events.filter((e) => e === 'nudge')).toHaveLength(4);
+    expect(advance(s, 10 * 60_000 + 5 * 60_000).events.filter((e) => e === 'nudge')).toHaveLength(4); // none on the breakDone tick
   });
   it('pause keeps the remainder; finish ignores sessions under a minute', () => {
     let s = toggle(initTimer({ planMin: 25 }), 0).state; s = toggle(s, 10 * 60_000).state;

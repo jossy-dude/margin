@@ -17,12 +17,13 @@ export const FACES: FaceSpec[] = [
 ];
 export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id) ?? (FACES[1] as FaceSpec);
 /** Dial palette for a face in a theme, read from the resolved theme colours so it follows the palette as well as
- *  light/dark. Dark-native faces keep their onyx dial in both themes, so their engraving takes whichever of the
- *  theme's two extremes contrasts with it: the ink in dark, the card tone in light.
+ *  light/dark. `native` records where a face comes from (its material in the source engraving), not what the dial
+ *  has to be: a dark-native face keeps the onyx disc only in the dark theme, where the cream ink reads off it, and
+ *  turns to the card tone in the light theme, where dark ink on cream is the inverse of the same engraving. Without
+ *  that inversion every dark-native face is a black disc punched into the cream app.
  *  Takes only `native`, so a bitmap plate (always light artwork) can pass `{ native: 'light' }` without a cast. */
 export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): Pal {
-  if (f.native === 'light') return { ink: c.ink, dial: c.card, accent: c.acc };
-  return { ink: dark ? c.ink : c.card, dial: dark ? ONYX.dark : ONYX.light, accent: c.acc };
+  return { ink: c.ink, dial: dark && f.native === 'dark' ? ONYX.dark : c.card, accent: c.acc };
 }
 /**
  * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the
@@ -37,6 +38,15 @@ const PI = Math.PI, f1 = (v: number) => +v.toFixed(1);
 const P = (r: number, a: number): [number, number] => [r * Math.sin(a), -r * Math.cos(a)];
 const each = (n: number, fn: (i: number) => string) => Array.from({ length: n }, (_, i) => fn(i)).join('');
 const svg = (body: string, vb = '-100 -100 200 200') => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}">${body}</svg>`;
+const chan = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) as number);
+/** Flat tone `t` of the way from the dial to the ink. Ornament is stroked at full opacity in this pre-mixed
+ *  colour rather than as translucent ink: overlapping strokes then paint the same tone instead of stacking alpha,
+ *  which is what turned the old 20-ellipse guilloché into a grey cloud, and one drawing now reads identically on a
+ *  cream dial and an onyx one. `t` keeps the meaning of the old `stroke-opacity`. */
+export const engrave = (pal: Pal, t: number) => {
+  const [a, b] = [chan(pal.ink), chan(pal.dial)];
+  return `#${a.map((v, i) => Math.round(v * t + (b[i] as number) * (1 - t)).toString(16).padStart(2, '0')).join('')}`;
+};
 
 /* ── real involute gearing (module m, 20° pressure angle): flanks from the involute function, tooth-on-space phasing solved per train ── */
 const PA = (20 * PI) / 180, COS_PA = Math.cos(PA), INV_PA = Math.tan(PA) - PA;
@@ -71,14 +81,14 @@ function windows(rin: number, rout: number, k: number, spoke: number, ph: number
 export function gearSvg(g: Gear, pal: Pal): { svg: string; R: number } {
   const { rp, rf, ra } = gearGeometry(g), hub = Math.max(1.4, rp * 0.2), rim = rf - Math.max(0.9, g.m * 0.5), R = ra + 1.5;
   const body = `${toothPath(g)}${ring(0, 0, hub)}${g.spokes > 0 ? windows(hub * 1.9 + 0.6, rim, g.spokes, Math.max(1.1, g.m * 0.7), g.ph) : ''}`;
-  const jewel = g.jewel ? `<circle r="${f1(hub * 0.62)}" fill="${pal.accent}" stroke="${pal.ink}" stroke-width=".35"/><path d="M${f1(-hub * 0.5)} 0H${f1(hub * 0.5)}" stroke="${pal.dial}" stroke-width=".3"/>` : `<circle r="${f1(hub * 0.5)}" fill="${pal.ink}"/>`;
-  return { R, svg: svg(`<path d="${body}" fill="${pal.ink}" fill-opacity="${g.t}" stroke="${pal.ink}" stroke-width=".45" stroke-opacity=".9" fill-rule="evenodd"/><circle r="${f1(rim)}" fill="none" stroke="${pal.ink}" stroke-width=".3" stroke-opacity=".5"/>${jewel}`, `${-R} ${-R} ${2 * R} ${2 * R}`) };
+  const jewel = g.jewel ? `<circle r="${f1(hub * 0.62)}" fill="${pal.accent}" stroke="${engrave(pal, .95)}" stroke-width=".5"/><path d="M${f1(-hub * 0.5)} 0H${f1(hub * 0.5)}" stroke="${pal.dial}" stroke-width=".55"/>` : `<circle r="${f1(hub * 0.5)}" fill="${engrave(pal, .95)}"/>`;
+  return { R, svg: svg(`<path d="${body}" fill="${engrave(pal, Math.min(1, g.t + 0.3))}" stroke="${engrave(pal, .95)}" stroke-width="1.4" fill-rule="evenodd"/><circle r="${f1(rim)}" fill="none" stroke="${engrave(pal, .7)}" stroke-width="1"/>${jewel}`, `${-R} ${-R} ${2 * R} ${2 * R}`) };
 }
 /** Balance wheel + hairspring, oscillating — the part that makes a movement read as a movement. */
 export function balanceSvg(pal: Pal): { svg: string; R: number } {
   const R = 13; let spring = ''; for (let i = 0; i <= 60; i++) { const a = i * 0.34, r = 2 + (i / 60) * 6.5, p = P(r, a); spring += `${i ? 'L' : 'M'}${f1(p[0])} ${f1(p[1])}`; }
   const spokes = each(3, (i) => { const p = P(11.2, (i * 2 * PI) / 3), q = P(2.2, (i * 2 * PI) / 3); return `M${f1(q[0])} ${f1(q[1])}L${f1(p[0])} ${f1(p[1])}`; });
-  return { R, svg: svg(`<circle r="11.4" fill="none" stroke="${pal.ink}" stroke-width="1.7" stroke-opacity=".85"/><path d="${spokes}" stroke="${pal.ink}" stroke-width=".9" stroke-opacity=".85" fill="none"/><path d="${spring}" fill="none" stroke="${pal.ink}" stroke-width=".35" stroke-opacity=".7"/>${each(4, (i) => { const p = P(11.4, (i * PI) / 2 + 0.4); return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r=".9" fill="${pal.accent}"/>`; })}<circle r="1.5" fill="${pal.accent}" stroke="${pal.ink}" stroke-width=".3"/>`, `${-R} ${-R} ${2 * R} ${2 * R}`) };
+  return { R, svg: svg(`<circle r="11.4" fill="none" stroke="${engrave(pal, .95)}" stroke-width="2"/><path d="${spokes}" stroke="${engrave(pal, .95)}" stroke-width="1.5" fill="none"/><path d="${spring}" fill="none" stroke="${engrave(pal, .85)}" stroke-width=".8"/>${each(4, (i) => { const p = P(11.4, (i * PI) / 2 + 0.4); return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r=".9" fill="${pal.accent}"/>`; })}<circle r="1.5" fill="${pal.accent}" stroke="${engrave(pal, .95)}" stroke-width=".45"/>`, `${-R} ${-R} ${2 * R} ${2 * R}`) };
 }
 /* Skeleton movement: four wheels, module 2, solved so centre distance = rp+rp and a tooth meets a space at every contact (verified in tests). */
 const RAW: Omit<Gear, 'ph'>[] = [
@@ -107,50 +117,58 @@ export const SKELETON: Gear[] = (() => {
 export const BALANCE = { x: 29, y: 33, period: 0.8, swing: 105 };
 
 export interface SpinLayer { key: string; x: number; y: number; R: number; svg: string; dps: number; osc?: { swing: number; period: number } }
-const spiro = (cy: number, r: number, off: number, op: number, pal: Pal) => `<g fill="none" stroke="${pal.ink}" stroke-opacity="${op}" stroke-width=".5">${each(30, (i) => `<circle cy="${cy}" r="${r}" transform="rotate(${i * 12 + off})"/>`)}</g>`;
+/** One petal ring of a rosette: n circles of radius r whose centres ride a circle of radius cr, drawn in one flat
+ *  tone so the petals that overlap stay a single crisp flower outline instead of stacking into haze. */
+const petals = (n: number, cr: number, r: number, off: number, pal: Pal, t: number, sw: number) => `<g fill="none" stroke="${engrave(pal, t)}" stroke-width="${sw}">${each(n, (i) => `<circle cy="${f1(-cr)}" r="${f1(r)}" transform="rotate(${i * (360 / n) + off})"/>`)}</g>`;
 /** Layers that move on their own (gear trains, rosettes, the balance wheel, the Scales sub-seconds). */
 export function spinLayers(id: FaceId, pal: Pal): SpinLayer[] {
-  if (id === 'rb') return [{ key: 'r1', x: 0, y: 0, R: 60, svg: svg(spiro(-22, 22, 0, 0.3, pal), '-60 -60 120 120'), dps: 12 }, { key: 'r2', x: 0, y: 0, R: 60, svg: svg(spiro(-16, 30, 6, 0.18, pal), '-60 -60 120 120'), dps: -12 }];
+  // Guilloché is cut on a rose engine, so its centre turns: a 12-spoke centre wheel at −6 dps, under a third of
+  // the 30° repeat of a 12-fold figure, so it reads as a slow deliberate turn and cannot alias against itself.
+  // Straight arms only — a real guilloché is a straight-line weave, unlike Rosette Blanc's petals.
+  if (id === 'g') { const R = 31, arms = `<g fill="none" stroke="${engrave(pal, .85)}" stroke-width="2">${each(12, (i) => `<line y1="-10" y2="-27" transform="rotate(${i * 30})"/>`)}<circle r="27" stroke-width="1.6"/></g>`; return [{ key: 'sun', x: 0, y: 0, R, svg: svg(arms, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -6 }]; }
+  if (id === 'rb') return [{ key: 'r1', x: 0, y: 0, R: 49, svg: svg(petals(8, 34, 13, 0, pal, .85, 2), '-49 -49 98 98'), dps: 12 }, { key: 'r2', x: 0, y: 0, R: 33, svg: svg(petals(6, 19, 12, 30, pal, .68, 1.6), '-33 -33 66 66'), dps: -12 }];
   if (id === 's') {
     const out: SpinLayer[] = SKELETON.map((g, i) => { const s = gearSvg(g, pal); return { key: `g${i}`, x: g.x, y: g.y, R: s.R, svg: s.svg, dps: g.w }; });
     const b = balanceSvg(pal); out.push({ key: 'bal', x: BALANCE.x, y: BALANCE.y, R: b.R, svg: b.svg, dps: 0, osc: { swing: BALANCE.swing, period: BALANCE.period } });
     return out;
   }
   if (id === 'sl') {
-    const R = 15, body = `<circle r="14" fill="${pal.dial}"/><circle r="14" fill="none" stroke="${pal.ink}" stroke-width=".8" stroke-opacity=".6"/>${each(12, (i) => `<line y1="-12.5" y2="-10.5" stroke="${pal.ink}" stroke-width=".5" stroke-opacity=".6" transform="rotate(${i * 30})"/>`)}<path d="M0 3V-11" stroke="${pal.accent}" stroke-width="1.2" stroke-linecap="round"/><circle r="1.3" fill="${pal.accent}"/>`;
+    const R = 15, body = `<circle r="14" fill="${pal.dial}"/><circle r="14" fill="none" stroke="${engrave(pal, .85)}" stroke-width="1.4"/>${each(12, (i) => `<line y1="-12.5" y2="-10.5" stroke="${engrave(pal, .85)}" stroke-width="1" transform="rotate(${i * 30})"/>`)}<path d="M0 3V-11" stroke="${pal.accent}" stroke-width="1.2" stroke-linecap="round"/><circle r="1.3" fill="${pal.accent}"/>`;
     return [{ key: 'sub', x: 0, y: 36, R, svg: svg(body, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 6 }];
   }
   return [];
 }
 /** the fixed part of a face: case, dial, chapter ring, ornament, numerals */
 export function staticSvg(f: FaceSpec, pal: Pal, font: string): string {
-  const ink = pal.ink, o = (op: number) => `stroke="${ink}" stroke-opacity="${op}" fill="none"`;
+  const ink = pal.ink, o = (t: number) => `stroke="${engrave(pal, t)}" fill="none"`;
   let orn = '';
-  if (f.id === 'g') orn = `<circle r="58" fill="${ink}" fill-opacity=".06"/><g ${o(0.34)} stroke-width=".5">${each(20, (i) => `<ellipse rx="36" ry="14" transform="rotate(${i * 9})"/>`)}<circle r="30"/></g>`;
-  if (f.id === 'c') orn = `<g ${o(0.55)} stroke-width="4.2">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><g fill="none" stroke="${pal.dial}" stroke-width="1.3">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><circle r="7" ${o(0.8)} stroke-width="2"/>`;
+  // Guilloché Ivory: an engine-turned fluted band — two rules with 16 radial bars cut between them. Straight lines
+  // only, one flat tone, no translucent overlap: a rose engine cuts crisp grooves, it does not fog the dial.
+  if (f.id === 'g') orn = `<g ${o(0.85)} stroke-width="2">${each(16, (i) => `<line y1="-52" y2="-40" transform="rotate(${i * 22.5})"/>`)}</g><circle r="52" ${o(0.7)} stroke-width="1.7"/><circle r="40" ${o(0.6)} stroke-width="1.4"/>`;
+  if (f.id === 'c') orn = `<g ${o(0.85)} stroke-width="6.4">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><g fill="none" stroke="${pal.dial}" stroke-width="2">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><circle r="7" ${o(0.9)} stroke-width="3"/>`;
   if (f.id === 'sl') {
     const s = 6.2, rows = each(24, (j) => { const y = -64 + j * s * 0.62, off = j % 2 ? s : 0; return each(24, (i) => { const x = -66 + i * s * 2 + off; return `<path d="M${f1(x - s)} ${f1(y)}a${s} ${s} 0 0 0 ${2 * s} 0"/>`; }); });
-    orn = `<clipPath id="sc"><circle r="62"/></clipPath><g clip-path="url(#sc)" ${o(0.4)} stroke-width=".45">${rows}</g><g transform="translate(0 -38)" fill="${ink}" fill-opacity=".9"><path d="M0 -8C-5 -3-5 4 0 8 5 4 5 -3 0 -8Z"/><path d="M-3 6C-10 4-13-4-8-8-8-3-6 1-2 3ZM3 6C10 4 13-4 8-8 8-3 6 1 2 3Z"/><rect x="-5" y="7" width="10" height="1.6" rx=".8"/></g>`;
+    orn = `<clipPath id="sc"><circle r="62"/></clipPath><g clip-path="url(#sc)" ${o(0.55)} stroke-width=".8">${rows}</g><g transform="translate(0 -38)" fill="${engrave(pal, .95)}"><path d="M0 -8C-5 -3-5 4 0 8 5 4 5 -3 0 -8Z"/><path d="M-3 6C-10 4-13-4-8-8-8-3-6 1-2 3ZM3 6C10 4 13-4 8-8 8-3 6 1 2 3Z"/><rect x="-5" y="7" width="10" height="1.6" rx=".8"/></g>`;
   }
   if (f.id === 's') {
     const gz = SKELETON.map((g) => gearGeometry(g));
-    orn = `<g ${o(0.3)} stroke-width=".4">${SKELETON.map((g, i) => `<circle cx="${g.x}" cy="${g.y}" r="${f1((gz[i]?.rp ?? 0))}" stroke-dasharray="1 1.4"/>`).join('')}<circle cx="${BALANCE.x}" cy="${BALANCE.y}" r="13.5" stroke-dasharray="1 1.4"/></g>` +
-      `<path d="M-46 -26Q0 -58 46 -26" ${o(0.55)} stroke-width="3.2" stroke-linecap="round"/><path d="M-46 -26Q0 -58 46 -26" fill="none" stroke="${pal.dial}" stroke-width="1" stroke-linecap="round"/>` +
-      [[-44, -27], [44, -27], [0, -42]].map(([x, y]) => `<g transform="translate(${x} ${y})"><circle r="2.7" fill="${ink}" fill-opacity=".85"/><path d="M-1.8 -1.2L1.8 1.2" stroke="${pal.dial}" stroke-width=".6"/></g>`).join('') +
-      `<path d="M-56 22Q-60 40 -42 52" ${o(0.5)} stroke-width="2.4" stroke-linecap="round"/>`;
+    orn = `<g ${o(0.5)} stroke-width=".9">${SKELETON.map((g, i) => `<circle cx="${g.x}" cy="${g.y}" r="${f1((gz[i]?.rp ?? 0))}" stroke-dasharray="1 1.4"/>`).join('')}<circle cx="${BALANCE.x}" cy="${BALANCE.y}" r="13.5" stroke-dasharray="1 1.4"/></g>` +
+      `<path d="M-46 -26Q0 -58 46 -26" ${o(0.8)} stroke-width="5" stroke-linecap="round"/><path d="M-46 -26Q0 -58 46 -26" fill="none" stroke="${pal.dial}" stroke-width="1.4" stroke-linecap="round"/>` +
+      [[-44, -27], [44, -27], [0, -42]].map(([x, y]) => `<g transform="translate(${x} ${y})"><circle r="2.7" fill="${engrave(pal, .95)}"/><path d="M-1.8 -1.2L1.8 1.2" stroke="${pal.dial}" stroke-width=".6"/></g>`).join('') +
+      `<path d="M-56 22Q-60 40 -42 52" ${o(0.8)} stroke-width="3" stroke-linecap="round"/>`;
   }
-  const rings = f.rings.map((r, i) => `<circle r="${r}" ${o(i ? 0.35 : 0.6)} stroke-width="${i ? 0.4 : 0.7}"/>`).join('');
+  const rings = f.rings.map((r, i) => `<circle r="${r}" ${o(i ? 0.6 : 0.8)} stroke-width="${i ? 1.3 : 1.7}"/>`).join('');
   const ticks = each(60, (j) => {
     const maj = j % 5 === 0, a = (j * PI) / 30;
-    if (f.tk === 'dot') { const p = P(87, a); return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${maj ? 1.5 : 0.7}" fill="${ink}"/>`; }
-    return `<line y1="-90.5" y2="${maj ? -84 : -87.5}" transform="rotate(${j * 6})" stroke="${ink}" stroke-width="${maj ? 1.6 : 0.6}"/>`;
+    if (f.tk === 'dot') { const p = P(87, a); return `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${maj ? 1.9 : 0.9}" fill="${ink}"/>`; }
+    return `<line y1="-90.5" y2="${maj ? -84 : -87.5}" transform="rotate(${j * 6})" stroke="${ink}" stroke-width="${maj ? 2.2 : 0.9}"/>`;
   });
   const RN = 'XII I II III IV V VI VII VIII IX X XI'.split(' ');
   const nums = each(12, (j) => {
     if (f.drop6 && j === 6) return ''; const p = P(f.nr, (j * PI) / 6), x = f1(p[0]), y = f1(p[1]), rot = j > 3 && j < 9 ? j * 30 + 180 : j * 30;
     return `<text x="${x}" y="${f1(p[1] + f.ns * 0.34)}" font-size="${f.ns}" font-family="${font}" fill="${ink}" text-anchor="middle" transform="rotate(${rot === j * 30 ? 0 : rot} ${x} ${y})">${RN[j]}</text>`;
   });
-  return svg(`<circle r="99" fill="${ink}"/><circle r="97.2" fill="${pal.dial}"/><circle r="95.6" fill="none" stroke="${ink}" stroke-width=".5" stroke-opacity=".6"/>${rings}${orn}${ticks}${nums}`);
+  return svg(`<circle r="99" fill="${ink}"/><circle r="97.2" fill="${pal.dial}"/><circle r="95.6" ${o(0.7)} stroke-width="1.2"/>${rings}${orn}${ticks}${nums}`);
 }
 export type HandKind = 'hour' | 'minute' | 'second';
 /** Hands point to 12 and rotate about the dial centre (the host view is the dial's size, so its centre is the pivot). */

@@ -19,6 +19,10 @@ export interface Repository {
   purgeDemo(): Promise<void>;
   reset(): Promise<void>;
   logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number): Promise<void>;
+  /** Record that a reminder was handed to the OS, before it has rung. `logNotif` can only write a
+   *  `shown_at` or an `opened_at`, and inventing one of those to mean "queued" would be a lie in a
+   *  column the Delivery page reads. */
+  schedNotif(id: string, kind: string, dueAt: number): Promise<void>;
   notifLog(): Promise<NotifLogRow[]>;
   pendingOutbox(limit?: number): Promise<OutboxRow[]>;
   ackOutbox(upToSeq: number): Promise<void>;

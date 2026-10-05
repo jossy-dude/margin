@@ -19,9 +19,11 @@ export const PENS: Record<Exclude<Settings['pen'], 'warm' | 'graphite'>, { light
 export const palettes = { refined: REFINED, original: ORIGINAL };
 
 /** Art constants that are deliberately theme-independent, so they are tokens rather than literals
- *  pasted into components. The onyx dial of the dark-native clock faces stays dark in both themes
- *  (a cream dial with cream hands would be invisible), and the washi tape is a material, not a
- *  palette entry. Neither should follow `palette: 'original'` — but neither belongs in a screen. */
+ *  pasted into components. `ONYX.dark` is the dial material of the dark-native clock faces: they keep it in the
+ *  dark theme, where the theme's cream ink reads off it, and turn to `card` in the light theme (see `dialPal`) —
+ *  a cream dial with cream hands would be invisible, and an onyx dial would be a black hole in the cream app.
+ *  `ONYX.light` is the same material a shade down and stays for the plate work. Neither should follow
+ *  `palette: 'original'` — but neither belongs in a screen. */
 export const ONYX = { light: '#26201A', dark: '#17130F' } as const;
 export const TAPE = {
   light: { fill: '#E7D9AE99', edge: '#B8A56E55' },

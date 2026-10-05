@@ -12,14 +12,28 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, set } from '../store/store';
+import { hydrate, set, stopResync } from '../store/store';
+import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
 import { clearCrashes, recordCrash, type CrashEntry } from '../ui/crashlog';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
-jest.mock('../services/notifications', () => ({ ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0 }), cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {}, status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, platform: 'test' }), onOpened: () => {}, onReceived: () => {} }));
+jest.mock('../services/notifications', () => ({
+  ensurePermission: async () => 'granted',
+  sync: async () => ({ added: 0, removed: 0, planned: [] }),
+  cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {},
+  sendTest: async () => true, sendActionTest: async () => true, TEST_ACTION_ID: 'action-test',
+  status: async () => mockNotif.status,
+  onOpened: () => {}, onReceived: () => {},
+}));
+
+/** `jest.mock` is hoisted above the module body, so the phone's answers to Delivery status have to be
+ *  reachable from that factory by a name the hoister allows (see the note on `fs` below). */
+const mockNotif: { status: NotifStatus } = {
+  status: { permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, platform: 'test' },
+};
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const Provider = ({ children }: { children: unknown }) => R.createElement(R.Fragment, null, children as React.ReactNode);
@@ -106,6 +120,10 @@ const mount = async (crashes = 0) => {
   return {
     r,
     json: () => JSON.stringify(r.toJSON()),
+    /** The page as a reader gets it. `json` splits every interpolated value into its own node, so a
+     *  sentence the user reads as one line arrives as `"6"," reminders planned · ","1"`; joining the
+     *  leaves with nothing puts it back together. */
+    text: () => leaves(r.toJSON()).join(''),
     /** Drive the greeting field the way typing does: change text, then let the sheet re-render. */
     async type(text: string) {
       const inputs = r.root.findAll((n) => typeof n.type !== 'string' && 'onChangeText' in (n.props as object));
@@ -116,7 +134,15 @@ const mount = async (crashes = 0) => {
   };
 };
 
-afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; });
+afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); });
+
+/** Every string in the rendered tree, in order. */
+function leaves(node: unknown): string[] {
+  if (typeof node === 'string') return [node];
+  if (Array.isArray(node)) return node.flatMap(leaves);
+  const kids = (node as { children?: unknown[] } | null)?.children;
+  return kids ? leaves(kids) : [];
+}
 
 describe('the Diagnostics hint does not re-read the crash log on every keystroke (BUG-008)', () => {
   it('reads the log once for the hint, not twice, and not at all per keystroke', async () => {
@@ -176,5 +202,96 @@ describe('the Diagnostics hint does not re-read the crash log on every keystroke
     expect(s.json()).toContain('1 crash recorded');
     await act(async () => { recordCrash(new Error('boom'), 'runtime', 'Today'); });
     expect(s.json()).toContain('2 crashes recorded'); // the subscription, not a page visit
+  });
+});
+
+/* ───── Delivery status ───── */
+/** The page's whole job is not to look plausible when the phone is in a state it cannot do anything
+ *  about. A plausible-looking zero is the failure this renders, so each state below asserts the sentence
+ *  that admits it rather than the number. */
+describe('Delivery status tells the truth about what this phone has actually done', () => {
+  /** `resync` is debounced, so the store's own `notifStatus` never lands inside a test; the page is
+   *  given the phone's answers and the planner's output directly, which is what it reads. */
+  const page = async (patch: Partial<Parameters<typeof set>[0]> = {}) => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: ['nstatus'], notifStatus: mockNotif.status, ...patch }); });
+    return s;
+  };
+  const status = (o: Partial<NotifStatus>): NotifStatus => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: true, queueRead: true, platform: 'test', ...o });
+
+  it('a queue it could not read is not shown as an empty one', async () => {
+    mockNotif.status = status({ scheduled: 0, queueRead: false });
+    const s = await page({});
+    expect(s.text()).toContain('would not say what it has queued');
+    expect(s.text()).not.toContain('0 reminders queued');
+  });
+
+  it('a real count is real, and the next one is absolute and relative', async () => {
+    mockNotif.status = status({ scheduled: 18, next: Date.now() + 12 * 60_000 });
+    const s = await page({});
+    expect(s.text()).toContain('18 reminders queued on this phone');
+    expect(s.text()).toMatch(/Next one rings .+ — in \d+ min\./);
+  });
+
+  it('an alarm whose time has passed says so instead of a negative wait', async () => {
+    mockNotif.status = status({ scheduled: 3, next: Date.now() - 5 * 60_000 });
+    const s = await page({});
+    expect(s.text()).toContain('5 min overdue');
+  });
+
+  it('blocked, with the phone still willing to ask: it says so, and offers the ask', async () => {
+    mockNotif.status = status({ permission: 'denied', canAskAgain: true, scheduled: 4 });
+    const s = await page({});
+    expect(s.text()).toContain('Notifications are blocked.');
+    expect(s.text()).toContain('The phone will still ask once');
+    expect(s.text()).toContain('Allow notifications');
+    expect(s.text()).not.toContain('Open phone settings');
+    expect(s.text()).toContain('4 still queued from before'); // leftovers are named, not hidden
+  });
+
+  it('blocked, with the phone refusing to ask again: it says the app cannot fix it and offers the settings screen', async () => {
+    mockNotif.status = status({ permission: 'denied', canAskAgain: false });
+    const s = await page({});
+    expect(s.text()).toContain('The phone has stopped asking');
+    expect(s.text()).toContain('Open phone settings');
+    expect(s.text()).not.toContain('Allow notifications');
+  });
+
+  it('a phone with no notification module is not described as a blocked app with a fix', async () => {
+    mockNotif.status = status({ permission: 'unavailable', queueRead: false });
+    const s = await page({});
+    expect(s.text()).toContain('would not give the app its notification module');
+  });
+
+  it('a reminder that rang while the app was closed is shown as opened and never seen', async () => {
+    mockNotif.status = status({ scheduled: 0 });
+    const s = await page({ notifLog: [{ id: 'ended-1-1', kind: 'ended', dueAt: Date.now() - 3_600_000, shownAt: null, openedAt: Date.now() - 600_000 }] });
+    expect(s.text()).toContain('opened, never rang in the app');
+    expect(s.text()).toContain('class ended');
+    expect(s.text()).not.toContain('Nothing has been queued on this phone yet');
+  });
+
+  it('an empty log says so in words, rather than showing an empty list', async () => {
+    mockNotif.status = status({ scheduled: 0 });
+    const s = await page({ notifLog: [] });
+    expect(s.text()).toContain('Nothing has been queued on this phone yet');
+  });
+
+  it('what moved and what was dropped is named, with the reason the planner gave', async () => {
+    mockNotif.status = status({ scheduled: 6 });
+    const s = await page({ plan: { count: 6, deferred: 2, shifted: 1, at: Date.now(), next: null, moved: [{ title: 'Economics', at: Date.now() + 3_600_000, was: Date.now(), why: 'quiet hours' }], dropped: [{ id: 'x', why: 'blocked by quiet/active settings' }] } });
+    expect(s.text()).toContain('1 moved out of the way');
+    expect(s.text()).toContain('2 waiting for room in the queue');
+    expect(s.text()).toContain('“Economics” moved from');
+    expect(s.text()).toContain('quiet hours.');
+    expect(s.text()).toContain('Dropped: blocked by quiet/active settings.');
+  });
+
+  it('the action test is armed before it can write anything real', async () => {
+    mockNotif.status = status({ scheduled: 6, next: Date.now() + 3_600_000 });
+    const s = await page({ plan: { count: 6, deferred: 0, shifted: 0, at: Date.now(), next: { id: 'ended-1-1', kind: 'ended', at: Date.now() + 3_600_000, title: 'Economics just ended', body: 'b', channel: 'classes', route: 'Today', entityId: '2026-10-06|08:30|E' }, moved: [], dropped: [] } });
+    expect(s.text()).toContain('Test the buttons');
+    expect(s.text()).toContain('really marks it'); // the cost is stated before the button is pressed
+    expect(s.text()).toContain('Test in 10 s'); // …and the old plain-tap test is still there
   });
 });

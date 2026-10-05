@@ -124,7 +124,7 @@ function BreakSticker({ leftMs, totalMs, falling, onGone, onBack, nudge }: { lef
 export function FocusScreen() {
   const route = useStore((s) => s.route), sheet = useStore((s) => s.sheet), timer = useStore((s) => s.timer), fev = useStore((s) => s.fev), settings = useStore((s) => s.settings), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses);
   const st = { route, sheet, timer, fev, settings, tasks, courses };
-  const { c, dark } = useTheme(), { width } = useWindowDimensions(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), now = useNow(st.route === 'Focus' || st.timer.running ? 1000 : 30_000), s = width / 440, t = st.timer, v = view(t, now);
+  const { c, dark } = useTheme(), { width } = useWindowDimensions(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), now = useNow(st.route === 'Focus' || st.timer.running ? 1000 : 30_000), s = width / 440, t = st.timer, v = view(t, now), g = v.state;
   const task = st.tasks.find((x) => x.id === t.taskId), course = st.courses.find((x) => x.id === t.courseId), topOff = ins.top / s;
   const stamp = useSharedValue(0), [stampN, setStampN] = useState(1), [ghost, setGhost] = useState<null | { total: number }>(null), prev = useRef(t.phase), lastSec = useRef(0), [nudge, setNudge] = useState(0), [live, setLive] = useState(''), tickSV = useSharedValue(0), wash = useSharedValue(0);
   const editable = t.phase === 'set';
@@ -149,10 +149,10 @@ export function FocusScreen() {
   /* eslint-enable react-hooks/set-state-in-effect */
   const phaseLabel = t.phase === 'set' ? 'ready' : t.phase === 'break' ? 'on a break' : v.flowing && v.overMs > 0 ? `flow +${Math.floor(v.overMs / 60_000)}m` : t.running ? 'focusing' : v.roundDone ? 'round done' : 'paused', rn = t.rounds + (t.phase === 'set' || v.roundDone ? (t.phase === 'set' ? 1 : 0) : 1) || 1;
   const bigText = t.phase === 'set' ? `${t.planMin} min` : t.phase === 'break' ? fmtClock(v.breakLeftMs / 1000) : v.roundDone && v.overMs > 0 ? `+${fmtClock(v.overMs / 1000)}` : fmtClock(v.leftMs / 1000);
-  const subText = t.phase === 'set' ? 'ready when you are' : t.phase === 'break' ? 'break, main clock paused' : frozen ? `flow capped at ${Math.round(FLOW_OVER_CAP_MS / 60_000)} min` : v.roundDone && !t.running ? 'round complete' : t.running ? `${fmtDur(Math.max(1, Math.round(t.planMin - t.focusElapsedMs / 60_000)))} to go` : 'paused';
+  const subText = t.phase === 'set' ? 'ready when you are' : t.phase === 'break' ? 'break, main clock paused' : frozen ? `flow capped at ${Math.round(FLOW_OVER_CAP_MS / 60_000)} min` : v.roundDone && !t.running ? 'round complete' : t.running ? `${fmtDur(Math.max(1, Math.round(t.planMin - g.focusElapsedMs / 60_000)))} to go` : 'paused';
   const goLabel = t.phase === 'set' ? 'Start' : t.phase === 'break' ? 'On break' : t.running ? 'Pause' : v.roundDone ? 'Next round' : 'Resume';
   const onGo = () => { if (t.phase === 'break') { fx.denied(); return; } const wasRunning = t.running; const n = act.timerToggle(); if (!wasRunning && n.running) fx.start(); else fx.clack(); };
-  const breakGate = canBreak(t) ? '' : t.phase === 'break' ? 'Already on a break.' : t.phase !== 'focus' || !t.running ? 'Start a round first.' : t.breaksUsed >= t.breaksAllowed ? 'No breaks left this round.' : `Breaks unlock after ${Math.round(MIN_BREAK_AFTER_MS / 60_000)} min of focus.`;
+  const breakGate = canBreak(g) ? '' : g.phase === 'break' ? 'Already on a break.' : g.phase !== 'focus' ? 'Start a round first.' : !g.running ? 'Paused — resume the round to take a break.' : g.breaksUsed >= g.breaksAllowed ? 'No breaks left this round.' : `Breaks unlock after ${Math.round(MIN_BREAK_AFTER_MS / 60_000)} min of focus.`;
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
       <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
@@ -163,6 +163,7 @@ export function FocusScreen() {
             <Txt f="bold" s={19} accessibilityLiveRegion="polite">Round {rn} · {phaseLabel}</Txt>
             <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1, 2, 3].map((i) => <View key={i} style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.6, borderColor: c.ink, backgroundColor: i < t.rounds % 4 || (t.rounds > 0 && t.rounds % 4 === 0) ? c.ink : 'transparent' }} />)}</View>
           </Box>
+          <Pressable onPress={() => act.open({ t: 'settings' })} accessibilityRole="button" accessibilityLabel="Settings" style={{ position: 'absolute', right: 118, top: 8 + topOff }}><Box seed="set" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="gear" size={22} color={c.ink} /></Box></Pressable>
           <Pressable onPress={() => act.go('Today')} accessibilityRole="button" accessibilityLabel="Back to Today" style={{ position: 'absolute', right: 66, top: 8 + topOff }}><Box seed="back" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="back" size={22} color={c.ink} /></Box></Pressable>
           <Pressable onPress={() => { act.setSettings({ soundOn: !st.settings.soundOn }); }} accessibilityRole="switch" accessibilityState={{ checked: st.settings.soundOn }} accessibilityLabel="Sounds" style={{ position: 'absolute', right: 14, top: 8 + topOff }}><Box seed="snd" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="sound" size={22} color={st.settings.soundOn ? c.ink : c.mut} /></Box></Pressable>
           <Box seed="task" style={{ position: 'absolute', left: 32, top: 259, width: 386, paddingHorizontal: 15, paddingTop: 11, paddingBottom: 10, transform: [{ rotate: '-1deg' }] }}>
@@ -172,8 +173,10 @@ export function FocusScreen() {
             <Pressable onPress={() => act.timerSwap()} disabled={!editable} accessibilityRole="button" accessibilityLabel={`Swap task, now ${task?.title ?? 'free focus'}`} style={{ position: 'absolute', right: 10, bottom: 9, minHeight: 32, paddingHorizontal: 4, justifyContent: 'center', opacity: editable ? 1 : 0.4 }}><Txt f="bold" s={15} c="mut" style={{ borderBottomWidth: 1.5, borderStyle: 'dashed', borderBottomColor: c.mut }}>swap task</Txt></Pressable>
           </Box>
           {/* the dial always counts the focus clock: on a break the main clock is paused, so `focusLeftMs`
-              is the right number in both phases and the dial never restarts behind the break sticker */}
-          <Dial min={t.planMin} phase={t.phase} leftMs={t.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing} readout={bigText} tick={tickSV} wash={wash}
+              is the right number in both phases and the dial never restarts behind the break sticker.
+              It comes from the advanced state, not the store: the store only commits on events, so the
+              ring, the pointer hand and the last-10-seconds ring all froze if they read `t`. */}
+          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing} readout={bigText} tick={tickSV} wash={wash}
             onChange={(m, vel) => { if (vel < 0) { fx.bump(); return; } if (m !== t.planMin) { act.timerSetMin(m); fx.detent(vel); } }} />
           <Txt f="serifB" s={12.5} c="mut" pointerEvents="none" style={{ position: 'absolute', left: 60, top: 640, width: 320, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{subText}</Txt>
           <Txt f="hand" s={15} pointerEvents="none" style={{ position: 'absolute', left: 360, top: 352, transform: [{ rotate: '6deg' }], textShadowColor: c.paper, textShadowRadius: 4, width: 90 }}>{'focus doesn\'t\nhappen by\naccident'}</Txt>
@@ -192,8 +195,8 @@ export function FocusScreen() {
           <Pressable onPress={() => { if (t.phase === 'set') { act.go('Today'); return; } act.timerFinish(true); fx.clack(); }} accessibilityRole="button" accessibilityLabel={t.phase === 'set' ? 'Leave focus' : 'End session and save'} style={{ position: 'absolute', left: 181, top: 800, transform: [{ rotate: '1deg' }] }}>
             <Box seed="end" fill="transparent" shadow={false} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}><Txt f="bold" s={19}>{t.phase === 'set' ? 'leave' : 'end session'}</Txt></Box>
           </Pressable>
-          <Pressable onPress={() => { if (canBreak(t)) act.timerBreak(); else { fx.denied(); toast(breakGate); } }} accessibilityRole="button" accessibilityState={{ disabled: !canBreak(t) }} accessibilityLabel={`Take a break, ${Math.max(0, t.breaksAllowed - t.breaksUsed)} left. ${breakGate}`} style={{ position: 'absolute', left: 52, top: 806, transform: [{ rotate: '-1.5deg' }] }}>
-            <Box seed="brk" fill={c.card} shadow={false} sw={2} style={{ minHeight: 38, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: canBreak(t) ? 1 : 0.55 }}><Icon name="coffee" size={17} color={c.ink} /><Txt f="bold" s={16}>break · {fmtDur(Math.round(t.breakMs / 60_000))}</Txt></Box>
+          <Pressable onPress={() => { if (canBreak(g)) act.timerBreak(); else { fx.denied(); toast(breakGate); } }} accessibilityRole="button" accessibilityState={{ disabled: !canBreak(g) }} accessibilityLabel={`Take a break, ${Math.max(0, t.breaksAllowed - g.breaksUsed)} left. ${breakGate}`} style={{ position: 'absolute', left: 52, top: 806, transform: [{ rotate: '-1.5deg' }] }}>
+            <Box seed="brk" fill={c.card} shadow={false} sw={2} style={{ minHeight: 38, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: canBreak(g) ? 1 : 0.55 }}><Icon name="coffee" size={17} color={c.ink} /><Txt f="bold" s={16}>break · {fmtDur(Math.round(t.breakMs / 60_000))}</Txt></Box>
           </Pressable>
           {(t.phase === 'break' || ghost) && <BreakSticker leftMs={ghost ? 0 : v.breakLeftMs} totalMs={ghost ? ghost.total : t.breakTotalMs} falling={!!ghost} nudge={nudge} onGone={() => setGhost(null)} onBack={() => act.timerBackNow()} />}
           <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 88, top: 404, width: 264, height: 170, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: c.bad, borderRadius: 14 }, stampS]}>
