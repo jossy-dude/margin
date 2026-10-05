@@ -24,6 +24,11 @@ export const fmtClock = (sec: number) => {
   return (h ? `${h}:${pad(Math.floor(s / 60) % 60)}` : pad(Math.floor(s / 60))) + ':' + pad(s % 60);
 };
 export const fmtDur = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}` : `${min}m`);
+/** `1 day` / `2 days`. Takes the singular unit and derives the plural, so the caller picks one word
+ *  and the helper picks which of the two to print. Irregulars pass their own plural explicitly.
+ *  The app had this inlined in a dozen places and Stats' streak line was the one that got it wrong
+ *  ("streak 1 days"); zero takes the plural, which is what English does. */
+export const plural = (n: number, unit: string, many = `${unit}s`) => `${n} ${Math.abs(n) === 1 ? unit : many}`;
 export const fmtTime = (ms: number) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 export const fmtDay = (ms: number, now = Date.now()) => {
   const d = startOfDay(ms), t = startOfDay(now), diff = Math.round((d - t) / DAY_MS);

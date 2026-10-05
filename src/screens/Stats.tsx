@@ -6,7 +6,7 @@ import { useNow, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import * as A from '../domain/analytics';
-import { fmtDur, parseYmd, weekdayOf } from '../domain/time';
+import { fmtDur, parseYmd, plural, weekdayOf } from '../domain/time';
 import { ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
@@ -38,7 +38,7 @@ export function StatsScreen() {
         <Txt f="serif" s={15.5} c="mut">{ot.avgLeadHours !== null ? `You finish on-time tasks about ${ot.avgLeadHours < 24 ? Math.round(ot.avgLeadHours) + ' h' : Math.round(ot.avgLeadHours / 24) + ' days'} before they are due. ` : ''}{prev ? `Focus is ${week >= prev ? 'up' : 'down'} ${Math.abs(Math.round(((week - prev) / prev) * 100))}% on last week. ` : ''}{lateWeeks ? `${lateWeeks} finished late.` : ''}</Txt>
       </Card>
       <Card seed="fheat" title="Focus heatmap" sub={`${fmtDur(totalMin)} in the last 15 weeks`}><Heatmap values={focusD} w={iw} startWd={start} unit=" min" /></Card>
-      <Card seed="dheat" title="Tasks finished" sub={`${totalDone} in the last 15 weeks · streak ${ds.current} days`}><Heatmap values={doneD} w={iw} startWd={start} unit=" tasks" /></Card>
+      <Card seed="dheat" title="Tasks finished" sub={`${totalDone} in the last 15 weeks · streak ${plural(ds.current, 'day')}`}><Heatmap values={doneD} w={iw} startWd={start} unit=" tasks" /></Card>
       <Card seed="hh" title="When you work best" sub={bestH(fh) ? `Focus peaks around ${bestH(fh)}` : 'Start a focus session to see this'}><Hist24 values={fh} w={iw} /></Card>
       <Card seed="th" title="When you tick things off" sub={bestH(hours) ? `Most tasks are finished around ${bestH(hours)}` : 'Finish a task to see this'}><Hist24 values={hours} w={iw} accent={c.ok} /></Card>
       {bySub.length > 0 && <Card seed="sub" title="Focus by subject"><HBars items={bySub.slice(0, 6).map((s) => ({ label: s.name, value: s.min }))} w={iw} fmt={fmtDur} /></Card>}
