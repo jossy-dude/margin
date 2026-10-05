@@ -23,6 +23,24 @@ export const pageBottomPad = (bottomInset: number) => navHeight(bottomInset) + F
 export const TOAST_CLEAR = 20;
 export const toastBottom = (bottomInset: number) => navHeight(bottomInset) + TOAST_CLEAR;
 
+/** An hour label's line box on the Week scale, at `s: 11.5` — `Txt` sets `lineHeight: round(size * 1.18)`. */
+export const HOUR_LH = Math.round(11.5 * 1.18);
+/** Where an hour label sits on the Week grid.
+ *
+ *  Each label was absolutely positioned at `i * 60 * PX - 5`, i.e. centred on its own rule line. That is
+ *  right for every rule *except the last one*: the final rule sits on the grid's bottom edge at `y = H`,
+ *  so the label was centred there too and half of it hung below the grid — 465 dp against a grid 456 dp
+ *  tall on the shipped timetable — and the card's hand-drawn border ran straight through the glyph. The
+ *  last label is therefore pulled up to sit fully inside, `2 dp` clear of the edge. Every other label is
+ *  returned untouched, so the axis does not shift. */
+export function hourTop(i: number, H: number, PX: number, lh = HOUR_LH) {
+  const natural = i * 60 * PX - 5, cap = H - lh - 2;
+  /* Only the pull-up is floored at zero. Clamping the natural position too would drag the *first* label
+     down by its own 5 dp offset — a real shift of a label that was never clipped, to defend against a
+     grid shorter than one label, which `start`/`end` make unreachable (they span at least 8 hours). */
+  return natural <= cap ? natural : Math.max(0, cap);
+}
+
 /** Metrics for the attendance heatmap's "one row per subject" strip (Stats → "Attendance, last 4 weeks").
  *
  *  The row is a fixed number of equal day-cells beside a subject label, and both were hard-coded pixel

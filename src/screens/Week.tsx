@@ -8,6 +8,7 @@ import { Page, Section } from './common';
 import { DW, MO, addDays, atTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
 import { effective, isCancelled, occKey, occurrencesOn } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
+import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
 
 export function WeekScreen() {
@@ -32,7 +33,7 @@ export function WeekScreen() {
             {off === 0 && nowY > 0 && nowY < H && <Line x1={tw - 4} x2={gw} y1={nowY} y2={nowY} stroke={c.acc} strokeWidth={2} />}
             {off === 0 && nowY > 0 && nowY < H && <Rect x={tw - 8} y={nowY - 3} width={6} height={6} rx={3} fill={c.acc} />}
           </Svg>
-          <View style={{ width: tw }}>{hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: i * 60 * PX - 5, right: 4 }}>{h}</Txt>)}</View>
+          <View style={{ width: tw }}>{hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: hourTop(i, H, PX), right: 4 }}>{h}</Txt>)}</View>
           {DW.map((_, i) => {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
             return (
