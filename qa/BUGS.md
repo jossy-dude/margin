@@ -970,7 +970,7 @@ flagged "possible clip at right edge" on the To-do chip row; this confirms it an
 
 ---
 
-## BUG-027 — open — Minor
+## BUG-027 — fixed — Minor
 **Screen:** Week (the timetable grid's hour scale)
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:** Week → "This week".
@@ -981,10 +981,31 @@ Every other label (8–15) is clear.
 **Evidence:** `qa/shots/a2_week_hour16.png` (zoomed crop of the hour scale, taken from the Week page
 in the same session). The full Week page from that moment was not kept; `a2_week_hour16.png` plus the
 pixel measurements in the root-cause note are the evidence.
-**Root cause (pinned, for the Fixer):** `src/screens/Week.tsx:35` renders each hour label at
-`top: i * 60 * PX - 5` inside the `height: H` grid. For the final hour (`i = (end-start)/60`) that is
-`451 dp`, i.e. the label is centred on the grid's **bottom edge** instead of sitting above it. Either
-give the label container `H + 12` of room, or offset the last row by the label height.
+**Root cause (confirmed — the pinned analysis was right, and now measured):** `src/screens/Week.tsx:35`
+rendered each hour label at `top: i * 60 * PX - 5`, which **centres the label on its own rule line**.
+That is correct for every rule *except the last*, because the final rule **is** the grid's bottom edge at
+`y = H` — so the label was centred on the edge and half of it hung below the grid. On the shipped
+timetable (`start` 08:00, `end` 16:00, `PX` 0.95) the grid is **456 dp** tall, the last label started at
+**451** and its 14 dp line box (`round(11.5 × 1.18)`) ended at **465** — **9 dp past the edge**, which is
+exactly where the card's hand-drawn border stroke runs. Structural, not cosmetic: it is the *last row
+only* that fails, which is why 8–15 were all clear.
+**Fix commit:** `837a719`
+**Fix:** `hourTop(i, H, PX)` in `src/ui/fit.ts` (it lives there rather than in `Week.tsx` so the geometry
+is unit-testable without importing the screen's whole native tree) returns the **old position unchanged**
+unless that position would overhang the bottom, in which case the label is lifted to sit `2 dp` clear of
+the edge. The last label therefore moves 451 → 440 and **no other label moves at all**.
+**One thing the fix deliberately does not do:** only the pull-up branch is floored at zero. A first draft
+clamped the natural position too, which would have dragged the *first* label down by its own 5 dp offset
+— a real shift of a label that was never clipped, in order to defend against a grid shorter than one
+label, which `start`/`end` make unreachable (they span at least 8 hours). The regression test caught it.
+**Verified on device (SM-A516N, 411 dp):** "16" renders whole, sitting clear above the border, with 8–15
+unchanged.
+**Before:** `qa/shots/fix_10_week.png`. **After:** `qa/shots/fix_50_week_after.png`.
+**Regression test:** `src/test/week-hours.test.ts` (8 tests). It states the shipped 9 dp overhang as
+arithmetic so it cannot drift, asserts the real invariant — no label's **bottom edge** passes the grid's
+bottom — across 20 timetable combinations from 06:00–14:00 to 09:00–23:00, and, the half that stops a lazy
+fix, asserts that every label **before** the last keeps its exact old position and that the steps stay
+evenly spaced. **Verified by mutation:** restoring `i * 60 * PX - 5` fails 4 of the 8.
 **Also checked and is CLEAN — do not re-audit:** the grid does **not** overflow horizontally (V2).
 Measured off a screencap: vertical rules at x = 121, 252, 383, 513, 644, 775, 906 and the card's own
 border at 1035, and the seven day headers centre at 186 / 317 / 448 / 579 / 710 / 841 / 972 — so all
@@ -1264,10 +1285,10 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 9 | 12 | 0 |
+| Minor | 8 | 13 | 0 |
 | Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (12 fixed), 5 Polish (2 fixed).
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (13 fixed), 5 Polish (2 fixed).
 Nothing verified.** Recounted from the per-bug headers
 (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
