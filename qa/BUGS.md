@@ -214,22 +214,46 @@ out of scope and `tsc --noEmit` is currently clean.
 **Evidence:** expo-doctor output; `package.json` devDependencies.
 **Risk if unfixed:** a future SDK bump or a contributor running `expo install --fix` gets an unvalidated TS 6 jump.
 
-## BUG-008 — open — Minor
+## BUG-008 — fixed — Minor
 **Screen:** Settings (root) → Data & export / Sound & haptics; also the Diagnostics nav hint
 **Found by:** STATIC AUDITOR · render-path trace
 **Repro:** 1. Settings → root. 2. Focus "What should the app call you?" and type slowly.
-**Expected:** typing is smooth; a hint count is already known.
-**Actual:** `crashCount()` is called **inside the render body** at `src/sheets/Settings.tsx:71` to build the
-Diagnostics nav hint. `crashCount()` → `readCrashes()` → `new File(...)`, `.exists`, then **`f.textSync()`**
-(`src/ui/crashlog.ts:82`) followed by a `JSON.parse` per line. `SettingsSheet` holds the name in local state
-(`nameDraft`), so **every keystroke re-renders the sheet and re-reads and re-parses the whole crash log
-synchronously on the JS thread.** The file is bounded to 50 entries / 256 KB, so the worst case is bounded, but
-it is blocking disk I/O in a text-input path.
-**Evidence:** `src/sheets/Settings.tsx:71`; `src/ui/crashlog.ts:77-94`; `src/sheets/Settings.tsx:55`.
-**Severity honesty:** with 0 crashes the file does not exist and `readCrashes()` returns early, so this is
-**invisible on a clean install** and only bites after crashes have accumulated. Minor, not Major.
-**Root cause:** `src/sheets/Settings.tsx:71` (Fixer) — hoist the count into a `useState` initialised once, or
-memoise it on `settingsPath`.
+**Expected:** typing is smooth.
+**Actual:** `crashCount()` was called inside the render body — **twice**, since the hint interpolated
+it for both the number and the plural — to build the Diagnostics nav hint. `crashCount()` →
+`readCrashes()` → `new File(...)`, `.exists`, then **`f.textSync()`** plus a `JSON.parse` per line.
+`SettingsSheet` holds the name in local state (`nameDraft`), so **every keystroke re-rendered the sheet
+and re-read and re-parsed the whole crash log twice**, on the JS thread, in a text-input path.
+**Root cause:** `src/sheets/Settings.tsx:71` — blocking file I/O in a render body, subscribed to state
+that changes on every keystroke.
+**Severity honesty:** with 0 crashes the file does not exist and `readCrashes()` returns early, so this
+is **invisible on a clean install** and only bites after crashes have accumulated. Minor, not Major.
+**Fix commit:** `1ba2c7d`
+**Fix — the log is a file, so it is an external store, and that is how it is now read:**
+- `src/ui/crashlog.ts` **caches the parse** and invalidates it whenever the file is written or deleted, so
+  `crashCount()` is O(1). This is the half that matters: `useSyncExternalStore` calls its `getSnapshot` on
+  every render of every subscriber — that is how it detects a change — so a snapshot that reads a file
+  would defeat the whole thing. (A `useMemo` keyed on the page was tried first and is *not* sufficient;
+  see the note below.)
+- added `subscribeCrashes`, so the hint is **told** when the log changes. It now updates the moment a
+  crash is recorded or Diagnostics is cleared, which it did not before — the old count only refreshed by
+  accident on the next unrelated render.
+- `Settings.tsx` reads it with `useSyncExternalStore`, and the hint calls `crashCount()` once.
+**Regression test:** `src/test/settings-render.test.ts` (6 tests). It **renders the real sheet** behind a
+mock on `crashlog`'s own dependency (`expo-file-system`), so it counts real reads rather than calls to a
+seam chosen for the test. Five keystrokes now cost **zero** reads; the shipped code cost **ten**. 50
+recorded crashes cost exactly what 3 do. The last test records a crash through the app's own API and
+asserts the hint updates without anyone re-rendering by hand.
+**Verified by mutation:** reverting both halves — the render-body read *and* the cache — fails the
+keystroke test; reverting just the subscription fails the live-update test.
+**Note on the approach:** the obvious `useState` + `useEffect` fix is rejected by
+`react-hooks/set-state-in-effect`, and adding a suppression was not an option for this gate, so the
+external-store route was taken instead. It is also strictly better: the count stays live.
+**Device verification still required:** yes — (1) Settings → root, type slowly in "What should the app
+call you?" and confirm no stutter on a phone that has ≥10 crashes recorded (the invisible-on-clean-install
+case is why this needs a seeded log); (2) Settings → Diagnostics → **Test the crash reporter**, back out
+to the root, and confirm the hint count went up by one immediately; (3) Diagnostics → **Clear**, back out,
+and confirm it reads "0 crashes recorded" without reopening the sheet.
 
 ## BUG-009 — fixed — Minor
 **Screen:** Settings (root) → Sound & haptics; any OS notification
@@ -272,112 +296,259 @@ from `package.json`; `BUILDING.md` rule 4 + the size-levers table.
 that is a **product/build decision, not an audit fix.** The other three are hygiene.
 **Also recorded (Phase 0):** `eas-cli` as a local devDependency — BUG-003.
 
-## BUG-011 — open — Minor
+## BUG-011 — fixed — Minor
 **Screen:** n/a (code hygiene)
 **Found by:** STATIC AUDITOR · dead-code sweep
 **Expected:** no code that can never affect behaviour.
-**Actual:**
-1. `src/screens/Today.tsx:90` — `<View style={{ height: cw > 0 ? 0 : 0 }} />`. Both ternary arms are `0`; `cw`
-   (`Today.tsx:27`) exists only to feed this no-op.
-2. `src/screens/Stats.tsx:72` — `<View style={{ height: 1 }}>{addDays(startOfDay(now), 0) ? null : null}</View>`.
-   Always renders `null`; `addDays` is imported at `Stats.tsx:10` solely for it.
-3. `src/screens/Focus.tsx:172` — `leftMs={t.phase === 'break' ? t.focusLeftMs : t.focusLeftMs}`. Identical arms;
-   reads as though the break phase were meant to pass something else.
-4. Three unused re-exports: `src/screens/Today.tsx:94` (`export { DAY_MS }`),
-   `src/screens/common.tsx:103` (`export { StyleSheet, Tape, useWindowDimensions }`),
-   `src/sheets/Settings.tsx:205` (`export { ScrollView }`). Verified: no module imports any of them.
-5. `src/screens/Focus.tsx:203` — `<View style={{ flex: 1 }} />` filler. It is only ever non-zero if
-   `1001 * (width/440)` is shorter than the window; at 360–430 dp width it is always zero-height.
-**Evidence:** the lines above; `rg` over all importers of `./common`, `../screens/common`, `screens/Settings`.
-**Not fixed by me** — the brief for this agent was one mechanical a11y/testID commit only.
+**Actual:** the finding listed five sites. Reading the tree for a *general* version of the same two
+rules found **six** dead ternaries and **six** orphan re-exports — three more of each.
+**Root cause:** each site was written once and never revisited; nothing in the project fails when one is
+added. `cw` (`Today.tsx:27`) existed only to feed its own no-op.
+**Fix commit:** `200057b`
+**Fix — six dead ternaries, each replaced by the constant it always evaluated to:**
+| Site | Was | Now |
+|---|---|---|
+| `screens/Today.tsx:93` | `height: cw > 0 ? 0 : 0` | row deleted (`cw` deleted with it) |
+| `screens/Stats.tsx:72` | `addDays(startOfDay(now), 0) ? null : null` | row deleted |
+| `screens/Focus.tsx:174` | `leftMs={t.phase === 'break' ? t.focusLeftMs : t.focusLeftMs}` | `leftMs={t.focusLeftMs}` |
+| `ui/kit.tsx:68` | `stroke={kind === 'ghost' ? c.ink : bg === 'transparent' ? c.ink : c.ink}` | `stroke={c.ink}` |
+| `ui/clock/ClockFace.tsx:32` | `(ms / 60_000 % 60) * 6 + (reduce ? 0 : 0)` | `(ms / 60_000 % 60) * 6` |
+| `ui/charts.tsx:10,85` | `shade`, defined and exported, never called | both lines deleted |
 
-## BUG-012 — open — Minor
+The last two were **not in the finding**. `bg` in `kit.tsx` is `'transparent'` exactly when `kind ===
+'ghost'`, so the inner ternary yields `c.ink` for all four kinds; and `(reduce ? 0 : 0)` adds nothing
+for either value of `reduce`.
+
+**Six orphan re-exports**, each with its now-unused import: `screens/Today.tsx` (`DAY_MS`),
+`screens/common.tsx` (`StyleSheet`, `Tape`, `useWindowDimensions`), `sheets/Settings.tsx`
+(`ScrollView`), `ui/charts.tsx` (`shade`).
+**Regression test:** `src/test/dead-code.test.ts` (5 tests). Both classes are now *rules over the whole
+tree* rather than one-off assertions, so neither can come back: no ternary with two identical arms, and
+no bare `export {}` that nothing imports (module resolution included). Three further tests re-evaluate
+the two new replacements over their whole input domain — all four button kinds, both motion settings,
+both timer phases — so the "it was a constant" claim is proven, not asserted.
+**Verified by mutation:** reintroducing a dead ternary fails test 1; an orphan re-export fails test 2.
+**Device verification still required:** yes — (1) press every button style and confirm the outline is
+unchanged (`kit.tsx` supplies the stroke for `primary`/`ink`/`danger`/`ghost`, so a mistake here would
+show as a missing or doubled border); (2) Focus → start a round and confirm the **minute** hand still
+ticks every minute — that is the hand whose `+ (reduce ? 0 : 0)` was removed, and with Reduce Motion
+on it must still advance; (3) confirm the Stats page's bottom padding is unchanged after the 1 px filler
+row went (it lost ~15 dp of an already ~176 dp bottom pad, which should be invisible); (4) Today →
+scroll to the very bottom and confirm nothing shifted.
+
+**Item 5 of the finding was deliberately left out.** `Focus.tsx:205`'s `<View style={{ flex: 1 }} />` is
+an empty last child of a `flex: 1` column, so it *does* occupy the leftover height — it is not dead
+code, and the finding's own reasoning ("always zero-height") is wrong. Removing it is very probably
+invisible, but it is a layout change with no device to confirm it. **Left in place.**
+
+## BUG-012 — fixed — Minor
 **Screen:** n/a (tooling)
 **Found by:** STATIC AUDITOR · package.json scripts vs `scripts/`
 **Expected:** every `npm run` script resolves to a file that exists.
-**Actual:** `package.json` declares
-`"plates:gen": "node ... scripts/plates.generated.mjs"` and
-`"plates:preview": "node ... scripts/plate-preview.mjs"`, but `scripts/` contains only `synth-sounds.mjs`.
-Both scripts fail immediately with `Cannot find module`. They are the entry points for the `<plates>` work in
-`prompt.md`, and `src/ui/clock/faces.ts:16` claims "scripts/plate-preview.mjs imports this exact string".
-**Evidence:** `package.json` scripts block; `ls scripts/`.
-**Note:** the plate faces themselves are out of scope for this gate (they need PNGs from the user, `prompt.md`
-§PLATES), but dead entry points should not ship in `package.json`.
+**Actual:** **confirmed broken.** `plates:gen` and `plates:preview` both fail with
+`MODULE_NOT_FOUND — scripts/plates.generated.mjs` on the first invocation.
+**Root cause:** `scripts/` contains only `synth-sounds.mjs`; the two plate scripts were declared for a
+feature whose artwork has not arrived and were never written.
+**Fix commit:** `cf6b8f3`
+**Fix:** removed both script entries. `<plates>` is blocked on PNGs the user has not supplied
+(`prompt.md`: "ask the user; stop and ask if absent"), so removing the entry points is the honest fix —
+they come back with the artwork. Also corrected `src/ui/clock/faces.ts`'s claim that
+"`scripts/plate-preview.mjs` imports this exact string, so the preview cannot drift from what the app
+applies": that was a coverage claim about a file that did not exist. `PLATE_DARK_MATRIX` itself stays;
+the plates work needs it, and the comment now says so.
+**Regression test:** `src/test/scripts.test.ts` (5 tests). The main one is **general** — no `npm run`
+script may name a local file that is not there — so the next dead entry point fails a test instead of a
+user. One test asserts `sounds` still resolves and that no other script changed.
+**Device verification still required:** no — this is build tooling only. `npm run sounds` is the
+equivalent check and is covered by `npm run check` on CI. Confirm `npm run check` and `npm run bundle`
+still pass on the release machine (they do here).
 
-## BUG-013 — open — Minor
+## BUG-013 — open — Minor — **left open deliberately, not fixed**
 **Screen:** To-do (and every list in the app)
 **Found by:** STATIC AUDITOR · list-rendering sweep
 **Expected:** long lists are virtualised.
-**Actual:** **`FlatList` / `SectionList` / `VirtualizedList` appear nowhere in `src/`.** Every list is a
-`ScrollView` (from `Page`, `src/screens/common.tsx:23`) with `.map()` inside it. The worst case is the To-do task
-list (`src/screens/Tasks.tsx:33`): each row is a `TaskCard` → `SwipeCard`, and every `SwipeCard` mounts a
-`GestureDetector` plus four `useSharedValue`s and two `useAnimatedStyle`s (`src/ui/Swipe.tsx:15,34`). Row cost is
-therefore high and the row count is unbounded (a school year of tasks). Grades' attendance grid
-(`src/screens/Grades.tsx:31`) has the same shape with up to a semester of cells per subject.
-**Evidence:** `rg 'FlatList|SectionList|VirtualizedList' src/` → no matches; `src/screens/Tasks.tsx:33`.
-**Severity honesty:** with the 16-task demo seed this is invisible. It is a scaling risk, not an observed defect.
-I have not measured it. Note that virtualising would fight the hand-drawn `HandBox`/`SwipeCard` design, so this may
-be a deliberate trade — flagging for a decision, not demanding a change.
+**Actual:** `FlatList` / `SectionList` / `VirtualizedList` appear nowhere in `src/`. Every list is a
+`ScrollView` (from `Page`, `src/screens/common.tsx:23`) with `.map()` inside it. The worst case is the To-do
+task list (`src/screens/Tasks.tsx:33`): each row is a `TaskCard` → `SwipeCard`, and every `SwipeCard`
+mounts a `GestureDetector` plus four `useSharedValue`s. The row count is unbounded.
+**Severity honesty:** with the 16-task demo seed this is invisible. It is a scaling risk, not an
+observed defect, and nothing in this pass measured a frame time.
 
-## BUG-014 — open — Minor
+**Why the Fixer did not fix it — this needs a decision and a device, not just code:**
+1. **The only correct fix is to make `Page` itself virtualised**, i.e. `Page` becomes a `FlatList` with
+   the header row as `ListHeaderComponent` and the trailing content as `ListFooterComponent`. That is
+   not a local change: every screen passes arbitrary JSX as `children`, so all five would have to be
+   restructured around it.
+2. **The tempting fix is worse than the bug.** Putting a `FlatList` inside the existing `ScrollView` is
+   the documented React Native anti-pattern — virtualisation silently stops working and RN logs
+   "VirtualizedLists should never be nested inside plain ScrollViews with the same orientation". A
+   change that made scrolling *worse* on the app's only list screen would be a Major regression, and
+   scroll behaviour is precisely what cannot be checked without a device.
+3. **This gate cannot prove it.** Every fix in this pass is proven by a jest regression test. Windowing
+   is not observable from jest: it is a function of measured layout height and viewport, which need a
+   real frame. The only test available would have been a source assertion that the word `FlatList`
+   appears in `Page.tsx` — a vacuous test that would pass on a broken implementation.
+4. The finding's own note already says virtualising "would fight the hand-drawn `HandBox`/`SwipeCard`
+   design, so this may be a deliberate trade — flagging for a decision, not demanding a change".
+
+**Blocked on:** a device **and** a product decision on (1). **Exact check once a device is available:**
+(1) To-do, add ~200 tasks, scroll from top to bottom and back — record any blank-frame flicker, scroll
+position loss, or a `VirtualizedList nested inside a ScrollView` warning in logcat; (2) swipe a card
+right and left while scrolling, to confirm the row gesture and the list gesture still arbitrate
+correctly (`GestureDetector` + virtualised rows is the risky combination); (3) check the FAB and the
+floating nav still sit correctly at the bottom of the page, since they depend on
+`pageBottomPad()` being the last thing in the scroll content; (4) repeat on Grades, whose attendance
+grid is the other unbounded-ish list.
+**Partly mitigated in the meantime:** BUG-014's fix removed nine full-dataset passes per render on
+Stats, and `TaskCard` was already `React.memo`'d, so the *re-render* half of this cost is already
+covered. What remains is the *mount* cost of N rows, which only virtualization addresses.
+
+## BUG-014 — fixed — Minor
 **Screen:** Stats
 **Found by:** STATIC AUDITOR · render-path trace
 **Expected:** expensive derivations are memoised, as they already are elsewhere in this file.
-**Actual:** of ~12 derivations in `StatsScreen`, only 3 are wrapped in `useMemo` (`Stats.tsx:20-21`). Nine run
-un-memoised on **every render**, each a full pass over the dataset:
-`A.onTimeStats`, `A.overallAttendance` (30 days), `A.streak` ×2, `A.focusBySubject`,
-`A.attendanceByCourse` (60 days × every course), `A.attendanceHeat` (28 days × every course),
-`A.gradeBars`, `A.markSeries`, `A.doneByHour`, `A.focusByHour` — `src/screens/Stats.tsx:22-27`.
-The component also re-renders every 60 s via `useNow(60_000)` (`Stats.tsx:19`), so the whole set runs on a timer
-whether or not anything changed. The neighbouring `Grades.tsx:46` and `Today.tsx:22-27` have the same
-compute-in-render shape at smaller n.
-**Evidence:** `src/screens/Stats.tsx:19-27`.
-**Severity honesty:** trivial at the demo data size. Unquantified at a year of real data.
+**Actual:** of ~12 derivations in `StatsScreen`, only 3 were wrapped in `useMemo`. Nine ran
+un-memoised on **every render**, each a full pass over the dataset. `useNow(60_000)`
+(`Stats.tsx:19`) re-renders the screen every minute, so the whole set ran on a timer.
+**Root cause:** `src/screens/Stats.tsx:19-27` — and, more precisely, `days` was
+`A.lastDays(105, now)` keyed on `[now]`. A 105-day window ending "today" only changes at midnight, so
+keying it on the instant made every day-scoped derivation move 1440 times a day for nothing.
+**Fix commit:** `4d5969e`
+**Fix — split by what each derivation actually depends on:**
+- `day = startOfDay(now)`; `days = useMemo(() => A.lastDays(105, day), [day])`.
+- One `useMemo` for everything that depends only on the data (`onTimeStats`, `streak` ×2,
+  `focusBySubject`, `gradeBars`, `doneByHour`, `focusByHour`, `markSeries`), keyed on the store slices.
+- The three attendance derivations (`overallAttendance`, `attendanceByCourse`, `attendanceHeat`) stay
+  keyed on `[courses, meetings, attendance, dayMarks, now]` **deliberately**: `effective()` infers "Here"
+  once a class has ended, so freezing them on the day would leave a whole day of classes reading as
+  unmarked. This is a correctness constraint, not an oversight.
+- `lateWeeks` memoised too; `st` (a fresh object each render) is gone, so no dep is a fresh reference.
+**Regression test:** `src/test/stats-memo.test.ts` (6 tests). It mounts the real screen behind a mock on
+its own `../domain/analytics` dependency and counts real calls. Writing `plan` — which the screen
+subscribes to and no chart reads — re-renders it and now runs **zero** derivations; writing `marks`
+does re-run the mark chart, so the memo cannot silently go stale.
+**Verified by mutation:** un-memoising the data derivations fails 2 of the 6; re-keying the day series
+on `now` fails a third.
+**Device verification still required:** yes — (1) Stats, pull to a fresh mount and confirm every chart
+still draws identically to the pre-fix build (all values are unchanged, only the scheduling is); (2) add
+a focus session and a finished task, leave the screen for a minute, and confirm the heatmaps update —
+this is the case that could regress if a dep were wrong; (3) with a class that has just ended, confirm
+the attendance ring and heatmap still count it without needing a re-render; (4) V17 timing is still
+unmeasured: this fix counts how often work is *scheduled*, not how long a frame takes.
 
-## BUG-015 — open — Minor
+## BUG-015 — fixed — Minor
 **Screen:** Add sheet and Task sheet → "Focus on this" / "Start a focus session"
 **Found by:** STATIC AUDITOR · timer-lifecycle sweep
 **Repro:** 1. FAB → Add. 2. Tap "Start a focus session". 3. Within 230 ms, press Back (or tap the dim area).
 **Expected:** the sheet dismisses and you stay where you were.
-**Actual:** both buttons defer the navigation with an untracked timer:
-`setTimeout(() => act.focusOpen(null), 230)` at `src/sheets/forms.tsx:44` and
-`setTimeout(() => act.focusOpen(existing.id), 230)` at `src/sheets/forms.tsx:70`. The 230 ms exists so the sheet's
-close animation finishes first, but nothing cancels it. Dismiss the sheet inside that window and
-`act.focusOpen` still fires, navigating to Focus and re-initialising the timer.
-**Evidence:** `src/sheets/forms.tsx:44,70`.
-**Related but not the same:** `hapticBurst` (`src/services/haptics.ts:31`) and `fx.crumple`/`fx.fall`
-(`src/services/fx.ts:11,31`) also schedule untracked `setTimeout`s. Those only ever fire sound/haptics, which is
-harmless after unmount, so they are not folded into this finding.
+**Actual:** the navigation was deferred with an untracked `setTimeout`. Dismiss the sheet inside that
+window and `act.focusOpen` still fires, navigating to Focus and re-initialising the timer.
+**Root cause:** `src/sheets/forms.tsx:45` and `:75` — `close(); setTimeout(() => act.focusOpen(...), 230)`.
+The 230 ms approximates "after the sheet's close animation finishes", but nothing owned the timer.
+**Fix commit:** `5157f74`
+**Fix — the timer is gone, not merely cancelled.** The sheet already knows exactly when its close
+finishes, so `close()` now takes an optional follow-up and runs it from the animation callback
+(`src/ui/Sheet.tsx`), which is the same moment the 230 ms was guessing at.
+The part that makes the bug impossible rather than less likely: **every** dismissal — hardware Back, the
+drag, the dim area, the ✕ — and every "close, then do X" go through the same `close()`. So a call
+*without* a follow-up **is** a dismissal, and it cancels one a button queued milliseconds earlier. That
+is why `after.ask(next)` runs *before* the close latch (`src/ui/after.ts`).
+Two details this forced:
+- `onPress={close}` handed the Pressable's gesture event to the handler, which would now be called as a
+  function. Both sites are `onPress={() => close()}`, and `ask()` ignores anything that is not a
+  function, so a stray event cannot throw.
+- the follow-up runs *after* `onClose()`, so the sheet is out of the store before the caller navigates.
+**Regression test:** `src/test/deferred-nav.test.ts` (10 tests) — seven on the queue (a dismissal
+cancels; running twice runs once, which also covers StrictMode's double invocation; a gesture event is
+not a callback; the most recent ask wins) and three reading `Sheet.tsx` / `forms.tsx` for the wiring,
+since the model cannot see it.
+**Verified by mutation:** making `ask()` non-cancelling — i.e. the shipped semantics — fails the
+cancellation test.
+**Device verification still required:** yes — (1) Add → "Start a focus session" and confirm Focus opens
+and the dial is initialised *after* the sheet has animated away, not before; (2) tap it, then within
+~200 ms press Back or tap the dim area, and confirm you are **not** navigated to Focus and the timer is
+**not** re-initialised (this is the repro); (3) same for a task sheet's "Focus on this"; (4) confirm a
+normal dismiss — Back with no button pressed, a drag, the dim area, the ✕ — still closes and does
+nothing else.
 
-## BUG-016 — open — Polish
+## BUG-016 — fixed — Polish
 **Screen:** Today → the "ticker" day bar
 **Found by:** STATIC AUDITOR · key-props sweep
-**Actual:** `src/ui/DayBar.tsx:98` maps `txt.split('')` with `key={i}` while the string's **content changes every
-second** (`--:--` → `12:34`). Index keys mean React reuses the same `View`/`Text` nodes positionally instead of
-reconciling by content. Benign today because the string length is constant, so nothing remounts — but it breaks the
-moment a format change makes the length vary.
-**Evidence:** `src/ui/DayBar.tsx:92-98`.
-**Other index-as-key sites, all benign** (fixed-length, never reordered): `Week.tsx:31,39`, `Focus.tsx:61,162`,
-`DayBar.tsx:42,67`, `charts.tsx:17,18,45,65`. Recorded so a future reviewer does not have to re-derive it.
+**Actual (as shipped):** `src/ui/DayBar.tsx:98` maps `txt.split('')` with `key={i}` while the string's
+content changes every second (`--:--` → `12:34`).
+**Root cause:** `src/ui/DayBar.tsx:98` — the key was the character's **index**.
+**Fix commit:** `402b052`
+**Fix:** added `clockCells(txt)` to `src/domain/time.ts`: one cell per character, keyed by the
+character's **distance from the right**. Every shared slot keeps its key across a length change, and the
+slots that appear with the hour get keys nothing else had.
 
-## BUG-017 — open — Polish
+> **The finding's premise was wrong, and this is a live defect rather than a latent one.** It says the
+> index keys are "benign today because the string length is constant". `fmtClock` is *not* fixed width:
+> it returns `MM:SS` under an hour and `H:MM:SS` over it, and `HH:MM:SS` over ten. The string grows at
+> 3600 s and again at 36000 s. At the first boundary, index 2 goes from the colon to a minute digit, and
+> React reuses any node whose key did not change — so that box silently flips between borderless and
+> transparent and bordered and opaque, in the same commit, with no key to tell React otherwise.
+
+The `--:--` placeholder keys like a 5-slot clock (`d4 d3 c2 d1 d0`, the same as `00:00`), so the row does
+not remount when a target appears.
+**Regression test:** `src/test/ticker-keys.test.ts` (8 tests) — the exact before/after character tables
+so the claim can be re-derived, that every shared slot keeps its key, that the two new slots get fresh
+ones, that keys are unique and colon-vs-digit is distinguishable, and that the keys are stable within
+each of the three widths.
+**Verified by mutation:** reverting `clockCells` to index keys fails 5 of the 8.
+**Device verification still required:** yes — Settings → Progress bar → Ticker, with
+`DEMO_PERIODS` spanning a 50-minute class: (1) let it tick and confirm no box flickers or swaps border
+as the digits change; (2) this needs a countdown over an hour to see the real transition, so also start
+a 240-minute round on Focus and let the ticker cross 1:00:00 — confirm the leading `1:` appears and the
+remaining boxes keep their borders; (3) confirm the `--:--` state (no periods left today) still renders
+five boxes and does not flicker when a class is reached.
+
+## BUG-017 — fixed — Polish (audited, not silenced)
 **Screen:** n/a (lint hygiene)
 **Found by:** STATIC AUDITOR · suppression sweep
 **Expected:** every `eslint-disable` in `src/` is justified.
-**Actual:** 7 suppressions in `src/`. The pair in `eslint.config.js:6` (`react-hooks/immutability`,
-`react-hooks/refs` off for Reanimated shared-value writes) is justified as stated. Of the 7 in `src/`:
-- **Justified, keep:** `Focus.tsx:43` (per-second jolt keyed on `Math.floor(leftMs/1000)`), `Focus.tsx:100`
-  (sticker fall animation), `Focus.tsx:137`/`147` (`set-state-in-effect` block, carries an explanatory comment),
-  `Focus.tsx:143` (feeds off the `fev` event), `Book.tsx:23` (placement animation), `Book.tsx:40` (route → navigate).
-- **Latent risk, not a live bug:** `src/sheets/forms.tsx:61` memoises `workload(draft, {...})` on
-  `[due, est, start]` while the body also closes over `draft`, `st.meetings`, `st.attendance`, `st.dayMarks` and
-  `nset`. I checked `workload()` (`src/domain/reminders.ts:152-158`): it reads only `dueAt`, `estimateMin`,
-  `status`, `startAt` and the passed context, and **not** `courseId` — so the declared deps happen to cover every
-  input that can change while the sheet is open. It is correct today and fragile: adding a store write reachable
-  from inside the Task sheet would make the "Tight / Comfortable" box silently stale.
-**Evidence:** the lines above.
-**Recommendation:** leave the six alone; add the missing deps (or a comment naming the ones deliberately omitted)
-on `forms.tsx:61` when the Fixer is next in that file.
+**Audit commit:** `882da60` — no suppression added or removed.
+**Verdict: all eight stand, and the new one is load-bearing rather than a silenced failure.** The
+question put to this pass was whether the 8th suppression (`src/navigation/Book.tsx:42`, added by the
+BUG-021 fix) was legitimate. It is, and `src/test/suppressions.test.ts` now proves why instead of
+asserting it.
+
+**The new one (`Book.tsx:42`) — why obeying the linter is the bug.** The effect closes over `route` but
+is keyed on `[cur]`, and `react-hooks/exhaustive-deps` is right that `route` is missing. Adding it is a
+regression: effects run in declaration order, so on a tab tap the forward sync (`:41`, keyed `[route]`)
+moves the navigator to Grades, and the reverse sync then reads `route` as stale and writes the store back
+to Today — the nav would highlight Grades while the store said Today, which is BUG-021 from the other
+direction. Keyed on `[cur]` the reverse effect does not run in that commit at all, because the navigator
+has not moved *yet*. Same shape, same reason, as the blessed suppression on the line above it.
+Over 300 randomised hops the shipped keying never lets the two disagree; the linter-obedient keying
+breaks, and the one-hop case is asserted concretely so the model cannot quietly become a fiction.
+
+**The other seven, re-confirmed against the code:**
+| Site | Verdict |
+|---|---|
+| `Focus.tsx:43` | per-second jolt, keyed on `Math.floor(leftMs / 1000)` on purpose |
+| `Focus.tsx:102` | sticker fall, keyed on `[falling]` so it runs once per fall |
+| `Focus.tsx:139/147` | the `set-state-in-effect` block: discrete timer events, carries an explanatory comment |
+| `Focus.tsx:145` | the same block, keyed on `[st.fev]` |
+| `Book.tsx:24` | `Placed` page placement, keyed on `[on]` |
+| `Book.tsx:41` | store→navigator, keyed on `[route]` so a tab tap navigates |
+| `Book.tsx:42` | navigator→store, keyed on `[cur]` — the new one, above |
+| `forms.tsx:62` | `workload` memo, keyed on the four fields `workload()` actually reads |
+
+**The seventh — BUG-017's "latent risk" — is re-checked, not assumed.** It called the `workload` memo
+"correct today and fragile". It still is: `workload()` (`src/domain/reminders.ts`) reads only
+`task.dueAt`, `task.estimateMin`, `task.status` and `task.startAt` plus the passed context, and **not**
+`task.courseId`, so the declared deps still cover every input that can change while the sheet is open.
+`suppressions.test.ts` asserts that against the real function body, so if a future edit makes
+`workload` read a fifth task field the test fails and the memo's correctness has to be re-argued rather
+than inherited. That is the fix the finding's own recommendation asked for, and it costs no new
+suppression.
+**The two in `eslint.config.js`** (`react-hooks/immutability`, `react-hooks/refs` off) are unchanged and
+still justified as stated: they flag every Reanimated `sharedValue.value = x` write, which is that
+library's API.
+**Device verification still required:** no — no runtime behaviour changed. The keying is proven over 300
+randomised hops and the one-hop failure is asserted; BUG-021's device steps are unchanged and still
+outstanding.
 
 ## BUG-018 — open — Polish
 **Screen:** n/a (repo hygiene)
@@ -641,39 +812,44 @@ no subject-label gutter and fit correctly — only this one clips. So it is this
 
 ---
 
-## BUG-024 — open — Minor
+## BUG-024 — fixed — Minor
 **Screen:** Stats (the `Empty` hint at the top of the page)
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:**
 1. Settings → Data & export → **Clear demo history**.
 2. Go to Stats.
-**Expected (`prompt.md` V13, verbatim):** "empty-state hint shows after Settings → Clear demo history
-on a fresh DB with no focus/tasks" — i.e. the hint *"Finish a task or a focus session and the charts
-fill in."*
-**Actual:** after the purge the DB has **0 focus sessions** and the Focus heatmap is completely blank
-("0m in the last 15 weeks"), yet **no empty-state hint appears anywhere on the page**. The seeded DB
-retains one non-demo finished task, "Lab report — set proofs", and the guard demands that *no* task be
-finished at all before it will show.
-**Evidence:** `qa/shots/a2_stats_afterpurge.png` — rings all read 0 %, "Focus heatmap / 0m in the last
-15 weeks" with an empty grid, and no hint above the "At a glance" card.
-**Root cause (pinned):** `src/screens/Stats.tsx:25`
-```ts
-const nothing = st.focus.length === 0 && st.tasks.every((t) => t.status !== 2);
-```
-The two conditions are ANDed, so the hint fires only when *both* halves of the dataset are empty. A
-user who has completed one task but never run a focus session gets two permanently blank focus charts
-and no explanation. Splitting it — an empty-state hint per chart, or `nothing = st.focus.length === 0
-|| !totalDone` — would satisfy V13.
-**Honest partial credit:** the per-card sub-lines do degrade correctly. "When you work best" becomes
-**"Start a focus session to see this"** and "When you tick things off" becomes "Finish a task to see
-this", and the two histograms draw a flat baseline rather than breaking. So the page is not broken —
-the one hint V13 names is the one that does not fire.
-**Knock-on:** this is the same root cause as BUG-025 — neither V13's empty state nor a genuine
-first-run empty database is reachable in the shipped build.
+**Expected (`prompt.md` V13):** "empty-state hint shows after Settings → Clear demo history on a fresh
+DB with no focus/tasks" — the hint *"Finish a task or a focus session and the charts fill in."*
+**Actual:** 0 focus sessions, the Focus heatmap completely blank ("0m in the last 15 weeks"), and **no
+empty-state hint anywhere on the page**.
+**Root cause (confirmed):** `src/screens/Stats.tsx:25` — the two conditions were `&&`ed, so the hint
+needed *both* halves of the dataset empty at once. A state nothing in the app can reach, because
+"Clear demo history" removes every demo focus session but keeps your own finished tasks.
+**Fix commit:** `ca60dbe`
+**Fix:** added `statsEmptyHint({ focusMinutes, finished })` to `src/domain/analytics.ts`. The two halves
+are independent, so each is checked on its own and the hint names whichever is missing:
+- neither → *"Finish a task or a focus session and the charts fill in."* (V13's wording, verbatim)
+- focus only → *"Start a focus session and the focus charts fill in."*
+- tasks only → *"Finish a task and the tasks charts fill in."*
+- both present → no hint.
+Both totals are measured over the **105-day window the heatmaps actually draw**, not over the whole
+table, so a focus session from last year is not mistaken for data the chart cannot show. That is the
+whole bug class V13 is asking about: a blank chart with no explanation.
+**Regression test:** `src/test/stats-empty.test.ts` (6 tests). The headline case runs the **real**
+`MemoryRepository` through `seedSnapshot` + `purgeDemo` and asserts the hint fires on exactly the
+dataset the device run photographed (0 focus sessions, 1 surviving finished task, 0 minutes in the
+window). A second test asserts the old `&&` guard does *not* fire on that same dataset, so the test
+cannot pass by accident.
+**Verified by mutation:** restoring the `&&` semantics fails 4 of the 6.
+**Device verification still required:** yes — (1) Settings → Data & export → **Clear demo history** →
+Stats, and confirm the hint now appears above "At a glance" reading "Start a focus session and the focus
+charts fill in."; (2) on a fresh DB with nothing at all, confirm it reads V13's exact original wording;
+(3) with a real dataset (before clearing), confirm **no** hint appears — the common case must be silent;
+(4) finish one task with no focus sessions and confirm the other half of the message shows.
 
 ---
 
-## BUG-025 — open — Minor
+## BUG-025 — fixed — Minor (copy only; see the STILL OPEN note below)
 **Screen:** Settings → Data & export → "Clear demo history"
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device + source
 **Repro:**
@@ -709,6 +885,36 @@ cannot satisfy, and the gate cannot verify any screen's real empty state without
 "start fresh" and point V13 at a supported way to get an empty DB, or add an explicit
 "Delete all data" (with the same double-tap guard as Reset) so the empty states are reachable and
 testable.
+
+**Root cause (established by running it, not reading it):** the seed flags **only the history** as
+demo. `src/data/seed.ts:38` marks the six finished demo tasks `demo: true` and `:50` the twenty demo
+focus sessions, but the ten seeded *open* tasks are `demo: false` (`:25`) and courses, meetings,
+notices and marks **have no `demo` field at all**. So "demo" and "yours" are indistinguishable for
+everything except the history, and no purge predicate could separate them.
+**Fix commit:** `1020301` — **copy only; the behaviour was judged correct and deliberately not changed.**
+The judgement, since the brief asked for it explicitly: the button is **not** misnamed and **not**
+mislabelled. "Clear demo history" removes the demo *history*, and that is exactly what it does;
+extending it to the subjects, timetable, notes and open tasks would destroy real user data behind a
+button that says "demo history", which is far worse than the gap. The one thing that *was* wrong is the
+last sentence of the hint: on a fresh install everything still on screen is sample data, while "Your own
+data stays" implies none of it is. The hint now names what stays and points at Settings → Reset.
+**Regression test:** `src/test/purge-demo.test.ts` (5 tests) through the real `MemoryRepository`. Four
+pin the contract the copy now makes — the demo history goes, **every other table is byte-identical
+afterwards** (courses, meetings, attendance, dayMarks, notices, marks, adjusts, settings), and the user's
+own finished task survives — so the copy and the behaviour cannot drift apart silently. The first four
+pass before and after this commit: that is deliberate, they are the evidence for leaving the behaviour
+alone, not a regression test for it.
+**Device verification still required:** yes — (1) Settings → Data & export, read the hint and confirm it
+now names the sample subjects, timetable, notes and open tasks; (2) **Clear demo history**, return to
+To-do, and confirm the header still reads "9 open" — the copy must match what actually happens; (3)
+confirm your own data is untouched throughout.
+
+**STILL OPEN — a product decision, not a defect, and not taken unilaterally:** no supported route
+reaches a genuinely empty database, so V13's empty states for **any screen other than Stats** still
+cannot be exercised — Today, Week, To-do and Grades all keep the seeded subjects, timetable, notes and
+open tasks. Adding a "Delete all data" alongside Reset would do it and is a new destructive feature.
+V13's *own* named criterion — "empty-state hint shows after Clear demo history" — **is** now reachable,
+via BUG-024's fix.
 
 ---
 
@@ -781,18 +987,28 @@ card's "tight"), `qa/shots/a2_search_empty.png` (FAB over the empty-state box), 
 
 ---
 
-## BUG-029 — open — Minor
+## BUG-029 — fixed — Minor
 **Screen:** Stats → "Tasks finished"
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
-**Repro:** Stats, with exactly one task finished inside the 15-week window — i.e. right after
-Settings → Data & export → Clear demo history.
+**Repro:** Stats, with exactly one task finished inside the 15-week window.
 **Expected:** "1 in the last 15 weeks · streak 1 **day**".
 **Actual:** "1 in the last 15 weeks · **streak 1 days**".
-**Evidence:** `qa/shots/a2_stats_afterpurge.png`, `qa/shots/a2_baseline_stats.png` (the same line
-read "streak 1 days" before the purge too).
-**Root cause (pinned):** `src/screens/Stats.tsx:41` — `streak ${ds.current} days`, no pluralisation.
-The neighbouring copy on the same page gets it right ("1 finished late."), so this is an oversight
-rather than a deliberate choice.
+**Root cause:** `src/screens/Stats.tsx:41` — `streak ${ds.current} days`, with the unit interpolated
+unconditionally.
+**Fix commit:** `197a83a`
+**Fix:** added `plural(n, unit, many?)` to `src/domain/time.ts` and used it. Zero takes the plural and
+-1 takes the singular, which is what the two call sites that already got this right did by hand —
+Settings' "1 reminder" and Week's "-1 week ago". The unit is appended exactly once (the first version of
+the helper printed the singular *and* the plural, "0 daydays"; the test caught it before it shipped).
+The same oversights exist elsewhere in the app and were left alone as out of scope — recorded here so
+they are not re-derived.
+**Regression test:** `src/test/plural.test.ts` (5 tests). The sub-line is asserted against the real
+`streak()` output and checked against the demo seed, so the "1 day" case is a state the app can
+actually reach rather than a hand-written stub. One test reads `Stats.tsx` so the copy cannot drift
+back to an interpolated unit.
+**Device verification still required:** yes — Stats → "Tasks finished": (1) with a 1-day streak, confirm
+the sub-line reads "streak 1 day"; (2) with a 2+ day streak, confirm "streak N days" is unchanged;
+(3) with a 0-day streak, confirm "streak 0 days".
 
 ---
 
@@ -979,22 +1195,77 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 19 | 2 | 0 |
-| Polish | 5 | 0 | 0 |
+| Minor | 11 | 10 | 0 |
+| Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (2 fixed), 5 Polish. Nothing verified.**
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (10 fixed), 5 Polish (2 fixed).
+Nothing verified.** Recounted from the per-bug headers
+(`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
-> **This table was stale until the FIXER (majors) pass recounted it from the per-bug headers.** It used to
-> read `Major 3 open / 2 fixed`, `Minor 23 open / 3 fixed`, `Polish 4 open` — 35 rows for 32 bugs. The
-> per-bug `## BUG-NNN — <status> — <Severity>` headers are authoritative; the table is derived from them
-> (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`).
-> **BUG-001 is the one Major still open** — the CNG-vs-committed-native-folders product decision, which
-> this pass did not touch.
+> **The FIXER (minors/polish, 2026-10-05, device-locked run) fixed 9:** BUG-008, BUG-011, BUG-012,
+> BUG-014, BUG-015, BUG-016, BUG-024, BUG-025 (copy only), BUG-029 — plus **BUG-017** as an audit that
+> changed no code. Every one is proven by a jest regression test, and every one was checked by mutation
+> (reverting the fix fails at least one test). Test count 148 → **209**.
+> **None is `verified`**: there is no device, so each entry carries a **Device verification still
+> required** line with the exact steps. One fix found *three more* dead-code sites than its finding named
+> (BUG-011) and one fix found that its finding's premise was wrong (BUG-016 — `fmtClock` is not fixed
+> width, so that defect is live rather than latent).
+
+> **BUG-013 was deliberately left `open`.** Virtualising the lists requires `Page` itself to become a
+> `FlatList` — a restructure of all five screens — and the obvious alternative, a `FlatList` inside the
+> existing `ScrollView`, is the documented React Native anti-pattern that silently *stops* virtualising.
+> Scroll behaviour is exactly what this gate cannot verify, and a jest test could only assert that the
+> word "FlatList" appears in a file. Recorded in full under BUG-013 with the device checks needed.
+>
+> **BUG-025 is fixed for its copy but retains an open question,** flagged there: no supported route
+> reaches a genuinely empty database, so V13's empty states for any screen *other than* Stats still
+> cannot be exercised. Adding "Delete all data" is a product decision and was not taken unilaterally.
+>
+> **The single highest-value next action is still a human unlocking the phone** (see `STATE.md`): two
+> agent sessions have now been lost to the secure keyguard, and every fix above is `fixed, pending
+> device verification` until someone runs the steps.
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
 (BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
 **FIXER (majors, 2026-10-05, device-locked run) fixed BUG-021, BUG-022 and BUG-032 with jest
 regression tests** — no device, so each is `fixed, pending device verification`.
+**FIXER (minors/polish, 2026-10-05, device-locked run) fixed BUG-008, BUG-011, BUG-012, BUG-014,
+BUG-015, BUG-016, BUG-024, BUG-025 (copy) and BUG-029**, and audited BUG-017 (no code change) — same
+constraint, every one `fixed, pending device verification`, every one mutation-checked. **BUG-013 left
+open on purpose** — see its entry for why it needs a decision and a device rather than just code.
+
+### Machine gates — FIXER (minors/polish) exit, 2026-10-05, Node 24.16.0 / npm 11.13.0
+
+Both gates re-run after **each** commit, not once at the end. Every row is exit 0.
+
+| Gate | Before (148 tests / 13 suites) | After (209 tests / 23 suites) |
+|---|---|---|
+| `npm run typecheck` (`tsc --noEmit`) | 0 | 0 |
+| `npm run lint` (`eslint src --max-warnings=0`) | 0 · 0 warnings | 0 · 0 warnings |
+| `npm run test` (`jest`) | 0 · 148 | 0 · **209** |
+| `npm run boundaries` (`depcruise`) | 0 · 133 modules | 0 · 145 modules |
+| `npm run check` (all four chained) | 0 | 0 |
+| `npm run bundle` (`expo export --platform android`) | 0 · 3.8 MB | 0 · 3.8 MB |
+
+| Commit | Bug | Tests after |
+|---|---|---|
+| `200057b` | BUG-011 dead code | 153 |
+| `882da60` | BUG-017 audit (no code change) | 158 |
+| `197a83a` | BUG-029 "streak 1 days" | 163 |
+| `402b052` | BUG-016 ticker keys | 171 |
+| `cf6b8f3` | BUG-012 dead npm scripts | 176 |
+| `1ba2c7d` | BUG-008 crash-log reads in render | 182 |
+| `ca60dbe` | BUG-024 empty-state hint | 188 |
+| `1020301` | BUG-025 copy | 193 |
+| `5157f74` | BUG-015 untracked timer | 203 |
+| `4d5969e` | BUG-014 Stats memoisation | 209 |
+
+> **Nothing was weakened to reach green.** No `@ts-ignore`, no new `eslint-disable` (the eighth
+> suppression in BUG-017 was audited and *kept*, with the reason proven rather than asserted — adding
+> `route` to that effect's deps is BUG-021 all over again), no test deleted or skipped, no tsconfig
+> loosened, no dependency changed. Two lint warnings that appeared **inside this pass's own new test
+> files** were fixed rather than suppressed. Two helpers written in this pass were caught by their own
+> tests before shipping (`plural` printed "0 daydays"; `clockCells` was first written to key by index).
 
 > **AGENT 2b is also blocked and Parts 2, 3 and 4 of the task domain remain UNTESTED.** The device was
 > locked behind a secure **pattern** before the first tap of the session; `svc power stayon true` prevents
@@ -1025,7 +1296,8 @@ regression tests** — no device, so each is `fixed, pending device verification
 | `npx expo install --check` | 1 | 1 package out of date: typescript 5.9.3 vs ~6.0.3 → BUG-007 |
 
 > Note for the Fixer: `qa/STATE.md:19` and `prompt.md:8` both record **104** and **82** jest tests
-> respectively. The current count is **111** (9 suites). Both earlier figures are stale, not a regression.
+> respectively. Those figures are stale, not a regression. The count after the minors/polish pass is
+> **209 in 23 suites**.
 
 ### What the static pass found CLEAN (do not re-audit)
 
