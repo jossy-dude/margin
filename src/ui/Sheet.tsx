@@ -8,16 +8,18 @@ import { PaperBg } from './PaperBg';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
 import { hexA } from '../tokens/theme';
+import { afterClose } from './after';
 import { FS } from './fit';
 
-const SheetCtx = createContext<{ close: () => void }>({ close: () => undefined });
+const SheetCtx = createContext<{ close: (after?: () => void) => void }>({ close: () => undefined });
 export const useSheet = () => useContext(SheetCtx);
+export type SheetClose = (after?: () => void) => void;
 const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
 
 /** One-hand bottom sheet: sits in the thumb zone, drags down to dismiss, Android back closes it, keyboard-aware, live-region title. */
 export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null }) {
   const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c } = useTheme(), reduce = useReduceMotion();
-  const y = useSharedValue(H), [kb, setKb] = useState(0), restH = useRef(H), closing = useRef(false);
+  const y = useSharedValue(H), [kb, setKb] = useState(0), restH = useRef(H), closing = useRef(false), after = useRef(afterClose()).current;
   useEffect(() => { y.value = reduce ? 0 : withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }); fx.page(); }, [y, reduce]);
   useEffect(() => { const a = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates.height)), b = Keyboard.addListener('keyboardDidHide', () => setKb(0)); return () => { a.remove(); b.remove(); }; }, []);
   /** Android lifts the window for the keyboard in one of two ways: `adjustResize` shrinks it, `adjustPan` /
@@ -35,8 +37,16 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
       full height while also raising `bottom` by `kb` pushes the top edge to `H - kb - H*maxH`, which is
       negative once the keyboard is up and throws the grab handle, the title and the close button off-screen. */
   const cap = Math.min(H * maxH, Math.max(0, H - bottom - ins.top));
-  const finish = useCallback(() => onClose(), [onClose]);
-  const close = useCallback(() => { if (closing.current) return; closing.current = true; Keyboard.dismiss(); if (reduce) finish(); else y.value = withTiming(H, { duration: 210, easing: Easing.in(Easing.cubic) }, (done) => { if (done) runOnJS(finish)(); }); }, [H, finish, reduce, y]);
+  /* `onClose` first, then whatever the button that started this close asked for: the sheet is out of
+     the store by then, so the caller can navigate. */
+  const finish = useCallback(() => { onClose(); after.run(); }, [onClose, after]);
+  /* `after` is asked on *every* call and before the latch, because a dismissal is a later call with no
+     argument, and it cancels a follow-up a button queued milliseconds earlier. That is the whole fix
+     for the untracked `setTimeout` the focus buttons used to defer their navigation with. */
+  const close = useCallback((next?: () => void) => {
+    after.ask(next); if (closing.current) return;
+    closing.current = true; Keyboard.dismiss(); if (reduce) finish(); else y.value = withTiming(H, { duration: 210, easing: Easing.in(Easing.cubic) }, (done) => { if (done) runOnJS(finish)(); });
+  }, [H, after, finish, reduce, y]);
   useEffect(() => { const s = BackHandler.addEventListener('hardwareBackPress', () => { if (back) { back(); return true; } close(); return true; }); return () => s.remove(); }, [close, back]);
   const pan = Gesture.Pan().activeOffsetY(8).onUpdate((e) => { y.value = Math.max(0, e.translationY); }).onEnd((e) => { if (e.translationY > 110 || e.velocityY > 900) runOnJS(close)(); else y.value = withSpring(0, { damping: 22, stiffness: 260 }); });
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
@@ -46,7 +56,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
       {/* `accessibilityViewIsModal` traps focus on iOS only, so Android gets the matching
           `importantForAccessibility`; App.tsx hides the navigator behind this sheet at the same time. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none" accessibilityViewIsModal importantForAccessibility="yes">
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, dim]}><Pressable testID="sheet-dismiss" style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" accessibilityRole="button" /></Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, dim]}><Pressable testID="sheet-dismiss" style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel="Close" accessibilityRole="button" /></Animated.View>
         <Animated.View importantForAccessibility="yes" style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
           <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={c.ink}>
             <PaperBg card />
@@ -56,7 +66,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
                 <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
                   {back ? <Pressable testID="sheet-back" accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 }}><Icon name="back" /></Pressable> : null}
                   <Txt f="marker" s={25} maxFontSizeMultiplier={FS} numberOfLines={2} style={{ flex: 1 }} accessibilityLiveRegion="polite">{title}</Txt>
-                  <Pressable testID="sheet-close" accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
+                  <Pressable testID="sheet-close" accessibilityRole="button" accessibilityLabel="Close" onPress={() => close()} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
                 </View>
               </View>
             </GestureDetector>

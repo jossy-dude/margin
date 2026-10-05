@@ -42,7 +42,7 @@ export function AddSheet() {
           </View>
         ))}
       </View>
-      <Btn label="Start a focus session" icon="timer" kind="ink" onPress={() => { close(); setTimeout(() => act.focusOpen(null), 230); }} />
+      <Btn label="Start a focus session" icon="timer" kind="ink" onPress={() => close(() => act.focusOpen(null))} />
     </Sheet>
   );
 }
@@ -72,7 +72,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
   });
   return (
     <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93}
-      footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => { close(); setTimeout(() => act.focusOpen(existing.id), 230); }} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
+      footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => close(() => act.focusOpen(existing.id))} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
       <Field label="What is it?" placeholder="e.g. Problem set 6" value={title} onChangeText={setTitle} autoFocus={!existing} returnKeyType="done" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled">{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</ScrollView>
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
