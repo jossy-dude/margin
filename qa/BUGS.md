@@ -978,11 +978,18 @@ and closes the sheet (the latch must not swallow the first press).
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 0 | 5 | 0 |
-| Minor | 23 | 3 | 0 |
-| Polish | 4 | 0 | 0 |
+| Major | 1 | 5 | 0 |
+| Minor | 19 | 2 | 0 |
+| Polish | 5 | 0 | 0 |
 
-**Totals: 32 findings — 0 Critical, 5 Major (5 fixed), 26 Minor (3 fixed), 4 Polish.**
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (2 fixed), 5 Polish. Nothing verified.**
+
+> **This table was stale until the FIXER (majors) pass recounted it from the per-bug headers.** It used to
+> read `Major 3 open / 2 fixed`, `Minor 23 open / 3 fixed`, `Polish 4 open` — 35 rows for 32 bugs. The
+> per-bug `## BUG-NNN — <status> — <Severity>` headers are authoritative; the table is derived from them
+> (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`).
+> **BUG-001 is the one Major still open** — the CNG-vs-committed-native-folders product decision, which
+> this pass did not touch.
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
 (BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
