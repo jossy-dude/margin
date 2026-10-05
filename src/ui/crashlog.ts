@@ -37,6 +37,21 @@ export const sdkVersion = (): string => Constants.expoConfig?.sdkVersion ?? 'unk
 const file = () => new File(Paths.document, FILE);
 const bytesOf = (list: CrashEntry[]) => list.reduce((n, e) => n + JSON.stringify(e).length + 1, 0);
 
+/* The log is a file, i.e. an external store. `useSyncExternalStore` calls its `getSnapshot` on every
+ * render of every subscriber — that is how it detects a change — so `crashCount` has to be O(1) or
+ * the Settings hint re-reads and re-parsed the whole log on every keystroke in the name field. The
+ * parse is therefore cached and invalidated whenever the file is written or deleted. */
+let cache: CrashEntry[] | null = null;
+const listeners = new Set<() => void>();
+export function subscribeCrashes(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+}
+const notify = (): void => {
+  cache = null;
+  for (const cb of [...listeners]) cb();
+};
+
 /** Trim to the newest MAX_ENTRIES, and to MAX_BYTES by dropping the oldest, then rewrite. Runs after each
  *  append so a crash loop stays bounded without anyone opening Diagnostics. */
 function trimAfterAppend(): void {
@@ -66,18 +81,22 @@ export function recordCrash(e: unknown, phase: 'boot' | 'runtime', route = 'unkn
     const f = file();
     if (!f.exists) f.create({ intermediates: true, overwrite: false });
     f.write(JSON.stringify(entry) + '\n', { append: true });
+    cache = null; // the file moved on; the trim below must re-read it, and so must every subscriber
     trimAfterAppend();
+    notify();
     return entry;
   } catch {
     return null;
   }
 }
 
-/** Newest first. Unparseable lines are skipped rather than thrown, so one damaged record cannot hide the rest. */
-export function readCrashes(): CrashEntry[] {
+/** Newest first. Unparseable lines are skipped rather than thrown, so one damaged record cannot hide the rest.
+ *  Parsed once and cached; `readCrashes()` hands back a copy so a caller can hold it in state. */
+function parseLog(): CrashEntry[] {
+  if (cache) return cache;
   try {
     const f = file();
-    if (!f.exists) return [];
+    if (!f.exists) { cache = []; return cache; }
     const out: CrashEntry[] = [];
     for (const line of f.textSync().split('\n')) {
       const t = line.trim();
@@ -87,16 +106,20 @@ export function readCrashes(): CrashEntry[] {
         if (v && typeof v.message === 'string' && typeof v.at === 'number') out.push(v);
       } catch { /* skip a damaged line */ }
     }
-    return out.reverse();
+    cache = out.reverse();
+    return cache;
   } catch {
-    return [];
+    cache = [];
+    return cache;
   }
 }
+export function readCrashes(): CrashEntry[] { return parseLog().slice(); }
 
-export function crashCount(): number { return readCrashes().length; }
+export function crashCount(): number { return parseLog().length; }
 
 export function clearCrashes(): void {
   try { const f = file(); if (f.exists) f.delete(); } catch { /* already gone */ }
+  notify();
 }
 
 const when = (ms: number) => {

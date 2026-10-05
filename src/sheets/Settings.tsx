@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
 import { Label, Sheet } from '../ui/Sheet';
@@ -15,7 +15,7 @@ import { play, type SoundName } from '../services/audio';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { runExport, type ExportFormat, type ExportTarget } from '../services/exportFile';
-import { crashCount } from '../ui/crashlog';
+import { crashCount, subscribeCrashes } from '../ui/crashlog';
 import { DiagnosticsPage } from './Diagnostics';
 import type { Settings, SoundGroup } from '../domain/types';
 
@@ -46,6 +46,13 @@ export function SettingsSheet() {
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
   const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false);
+  /* The Diagnostics hint used to call `crashCount()` twice *inside the render body*, and
+     `crashCount()` is blocking disk I/O: it opens the JSONL file, reads it whole and parses each
+     line. `nameDraft` is local state, so every keystroke re-rendered this sheet and re-read the
+     whole log twice — on the JS thread, in a text field. The log is a file, so it is an external
+     store: subscribing reads it once, and re-reads only when a crash is actually recorded or
+     cleared, so the count stays live without ever polling. */
+  const crashes = useSyncExternalStore(subscribeCrashes, crashCount, crashCount);
   useEffect(() => { if (!sure) return; const t = setTimeout(() => setSure(false), 4000); return () => clearTimeout(t); }, [sure]);
   /* The greeting field used to `set({name})` on EVERY keystroke — a whole-store write that re-rendered every
      screen while you typed. It now edits locally and commits after 400 ms of quiet (and on unmount, so closing
@@ -68,7 +75,7 @@ export function SettingsSheet() {
     <Nav icon="week" label="Attendance & semester" hint={`Semester from ${s.semesterStart} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
-    <Nav icon="note" label="Diagnostics" hint={`${crashCount()} crash${crashCount() === 1 ? '' : 'es'} recorded`} to="diagnostics" />
+    <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
     <Nav icon="trash" label="Reset" hint="Back to the demo set" to="about" />
   </>);
   if (page === 'appearance') body = (<>
