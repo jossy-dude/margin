@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Pressable, View, useWindowDimensions } from 'react-native';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { DayBar, type BarKind } from '../ui/DayBar';
-import { Btn, HandBox, Icon, Tape, Txt } from '../ui/kit';
+import { Btn, HandBox, HStrip, Icon, Tape, Txt } from '../ui/kit';
 import { useNow, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
@@ -76,7 +76,7 @@ export function TodayScreen() {
       </Section>
       <Section title="Notes" right={<Btn small kind="ghost" icon="plus" a11y="New note" onPress={() => act.open({ t: 'notice' })} />}>
         {st.notices.length === 0 ? <Empty text="Nothing pinned. Add a reminder to yourself." /> : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 8, paddingRight: 8 }}>
+          <HStrip gap={12} contentStyle={{ paddingTop: 8 }}>
             {st.notices.map((n, i) => (
               <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`Note: ${n.text}`} onPress={() => act.open({ t: 'notice', id: n.id })} style={{ transform: [{ rotate: `${(i % 3 - 1) * 1.6}deg` }] }}>
                 <HandBox seed={n.id} fill={n.priority >= 2 ? c.hl : c.card} style={{ width: 220, minHeight: 110, padding: 12, paddingTop: 16 }}>
@@ -85,7 +85,7 @@ export function TodayScreen() {
                   <Txt f="hand" s={19} numberOfLines={5}>{n.text}</Txt>
                 </HandBox>
               </Pressable>))}
-          </ScrollView>)}
+          </HStrip>)}
       </Section>
       <Section title="Due soon" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
         {nDone === 0 ? <Empty icon="tasks" text="Nothing due. Tap + to add an assignment." /> : open.map((t) => <TaskCard key={t.id} t={t} now={now} />)}

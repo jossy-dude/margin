@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
-import { Chip, HandBox, Row, Stepper, Txt } from '../ui/kit';
+import { View, Pressable } from 'react-native';
+import { Chip, HandBox, HStrip, Row, Stepper, Txt } from '../ui/kit';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { DW, MO, addDays, atTime, fmtWhen, fromMin, hm, startOfDay, weekdayOf } from '../domain/time';
@@ -21,20 +21,20 @@ export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceho
   return (
     <View style={{ gap: 8 }}>
       <HandBox seed="when" shadow={false} fill={c.hl} style={{ paddingHorizontal: 12, paddingVertical: 8 }}><Txt f="bold" s={22} accessibilityLiveRegion="polite">{value ? fmtWhen(value, now) : nonePlaceholder}</Txt></HandBox>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} keyboardShouldPersistTaps="handled">
+      <HStrip gap={8} bg={c.card}>
         {optional && <Chip label="None" on={value === null} onPress={() => onChange(null)} />}
         {pre.map((p) => <Chip key={p.label} label={p.label} on={value === p.at} onPress={() => onChange(p.at)} />)}
         <Chip label={open ? 'Done' : 'Pick…'} icon={open ? 'check' : 'clock'} on={open} onPress={() => { if (!open && value === null) onChange(base); setOpen(!open); }} />
-      </ScrollView>
+      </HStrip>
       {open && (
         <View style={{ gap: 8 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} keyboardShouldPersistTaps="handled">
+          <HStrip gap={6} bg={c.card}>
             {days.map((d) => { const on = startOfDay(base) === d, dt = new Date(d); return (
               <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${DW[weekdayOf(dt)]} ${dt.getDate()} ${MO[dt.getMonth()]}`} onPress={() => setDay(d)}>
                 <HandBox seed={`d${d}`} fill={on ? c.acc : c.card} shadow={false} style={{ width: 52, height: 66, alignItems: 'center', justifyContent: 'center' }}>
                   <Txt f="serif" s={13} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'mut'}>{dt.getDate() === 1 || d === days[0] ? MO[dt.getMonth()]?.slice(0, 3) : DW[weekdayOf(dt)]}</Txt><Txt f="marker" s={22} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'ink'}>{dt.getDate()}</Txt><Txt f="serif" s={12} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'mut'}>{DW[weekdayOf(dt)]}</Txt>
                 </HandBox></Pressable>); })}
-          </ScrollView>
+          </HStrip>
           <Row><Stepper label="hour" value={Math.floor(minutes / 60)} min={0} max={23} fmt={(v) => String(v).padStart(2, '0')} onChange={(h) => setMin(h * 60 + (minutes % 60))} /><Txt f="marker" s={26}>:</Txt><Stepper label="minutes" value={minutes % 60} min={0} max={55} step={5} fmt={(v) => String(v).padStart(2, '0')} onChange={(m) => setMin(Math.floor(minutes / 60) * 60 + m)} /></Row>
         </View>
       )}

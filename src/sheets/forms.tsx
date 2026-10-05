@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Btn, Chip, Field, HandBox, Icon, Row, Stepper, Toggle, Txt, Hair } from '../ui/kit';
+import { View } from 'react-native';
+import { Btn, Chip, Field, HandBox, HStrip, Icon, Row, Stepper, Toggle, Txt, Hair } from '../ui/kit';
 import { Label, Sheet, useSheet } from '../ui/Sheet';
 import { latch } from '../ui/latch';
 import { useTheme } from '../ui/theme-context';
@@ -17,8 +17,8 @@ const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'A
 const PRI = ['None', 'Low', 'Medium', 'High'];
 
 export function CourseChips({ value, onChange, none = 'No subject' }: { value: string | null; onChange: (v: string | null) => void; none?: string | null }) {
-  const courses = useStore((s) => s.courses);
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} keyboardShouldPersistTaps="handled">{none !== null && <Chip label={none} on={value === null} onPress={() => onChange(null)} />}{courses.map((c) => <Chip key={c.id} label={c.name} on={value === c.id} onPress={() => onChange(c.id)} />)}</ScrollView>;
+  const courses = useStore((s) => s.courses), { c } = useTheme();
+  return <HStrip gap={8} bg={c.card}>{none !== null && <Chip label={none} on={value === null} onPress={() => onChange(null)} />}{courses.map((c) => <Chip key={c.id} label={c.name} on={value === c.id} onPress={() => onChange(c.id)} />)}</HStrip>;
 }
 
 /* ───── Add: eight big tiles in the thumb zone ───── */
@@ -74,7 +74,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
     <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => close(() => act.focusOpen(existing.id))} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
       <Field label="What is it?" placeholder="e.g. Problem set 6" value={title} onChangeText={setTitle} autoFocus={!existing} returnKeyType="done" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled">{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</ScrollView>
+      <HStrip gap={8} bg={c.card}>{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</HStrip>
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" />
       {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" /></>}

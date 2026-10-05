@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import React, { useId, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, FONT, hexA, type Colors } from '../tokens/theme';
 import { handPath, hashSeed, type Corners } from './hand';
+import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
 import { useTheme } from './theme-context';
 import { fx } from '../services/fx';
 
@@ -126,6 +127,41 @@ export function Field({ label, style, multiline, ...p }: TextInputProps & { labe
   );
 }
 export const Row = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, style]}>{children}</View>;
+
+/** A horizontal strip that scrolls when it overflows **and says so**.
+ *
+ *  Ten call sites were a bare `<ScrollView horizontal showsHorizontalScrollIndicator={false}>`. That
+ *  suppresses the only affordance the platform gives away for free, so a row of chips was sliced
+ *  mid-glyph at the viewport edge with nothing to indicate there was more (BUG-026) — on the To-do
+ *  subject filter and on the Task sheet's kind and subject rows, which are the only way to pick either.
+ *
+ *  The platform's own scrollbar stays off: it is a grey bar on a hand-drawn paper page. In its place is
+ *  a fade at the trailing edge, in whatever paper colour sits behind the strip (`bg`). It is *measured*,
+ *  not assumed — it appears only when the content really is wider than the strip, and it disappears once
+ *  you reach the end — so it never suggests more than there is. Trailing padding grows while it is shown
+ *  so the last chip can be scrolled fully clear of the fade rather than sitting under it. */
+export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSizeChange, ref, ...rest }: ScrollViewProps & { gap?: number; bg?: string; contentStyle?: StyleProp<ViewStyle>; ref?: React.Ref<ScrollView> }) {
+  const { c } = useTheme(), id = useId(), [vw, setVw] = useState(0), [cw, setCw] = useState(0), [x, setX] = useState(0);
+  const more = stripHasMore(cw, vw, x), paper = bg ?? c.paper;
+  return (
+    <View style={style}>
+      <ScrollView {...rest} ref={ref} horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
+        onLayout={(e) => setVw(e.nativeEvent.layout.width)}
+        onScroll={(e) => setX(e.nativeEvent.contentOffset.x)}
+        onContentSizeChange={(w, h) => { setCw(w); onContentSizeChange?.(w, h); }}
+        contentContainerStyle={[{ gap, paddingVertical: 4, paddingRight: more ? STRIP_FADE : 4 }, contentStyle]}>{children}</ScrollView>
+      {more ? (
+        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%" accessibilityRole="none">
+          <Defs><LinearGradient id={id} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset={FADE_START} stopColor={paper} stopOpacity="0" />
+            <Stop offset="1" stopColor={paper} stopOpacity="1" />
+          </LinearGradient></Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
 export function Tape({ w = 62, rot = -4, style }: { w?: number; rot?: number; style?: StyleProp<ViewStyle> }) {
   const { dark } = useTheme();
   return <View pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? '#C9B98F55' : '#E7D9AE99', borderColor: dark ? '#C9B98F66' : '#B8A56E55', borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;

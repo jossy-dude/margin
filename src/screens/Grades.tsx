@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Btn, HandBox, Icon, Row, Stepper, Txt } from '../ui/kit';
+import { Btn, HandBox, HStrip, Icon, Row, Stepper, Txt } from '../ui/kit';
 import { useNow, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
@@ -28,13 +28,13 @@ function AttendanceGrid({ course }: { course: Course }) {
       </Row>
       <Txt f="serif" s={14} c="mut">{locked ? 'Locked: nothing can change by accident.' : 'Tap an empty cell once to mark it. After that, long-press to change.'}</Txt>
       {occ.length === 0 ? <Txt f="serif" s={16} c="mut">No classes scheduled yet.</Txt> : (
-        <ScrollView horizontal ref={gridRef} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 3, paddingVertical: 6, paddingRight: 8 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
+        <HStrip ref={gridRef} gap={3} bg={c.card} contentStyle={{ paddingVertical: 6 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
           {occ.map(({ date, meeting }) => {
             const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${meeting.start}, ${spokenStatus(e)}`;
             return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
               onTap={() => act.setAtt(key, e.status && e.inferred ? nextStatus(e.status) : 'p')} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}
-        </ScrollView>)}
+        </HStrip>)}
       <Row style={{ gap: 12 }}>{[['✓', 'here', c.ink], ['L', 'late', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.ok], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
     </View>
   );

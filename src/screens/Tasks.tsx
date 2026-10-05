@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Btn, Chip, Field, Row, Txt } from '../ui/kit';
+import { View } from 'react-native';
+import { Btn, Chip, Field, HStrip, Row, Txt } from '../ui/kit';
 import { RunningTimer } from '../ui/RunningTimer';
 import { useNow } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
@@ -28,7 +28,7 @@ export function TasksScreen() {
       <RunningTimer />
       <Field placeholder="Search tasks" value={q} onChangeText={setQ} returnKeyType="search" />
       <Row>{(['all', 'open', 'done'] as const).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={s.taskFilter === f} onPress={() => act.setSettings({ taskFilter: f })} small />)}<View style={{ width: 8 }} />{(['due', 'priority', 'created'] as const).map((f) => <Chip key={f} label={f === 'due' ? 'By date' : f === 'priority' ? 'By priority' : 'Newest'} on={s.taskSort === f} icon={undefined} onPress={() => act.setSettings({ taskSort: f })} small />)}</Row>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}><Chip label="Every subject" on={cid === 'all'} onPress={() => setCid('all')} small /><Chip label="Personal" on={cid === null} onPress={() => setCid(null)} small />{st.courses.map((c) => <Chip key={c.id} label={c.name} on={cid === c.id} onPress={() => setCid(c.id)} small />)}</ScrollView>
+      <HStrip gap={8}><Chip label="Every subject" on={cid === 'all'} onPress={() => setCid('all')} small /><Chip label="Personal" on={cid === null} onPress={() => setCid(null)} small />{st.courses.map((c) => <Chip key={c.id} label={c.name} on={cid === c.id} onPress={() => setCid(c.id)} small />)}</HStrip>
       {list.length === 0 ? <Empty icon="tasks" text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add an assignment, exam or reading.'} /> : groups.map((g) => (
         <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.items.length}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</View>))}
       <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />

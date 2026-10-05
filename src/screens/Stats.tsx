@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
-import { Chip, HandBox, Row, Txt } from '../ui/kit';
+import { View, useWindowDimensions } from 'react-native';
+import { Chip, HandBox, HStrip, Row, Txt } from '../ui/kit';
 import { Heatmap, HBars, Hist24, Line2, Ring } from '../ui/charts';
 import { useNow, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
@@ -48,12 +48,12 @@ export function StatsScreen() {
     <Page title="Stats" sub="Everything the app tracks, in one place">
       {hint && <Empty icon="stats" text={hint} />}
       <Card seed="rings" title="At a glance" sub="Attendance is the last 30 days">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+        <HStrip gap={10} bg={c.card}>
           <Ring value={attOverall.rate} label="Attendance" sub={`${attOverall.here}/${attOverall.held} classes`} />
           <Ring value={ot.pct} label="On time" sub={`${ot.onTime}/${ot.total} tasks`} />
           <Ring value={Math.min(1, week / 300)} label="Focus week" sub={`${fmtDur(week)} of 5h`} />
           <Ring value={Math.min(1, fs.current / 7)} label="Focus streak" sub={`${fs.current} d · best ${fs.best}`} />
-        </ScrollView>
+        </HStrip>
         <Txt f="serif" s={15.5} c="mut">{ot.avgLeadHours !== null ? `You finish on-time tasks about ${ot.avgLeadHours < 24 ? Math.round(ot.avgLeadHours) + ' h' : Math.round(ot.avgLeadHours / 24) + ' days'} before they are due. ` : ''}{prev ? `Focus is ${week >= prev ? 'up' : 'down'} ${Math.abs(Math.round(((week - prev) / prev) * 100))}% on last week. ` : ''}{lateWeeks ? `${lateWeeks} finished late.` : ''}</Txt>
       </Card>
       <Card seed="fheat" title="Focus heatmap" sub={`${fmtDur(totalMin)} in the last 15 weeks`}><Heatmap values={focusD} w={iw} startWd={start} unit=" min" /></Card>
@@ -82,7 +82,7 @@ export function StatsScreen() {
         <Card seed="gb" title="Totals against goals">{gb.filter((g) => g.total !== null).length === 0 ? <Txt f="serif" s={16} c="mut">No marks yet.</Txt> : <HBars items={gb.filter((g) => g.total !== null).map((g) => ({ label: g.name, value: Math.round(g.total as number) }))} w={iw} fmt={(v) => `${v}`} max={100} />}</Card>
         <Card seed="gl" title="Mark history" sub={courses.find((x) => x.id === gCourse)?.name}>
           {courses.length === 0 ? <Txt f="serif" s={16} c="mut">No subjects yet. Add one to plot its marks.</Txt> : (<>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</ScrollView>
+            <HStrip gap={8} bg={c.card}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</HStrip>
             {series.length ? <Line2 values={series.map((s) => s.score)} labels={series.map((s) => s.name)} w={iw} goal={courses.find((x) => x.id === gCourse)?.goal ?? null} /> : <Txt f="serif" s={16} c="mut">No scored marks for this subject.</Txt>}
           </>)}
         </Card>

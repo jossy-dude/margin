@@ -23,6 +23,22 @@ export const pageBottomPad = (bottomInset: number) => navHeight(bottomInset) + F
 export const TOAST_CLEAR = 20;
 export const toastBottom = (bottomInset: number) => navHeight(bottomInset) + TOAST_CLEAR;
 
+/** How wide the fade at a scrolling strip's trailing edge is, and where it starts. */
+export const STRIP_FADE = 30;
+export const FADE_START = 0.62;
+/** Is there genuinely more of a horizontal strip to scroll to?
+ *
+ *  Ten call sites were a bare `<ScrollView horizontal showsHorizontalScrollIndicator={false}>`, which
+ *  suppresses the only affordance the platform gives away for free — so a row of chips was sliced
+ *  mid-glyph at the viewport edge with nothing to indicate there was more (BUG-026). `HStrip` fades its
+ *  trailing edge instead, and this decides *whether* to: only when the content really is wider than the
+ *  strip, and only until the end is reached, so the fade can never suggest more than there is. The
+ *  `+ 1` / `- 1` slack absorbs the sub-pixel noise in measured layout widths, which would otherwise make
+ *  the fade blink on and off as a row reflows. */
+export function stripHasMore(contentW: number, viewW: number, offsetX: number) {
+  return contentW > viewW + 1 && offsetX < contentW - viewW - 1;
+}
+
 /** An hour label's line box on the Week scale, at `s: 11.5` — `Txt` sets `lineHeight: round(size * 1.18)`. */
 export const HOUR_LH = Math.round(11.5 * 1.18);
 /** Where an hour label sits on the Week grid.
