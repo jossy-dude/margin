@@ -1,7 +1,7 @@
 import React, { useId, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { RG, RS, FONT, hexA, type Colors } from '../tokens/theme';
+import { RG, RS, FONT, TAPE, hexA, type Colors } from '../tokens/theme';
 import { handPath, hashSeed, type Corners } from './hand';
 import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
 import { useTheme } from './theme-context';
@@ -164,6 +164,6 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
 }
 export function Tape({ w = 62, rot = -4, style }: { w?: number; rot?: number; style?: StyleProp<ViewStyle> }) {
   const { dark } = useTheme();
-  return <View pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? '#C9B98F55' : '#E7D9AE99', borderColor: dark ? '#C9B98F66' : '#B8A56E55', borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;
+  return <View pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? TAPE.dark.fill : TAPE.light.fill, borderColor: dark ? TAPE.dark.edge : TAPE.light.edge, borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;
 }
 export const Hair = () => { const { c } = useTheme(); return <View style={{ height: 1.4, backgroundColor: c.rule, marginVertical: 8 }} />; };

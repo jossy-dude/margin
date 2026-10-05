@@ -1,4 +1,4 @@
-import type { Colors } from '../../tokens/theme';
+import { ONYX, type Colors } from '../../tokens/theme';
 
 /**
  * Dial engine — a TypeScript port of the clock-variations engine. Pure: it returns SVG strings (viewBox -100 -100 200 200 unless noted),
@@ -22,7 +22,7 @@ export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id)
  *  Takes only `native`, so a bitmap plate (always light artwork) can pass `{ native: 'light' }` without a cast. */
 export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): Pal {
   if (f.native === 'light') return { ink: c.ink, dial: c.card, accent: c.acc };
-  return { ink: dark ? c.ink : c.card, dial: dark ? '#17130F' : '#26201A', accent: c.acc };
+  return { ink: dark ? c.ink : c.card, dial: dark ? ONYX.dark : ONYX.light, accent: c.acc };
 }
 /**
  * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the

@@ -18,6 +18,16 @@ export const PENS: Record<Exclude<Settings['pen'], 'warm' | 'graphite'>, { light
 };
 export const palettes = { refined: REFINED, original: ORIGINAL };
 
+/** Art constants that are deliberately theme-independent, so they are tokens rather than literals
+ *  pasted into components. The onyx dial of the dark-native clock faces stays dark in both themes
+ *  (a cream dial with cream hands would be invisible), and the washi tape is a material, not a
+ *  palette entry. Neither should follow `palette: 'original'` — but neither belongs in a screen. */
+export const ONYX = { light: '#26201A', dark: '#17130F' } as const;
+export const TAPE = {
+  light: { fill: '#E7D9AE99', edge: '#B8A56E55' },
+  dark: { fill: '#C9B98F55', edge: '#C9B98F66' },
+} as const;
+
 export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', serif: 'Newsreader_400Regular_Italic', serifB: 'Newsreader_600SemiBold_Italic', marker: 'PermanentMarker_400Regular', type: 'SpecialElite_400Regular' } as const;
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;

@@ -36,15 +36,23 @@ ui_dump_raw() {
   # case /sdcard/qa_ui.xml still holds the PREVIOUS dump. A stale tree is worse
   # than no tree: it silently reports another app's screen as ours. Detect and
   # refuse, so callers can retry instead of acting on a phantom UI.
-  local out
-  for _ in 1 2 3; do
-    out="$($ADB shell uiautomator dump /sdcard/qa_ui.xml 2>&1)" || true
-    if [[ "$out" != *"could not get idle state"* ]]; then
-      $ADB exec-out cat /sdcard/qa_ui.xml 2>/dev/null && return 0
+  local out rc
+  for _ in 1 2 3 4 5; do
+    # The target file is DELETED first, so a failed dump can never fall through to
+    # the previous run's tree. See trap 7: `uiautomator dump` is also killed by the
+    # device (exit 137, SIGKILL) while printing NOTHING, which the old
+    # "could not get idle state" string check did not catch -- it then happily
+    # `cat`ed a leftover file from an earlier session and reported that phantom UI.
+    $ADB shell rm -f /sdcard/qa_ui.xml >/dev/null 2>&1
+    out="$($ADB shell uiautomator dump /sdcard/qa_ui.xml 2>&1)"; rc=$?
+    if [[ "$out" != *"could not get idle state"* ]] && (( rc == 0 )); then
+      local xml
+      xml="$($ADB exec-out cat /sdcard/qa_ui.xml 2>/dev/null)"
+      if [[ -n "$xml" && "$xml" == "<"* ]]; then printf '%s' "$xml"; return 0; fi
     fi
     sleep 1
   done
-  echo "STALE_DUMP: uiautomator never went idle; refusing to return a stale tree" >&2
+  echo "STALE_DUMP: uiautomator never produced a fresh tree (rc=$rc, out='${out:0:120}'); refusing to return a stale tree" >&2
   return 1
 }
 

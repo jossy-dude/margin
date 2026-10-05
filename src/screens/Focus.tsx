@@ -158,7 +158,7 @@ export function FocusScreen() {
       <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
         <View style={{ width: 440, height: 1001, transformOrigin: '0% 0%', transform: [{ scale: s }] }}>
           <Image source={PAGE} style={{ position: 'absolute', width: 440, height: 1001 }} />
-          {dark && <View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: '#1B1712', opacity: 0.62 }} />}
+          {dark && <View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.desk, opacity: 0.62 }} />}
           <Box seed="rnd" style={{ position: 'absolute', left: 32, top: 6 + topOff, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8, transform: [{ rotate: '-1.5deg' }] }}>
             <Txt f="bold" s={19} accessibilityLiveRegion="polite">Round {rn} · {phaseLabel}</Txt>
             <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1, 2, 3].map((i) => <View key={i} style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.6, borderColor: c.ink, backgroundColor: i < t.rounds % 4 || (t.rounds > 0 && t.rounds % 4 === 0) ? c.ink : 'transparent' }} />)}</View>

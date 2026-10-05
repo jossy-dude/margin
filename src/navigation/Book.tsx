@@ -52,7 +52,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
   const hideNav = cur === 'Focus' || kbUp;
   return (
     <NavigationContent>
-      <View style={{ flex: 1, backgroundColor: c.desk }}>
+      <View style={{ flex: 1, backgroundColor: c.paper }}>
         {state.routes.map((r, i) => (inMountWindow(visited, counter.current, r.name) ? <Placed key={r.key} on={i === state.index} order={visited[r.name] ?? 0} instant={visited[r.name] === 1}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{descriptors[r.key]?.render()}</View></Placed> : null))}
         {!hideNav && (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
