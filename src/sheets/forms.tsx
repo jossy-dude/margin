@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Icon, Row, Stepper, Toggle, Txt, Hair } from '../ui/kit';
 import { Label, Sheet, useSheet } from '../ui/Sheet';
+import { latch } from '../ui/latch';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { WhenPicker, nextHome } from './WhenPicker';
@@ -56,15 +57,19 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
   const [due, setDue] = useState<number | null>(existing ? existing.dueAt : null), [start, setStart] = useState<number | null>(existing?.startAt ?? null), [est, setEst] = useState(existing?.estimateMin ?? 0), [pri, setPri] = useState<number>(existing?.priority ?? 0);
   const [notes, setNotes] = useState(existing?.notes ?? ''), [subs, setSubs] = useState(existing?.subtasks ?? []), [ns, setNs] = useState(''), [showStart, setShowStart] = useState(!!existing?.startAt), [custom, setCustom] = useState(60), [addAt, setAddAt] = useState(false), [atV, setAtV] = useState<number | null>(null);
   const [rem, setRem] = useState<ReminderSpec[]>(existing?.reminders ?? nset.defaultTaskMinutes.map((m) => ({ id: uid('r'), mode: 'before' as const, minutes: m, label: m ? `${fmtDur(m)} before` : 'At due time' })));
-  const { close } = useSheet(), { c } = useTheme();
+  const { close } = useSheet(), { c } = useTheme(), [saveId] = useState(() => existing?.id ?? uid('t')), [submit] = useState(latch);
   const draft: Task = { id: existing?.id ?? 'draft', title, courseId: cid, kind: k, dueAt: due, startAt: start, estimateMin: est || null, priority: pri as Task['priority'], notes, status: existing?.status ?? 0, createdAt: existing?.createdAt ?? now, completedAt: existing?.completedAt ?? null, reminders: rem, subtasks: subs, demo: false };
   const w = useMemo(() => workload(draft, { now, meetings: st.meetings, attendance: st.attendance, dayMarks: st.dayMarks, settings: nset }), [due, est, start]); // eslint-disable-line react-hooks/exhaustive-deps
   const has = (m: number) => rem.some((r) => r.mode === 'before' && r.minutes === m), home = due ? nextHome(now, nset.homeAt) : null, hasHome = rem.some((r) => r.mode === 'abs' && r.label === 'When I get home');
   const toggleOff = (m: number) => setRem((r) => (has(m) ? r.filter((x) => !(x.mode === 'before' && x.minutes === m)) : [...r, { id: uid('r'), mode: 'before', minutes: m, label: m ? `${fmtDur(m)} before` : 'At due time' }]));
-  const save = () => {
-    const t = { ...draft, id: existing?.id ?? uid('t'), title: title.trim(), reminders: due ? rem : [] };
+  /** The Add button is never disabled, so it stays enabled through the sheet's 210 ms close animation
+   *  and a fast double-tap lands here twice. The latch refuses the second; minting `saveId` once per
+   *  form instance means even a repeat that got through re-saves this row instead of appending a
+   *  second, unrecoverable one. */
+  const save = () => submit(() => {
+    const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : [] };
     act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now)}` : ''}`); close();
-  };
+  });
   return (
     <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => { close(); setTimeout(() => act.focusOpen(existing.id), 230); }} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
@@ -116,21 +121,21 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' |
 
 /* ───── course / meeting / mark / notice ───── */
 export function CourseSheet({ id }: { id?: string }) {
-  const c0 = useStore((s) => s.courses.find((x) => x.id === id)), count = useStore((s) => s.courses.length), { close } = useSheet();
+  const c0 = useStore((s) => s.courses.find((x) => x.id === id)), count = useStore((s) => s.courses.length), { close } = useSheet(), [saveId] = useState(() => c0?.id ?? uid('c')), [submit] = useState(latch);
   const [name, setName] = useState(c0?.name ?? ''), [room, setRoom] = useState(c0?.room ?? ''), [teacher, setTeacher] = useState(c0?.teacher ?? ''), [goal, setGoal] = useState(c0?.goal ?? 0);
   return (
-    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => { act.saveCourse({ id: c0?.id ?? uid('c'), name: name.trim(), room: room.trim(), teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count }); close(); }} /></Row>}>
+    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), room: room.trim(), teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count }); close(); })} /></Row>}>
       <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Room" value={room} onChangeText={setRoom} /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
       <Label>Grade goal</Label><Stepper label="goal" value={goal} min={0} max={100} fmt={(v) => (v ? `${v}%` : 'none')} onChange={setGoal} />
     </Sheet>
   );
 }
 export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?: string; weekday?: number }) {
-  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), { close } = useSheet();
+  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), { close } = useSheet(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId ?? first ?? null), [wd, setWd] = useState(m0?.weekday ?? weekday ?? 0), [a, setA] = useState(hm(m0?.start ?? '09:00')), [b, setB] = useState(hm(m0?.end ?? '09:50'));
   const bad = !cid || b <= a;
   return (
-    <Sheet title={m0 ? 'Edit class' : 'Add class'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete class" onPress={() => { act.removeMeeting(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={bad} onPress={() => { act.saveMeeting({ id: m0?.id ?? uid('m'), courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b) }); close(); }} /></Row>}>
+    <Sheet title={m0 ? 'Edit class' : 'Add class'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete class" onPress={() => { act.removeMeeting(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={bad} onPress={() => submit(() => { act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b) }); close(); })} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={setCid} none={null} />
       <Label>Day</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} on={wd === i} onPress={() => setWd(i)} small />)}</Row>
       <Label>Starts</Label><Stepper label="start" value={a} min={360} max={1320} step={5} fmt={fromMin} onChange={(v) => { setA(v); if (b <= v) setB(v + 50); }} />
@@ -140,10 +145,10 @@ export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?
   );
 }
 export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
-  const m0 = useStore((s) => s.marks.find((x) => x.id === id)), count = useStore((s) => s.marks.filter((m) => m.courseId === courseId).length), { close } = useSheet();
+  const m0 = useStore((s) => s.marks.find((x) => x.id === id)), count = useStore((s) => s.marks.filter((m) => m.courseId === courseId).length), { close } = useSheet(), [saveId] = useState(() => m0?.id ?? uid('k')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId), [name, setName] = useState(m0?.name ?? ''), [score, setScore] = useState(m0?.score ?? 70), [has, setHas] = useState(m0 ? m0.score !== null : true), [weight, setWeight] = useState(m0?.weight ?? 10), [on, setOn] = useState(m0?.on ?? true);
   return (
-    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => { const mk: Mark = { id: m0?.id ?? uid('k'), courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count }; act.saveMark(mk); close(); }} /></Row>}>
+    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count }; act.saveMark(mk); close(); })} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={(v) => v && setCid(v)} none={null} />
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />
@@ -154,10 +159,10 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
   );
 }
 export function NoticeSheet({ id }: { id?: string }) {
-  const n0 = useStore((s) => s.notices.find((x) => x.id === id)), { close } = useSheet();
+  const n0 = useStore((s) => s.notices.find((x) => x.id === id)), { close } = useSheet(), [saveId] = useState(() => n0?.id ?? uid('n')), [submit] = useState(latch);
   const [text, setText] = useState(n0?.text ?? ''), [cid, setCid] = useState(n0?.courseId ?? null), [pri, setPri] = useState<number>(n0?.priority ?? 0);
   return (
-    <Sheet title={n0 ? 'Edit note' : 'New note'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" a11y="Delete note" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label="Pin it" icon="check" disabled={!text.trim()} onPress={() => { const n: Notice = { id: n0?.id ?? uid('n'), courseId: cid, text: text.trim(), dueAt: n0?.dueAt ?? startOfDay(Date.now()), read: false, priority: pri as Notice['priority'] }; act.saveNotice(n); fx.tap(); close(); }} /></Row>}>
+    <Sheet title={n0 ? 'Edit note' : 'New note'} onClose={act.close} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" a11y="Delete note" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label="Pin it" icon="check" disabled={!text.trim()} onPress={() => submit(() => { const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: n0?.dueAt ?? startOfDay(Date.now()), read: false, priority: pri as Notice['priority'] }; act.saveNotice(n); fx.tap(); close(); })} /></Row>}>
       <Field label="Note" multiline value={text} onChangeText={setText} autoFocus={!n0} placeholder="What should you remember?" />
       <Label>About</Label><CourseChips value={cid} onChange={setCid} />
       <Label>How important?</Label><Row>{['Note', 'Heads-up', 'Important', 'Urgent'].map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
