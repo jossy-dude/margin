@@ -73,6 +73,32 @@ adb shell settings put system accelerometer_rotation 0
 - Phase 0 (infra) complete: git baseline `47339a5` on branch `qa/prelaunch`,
   device verified, `qa/scripts/adb.sh` + `uiparse.py` written and working.
 
+## QA-support device settings (restore at gate end)
+
+```
+svc power stayon true        # screen must not sleep mid-test; device is USB-plugged
+```
+
+Without this the keyguard engages during long agent runs and blocks all input.
+Restore with `adb shell svc power stayon false`.
+
+## Harness traps found 2026-10-04 (fixed in qa/scripts/adb.sh — do not reintroduce)
+
+1. **RN ignores swipes under ~800ms.** The default 300ms swipe was a silent no-op and
+   nearly produced a false "the list does not scroll" bug. Default is now 800ms
+   (`SWIPE_MS` to override).
+2. **`uiautomator dump` exits 0 even when it prints "could not get idle state",** leaving the
+   PREVIOUS xml in place. It once handed an agent the Expo Go home-screen tree while the app
+   was foreground, i.e. a stale screen silently reported as the app. `adb.sh` now detects the
+   condition, retries 3x, and fails loudly rather than returning a phantom UI.
+3. **`adb shell input keyevent 26` is a toggle, not a wake** — it will put the phone to sleep
+   and then behind the keyguard. Use `./qa/scripts/adb.sh awake` / `locked` / `unlock`.
+4. **Always cold-restart before judging.** Fast refresh emits a spurious
+   `ReferenceError: Property 'dark' doesn't exist` plus ~90 bogus
+   `"undefined" is not a valid color` warnings that do not occur in a real cold boot.
+5. **Never report status-bar / edge-to-edge findings from Expo Go** — Expo Go owns that
+   window. See BUG-004.
+
 ## Next action
 
 1. Confirm `npm run check` and `npm run bundle` exit 0 on **Node 24** (project was

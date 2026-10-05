@@ -32,8 +32,20 @@ die() { echo "adb.sh: $*" >&2; exit 1; }
 
 # --- raw UI dump -------------------------------------------------------------
 ui_dump_raw() {
-  $ADB shell uiautomator dump /sdcard/qa_ui.xml >/dev/null 2>&1 || return 1
-  $ADB exec-out cat /sdcard/qa_ui.xml 2>/dev/null
+  # uiautomator exits 0 even when it prints "could not get idle state", in which
+  # case /sdcard/qa_ui.xml still holds the PREVIOUS dump. A stale tree is worse
+  # than no tree: it silently reports another app's screen as ours. Detect and
+  # refuse, so callers can retry instead of acting on a phantom UI.
+  local out
+  for _ in 1 2 3; do
+    out="$($ADB shell uiautomator dump /sdcard/qa_ui.xml 2>&1)" || true
+    if [[ "$out" != *"could not get idle state"* ]]; then
+      $ADB exec-out cat /sdcard/qa_ui.xml 2>/dev/null && return 0
+    fi
+    sleep 1
+  done
+  echo "STALE_DUMP: uiautomator never went idle; refusing to return a stale tree" >&2
+  return 1
 }
 
 # --- dump / texts ------------------------------------------------------------
@@ -114,8 +126,8 @@ cmd_swipe() {
     right) x1=$(( cx - half )); y1=$cy; x2=$(( cx + half )); y2=$cy;;
     *) die "swipe direction must be up|down|left|right";;
   esac
-  $ADB shell input swipe "$x1" "$y1" "$x2" "$y2" "${SWIPE_MS:-300}"
-  echo "swiped $dir ($dist px, ${SWIPE_MS:-300}ms) from $x1,$y1 to $x2,$y2"
+  $ADB shell input swipe "$x1" "$y1" "$x2" "$y2" "${SWIPE_MS:-800}"
+  echo "swiped $dir ($dist px, ${SWIPE_MS:-800}ms) from $x1,$y1 to $x2,$y2"
 }
 
 # --- waiting -----------------------------------------------------------------
@@ -175,6 +187,12 @@ case "${1:-}" in
   swipe)      shift; cmd_swipe "$@";;
   wait)       shift; cmd_wait "$@";;
   gone)       shift; cmd_gone "$@";;
+  unlock)     $ADB shell wm dismiss-keyguard 2>/dev/null; sleep 1
+              $ADB shell input swipe 540 1800 540 600 ${SWIPE_MS:-800}
+              echo "keyguard dismiss attempted";;
+  awake)      $ADB shell dumpsys power 2>/dev/null | grep -oE 'mWakefulness=[A-Za-z]+' | head -1;;
+  locked)     $ADB shell dumpsys window 2>/dev/null | grep -qiE 'mShowingLockscreen|isStatusBarKeyguard' \
+                && echo LOCKED || echo UNLOCKED;;
   stop)       cmd_stop;;
   launch)     cmd_launch;;
   restart)    cmd_restart;;
