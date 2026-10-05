@@ -19,7 +19,7 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Day bar (spines/glass/trace/ticker) | **fail** | Default kind rendered. Strip is hard-wired to *today* while "Mark day" below it acts on the *selected* day → **BUG-022** |
 | Timeline / class rows | **pass** | 4 classes listed with times, rooms, teachers, dashed attendance cells; walked, not tapped |
 | Attendance cell → status sheet | untested | |
-| Notice / note row | **pass** | 2 notes render; 2nd is clipped at the screen edge → **BUG-026** |
+| Notice / note row | **pass** | 2 notes render; 2nd was clipped at the screen edge (**BUG-026**) — the row is now an `HStrip`, so it fades at the trailing edge instead |
 | "No classes today" empty state | **pass** | Reached via Sat 10 (0 classes): "No classes. Add one from the + button." in a dashed box. Hint present, nothing blank → `a2_today_sat_empty.png` |
 | Timer icon → Focus | untested | |
 | Theme toggle (sun icon) | untested | |
@@ -34,7 +34,7 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 |---|---|---|
 | Week grid / day columns | **pass** | 7 columns, vertical rules at x=121/252/383/513/644/775/906 + card border 1035, headers centred on their columns. No overflow, no missing Sunday |
 | Day header + "This week" | **pass** | "This week · 5 Oct – 11 Oct" |
-| Hour scale labels | **fail** | "16" sliced in half by the card's bottom border → **BUG-027** |
+| Hour scale labels | **pass** | "16" was sliced in half by the card's bottom border (**BUG-027**); re-verified after the fix — all of 8-16 render whole, only the last row moved (`fix_10_week.png` → `fix_50_week_after.png`) |
 | Class block → tap | untested | |
 | Class block → long-press to edit | untested | |
 | Day mark | untested | |
@@ -45,11 +45,11 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 ## Screen: Tasks (To-do)
 | Element | Status | Notes |
 |---|---|---|
-| Search field | **pass** | Typed `zzqqxx` → empty state "Nothing matches that search." with icon → `a2_search_empty.png`. Keyboard opens without covering the field (V19 core requirement holds) |
+| Search field | **pass** | Typed `zzqqxx` → empty state "Nothing matches that search." with icon → `a2_search_empty.png`. Keyboard opens without covering the field (V19 core requirement holds). Re-verified after **BUG-028**: the stranded nav and the overlapping + button are both gone and the empty-state hint reads whole (`fix_15_kb3.png` → `fix_72_kb_final.png`, chrome restored in `fix_71_kb_back.png`) |
 | Running-focus card | untested | Rendered ("25 min ready"); not opened |
 | Filter: All / Open / Done | **fail** | All and Done exercised (Done → `Done · 1` after purge). Open not tapped. **Open** |
 | Sort: By date / By priority / Newest | untested | Chips rendered; "By date" active. Not toggled. **Open** |
-| Subject chip row + scroll | **fail** | 4th chip squeezed to 92 px and cut at the screen edge → **BUG-026** |
+| Subject chip row + scroll | **pass** | 4th chip was cut at the screen edge (**BUG-026**); re-verified — "Dis…" now fades out at the trailing edge, and after three left-swipes the fade is gone and "Database Systems" reads whole (`fix_09_tasks.png` → `fix_60_strip_after.png`, `fix_62_strip_end.png`) |
 | Group headers (Late · 8, Later · 1, Done · 1) | **pass** | Headers and counts correct: 8 + 1 = 9 open; Done 7 → 1 after purge |
 | "+ New task" button | untested | Rendered at the list foot |
 | Task card → open detail | untested | **blocked by the keyguard (AGENT 2b)** |
@@ -75,19 +75,19 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Cell: Late → "L" amber | untested | |
 | Lock button → deny all / unlock | untested | Toggle rendered in Settings, off |
 | Misplaced tap in 3dp gap | untested | |
-| Subject chip filter | untested | |
+| Subject chip filter | **pass** | Tapping a subject chip filters the list; the row's trailing fade is the **BUG-026** affordance and clears once scrolled to the end (`fix_60_strip_after.png` → `fix_62_strip_end.png`) |
 
 ## Screen: Stats
 | Element | Status | Notes |
 |---|---|---|
-| At-a-glance rings | **pass** | Attendance 100 % 68/68, On time 14 % → 0 % after purge, Focus week 100 % → 0 %, Focus streak 14 % → 0 %. **4th ring's label is clipped to "Focus strea"** → **BUG-030** |
+| At-a-glance rings | **pass** | Attendance 100 % 68/68, On time 14 % → 0 % after purge, Focus week 100 % → 0 %, Focus streak 14 % → 0 %. The 4th ring's label was clipped to "Focus strea" (**BUG-030**); re-verified — it now reads **"Focus streak"** (`fix_01_stats_top.png` → `fix_30_after_top.png`) |
 | Focus heatmap (28d) | **pass** | 15 h 40 m before purge → "0m in the last 15 weeks", all cells empty, no layout break |
 | Tasks finished heatmap | **pass** | "7 in the last 15 weeks · **streak 1 days**" → **BUG-029** |
 | Done-by-hour histogram | **pass** | "Most tasks are finished around 22:00"; green bar at 22; axis 0/6/12/18/23 |
 | "When you work best" histogram | **pass** | Empty state degrades to **"Start a focus session to see this"** — good hint |
-| Attendance heat/rates | **fail** | "Attendance by subject": 4 of 5 subject names truncated, all rates 100 % → **BUG-030**. "Attendance, last 4 weeks": **last column of every row clipped by the card edge** → **BUG-023** |
-| Grade bars | **fail** | "Totals against goals": 3 of 3 labels truncated; only 3 of 6 courses shown → **BUG-030** |
-| Mark history chart | **fail** | x-axis labels "Quiz / **Assig** / **Mid**" cut mid-word → **BUG-030**. (Also has no y-axis scale at all — not filed) |
+| Attendance heat/rates | **pass** | "Attendance by subject": 4 of 5 subject names were truncated (**BUG-030**) — re-verified, "Intro to Economics" / "Discrete Mathematics" / "Emerging Technology" now render whole (`fix_32_hbars2.png`). "Attendance, last 4 weeks": the **last of 28 cells on every row was sliced by the card edge** (**BUG-023**) — re-verified, all 28 fit on all five rows (`fix_08_heat3.png` → `fix_40_heat_after.png`) |
+| Grade bars | **pass** | "Totals against goals": 3 of 3 labels were truncated (**BUG-030**) — re-verified, labels now render whole; still only 3 of 6 courses shown, which is correct (the other three have no marks — see "Observed, judged NOT a bug") |
+| Mark history chart | **pass** | x-axis labels were cut mid-word to "Quiz / **Assig** / **Mid**" (**BUG-030**); the labels are now real `Txt numberOfLines={1}` bounded by half the gap between points, so they ellipsise on pixels. (Also has no y-axis scale at all — still not filed) |
 | Charts animate once | untested | |
 | Empty-state hint | **fail** | V13's hint never fires after the documented path → **BUG-024** |
 
@@ -119,15 +119,15 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Element | Status | Notes |
 |---|---|---|
 | Title field | **fail** | Renders with placeholder "e.g. Problem set 6"; tap-to-focus **pass**, but the typed value could not be verified — the device locked on the next frame → see iteration log |
-| Subject optional ("No subject") | **pass** | Defaults to "No subject" selected; chip row 3rd chip clipped → **BUG-026** |
+| Subject optional ("No subject") | **pass** | Defaults to "No subject" selected; the chip row's 3rd chip was clipped (**BUG-026**) — now an `HStrip`, so it fades at the trailing edge |
 | Due → WhenPicker | untested | **Open** — "No due date" button rendered, not opened |
-| Reminder chips | **pass** | None / In 1 h / In 3 h / When I get home + a 5th chip clipped at the screen edge; correctly disabled with the hint **"Set a due date to choose reminders."** → **BUG-026** |
+| Reminder chips | **pass** | None / In 1 h / In 3 h / When I get home + a 5th chip was clipped at the screen edge (**BUG-026**) — verified after the fix: the presets fade behind "When I get home" (`fix_65_task2.png`). Correctly disabled with the hint **"Set a due date to choose reminders."** |
 | Effort Stepper (min) | **pass** | Renders "− unknown +" with no due date. Limits untested |
 | Tight/Comfortable + latest start | untested | Needs a due date + effort → **Open** |
 | Priority chips | untested | None/Low/Medium/High rendered |
 | Subtasks add + tick | untested | "Add a step" rendered |
 | Save | untested | **Never pressed — the run stopped here (AGENT 2), and AGENT 2b never reached the screen either** |
-| Kind chips row | **fail** | 4th chip cut to "P…" → **BUG-026** |
+| Kind chips row | **pass** | 4th chip was cut to "P…" (**BUG-026**) — now an `HStrip`; the same sheet's WhenPicker presets row was confirmed fading on device |
 | Empty / whitespace / long / emoji / RTL input | untested | **blocked by the keyguard (AGENT 2b)** |
 | Negative effort via stepper | untested | **blocked by the keyguard (AGENT 2b)** |
 | Double-submit guard | **fail** | Static: `forms.tsx:65` mints a fresh `uid('t')` per `save()` call and the button is never disabled during the 210 ms close animation → **BUG-032**. Not device-confirmed |
@@ -290,6 +290,37 @@ AGENT 2 brief) is still untested across two consecutive agent sessions.** Everyt
 Undo, swipe-right=done, swipe-left=crumple, the whole propagation matrix (list / group header /
 "N open" / search / All-Open-Done / By date-By priority-Newest / subject chip / Stats), every input
 edge case, and the force-stop persistence check.
+
+### UI FIXER pass, 2026-10-05 (device unlocked — the blocker above is gone)
+
+The phone was unlocked for this pass, so every "device required" caveat above was discharged for the
+clipping class. **Converted 11 fail rows to pass** (BUG-023, BUG-026 ×4, BUG-027, BUG-028, BUG-030 ×4)
+plus one untested row, each with before/after screenshots named in the row.
+
+**All five clipped-content defects are now `fixed`, each on its own commit, each with a mutation-checked
+regression test: BUG-023 `63a8ec6`, BUG-026 `cece297`, BUG-027 `837a719`, BUG-028 `eec50de`,
+BUG-030 `396337b`.** Test count 209 → **254**.
+
+**The systemic answer, since five defects with one signature invites one cause: they are not one.**
+Three distinct mechanisms, in descending order of how much a single change was worth:
+1. **A number standing in for a measurement** — BUG-023 (a fixed 434 dp row in a 351 dp card),
+   BUG-027 (a label centred on the grid's bottom edge), BUG-030 (15- and 5-**character** slices). All
+   three are now derived from the width or the geometry actually available.
+2. **A removed affordance** — BUG-026: ten bare `ScrollView horizontal` rows with the scroll indicator
+   switched off. Fixed once, as the `HStrip` primitive, for all ten.
+3. **A different question entirely** — BUG-028: not clipping at all. The nav was *correctly* placed
+   (36 px above the keyboard, i.e. its own inset padding) and the real fault was that floating chrome
+   covered content while typing. Fixed by yielding to the keyboard, not by repositioning.
+
+**One thing a device changed:** BUG-028's finding said the nav was "stranded mid-screen". Measured, it
+was not — `adjustResize` had already put it at the bottom of the visible area, so V19 was met. A fix
+that moved the bar would have "fixed" a correct position. The measurement is recorded in BUGS.md.
+
+**BUG-013 is still open, and the re-assessment is in its BUGS.md entry.** The device was *not* its
+blocker: `Page` needs no call-site changes to become a `FlatList`. Its blocker is granularity — To-do
+hands `Page` only ~6 top-level children and `groups.map(...)` is *one* of them, so windowing `Page` would
+do nothing for the list the finding names as worst. And the only available `keyExtractor` would be the row
+**index**, which is the defect BUG-016 was fixed for; avoiding it needs stable keys from all five screens.
 
 **Before dispatching another device agent, a human must unlock the phone and the agent must confirm it
 with `dumpsys trust`, not `adb.sh locked`.** Read the two iteration logs at the foot of `qa/BUGS.md`

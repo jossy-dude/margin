@@ -391,6 +391,52 @@ observed defect, and nothing in this pass measured a frame time.
 4. The finding's own note already says virtualising "would fight the hand-drawn `HandBox`/`SwipeCard`
    design, so this may be a deliberate trade — flagging for a decision, not demanding a change".
 
+**RE-ASSESSED 2026-10-05 with a device — the device was NOT the real blocker, and the fix above would
+not have fixed the named worst case. Both halves matter, so they are recorded rather than left as a
+"no device" refusal.**
+
+**The previous agent's reason (1) is wrong, and that is worth correcting.** `Page` does **not** need the
+five screens restructured: `React.Children.toArray(children)` turns arbitrary JSX children into
+`FlatList` data with no call-site changes. A device is also no longer the blocker — it is unlocked and
+every screen was driven during the BUG-023/026/027/028/030 pass.
+
+**The real blocker is the granularity, and it is only visible by counting.** Measured, the number of
+top-level children each screen hands to `Page`:
+
+| screen | top-level children | what one child is |
+|---|---|---|
+| Stats | ~16 | one card — **real** row-level virtualisation |
+| Grades | ~3 (one `HandBox` per course, `key={course.id}`) | one subject — **real** row-level virtualisation |
+| Today / Week | ~11 / ~5 | a whole `Section`; already bounded |
+| **To-do** | **~6** | **`groups.map(...)` is ONE child** |
+
+So converting `Page` to a `FlatList` would window Stats' cards and Grades' subjects and do **nothing at
+all** for To-do — the list the finding names as the worst case ("each row is a `TaskCard` →
+`SwipeCard`, and every `SwipeCard` mounts a `GestureDetector` plus four `useSharedValue`s. The row count
+is unbounded"). It would add windowing machinery to the primitive every screen renders through, in
+exchange for fixing a list it cannot see.
+
+**And making To-do actually virtualise needs the one thing the fix above cannot supply.** FlatList
+recycles by key, and `Page`'s children are unkeyed JSX, so the only `keyExtractor` available is the row's
+**index** — which is precisely the defect **BUG-016** was filed and fixed for in this repo (the Today
+ticker keyed by character index, where a length change made a box silently flip between borderless and
+bordered). Planting an index `keyExtractor` in `Page` would reintroduce that class in the most-used
+primitive in the app, to fix a Minor scaling risk that is invisible with the shipped 16-task seed. Four
+screens also have conditional children (e.g. Stats' `{hint && <Empty/>}`, BUG-024), so indices shift and
+recycling would show the wrong row. Avoiding it requires **stable keys from every screen** — which *is*
+the "restructure all five screens" of (1), now for a reason that can actually be demonstrated.
+
+**To-do additionally needs its groups flattened** into sibling children, which changes the intra-group
+spacing (today 10 dp inside a group, versus `Page`'s 14 dp between children, so every task card would be
+spaced by 14) and puts `SwipeCard` + `GestureDetector` into *recycled* rows — the combination this finding
+itself names as risky. That is a visual change to the app's only swipe-gesture list, and a product call.
+
+**What would unblock it, concretely:** a decision to (a) give `Page` a `data`/`renderItem` contract so
+each screen supplies its own stable-keyed rows — starting with To-do, flattened per task — and (b) accept
+the spacing change, or give `Page` a per-item gap. Everything else follows mechanically. Absent that,
+a `Page` → `FlatList` conversion is not a fix for this bug; it is a different, smaller fix to Grades and
+Stats wearing this bug's number, and it would put an index key in the app's most-used primitive.
+
 **Blocked on:** a device **and** a product decision on (1). **Exact check once a device is available:**
 (1) To-do, add ~200 tasks, scroll from top to bottom and back — record any blank-frame flicker, scroll
 position loss, or a `VirtualizedList nested inside a ScrollView` warning in logcat; (2) swipe a card
