@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { Text, View } from 'react-native';
-import Svg, { Circle, G, Line, Path, Rect, Text as SText } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect, Text as SText } from 'react-native-svg';
 import Animated, { Easing, useAnimatedProps, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { useReduceMotion, useTheme } from './theme-context';
+import { Txt } from './kit';
 import { FONT, hexA } from '../tokens/theme';
 import { level } from '../domain/analytics';
 
@@ -18,17 +19,28 @@ export function Heatmap({ values, w, accent, labels = ['M', '', 'W', '', 'F', ''
     </Svg>
   );
 }
+/** Horizontal bars with a label gutter.
+ *
+ *  The label used to be SVG `<SText>` cut at a fixed **character** count (`slice(0, 15) + '…'`), so a
+ *  long subject name lost its tail whether or not the gutter had room for it — "Database Systems" fit
+ *  while "Intro to Economics" did not, at the same width. Now the label is a real `<Txt numberOfLines={1}>`,
+ *  which ellipsises on **pixels**, and the bar keeps the exact width it had. The bar column's width is
+ *  derived from `w` rather than measured so the animated fill keeps a numeric width to animate. */
 export function HBars({ items, w, fmt = (v: number) => String(v), max }: { items: { label: string; value: number; note?: string }[]; w: number; fmt?: (v: number) => string; max?: number }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), m = max ?? Math.max(1, ...items.map((i) => i.value)), rowH = 34, labelW = Math.min(118, w * 0.36);
+  const { c } = useTheme(), reduce = useReduceMotion(), m = max ?? Math.max(1, ...items.map((i) => i.value)), rowH = 34, valW = 56, labelW = Math.min(118, Math.max(72, w * 0.36)), barW = Math.max(24, w - labelW - valW - 16);
   return (
-    <Svg width={w} height={items.length * rowH + 2} accessibilityRole="image" accessibilityLabel={items.map((i) => `${i.label} ${fmt(i.value)}`).join(', ')}>
-      {items.map((it, i) => <G key={it.label}>
-        <SText x={0} y={i * rowH + 20} fontSize={15} fontFamily={FONT.hand} fill={c.ink}>{it.label.length > 16 ? it.label.slice(0, 15) + '…' : it.label}</SText>
-        <Rect x={labelW} y={i * rowH + 7} width={w - labelW - 56} height={16} rx={8} fill="none" stroke={hexA(c.ink, 0.35)} strokeWidth={1} />
-        <Bar x={labelW + 2} y={i * rowH + 9} w={Math.max(4, ((w - labelW - 60) * it.value) / m)} h={12} color={c.acc} delay={i * 70} reduce={reduce} />
-        <SText x={w} y={i * rowH + 20} fontSize={15} fontFamily={FONT.type} fill={c.ink} textAnchor="end">{fmt(it.value)}</SText>
-      </G>)}
-    </Svg>
+    <View accessible accessibilityRole="image" accessibilityLabel={items.map((i) => `${i.label} ${fmt(i.value)}`).join(', ')}>
+      {items.map((it, i) => (
+        <View key={it.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: rowH }}>
+          <Txt f="hand" s={15} numberOfLines={1} style={{ width: labelW }}>{it.label}</Txt>
+          <Svg width={barW} height={16} accessibilityRole="none">
+            <Rect x={0} y={0} width={barW} height={16} rx={8} fill="none" stroke={hexA(c.ink, 0.35)} strokeWidth={1} />
+            <Bar x={2} y={2} w={Math.max(4, ((barW - 4) * it.value) / m)} h={12} color={c.acc} delay={i * 70} reduce={reduce} />
+          </Svg>
+          <Txt f="type" s={15} numberOfLines={1} style={{ width: valW, textAlign: 'right' }}>{fmt(it.value)}</Txt>
+        </View>
+      ))}
+    </View>
   );
 }
 function Bar({ x, y, w, h, color, delay, reduce }: { x: number; y: number; w: number; h: number; color: string; delay: number; reduce: boolean }) {
@@ -54,15 +66,31 @@ function VBar({ x, base, w, hh, color, delay, reduce }: { x: number; base: numbe
 export function Line2({ values, labels, w, h = 100, goal, max = 100 }: { values: number[]; labels?: string[]; w: number; h?: number; goal?: number | null; max?: number }) {
   const { c } = useTheme(), reduce = useReduceMotion(), n = values.length, X = (i: number) => 12 + (n <= 1 ? (w - 24) / 2 : (i * (w - 24)) / (n - 1)), Y = (v: number) => h - 6 - (Math.max(0, Math.min(max, v)) / max) * (h - 16);
   const d = values.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(''), len = w * 3, p = useSharedValue(reduce ? 1 : 0);
+  /** Half the gap between two points: the widest a centred x-axis label can be without colliding. */
+  const slot = n > 1 ? (w - 24) / (n - 1) : w - 24;
   useEffect(() => { p.value = reduce ? 1 : withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }); }, [d, reduce, p]);
   const ap = useAnimatedProps(() => ({ strokeDashoffset: len * (1 - p.value) }));
   return (
-    <Svg width={w} height={h + 18} accessibilityRole="image" accessibilityLabel={`Line chart: ${values.map((v, i) => `${labels?.[i] ?? i + 1} ${Math.round(v)}`).join(', ')}`}>
-      <Line x1={6} x2={w - 4} y1={h - 6} y2={h - 6} stroke={c.ink} strokeWidth={1.2} />
-      {goal != null && <><Line x1={6} x2={w - 4} y1={Y(goal)} y2={Y(goal)} stroke={c.warn} strokeWidth={1.3} strokeDasharray="5 4" /><SText x={w - 4} y={Y(goal) - 4} fontSize={12} fontFamily={FONT.type} fill={c.warn} textAnchor="end">goal {goal}</SText></>}
-      {n > 1 && <AP d={d} fill="none" stroke={c.acc} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={`${len} ${len}`} animatedProps={ap} />}
-      {values.map((v, i) => <G key={i}><Circle cx={X(i)} cy={Y(v)} r={4.2} fill={c.card} stroke={c.ink} strokeWidth={1.6} />{labels?.[i] && n <= 9 && <SText x={X(i)} y={h + 12} fontSize={11.5} fontFamily={FONT.type} fill={c.mut} textAnchor="middle">{labels[i]!.slice(0, 5)}</SText>}</G>)}
-    </Svg>
+    <View>
+      <Svg width={w} height={h} accessibilityRole="image" accessibilityLabel={`Line chart: ${values.map((v, i) => `${labels?.[i] ?? i + 1} ${Math.round(v)}`).join(', ')}`}>
+        <Line x1={6} x2={w - 4} y1={h - 6} y2={h - 6} stroke={c.ink} strokeWidth={1.2} />
+        {goal != null && <><Line x1={6} x2={w - 4} y1={Y(goal)} y2={Y(goal)} stroke={c.warn} strokeWidth={1.3} strokeDasharray="5 4" /><SText x={w - 4} y={Y(goal) - 4} fontSize={12} fontFamily={FONT.type} fill={c.warn} textAnchor="end">goal {goal}</SText></>}
+        {n > 1 && <AP d={d} fill="none" stroke={c.acc} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={`${len} ${len}`} animatedProps={ap} />}
+        {values.map((v, i) => <Circle key={i} cx={X(i)} cy={Y(v)} r={4.2} fill={c.card} stroke={c.ink} strokeWidth={1.6} />)}
+      </Svg>
+      {/* The x-axis labels sit under the plot in a real <Txt numberOfLines={1}> rather than as SVG
+          `<SText>` sliced at a fixed 5 characters: that cut "Assignment" to "Assig" and "Midterm" to
+          "Mid" mid-word, and it ignored the real gap between points. Each label is centred on its own
+          point and bounded by half the gap either side, so it ellipsises on pixels. */}
+      {n <= 9 && labels ? (
+        <View style={{ height: 16, marginTop: 2 }} pointerEvents="none">
+          {values.map((_, i) => labels?.[i] ? (
+            <Txt key={i} f="type" s={11.5} c="mut" numberOfLines={1}
+              style={{ position: 'absolute', left: X(i) - slot / 2, width: slot, textAlign: 'center' }}>{labels[i]}</Txt>
+          ) : null)}
+        </View>
+      ) : null}
+    </View>
   );
 }
 export function Ring({ value, size = 76, label, sub }: { value: number | null; size?: number; label: string; sub?: string }) {
@@ -70,13 +98,17 @@ export function Ring({ value, size = 76, label, sub }: { value: number | null; s
   useEffect(() => { p.value = reduce ? 1 : withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }); }, [v, reduce, p]);
   const ap = useAnimatedProps(() => ({ strokeDashoffset: circ * (1 - v * p.value) }));
   return (
-    <View style={{ alignItems: 'center', width: size + 8 }} accessible accessibilityLabel={`${label}: ${value === null ? 'no data' : Math.round(v * 100) + ' percent'}`}>
+    /* `minWidth` rather than `width`: a fixed width bounded the label box to the ring's diameter plus a
+       hair, so a two-word label ("Focus streak") overflowed it and Android clipped the last glyph
+       ("Focus strea"). The row is a horizontal ScrollView, so the ring may take the width its own label
+       needs — the label now wraps instead of being cut. */
+    <View style={{ alignItems: 'center', minWidth: size + 8 }} accessible accessibilityLabel={`${label}: ${value === null ? 'no data' : Math.round(v * 100) + ' percent'}`}>
       <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={hexA(c.ink, 0.15)} strokeWidth={7} fill="none" />
         <AC cx={size / 2} cy={size / 2} r={r} stroke={c.acc} strokeWidth={7} fill="none" strokeLinecap="round" strokeDasharray={`${circ} ${circ}`} rotation={-90} originX={size / 2} originY={size / 2} animatedProps={ap} />
         <SText x={size / 2} y={size / 2 + 7} fontSize={20} fontFamily={FONT.marker} fill={c.ink} textAnchor="middle">{value === null ? '—' : Math.round(v * 100) + '%'}</SText>
       </Svg>
-      <View><SText2 t={label} />{sub ? <SText2 t={sub} dim /> : null}</View>
+      <View style={{ maxWidth: 116 }}><SText2 t={label} />{sub ? <SText2 t={sub} dim /> : null}</View>
     </View>
   );
 }
