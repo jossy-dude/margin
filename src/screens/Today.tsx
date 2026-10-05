@@ -6,7 +6,7 @@ import { Btn, HandBox, Icon, Tape, Txt } from '../ui/kit';
 import { useNow, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
-import { DW, MO, addDays, atTime, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd, DAY_MS } from '../domain/time';
+import { DW, MO, addDays, atTime, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
 import { effective, dayBlock, isCancelled, occKey, occurrencesOn, ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 import { FS } from '../ui/fit';
@@ -27,7 +27,7 @@ export function TodayScreen() {
   const hour = new Date(now).getHours(), hello = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   /** The name is user-editable now, so it may be blank: drop the whole ", name" rather than greet nobody. */
   const who = st.settings.name.trim();
-  const open = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).slice(0, 5), cw = width - 32 - 30;
+  const open = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).slice(0, 5);
   const dayMark = st.dayMarks[selDate];
   const nDone = open.length;
   return (
@@ -90,8 +90,6 @@ export function TodayScreen() {
       <Section title="Due soon" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
         {nDone === 0 ? <Empty icon="tasks" text="Nothing due. Tap + to add an assignment." /> : open.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
       </Section>
-      <View style={{ height: cw > 0 ? 0 : 0 }} />
     </Page>
   );
 }
-export { DAY_MS };

@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
-import { HandBox, Icon, Txt, Tape } from '../ui/kit';
+import { HandBox, Icon, Txt } from '../ui/kit';
 import { PaperBg } from '../ui/PaperBg';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
@@ -100,4 +100,3 @@ export function AttCell({ status, inferred, future, locked, onTap, onHold, label
     </Pressable>
   );
 }
-export { StyleSheet, Tape, useWindowDimensions };

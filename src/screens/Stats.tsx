@@ -6,7 +6,7 @@ import { useNow, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import * as A from '../domain/analytics';
-import { fmtDur, parseYmd, weekdayOf, addDays, startOfDay } from '../domain/time';
+import { fmtDur, parseYmd, weekdayOf } from '../domain/time';
 import { ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
@@ -69,7 +69,6 @@ export function StatsScreen() {
       <Card seed="rem" title="Reminders" sub="What the app is set to deliver on this phone">
         <Txt f="bold" s={19}>{st.plan ? `${st.plan.count} scheduled in the next 14 days${st.plan.shifted ? ` · ${st.plan.shifted} moved to stay out of class or quiet hours` : ''}${st.plan.deferred ? ` · ${st.plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
       </Card>
-      <View style={{ height: 1 }}>{addDays(startOfDay(now), 0) ? null : null}</View>
     </Page>
   );
 }

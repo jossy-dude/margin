@@ -65,7 +65,9 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
     <Pressable testID={testID ?? tid(a11y ?? label)} accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
       onPress={() => { if (!quiet) fx.tap(); onPress?.(); }} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4}
       style={[{ minHeight: h, opacity: disabled ? 0.45 : 1, flex: flex ? 1 : undefined }, style]}>
-      <HandBox seed={`${label}${icon}`} fill={bg} stroke={kind === 'ghost' ? c.ink : bg === 'transparent' ? c.ink : c.ink} corners={RS} shadow={kind !== 'ghost'} style={{ minHeight: h, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: small ? 14 : 20 }}>
+      {/* stroke is always the ink: a ghost button has a transparent fill so it needs its own border,
+          and the three filled kinds all draw on the accent/ink/bad the label is drawn against. */}
+      <HandBox seed={`${label}${icon}`} fill={bg} stroke={c.ink} corners={RS} shadow={kind !== 'ghost'} style={{ minHeight: h, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: small ? 14 : 20 }}>
         {icon ? <Icon name={icon} size={small ? 18 : 22} color={fg} /> : null}
         {label ? <Txt f="bold" s={small ? 19 : 23} c={fg}>{label}</Txt> : null}
       </HandBox>

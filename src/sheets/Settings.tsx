@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
 import { Label, Sheet } from '../ui/Sheet';
 import { Empty } from '../screens/common';
@@ -202,4 +202,3 @@ export function SettingsSheet() {
 const clearSettingsPath = () => { while (getState().settingsPath.length) act.settingsPop(); };
 const DEMO_NOW = new Date(2026, 9, 5, 10, 20).getTime(), at = (h: number, m: number) => new Date(2026, 9, 5, h, m).getTime();
 const DEMO_PERIODS = [{ start: at(8, 30), end: at(9, 20), label: 'Economics' }, { start: at(10, 0), end: at(10, 50), label: 'Discrete' }, { start: at(11, 45), end: at(12, 35), label: 'Tech', cancelled: true }, { start: at(14, 0), end: at(14, 50), label: 'Code' }];
-export { ScrollView };

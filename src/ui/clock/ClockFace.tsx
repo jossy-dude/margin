@@ -29,7 +29,7 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
   const frame = useFrameCallback(() => {
     const now = Date.now(), ms = (now - MS_TZ) % 86_400_000, sec = (ms % 60_000) / 1000;
     clock.value = now; const s = reduce ? Math.floor(sec) : sec;
-    sa.value = s * 6; ma.value = (ms / 60_000 % 60) * 6 + (reduce ? 0 : 0); ha.value = (ms / 3_600_000 % 12) * 30;
+    sa.value = s * 6; ma.value = (ms / 60_000 % 60) * 6; ha.value = (ms / 3_600_000 % 12) * 30;
   }, live && !fixed);
   React.useEffect(() => { frame.setActive(live && !fixed); }, [live, fixed, frame]);
   React.useEffect(() => { if (time) { ha.value = (time.h % 12) * 30 + time.m * 0.5; ma.value = time.m * 6 + time.s * 0.1; sa.value = time.s * 6; } }, [time, ha, ma, sa]);

@@ -7,7 +7,6 @@ import { FONT, hexA } from '../tokens/theme';
 import { level } from '../domain/analytics';
 
 const AR = Animated.createAnimatedComponent(Rect), AC = Animated.createAnimatedComponent(Circle), AP = Animated.createAnimatedComponent(Path);
-const shade = (ink: string, l: number) => hexA(ink, [0.07, 0.25, 0.45, 0.7, 0.95][l] ?? 0.07);
 
 /** weeks × 7 grid (GitHub-style). `values` is oldest→newest and is padded at the front so the last column ends on the last cell. */
 export function Heatmap({ values, w, accent, labels = ['M', '', 'W', '', 'F', '', ''], startWd, unit = '' }: { values: number[]; w: number; accent?: string; labels?: string[]; startWd: number; unit?: string }) {
@@ -82,4 +81,3 @@ export function Ring({ value, size = 76, label, sub }: { value: number | null; s
   );
 }
 const SText2 = ({ t, dim }: { t: string; dim?: boolean }) => { const { c } = useTheme(); return <Text style={{ fontFamily: FONT.hand, fontSize: dim ? 13.5 : 16, color: dim ? c.mut : c.ink, textAlign: 'center' }}>{t}</Text>; };
-export { shade };

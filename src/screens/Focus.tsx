@@ -171,7 +171,9 @@ export function FocusScreen() {
             <Txt f="marker" s={21} style={{ marginTop: 5, marginRight: 84 }} numberOfLines={2}>{task?.title ?? (t.title || 'Free focus')}</Txt>
             <Pressable onPress={() => act.timerSwap()} disabled={!editable} accessibilityRole="button" accessibilityLabel={`Swap task, now ${task?.title ?? 'free focus'}`} style={{ position: 'absolute', right: 10, bottom: 9, minHeight: 32, paddingHorizontal: 4, justifyContent: 'center', opacity: editable ? 1 : 0.4 }}><Txt f="bold" s={15} c="mut" style={{ borderBottomWidth: 1.5, borderStyle: 'dashed', borderBottomColor: c.mut }}>swap task</Txt></Pressable>
           </Box>
-          <Dial min={t.planMin} phase={t.phase} leftMs={t.phase === 'break' ? t.focusLeftMs : t.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing} readout={bigText} tick={tickSV} wash={wash}
+          {/* the dial always counts the focus clock: on a break the main clock is paused, so `focusLeftMs`
+              is the right number in both phases and the dial never restarts behind the break sticker */}
+          <Dial min={t.planMin} phase={t.phase} leftMs={t.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing} readout={bigText} tick={tickSV} wash={wash}
             onChange={(m, vel) => { if (vel < 0) { fx.bump(); return; } if (m !== t.planMin) { act.timerSetMin(m); fx.detent(vel); } }} />
           <Txt f="serifB" s={12.5} c="mut" pointerEvents="none" style={{ position: 'absolute', left: 60, top: 640, width: 320, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{subText}</Txt>
           <Txt f="hand" s={15} pointerEvents="none" style={{ position: 'absolute', left: 360, top: 352, transform: [{ rotate: '6deg' }], textShadowColor: c.paper, textShadowRadius: 4, width: 90 }}>{'focus doesn\'t\nhappen by\naccident'}</Txt>
