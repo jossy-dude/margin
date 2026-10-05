@@ -1012,7 +1012,7 @@ the sub-line reads "streak 1 day"; (2) with a 2+ day streak, confirm "streak N d
 
 ---
 
-## BUG-030 — open — Minor
+## BUG-030 — fixed — Minor
 **Screen:** Stats (four separate cards)
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:** Stats, scroll through the page.
@@ -1029,6 +1029,48 @@ one of them, so it is a width bug and not a naming one:**
 **Also on this page, same class of defect:** the fourth "At a glance" ring's label renders as
 **"Focus strea"** — the final "k" is cut — and its sub-line "0 d · best 0" runs flush to the card edge
 (`qa/shots/a2_baseline_stats.png`, `qa/shots/a2_stats_afterpurge.png`).
+
+**Root cause (two mechanisms, both confirmed on device, neither a width bug):**
+1. **A character budget standing in for a pixel budget.** `src/ui/charts.tsx` (was `:26`) truncated the
+   HBars label at a fixed **15 characters** — `it.label.length > 16 ? it.label.slice(0, 15) + '…' : it.label`
+   — and `Line2` (was `:64`) truncated its x-axis at **5 characters** — `labels[i]!.slice(0, 5)`. A
+   character count is blind to the gutter it is drawn in, which is exactly the reported pattern: the
+   column held ~118 dp, the *rendered* labels measured 102–110 dp on device, and "Database Systems" (the
+   shortest name) was the only survivor. Measured off a screencap at 411 dp: "Intro to Econom…" 110.5 dp,
+   "Discrete Mathem…" 106.7 dp, "Database Systems" 103.2 dp — all inside the gutter, all decided by
+   letter count.
+2. **A fixed width where flexible belongs.** `Ring` (was `:73`) drew its label inside
+   `width: size + 8` — the ring's diameter plus 8 dp, 84 dp at the default size. "Focus streak" at
+   `fontSize 16` is wider than that, so the label box overflowed its own parent and Android clipped the
+   final glyph. This one is geometry, not truncation, which is why the two needed different fixes.
+**Fix commit:** `396337b`
+**Fix:** labels are now laid out by the text engine instead of by arithmetic, so they ellipsise on
+pixels and can never be cut mid-word by a constant:
+- **HBars** draws its label as a real `<Txt numberOfLines={1}>` in a flex row beside the bar. The bar
+  column stays derived from `w` (`barW = max(24, w - labelW - valW - 16)`), so the animated fill keeps a
+  numeric width to animate and label + bar + value cannot overlap.
+- **Line2** draws its x-axis labels *under* the plot in absolutely-positioned `<Txt numberOfLines={1}>`,
+  each centred on its own point and bounded by half the gap to its neighbour (`slot = (w - 24) / (n - 1)`)
+  — the widest a centred label can be without colliding. The SVG now holds only the plot, so the same
+  rule fixes every future caller at any width.
+- **Ring**'s label box is `minWidth: size + 8` rather than `width`, so it takes the width its own label
+  needs and wraps. The rings row is a horizontal `ScrollView`, so a wider ring scrolls rather than clips.
+**Verified on device (SM-A516N, 411 dp, cold `am force-stop` + relaunch):** "Intro to Economics",
+"Discrete Mathematics" and "Emerging Technology" all render **whole** in "Attendance by subject" and
+"Focus by subject" — previously "Intro to Econom…", "Discrete Mathem…", "Emerging Techno…" — and the
+ring reads **"Focus streak"**, not "Focus strea".
+**Before:** `qa/shots/fix_01_stats_top.png` (ring "Focus strea"),
+`qa/shots/fix_05_stats_mid.png`, `/tmp` crop of `fix_06_heat_zoom.png` (subject names).
+**After:** `qa/shots/fix_30_after_top.png` (ring "Focus streak"),
+`qa/shots/fix_32_hbars2.png` (all three names whole).
+**Regression test:** `src/test/chart-labels.test.ts` (8 tests). It bans character-budget truncation of a
+label-bearing expression across `charts.tsx` **and** `Stats.tsx`, so the defect cannot return one layer
+up; it requires every chart `<Txt>` to carry `numberOfLines`; and it pins the three now-derived
+measurements (`slot`, `barW`, the `minWidth`) so they cannot harden back into constants. The ban is
+deliberately narrow — `slice(-7)` and `slice(0, 6)` on data arrays stay legal — and one test asserts the
+regex fires on the exact old expressions, so the negative assertions cannot pass vacuously.
+**Verified by mutation:** restoring `width: size + 8` fails the Ring test; restoring the 15-character
+slice fails the truncation test.
 
 ---
 
@@ -1195,10 +1237,10 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 11 | 10 | 0 |
+| Minor | 10 | 11 | 0 |
 | Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (10 fixed), 5 Polish (2 fixed).
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (11 fixed), 5 Polish (2 fixed).
 Nothing verified.** Recounted from the per-bug headers
 (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
