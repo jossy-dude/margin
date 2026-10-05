@@ -38,6 +38,21 @@ export function streak(values: number[]): { current: number; best: number } {
   let cur = 0; for (let i = values.length - 1; i >= 0; i--) { if ((values[i] ?? 0) > 0) cur++; else if (i === values.length - 1) continue; else break; }
   return { current: cur, best };
 }
+/**
+ * Which empty state Stats should show, or `null` when there is data to look at.
+ *
+ * The two halves are independent, and the guard used to `&&` them, so it needed *both* to be empty at
+ * once. Nothing in the app can reach that state: "Clear demo history" removes every demo focus
+ * session but keeps your own finished tasks, so two focus charts sat permanently blank with no
+ * explanation. Each half is measured over the 105-day window the heatmaps actually draw, not over the
+ * whole table — a session from last year is not data the chart can show.
+ */
+export const statsEmptyHint = (x: { focusMinutes: number; finished: number }): string | null => {
+  if (x.focusMinutes > 0 && x.finished > 0) return null;
+  if (x.focusMinutes === 0 && x.finished === 0) return 'Finish a task or a focus session and the charts fill in.';
+  return x.focusMinutes === 0 ? 'Start a focus session and the focus charts fill in.' : 'Finish a task and the tasks charts fill in.';
+};
+
 export interface AttCell { date: string; status: string | null; inferred: boolean }
 export function attendanceHeat(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
   const keys = lastDays(nDays, now);

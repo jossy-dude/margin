@@ -22,12 +22,12 @@ export function StatsScreen() {
   const ot = A.onTimeStats(st.tasks), att = A.overallAttendance(st.courses, st.meetings, st.attendance, st.dayMarks, 30, now), fs = A.streak(focusD), ds = A.streak(doneD);
   const week = focusD.slice(-7).reduce((a, b) => a + b, 0), prev = focusD.slice(-14, -7).reduce((a, b) => a + b, 0), totalMin = focusD.reduce((a, b) => a + b, 0), totalDone = doneD.reduce((a, b) => a + b, 0);
   const bySub = A.focusBySubject(st.focus, st.courses), attRows = A.attendanceByCourse(st.courses, st.meetings, st.attendance, st.dayMarks, 60, now), attHeat = A.attendanceHeat(st.courses, st.meetings, st.attendance, st.dayMarks, 28, now), gb = A.gradeBars(st.courses, st.marks, st.adjusts);
-  const gCourse = gc ?? st.courses[0]?.id ?? '', series = A.markSeries(gCourse, st.marks), hours = A.doneByHour(st.tasks), fh = A.focusByHour(st.focus), nothing = st.focus.length === 0 && st.tasks.every((t) => t.status !== 2);
+  const gCourse = gc ?? st.courses[0]?.id ?? '', series = A.markSeries(gCourse, st.marks), hours = A.doneByHour(st.tasks), fh = A.focusByHour(st.focus), hint = A.statsEmptyHint({ focusMinutes: totalMin, finished: totalDone });
   const bestH = (h: number[]) => { const m = Math.max(...h); return m ? `${String(h.indexOf(m)).padStart(2, '0')}:00` : null; };
   const lateWeeks = st.tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length;
   return (
     <Page title="Stats" sub="Everything the app tracks, in one place">
-      {nothing && <Empty icon="stats" text="Finish a task or a focus session and the charts fill in." />}
+      {hint && <Empty icon="stats" text={hint} />}
       <Card seed="rings" title="At a glance" sub="Attendance is the last 30 days">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
           <Ring value={att.rate} label="Attendance" sub={`${att.here}/${att.held} classes`} />
