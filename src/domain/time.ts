@@ -9,6 +9,10 @@ export const weekdayOf = (d: Date) => (d.getDay() + 6) % 7;
 export const startOfDay = (ms: number) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
 export const addDays = (ms: number, n: number) => { const d = new Date(ms); d.setDate(d.getDate() + n); return d.getTime(); };
 export const mondayOf = (ms: number) => addDays(startOfDay(ms), -weekdayOf(new Date(ms)));
+/** The day a day-picker is showing: today until the user picks one, then their pick. Derived from the
+ *  live `now` rather than snapshotted, so a clock ticking past midnight carries it forward instead of
+ *  stranding it on the day the screen happened to be mounted on. */
+export const selectedDay = (now: number, picked: number | null) => picked ?? startOfDay(now);
 /** "HH:MM" → minutes since midnight (tolerates bad input) */
 export const hm = (t: string) => { const [h, m] = t.split(':'); return (Number(h) || 0) * 60 + (Number(m) || 0); };
 export const fromMin = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;

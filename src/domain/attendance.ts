@@ -1,5 +1,5 @@
-import type { AttRecord, AttStatus, DayMark, Meeting } from './types';
-import { atTime, hm, startOfDay, weekdayOf, ymd } from './time';
+import type { AttRecord, AttStatus, Course, DayMark, Meeting } from './types';
+import { atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
 
 export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late · stayed out', a: 'Absent', s: 'Sick', c: 'Cancelled', t: 'Teacher out' };
 export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
@@ -28,6 +28,22 @@ export interface Occurrence { date: Date; meeting: Meeting }
 export function occurrencesOn(date: Date, meetings: Meeting[]): Occurrence[] {
   const wd = weekdayOf(date);
   return meetings.filter((m) => m.weekday === wd).sort((a, b) => hm(a.start) - hm(b.start)).map((meeting) => ({ date, meeting }));
+}
+
+/** One day's classes as the day bar draws them: named, timed, and flagged cancelled. */
+export interface Period { start: number; end: number; label: string; cancelled: boolean }
+export function periodsOn(occ: Occurrence[], courses: Course[], att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()): Period[] {
+  return occ.map(({ date, meeting }) => ({ start: atTime(date.getTime(), meeting.start), end: atTime(date.getTime(), meeting.end), label: courses.find((c) => c.id === meeting.courseId)?.name ?? '?', cancelled: isCancelled(effective(date, meeting, att, days, now)) }));
+}
+
+/** Everything a page's day-scoped half is built from, and it is all ONE day: the day itself, its
+ *  occurrences, the periods the day bar draws, and where you are inside it. A strip, a "Mark day"
+ *  target and a class list that each pick a date of their own can name different days; reading them
+ *  all off one of these cannot. `picked` is the user's own choice, or null while they have made none. */
+export interface DayBlock { day: number; date: string; occ: Occurrence[]; periods: Period[]; cur: Period | undefined; next: Period | undefined }
+export function dayBlock(now: number, meetings: Meeting[], courses: Course[], att: Record<string, AttRecord>, days: Record<string, DayMark>, picked: number | null): DayBlock {
+  const day = startOfDay(selectedDay(now, picked)), occ = occurrencesOn(new Date(day), meetings), periods = periodsOn(occ, courses, att, days, now);
+  return { day, date: ymd(new Date(day)), occ, periods, cur: periods.find((p) => now >= p.start && now < p.end && !p.cancelled), next: periods.find((p) => p.start > now && !p.cancelled) };
 }
 export function occurrencesBetween(fromMs: number, toMs: number, meetings: Meeting[]): Occurrence[] {
   const out: Occurrence[] = [];

@@ -7,7 +7,7 @@ import { useNow, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd, DAY_MS } from '../domain/time';
-import { effective, isCancelled, occKey, occurrencesOn, ST } from '../domain/attendance';
+import { effective, dayBlock, isCancelled, occKey, occurrencesOn, ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 import { FS } from '../ui/fit';
 
@@ -17,15 +17,18 @@ export function TodayScreen() {
   const route = useStore((s) => s.route), settings = useStore((s) => s.settings), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
   const st = { route, settings, meetings, courses, attendance, dayMarks, tasks, notices };
   const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(st.route === 'Today' ? 30_000 : 60_000), today = startOfDay(now);
-  const [sel, setSel] = useState(today), week = mondayOf(sel), selOcc = occurrencesOn(new Date(sel), meetings);
-  const todayOcc = occurrencesOn(new Date(today), meetings);
-  const periods = todayOcc.map((o) => ({ start: atTime(today, o.meeting.start), end: atTime(today, o.meeting.end), label: st.courses.find((x) => x.id === o.meeting.courseId)?.name ?? '?', cancelled: isCancelled(effective(o.date, o.meeting, st.attendance, st.dayMarks, now)) }));
-  const cur = periods.find((p) => now >= p.start && now < p.end && !p.cancelled), next = periods.find((p) => p.start > now && !p.cancelled);
+  /* The day block — strip, class list, "Mark day" — is ONE day, chosen by the user and otherwise the
+     live today; the title, clock and "in class / next up" line above it stay about now, so they read
+     the live day instead. Both come from `dayBlock`, so they cannot drift apart. */
+  const [picked, setPicked] = useState<number | null>(null);
+  const { day: sel, date: selDate, occ: selOcc, periods, cur: dayCur, next: dayNext } = dayBlock(now, st.meetings, st.courses, st.attendance, st.dayMarks, picked);
+  const { cur, next, periods: todayPeriods } = dayBlock(now, st.meetings, st.courses, st.attendance, st.dayMarks, null);
+  const week = mondayOf(sel);
   const hour = new Date(now).getHours(), hello = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   /** The name is user-editable now, so it may be blank: drop the whole ", name" rather than greet nobody. */
   const who = st.settings.name.trim();
   const open = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).slice(0, 5), cw = width - 32 - 30;
-  const dayMark = st.dayMarks[ymd(new Date(sel))];
+  const dayMark = st.dayMarks[selDate];
   const nDone = open.length;
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
@@ -33,22 +36,22 @@ export function TodayScreen() {
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
         <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPress={() => { act.open({ t: 'settings' }); act.settingsPush('appearance'); act.settingsPush('clock'); }}><ClockFace id={st.settings.clock} size={124} live={st.route === 'Today'} /></Pressable>
         <View style={{ flex: 1, gap: 4 }}>
-          <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayOcc.length ? 'All done for today' : 'No classes today'}</Txt>
-          <Txt f="marker" s={23} numberOfLines={2}>{cur?.label ?? next?.label ?? (todayOcc.length ? 'Nice work' : 'Free day')}</Txt>
+          <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
+          <Txt f="marker" s={23} numberOfLines={2}>{cur?.label ?? next?.label ?? (todayPeriods.length ? 'Nice work' : 'Free day')}</Txt>
           {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end)}` : `at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}`}</Txt>}
         </View>
       </View>
       {periods.length > 0 && (
         <HandBox seed="deck" fill={c.slab} stroke={c.slab} style={{ padding: 14, paddingBottom: 10 }}>
-          <Txt f="serif" s={15} c={c.slabMut}>{cur ? `Period ${periods.indexOf(cur) + 1} of ${periods.length}` : next ? `${periods.length - periods.indexOf(next)} of ${periods.length} left` : 'Day complete'}</Txt>
+          <Txt f="serif" s={15} c={c.slabMut}>{dayCur ? `Period ${periods.indexOf(dayCur) + 1} of ${periods.length}` : dayNext ? `${periods.length - periods.indexOf(dayNext)} of ${periods.length} left` : 'Day complete'}</Txt>
           <DayBar kind={st.settings.bar as BarKind} periods={periods} now={now} ink={c.slabInk} bg={c.slab} w={width - 32 - 28} />
         </HandBox>
       )}
-      <Section title="This week" right={<Btn small kind="ghost" label={dayMark ? ST[dayMark.status] : 'Mark day'} onPress={() => act.open({ t: 'status', mode: 'day', key: ymd(new Date(sel)), title: fmtDay(sel, now), date: ymd(new Date(sel)) })} />}>
+      <Section title="This week" right={<Btn small kind="ghost" label={dayMark ? ST[dayMark.status] : 'Mark day'} onPress={() => act.open({ t: 'status', mode: 'day', key: selDate, title: fmtDay(sel, now), date: selDate })} />}>
         <View style={{ flexDirection: 'row', gap: 5 }}>
           {Array.from({ length: 7 }, (_, i) => { const d = addDays(week, i), on = d === sel, n = occurrencesOn(new Date(d), st.meetings).length, isToday = d === today;
             return (
-              <Pressable key={d} style={{ flex: 1 }} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${DW[i]} ${new Date(d).getDate()}, ${n} classes${isToday ? ', today' : ''}`} onPress={() => setSel(d)}>
+              <Pressable key={d} style={{ flex: 1 }} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${DW[i]} ${new Date(d).getDate()}, ${n} classes${isToday ? ', today' : ''}`} onPress={() => setPicked(d)}>
                 <HandBox seed={`dy${i}`} fill={on ? c.ink : c.card} shadow={false} style={{ height: 66, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                   <Txt f="serif" s={13} maxFontSizeMultiplier={FS} c={on ? 'paper' : 'mut'}>{DW[i]}</Txt><Txt f="marker" s={21} maxFontSizeMultiplier={FS} c={on ? 'paper' : 'ink'}>{new Date(d).getDate()}</Txt>
                   <View style={{ flexDirection: 'row', gap: 2, height: 6 }}>{Array.from({ length: Math.min(n, 5) }, (_, k) => <View key={k} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: on ? c.paper : c.mut }} />)}</View>
