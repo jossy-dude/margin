@@ -119,6 +119,20 @@ Restore with `adb shell svc power stayon false`.
      capture.
    - **A human has to unlock the phone.** Verify it before dispatching a device agent.
 
+## BLOCKER (2026-10-04, device) — secure keyguard
+
+`dumpsys trust` reports `deviceLocked=1`. The phone is behind a **secure pattern lock**:
+- `svc power stayon true` prevents *sleeping*, not *locking* — do not confuse them again.
+- `wm dismiss-keyguard` does nothing; `locksettings clear` needs the credential; no root.
+- `adb.sh locked` was itself broken (BUG-031: it grepped `dumpsys window` for
+  `mShowingLockscreen`/`isStatusBarKeyguard`, strings that do not exist on Android 13, so it
+  always said UNLOCKED). It now reads `dumpsys trust`. **Always use `./qa/scripts/adb.sh locked`.**
+
+**All input-driven device QA is blocked until a human swipes the pattern.** Re-check with
+`./qa/scripts/adb.sh locked` between work chunks and resume device testing the moment it
+reads UNLOCKED. Meanwhile, all device-independent work continues: bug fixes with jest
+regression tests, gates, `expo export`, static UI defect analysis, release-readiness.
+
 ## Next action
 
 0. **HUMAN: unlock the phone.** Confirm with

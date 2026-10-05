@@ -191,8 +191,12 @@ case "${1:-}" in
               $ADB shell input swipe 540 1800 540 600 ${SWIPE_MS:-800}
               echo "keyguard dismiss attempted";;
   awake)      $ADB shell dumpsys power 2>/dev/null | grep -oE 'mWakefulness=[A-Za-z]+' | head -1;;
-  locked)     $ADB shell dumpsys window 2>/dev/null | grep -qiE 'mShowingLockscreen|isStatusBarKeyguard' \
-                && echo LOCKED || echo UNLOCKED;;
+  locked)     if $ADB shell dumpsys trust 2>/dev/null | grep -q 'deviceLocked=1'; then
+                echo "LOCKED"
+              else
+                echo "UNLOCKED"
+              fi;;
+  focus)      $ADB shell dumpsys window 2>/dev/null | grep -i mCurrentFocus | head -1;;
   stop)       cmd_stop;;
   launch)     cmd_launch;;
   restart)    cmd_restart;;
