@@ -421,6 +421,337 @@ as part of the motion.
 
 ---
 
+# Pass 1 device findings — FRESH-USER + TASK-DOMAIN QA (AGENT 2, 2026-10-05)
+
+All findings below were reproduced on the SM-A516N at 411 dp in **Expo Go** (`host.exp.exponent`),
+dark theme, font scale 1.0, 1080×2400 @ 420. Every run began from a cold `am force-stop` +
+relaunch, and no `ReferenceError: Property 'dark' doesn't exist` / `"undefined" is not a valid color`
+noise appeared in logcat — a real cold boot is clean, as briefed.
+
+**Method notes for the next agent (both cost me real time):**
+1. **`adb shell input swipe` must be slow.** At the default 300 ms and at 400 ms, RN's `ScrollView`
+   ignores the gesture entirely — I recorded a false "the To-do list does not scroll" from a 400 ms
+   swipe. At **900 ms** it scrolls correctly. Use `SWIPE_MS=900`.
+2. **`uiautomator dump` (and therefore `qa/scripts/adb.sh dump|texts|tap`) is unreliable on this app.**
+   The live clock repaints every second, so `uiautomator` reports `ERROR: could not get idle state`
+   and **exits 0 without writing the file** — `adb.sh` then prints a stale dump from a previous run
+   rather than failing. That is how I got a full Expo Go home-screen element list while the app was in
+   the foreground. Treat any `dump` that looks like a different screen as stale, and check the file
+   timestamp. A second, terminal failure mode appeared mid-run:
+   `java.lang.IllegalStateException: UiAutomationService ... already registered!` from
+   `UiAutomationConnection.connect`, after which **no** `uiautomator dump` or `mobile-mcp` element
+   list will succeed for the rest of the session (a leaked test-automation registration in
+   system_server; not recoverable without a framework restart). Recovery used instead:
+   `adb exec-out screencap -p` plus a coordinate grid drawn over the PNG.
+
+---
+
+## BUG-021 — open — Major
+**Screen:** all routes — the floating bottom nav (chrome, not a route)
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro (deterministic, 3 taps + 1 key):**
+1. Bottom nav → **Grades**. Confirm the Grades page renders and `Grades` is highlighted in the nav.
+2. Press **hardware BACK**.
+3. Read the nav.
+4. (Optional, shows the second half) Tap the tab the nav is now falsely highlighting.
+**Expected (V19: "hardware back order: sheet → settings sub-page → Focus → Today → exit"):** after BACK
+the app shows **Today**, and the nav highlights **Today**, because the nav is the app's only
+indication of where you are.
+**Actual:** the **Today** page renders in full (clock, "Next up Intro to Economics at 08:30",
+"4 of 4 left", This week strip, class rows) while the nav **keeps `Grades` highlighted** — icon
+tinted accent, pill behind it, label in accent. The nav is showing a route the app is not on. Then,
+because the tap handler is `act.go(t.name)`, **tapping the falsely-highlighted tab does nothing at
+all**: the page stays on Today and the nav stays on Grades. The tab is dead until a *different* tab is
+tapped first. Verified twice, in both directions (Grades→BACK→Today, and To-do→BACK→Today).
+**Evidence:** `qa/shots/a2_back1.png` (page = Today; nav crop = Grades), `qa/shots/a2_navtest1.png`
+(tapping the falsely-selected To-do tab is a no-op), `qa/shots/a2_nav_zoom.png`.
+**Root cause (pinned, for the Fixer):** `src/navigation/Book.tsx:50` derives the highlight from the
+**store**, not from the navigator:
+```tsx
+const route = useStore((s) => s.route), ...          // :38
+const cur = state.routes[state.index]?.name ...      // :39  <- the navigator's real route
+useEffect(() => { if (route !== cur) navigation.navigate(route) }, [route]); // :40
+...
+const on = route === t.name;                          // :50  <- reads the store
+onPress={() => act.go(t.name)}                        // :51
+```
+The sync at `:40` is **one-way, store → navigator**. Nothing writes the navigator's route back to the
+store, so an Android back that pops `TabRouter`'s own history moves `cur` and leaves `store.route`
+stale. `onPress` then sets `store.route` to the value it already holds, so the store does not change,
+the `:40` effect's dependency does not change, and no navigation happens.
+**Two suggested fixes, either sufficient:** derive `on` from `cur` (`:39`) rather than `route`, and/or
+add the reverse effect `useEffect(() => { if (cur && cur !== route) setRoute(cur) }, [cur])`. The
+second is the more correct one, because it also keeps `store.route` honest for anything else that
+reads it.
+**Why Major and not Minor:** it is not a cosmetic mismatch. The primary navigation of the app displays
+false state and one of five tabs stops responding, from a single hardware Back press — reachable from
+any tab, on the first thing V19 asks you to check.
+
+---
+
+## BUG-022 — open — Major
+**Screen:** Today
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:**
+1. Open Today.
+2. In the "This week" strip, tap **Sat 10**.
+3. Read the whole page, top to bottom.
+4. Tap **Mark day** (top-right of the "This week" section).
+**Expected:** everything in the "This week" group refers to the day selected in that strip, and
+anything on screen that is *not* about the selected day is unmistakably labelled as such. Tapping
+"Mark day" marks the day whose classes and attendance the user is looking at.
+**Actual — three different days on one screen, with the button wired to a different day than the strip
+above it:**
+- Page title stays **"MON 5 OCT"** and the greeting / clock / **"Next up — INTRO TO ECONOMICS at
+  08:30"** stay on **today**.
+- The attendance `DayBar` strip directly under the clock still reads **"4 of 4 left"** with four class
+  boxes (I, D, E, C) — today's four classes.
+- The section immediately below the strip correctly reads **"Sat 10 Oct"** and
+  **"No classes. Add one from the + button."**
+- So the screen states, in order: *today is Monday · you have 4 classes left today · today is Saturday
+  and you have no classes* — with nothing marking which day the top half belongs to.
+- **Tapping "Mark day" opens the status sheet titled "SAT 10 OCT".** The button and the "4 of 4 left"
+  strip it sits under are inside the same visual group and describe different days, so the natural
+  reading ("mark the day whose classes I can see") marks the wrong day.
+**Evidence:** `qa/shots/a2_today_sat_empty.png` (all three claims on one screen),
+`qa/shots/a2_markday_sat.png` (the sheet header reads "SAT 10 OCT" while "4 of 4 left" is visible
+directly above it).
+**Root cause (pinned):** the top half of `TodayScreen` is hard-wired to `today`, while the "This week"
+group follows the local `sel`:
+- `src/screens/Today.tsx:31` — page `title` is built from `now`, never `sel`.
+- `Today.tsx:36-38` — the "In class / Next up / All done for today / No classes today" line, the course
+  name and the countdown all read `todayOcc` / `periods`.
+- `Today.tsx:41-46` — the `deck` HandBox + `DayBar` strip ("4 of 4 left", the I/D/E/C boxes) is built
+  from `periods`, i.e. today's occurrences, and is gated on `periods.length > 0`.
+- `Today.tsx:47` — the **"Mark day" button** in that same group opens
+  `act.open({ t: 'status', mode: 'day', key: ymd(new Date(sel)), title: fmtDay(sel, now) })` → **sel**.
+- `Today.tsx:61` — the section title is `fmtDay(sel, now)` → **sel**.
+So `sel` drives the section and the button; `today` drives everything above them; and the strip sits
+directly above the button.
+**Why Major and not Minor:** it is a plausible path to writing an attendance mark against the wrong
+date, on a screen whose whole purpose is telling you what is happening today. Attendance feeds the
+Grades rate, the Stats attendance heatmap and the reminders, so a wrong mark is not self-correcting.
+**Not a one-line fix, and worth a product decision:** either (a) make the whole page follow `sel`
+(clock face, greeting and countdown are arguably "now"-shaped, so this may be wrong), or (b) label the
+top card explicitly ("Today · Mon 5 Oct") and move "Mark day" out of the strip's visual group /
+re-point it at `today` so the strip and the button always agree. Do not leave them adjacent and
+disagreeing.
+
+---
+
+## BUG-023 — open — Minor
+**Screen:** Stats → the "Grades" section → "Attendance, last 4 weeks"
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:** Stats → scroll to "Attendance, last 4 weeks".
+**Expected (V13: "All cards render without overlap at 360 dp"; "attendance heatmap shows rows per
+subject for the last 28 days"):** all 28 day-cells of every subject row fully visible inside the card.
+**Actual:** **every one of the five subject rows has its final cell sliced vertically by the card's
+right border** — roughly half a cell's width is cut off. One of the 28 days per subject is
+unreadable. Zoomed evidence in `qa/shots/a2_stats_heat_right.png`; the row labels are truncated at the
+same time ("Intro to Ec…", "Discrete M…", "Emerging …", "Computer …", "Database S…"), which is what
+steals the width.
+**Evidence:** `qa/shots/a2_stats_heat_right.png`, `qa/shots/a2_stats_s2.png`.
+**Scope note:** the two week-based heatmaps on the same page ("Focus heatmap", "Tasks finished") have
+no subject-label gutter and fit correctly — only this one clips. So it is this card's layout, not the
+`Heatmap` primitive.
+
+---
+
+## BUG-024 — open — Minor
+**Screen:** Stats (the `Empty` hint at the top of the page)
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:**
+1. Settings → Data & export → **Clear demo history**.
+2. Go to Stats.
+**Expected (`prompt.md` V13, verbatim):** "empty-state hint shows after Settings → Clear demo history
+on a fresh DB with no focus/tasks" — i.e. the hint *"Finish a task or a focus session and the charts
+fill in."*
+**Actual:** after the purge the DB has **0 focus sessions** and the Focus heatmap is completely blank
+("0m in the last 15 weeks"), yet **no empty-state hint appears anywhere on the page**. The seeded DB
+retains one non-demo finished task, "Lab report — set proofs", and the guard demands that *no* task be
+finished at all before it will show.
+**Evidence:** `qa/shots/a2_stats_afterpurge.png` — rings all read 0 %, "Focus heatmap / 0m in the last
+15 weeks" with an empty grid, and no hint above the "At a glance" card.
+**Root cause (pinned):** `src/screens/Stats.tsx:25`
+```ts
+const nothing = st.focus.length === 0 && st.tasks.every((t) => t.status !== 2);
+```
+The two conditions are ANDed, so the hint fires only when *both* halves of the dataset are empty. A
+user who has completed one task but never run a focus session gets two permanently blank focus charts
+and no explanation. Splitting it — an empty-state hint per chart, or `nothing = st.focus.length === 0
+|| !totalDone` — would satisfy V13.
+**Honest partial credit:** the per-card sub-lines do degrade correctly. "When you work best" becomes
+**"Start a focus session to see this"** and "When you tick things off" becomes "Finish a task to see
+this", and the two histograms draw a flat baseline rather than breaking. So the page is not broken —
+the one hint V13 names is the one that does not fire.
+**Knock-on:** this is the same root cause as BUG-025 — neither V13's empty state nor a genuine
+first-run empty database is reachable in the shipped build.
+
+---
+
+## BUG-025 — open — Minor
+**Screen:** Settings → Data & export → "Clear demo history"
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device + source
+**Repro:**
+1. Note the To-do header ("9 open") and the Done group count ("Done · 7").
+2. Settings → Data & export → **Clear demo history**.
+3. Return to To-do, and to Today / Week / Grades.
+**Expected:** `prompt.md` V13 treats this button as *the* way to reach "a fresh DB with no focus/tasks",
+so it is expected to empty the demo dataset. My brief for this run also assumed it produces a
+genuinely empty database for empty-state testing.
+**Actual:** the button only deletes **`task WHERE demo=1`** and **`focus_session WHERE demo=1`**
+(`src/data/sqlite.ts:77`). It does **not** touch courses, meetings, attendance, day marks, notes,
+marks, the 9 open tasks, or settings. Measured after the purge:
+| | before | after Clear demo history |
+|---|---|---|
+| To-do header | `9 open` | **`9 open` (unchanged)** |
+| Done group | `Done · 7` | `Done · 1` (only the non-demo "Lab report — set proofs" survives) |
+| Focus sessions | 20 (demo) | 0 |
+| Subjects / timetable / open tasks / notes | populated | **all unchanged** |
+So **no screen in the app can reach a true empty state**: not Today (classes, notes, due-soon all
+seeded), not Week (timetable), not To-do (9 open tasks + "New task" button), not Grades (5–6 subjects),
+not Stats (attendance heat and grade bars are still full). The only genuinely empty states reachable in
+the shipped build are *filter-scoped* ones — a search with no matches, and a day with no classes.
+**Evidence:** `qa/shots/a2_after_purge_todo.png` ("9 open", unchanged), `qa/shots/a2_done_only2.png`
+(Done · 1), `qa/shots/a2_today_sat_empty.png` (the 0-class day), `qa/shots/a2_search_empty.png`
+(the no-match search).
+**The two escape hatches both re-seed, so there is no route at all:** Settings → Reset → "Reset to demo
+set" *replaces everything with the original demo set*, and `adb shell pm clear` re-seeds on next boot.
+**Severity honesty:** this is a UX/spec finding, not a crash or data loss — nothing is lost that the
+user did not ask to lose, and the button's own hint is honest ("Removes the sample finished tasks and
+focus sessions… Your own data stays"). But `prompt.md` V13 has a stated PASS criterion that this path
+cannot satisfy, and the gate cannot verify any screen's real empty state without deleting demo data.
+**Suggested decision (product, not unilateral):** either rename the button so it stops implying
+"start fresh" and point V13 at a supported way to get an empty DB, or add an explicit
+"Delete all data" (with the same double-tap guard as Reset) so the empty states are reachable and
+testable.
+
+---
+
+## BUG-026 — open — Minor
+**Screen:** To-do (subject chips) · Task sheet (three chip rows) · Stats "Mark history" chips ·
+Today "Notes" row
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:** To-do, look at the subject chip row under the sort chips.
+**Expected:** horizontal chip rows either fit or scroll with a visible affordance; a chip should not
+be sliced mid-glyph at the viewport edge with nothing to indicate there is more.
+**Actual — the same hard clip in six places:**
+| Where | Clipped |
+|---|---|
+| To-do subject chips | 4th chip is **92 px** wide, label cut to 58 px, right edge flush at x=1038 → "Dis…" |
+| Task sheet, kind row | 4th chip cut → "P…" (Project) |
+| Task sheet, subject row | 3rd chip cut → "Discrete Mathe…" |
+| Task sheet, reminder row | 5th chip cut to a sliver at the screen edge |
+| Stats "Mark history" chips | "Emerging Technology" squeezed to **99 px** / 65 px of text |
+| Today "Notes" row | 2nd note card cut mid-word by the screen edge ("Bring the sources bi…") |
+**Evidence:** `qa/shots/a2_baseline_tasks.png`, `qa/shots/a2_task_form2.png`, `qa/shots/a2_stats_s2.png`,
+`qa/shots/a2_today_sat_empty.png`.
+**Severity honesty:** these *are* horizontal `ScrollView`s and they do scroll, so nothing is
+unreachable — but on the Task sheet the kind and subject rows are the *only* way to pick a kind or a
+subject, and both are cut with no fade, no shadow and no partial-chip peek. `COVERAGE.md` had already
+flagged "possible clip at right edge" on the To-do chip row; this confirms it and widens the scope.
+
+---
+
+## BUG-027 — open — Minor
+**Screen:** Week (the timetable grid's hour scale)
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:** Week → "This week".
+**Expected:** the hour scale down the left of the grid reads 8, 9, 10 … 16 with every label whole.
+**Actual:** the last label, **"16", is sliced roughly in half horizontally by the hand-drawn card's
+bottom border** — the bottom of the glyphs is cut off and the card edge runs straight through them.
+Every other label (8–15) is clear.
+**Evidence:** `qa/shots/a2_week_hour16.png` (zoomed crop of the hour scale, taken from the Week page
+in the same session). The full Week page from that moment was not kept; `a2_week_hour16.png` plus the
+pixel measurements in the root-cause note are the evidence.
+**Root cause (pinned, for the Fixer):** `src/screens/Week.tsx:35` renders each hour label at
+`top: i * 60 * PX - 5` inside the `height: H` grid. For the final hour (`i = (end-start)/60`) that is
+`451 dp`, i.e. the label is centred on the grid's **bottom edge** instead of sitting above it. Either
+give the label container `H + 12` of room, or offset the last row by the label height.
+**Also checked and is CLEAN — do not re-audit:** the grid does **not** overflow horizontally (V2).
+Measured off a screencap: vertical rules at x = 121, 252, 383, 513, 644, 775, 906 and the card's own
+border at 1035, and the seven day headers centre at 186 / 317 / 448 / 579 / 710 / 841 / 972 — so all
+7 columns are present and correctly aligned, with no missing Sunday column and no clipped block. The
+right-hand border is intentionally absent (`Week.tsx:31` draws `i = 0…6`, one left edge per column).
+
+---
+
+## BUG-028 — open — Minor
+**Screen:** To-do (search field) — V19
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:**
+1. To-do.
+2. Tap the "Search tasks" field.
+3. Type anything.
+**Expected (V19: "keyboard opens over sheets without covering the field … sheets lift by keyboard
+height"):** the field being typed into must stay visible, and the floating nav should stay at the
+bottom edge of the *visible* area.
+**Actual:** the field is **not** covered — the primary V19 requirement holds, and the list reflows
+above the keyboard correctly. But because the window is resized, the **floating bottom nav bar is
+stranded in the middle of the screen** (its box sits at y ≈ 1000–1150 px with the keyboard filling
+everything below it), and the **FAB lands on top of the first task card**, covering that card's "tight"
+label. With an empty search the FAB instead overlaps the dashed **"Nothing matches that search."**
+box, partly hiding the hint.
+**Evidence:** `qa/shots/a2_done_filter.png` (nav mid-screen, FAB over the "Reading response — Ch. 7"
+card's "tight"), `qa/shots/a2_search_empty.png` (FAB over the empty-state box), `qa/shots/a2_search_cleared.png`.
+
+---
+
+## BUG-029 — open — Minor
+**Screen:** Stats → "Tasks finished"
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:** Stats, with exactly one task finished inside the 15-week window — i.e. right after
+Settings → Data & export → Clear demo history.
+**Expected:** "1 in the last 15 weeks · streak 1 **day**".
+**Actual:** "1 in the last 15 weeks · **streak 1 days**".
+**Evidence:** `qa/shots/a2_stats_afterpurge.png`, `qa/shots/a2_baseline_stats.png` (the same line
+read "streak 1 days" before the purge too).
+**Root cause (pinned):** `src/screens/Stats.tsx:41` — `streak ${ds.current} days`, no pluralisation.
+The neighbouring copy on the same page gets it right ("1 finished late."), so this is an oversight
+rather than a deliberate choice.
+
+---
+
+## BUG-030 — open — Minor
+**Screen:** Stats (four separate cards)
+**Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
+**Repro:** Stats, scroll through the page.
+**Expected:** subject names and axis labels readable in full.
+**Actual — the same subject names truncated in four different cards, while a fifth subject fits in
+one of them, so it is a width bug and not a naming one:**
+| Card | Rendered |
+|---|---|
+| "Totals against goals" | "Intro to Econom…", "Discrete Mathem…", "Computer Progra…" (all three cut) |
+| "Attendance by subject" | "Intro to Econom…", "Discrete Mathem…", "Emerging Techno…", "Computer Progra…" — but **"Database Systems" fits whole** in the same column |
+| "Attendance, last 4 weeks" (row labels) | "Intro to Ec…", "Discrete M…", "Emerging …", "Computer …", "Database S…" |
+| "Mark history" (x-axis) | "Quiz", **"Assig"**, **"Mid"** — the last two are cut mid-word |
+**Evidence:** `qa/shots/a2_stats_s2.png`, `qa/shots/a2_stats_when2.png`, `qa/shots/a2_stats_when3.png`.
+**Also on this page, same class of defect:** the fourth "At a glance" ring's label renders as
+**"Focus strea"** — the final "k" is cut — and its sub-line "0 d · best 0" runs flush to the card edge
+(`qa/shots/a2_baseline_stats.png`, `qa/shots/a2_stats_afterpurge.png`).
+
+---
+
+## Observed, judged NOT a bug (recorded so nobody re-derives them)
+
+1. **The "Focus streak" ring reads "14 %" on a 1-day streak.** `Stats.tsx:36` computes
+   `Math.min(1, fs.current / 7)`, so the ring shows *fraction of a 7-day goal*, not a rate. The 14 % is
+   arithmetically correct (1/7) and the sub-line spells out "1 d · best 4". It reads oddly next to
+   three genuine rates, but it is not wrong and the label explains it. Polish at most.
+2. **`Stats` "Totals against goals" lists 3 of 6 courses.** The other three have no marks, so no
+   total. Correct, though a one-line "3 subjects with marks" would be kinder. Not filed.
+3. **`Settings → Attendance & semester → "Semester starts" shows "Sep" and "7".** Not a truncated
+   year: `Settings.tsx:167` builds **month + day** (`Number(s.semesterStart.slice(8))` = day 7), which
+   matches the root hint "Semester from 2026-09-07". The two steppers are visually unlabelled, but both
+   carry `accessibilityLabel` "semester month" / "semester day".
+4. **`Settings → Attendance & semester` day stepper is capped at `max={28}`.** A semester starting on
+   the 29th/30th/31st cannot be set. Real but tiny; Polish, not filed as a defect.
+5. **Settings root reads "Diagnostics · 12 crashes recorded"** on a device that has been through
+   several agents' Metro reloads. Not yet attributed — I lost the device before I could open
+   Diagnostics and read the log. **Open question for the next agent**, see the iteration log.
+
+---
+
 ## Template — copy for each new bug
 
 ```
@@ -441,13 +772,22 @@ as part of the motion.
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 0 | 2 | 0 |
-| Minor | 12 | 3 | 0 |
+| Major | 2 | 2 | 0 |
+| Minor | 22 | 3 | 0 |
 | Polish | 4 | 0 | 0 |
 
-**Totals: 20 findings — 0 Critical, 2 Major (2 fixed), 14 Minor (3 fixed), 4 Polish.**
+**Totals: 30 findings — 0 Critical, 4 Major (2 fixed), 25 Minor (3 fixed), 4 Polish.**
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
-(BUG-019, BUG-020), plus BUG-009 fixed by the FIXER.
+(BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
+(BUG-021…BUG-030, 2 Major + 8 Minor)**.
+
+> **AGENT 2 exited early and blocked.** Parts 2, 3 and 4 (the task-domain lifecycle, the input
+> edge cases and the persistence check) are **largely untested** — the phone's secure keyguard
+> engaged part-way through Part 2 and could not be dismissed by any `adb input` vector (swipe from
+> five origins and durations, `motionevent` DOWN/MOVE/UP, `keyevent` 3 / 26 / 82 / 224,
+> `wm dismiss-keyguard`, `cmd statusbar collapse`). The app process survives, so the work resumes
+> from the open Task sheet once a human swipes the phone. Details and the exact resume point are in
+> the iteration log below. Do not read the AGENT 2 counts as coverage of V9's lifecycle clauses.
 
 ### Machine gates at STATIC AUDITOR exit (2026-10-04, Node 24.16.0 / npm 11.13.0)
 
@@ -522,5 +862,61 @@ Both gates were re-run after **each** commit, not once at the end.
    (`PaperBg`, `Week`, `DayBar`), `mixBlendMode` on the photo texture, `transformOrigin` on the break sticker, the
    `Placed` navigator timing, and `Directory.pickDirectoryAsync` on a standalone install.
 6. Whether the derived `testID` slugs collide anywhere that matters in practice — needs a `uiautomator` dump.
+
+---
+
+## AGENT 2 iteration log (2026-10-05) — what was and was not exercised
+
+**Cold-boot discipline held.** Every judgement came after
+`adb shell am force-stop host.exp.exponent` + relaunch. No
+`ReferenceError: Property 'dark' doesn't exist` and no `"undefined" is not a valid color` warnings
+appeared in logcat at any point, which confirms the briefed artefact and means **none of the AGENT 2
+findings is a fast-refresh ghost**. Per the brief, no status-bar / system-bar / edge-to-edge
+observation is reported (Expo Go owns that window; BUG-004 already settled it).
+
+### Done and evidenced
+
+| Part | What | Result |
+|---|---|---|
+| 1 | Seeded baseline tallied: 9 open (Late·8 + Later·1), Done·7, 20 demo focus sessions, 5–6 courses, ~68 attendance marks | pass |
+| 1 | Settings → Clear demo history executed | Done 7 → 1, focus 20 → 0, everything else untouched → **BUG-025** |
+| 1 | Empty states reachable today: To-do search no-match, Today's 0-class day, Week "Nothing due this week.", Stats "When you work best" | **4 pass**, all with a helpful hint, no blank or broken layout |
+| 1 | Add sheet from this state | **pass** — all 8 tiles present, labelled, no clipping, thumb-reachable |
+| 1 | Every screen visited and judged | Today / Week / To-do / Stats / Grades walked; Focus not opened |
+| 1 | Genuinely empty database | **impossible in-app** → BUG-025; this is why Part 1 is partial |
+| 2 | Baseline counts recorded for later propagation diffs | see `DATA_LEDGER.md` |
+| 2 | Task sheet opened from the Add sheet; kind / subject / due / reminder / effort / priority / steps rows all inspected | visual pass; **not** saved |
+| 3 | Effort stepper defaults, reminder-disabled hint, subject default | pass |
+| — | Navigation: all five tabs, hardware BACK, keyboard-open layout | **BUG-021**, **BUG-028** |
+| — | Settings: root, Attendance & semester, Data & export, Reset | pass (Reset not triggered) |
+
+### Not tested, and why
+
+| Skipped | Reason |
+|---|---|
+| **All of Part 2's lifecycle**: open detail → values match → edit → re-verify → delete → Undo; swipe right = done; swipe left = crumple + Undo; done-timestamp recorded; the whole propagation matrix (list / group header / "N open" / search / All-Open-Done / By date-By priority-Newest / subject chip / Stats) | device locked mid-Part-2 |
+| **All of Part 3**: empty & whitespace titles, 200-char title, emoji, `<>&"'`, RTL, effort 0 / 1 / −1 / 240 / 1000, duplicate titles, rapid double-submit, HOME mid-form, keyboard-covering-the-field inside a sheet, back-out-with-unsaved-input | device locked mid-Part-2 |
+| **All of Part 4**: force-stop → relaunch → records intact | device locked mid-Part-2 |
+| Focus screen (V10) | out of my Part 1–4 scope; left to the INTERACTION SWEEPER |
+| Grades attendance grid (V8), marks, notices, slip, course/meeting/mark sheets | out of my scope; walked only far enough to judge the page renders |
+| Settings sub-pages: Look & feel, Reminders, Sound & haptics, Focus & breaks, Diagnostics | walked the list; only Attendance & semester, Data & export and Reset were opened |
+| Light mode, font scale 1.3, 360 / 430 dp, rotation | device settings are orchestrator-owned; I changed nothing |
+| Notification delivery, custom sound, haptics quality, performance | Expo Go cannot prove these (see STATE.md) |
+
+### Exact resume point
+
+The **Assignment task sheet is open and empty**, with the title field focused and the soft keyboard
+up (`qa/shots/a2_task_form.png` is the same state with the keyboard down). Nothing has been saved, so
+**the database contains zero `QA_` records** and `DATA_LEDGER.md` has no rows to clean up. The
+sequence to resume is: unlock the phone → dismiss the keyboard → finish Part 2 from the V9 script
+(title `QA_algebra_hw`, subject left as "No subject", Due → "When I get home", "2 h before" on,
+effort 90 min, check the Tight/Comfortable box, Save).
+
+### Open question I could not close
+
+`Settings → Diagnostics` reports **"12 crashes recorded"** and I never got to open it. Those are
+probably earlier agents' Metro reloads, but the app has a `recordCrash` path and a crash that
+reproduces on a cold boot would be Critical. **Whoever has the device next should open Diagnostics
+and read the log before trusting any further result from this build.**
 
 -
