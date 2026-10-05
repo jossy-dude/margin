@@ -867,7 +867,7 @@ locked) $ADB shell dumpsys trust 2>/dev/null | grep -q 'deviceLocked=0' \
            && echo UNLOCKED || echo LOCKED;;
 ```
 
-## BUG-032 — open — Major (static, **not** device-confirmed)
+## BUG-032 — fixed — Major (was static, **not** device-confirmed)
 **Screen:** Add sheet → Assignment · every other create-form sheet
 **Found by:** TASK-DOMAIN QA (AGENT 2b) · source, while scoping the Part 3 double-submit test
 **Repro (needs a device to confirm):** To-do → FAB → Assignment → type a title → tap **Add** twice quickly
@@ -889,6 +889,43 @@ because a physical double-tap must land inside a 210 ms window and I could not r
 **Major pending device confirmation**, not as an observed defect.
 **Suggested fix:** latch in `save()` the way `Sheet.close()` already does — an `if (saved.current) return;`
 with `saved.current = true` set before `act.saveTask`, or disable the button on first press.
+
+**Root cause (confirmed by reading the code; the reported analysis was correct):** `src/sheets/forms.tsx:65`
+— `id: existing?.id ?? uid('t')` was evaluated **inside** `save()`, so every invocation minted a new id.
+Nothing latched the handler: `Sheet.close()`'s `closing.current` (`src/ui/Sheet.tsx:39`) is checked *after*
+`act.saveTask`, and the Add button's only `disabled` prop (`disabled={!title.trim()}`) is true only for a
+blank title. Same shape at `:122` (subject), `:133` (class), `:146` (mark), `:160` (note).
+**Fix commit:** `00f7d4c`
+**Fix — two layers, not one:**
+1. **The submit is latched.** `latch()` (`src/ui/latch.ts`) wraps the handler in every create-form, the
+   same way `Sheet.close()` latches its own animation. It is deliberately *not* a disabled-button prop:
+   the latch covers every route into the handler — tap, the field's `returnKeyType="done"`, a TalkBack
+   double-activate — where `disabled` would only cover the tap. It takes the handler **at call time**, so
+   a repeat can never save a stale draft, and it is created once per form instance via `useState(latch)`.
+2. **A repeat is idempotent anyway.** Each form now mints its record id once per form instance,
+   `useState(() => existing?.id ?? uid('t'))`, so a repeat that got past the latch re-saves the same row
+   rather than appending a second one. This is defence in depth and it is what actually closes the hole:
+   the store's `saveTask`/`saveCourse`/`saveMeeting`/`saveMark`/`saveNotice` were *already* correct
+   upserts by id, and the test now proves that property instead of leaving it assumed.
+   Editing an existing record is unaffected: `saveId` resolves to `existing.id`.
+**Regression test:** `src/test/double-submit.test.ts` (15 tests). It drives the **real store** through a
+`MemoryRepository`: for all five entity kinds, saving the same id twice leaves exactly one row in state
+*and* one in the repository, and — the non-vacuity half — saving two different ids really does append two,
+which is the BUG-032 shape. Plus two `latch` unit tests, including that it reads the handler at call time.
+Three further checks read `forms.tsx`, since the store cannot see it: each of the five record prefixes has
+exactly one mint site and it sits in a `useState` initialiser, all five submits go through the latch, and
+no create-form still mints an id inside a handler.
+**Verified by mutation:** putting `uid('t')` back inside `save()` fails 2 of the 15; removing the latch
+fails 1. So the suite is not just describing the new code.
+**Not touched, deliberately:** the Delete buttons in the same footers still double-fire, but a second
+`removeTask`/`removeCourse` on the same id is a no-op in the store and only repeats the Undo toast — there
+is no duplicate-record risk, so it is not this bug.
+**Device verification still required:** yes — (1) To-do → **+** → Assignment, type a title, tap **Add**
+twice as fast as the phone allows (< 210 ms apart); confirm **one** task, **one** toast, and the To-do
+count rises by exactly 1; (2) repeat for **Add → Subject**, **Class**, **Mark** and **Note**, checking the
+subject/class/mark/note is not duplicated; (3) open an existing task, tap **Save** twice, confirm the
+record is still edited in place and not duplicated; (4) confirm a normal single save still shows its toast
+and closes the sheet (the latch must not swallow the first press).
 
 ---
 
@@ -941,11 +978,11 @@ with `saved.current = true` set before `act.saveTask`, or disable the button on 
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 1 | 4 | 0 |
+| Major | 0 | 5 | 0 |
 | Minor | 23 | 3 | 0 |
 | Polish | 4 | 0 | 0 |
 
-**Totals: 32 findings — 0 Critical, 5 Major (4 fixed), 26 Minor (3 fixed), 4 Polish.**
+**Totals: 32 findings — 0 Critical, 5 Major (5 fixed), 26 Minor (3 fixed), 4 Polish.**
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
 (BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
@@ -1156,3 +1193,48 @@ screen, so gestures land correctly. The blocker is solely the unknown pattern.
 `adb shell dumpsys trust | grep deviceLocked=0` rather than `adb.sh locked` → cold-restart
 (`am force-stop host.exp.exponent`, relaunch) → then run the V9 script from
 `qa/DATA_LEDGER.md`'s "Counts to diff against" table, seed `QA_algebra_hw` first.
+
+---
+
+### FIXER (majors) iteration log — 2026-10-05, no device
+
+**All three Majors assigned to this pass are now `fixed` with a jest regression test; none is
+`verified`**, because the device is still behind its secure pattern and nothing here could be confirmed
+by hand. Each bug carries an explicit **Device verification still required** line with exact steps.
+
+| Bug | Root cause (file:line) | Fix commit | Regression test |
+|---|---|---|---|
+| BUG-021 | `Book.tsx:50` read the store for the nav highlight; the only sync (`:40`) was one-way | `bef5ae7` | `src/test/nav-sync.test.ts` · 9 tests |
+| BUG-022 | `Today.tsx:22` built the strip from `todayOcc` while `:47`/`:61` followed `sel` — **and** `Today.tsx:20`'s `useState(today)` snapshotted `sel` at mount | `9225562` | `src/test/today-day.test.ts` · 9 tests |
+| BUG-032 | `forms.tsx:65` (and `:122`, `:133`, `:146`, `:160`) minted the record id inside `save()` | `00f7d4c` | `src/test/double-submit.test.ts` · 15 tests |
+
+**Two findings the assigning briefs did not contain, both recorded above:**
+- **BUG-022 has a second cause, and it needs no user action.** `useState(today)` froze the selected day
+  at mount while `today = startOfDay(now)` follows a 30 s ticker, so leaving the app open across midnight
+  stranded the whole day block on yesterday — title Tuesday, "Next up" Tuesday's classes, section and
+  **"Mark day"** on Monday. Measured, not inferred. The reported repro (tap a day) is the milder half.
+- **BUG-021's `fx.page()` now also fires on hardware BACK.** `act.go` plays the page sound, and the
+  reverse sync calls it, so BACK is no longer a silent pop. This is what V3 asks for anyway, but it is a
+  behaviour change and is listed in the device steps.
+
+**Machine gates — re-run after every single fix, never once at the end.**
+
+| Gate | baseline | `bef5ae7` BUG-021 | `9225562` BUG-022 | `00f7d4c` BUG-032 |
+|---|---|---|---|---|
+| `npm run typecheck` (`tsc --noEmit`) | 0 | 0 | 0 | 0 |
+| `npm run lint` (`eslint src --max-warnings=0`) | 0 | 0 | 0 | 0 |
+| `npm run test` (`jest`) | 0 · 115 tests / 10 suites | 0 · **124** / 11 | 0 · **133** / 12 | 0 · **148** / 13 |
+| `npm run boundaries` (`depcruise`) | 0 · 128 modules | 0 · 130 | 0 · 131 | 0 · 133 |
+| `npm run check` (all four chained) | **0** | **0** | **0** | **0** |
+| `npm run bundle` (`expo export --platform android`) | 0 · 3.8 MB | **0** · 3.8 MB | **0** · 3.8 MB | **0** · 3.8 MB |
+
+> Nothing was weakened to reach green: no `@ts-ignore`, no loosened tsconfig, no deleted or skipped test,
+> no dependency or SDK change, no new `eslint-disable` beyond the one BUG-021 records above (8 in `src/`,
+> up from 7, justified identically to `Book.tsx:40`). **BUG-001 was not touched.**
+> The baseline in this table is **10 suites / 115 tests**, not the 9 suites / 115 in the assigning brief.
+
+**Found while fixing, NOT fixed — no defect, recorded so nobody re-derives it:**
+`dayBlock` initially returned the pick un-normalised, so a pick carrying a time of day leaked it into the
+block. The regression test caught it (`startOfDay(p.start) === b.day` failed for a pick made at 08:00), and
+the fix is `startOfDay(selectedDay(now, picked))` in `src/domain/attendance.ts`. A pick made by the app is
+always midnight-aligned, so this was latent, not live.
