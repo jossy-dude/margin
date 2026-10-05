@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, Path, Pattern, Rect, Text as SText } from 'react-native-svg';
 import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import { FONT } from '../tokens/theme';
-import { fmtClock } from '../domain/time';
+import { clockCells, fmtClock } from '../domain/time';
 import { useNow, useReduceMotion } from './theme-context';
 import { FS } from './fit';
 
@@ -91,11 +91,11 @@ function Ticker({ periods, ink, bg, w, h, day }: { periods: BarPeriod[]; ink: st
   // that hosts the bar (which can then tick on minute boundaries like everything else).
   const t = useNow(1000);
   const next = periods.find((p) => p.start > t && !p.cancelled), cur = periods.find((p) => t >= p.start && t < p.end), target = cur ? cur.end : next?.start ?? null, secs = target ? Math.max(0, (target - t) / 1000) : 0;
-  const txt = target ? fmtClock(secs) : '--:--', cell = Math.min(34, (w - 40) / txt.length);
+  const txt = target ? fmtClock(secs) : '--:--', cell = Math.min(34, (w - 40) / txt.length), cells = useMemo(() => clockCells(txt), [txt]);
   return (
     <View style={{ height: h, justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
-        {txt.split('').map((ch, i) => <View key={i} style={{ width: ch === ':' ? cell * 0.45 : cell, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: ch === ':' ? 0 : 1.4, borderColor: ink, borderRadius: 4, backgroundColor: ch === ':' ? 'transparent' : bg }}><SvgText ch={ch} ink={ink} size={26} /></View>)}
+        {cells.map((c) => <View key={c.key} style={{ width: c.colon ? cell * 0.45 : cell, height: 34, alignItems: 'center', justifyContent: 'center', borderWidth: c.colon ? 0 : 1.4, borderColor: ink, borderRadius: 4, backgroundColor: c.colon ? 'transparent' : bg }}><SvgText ch={c.ch} ink={ink} size={26} /></View>)}
         <SvgText ch={cur ? ' left in class' : target ? ' until next' : ' done today'} ink={ink} size={15} small />
       </View>
       <View style={{ height: 3, marginTop: 6, backgroundColor: ink + '33', borderRadius: 2 }}><View style={{ width: `${day * 100}%`, height: 3, backgroundColor: ink, borderRadius: 2 }} /></View>
