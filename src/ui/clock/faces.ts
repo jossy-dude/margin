@@ -27,8 +27,9 @@ export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): 
 /**
  * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the
  * engraving turns into a photographic negative instead of disappearing into a black disc.
- * Four rows of five, the shape react-native-svg's FeColorMatrix wants. scripts/plate-preview.mjs
- * imports this exact string, so the preview cannot drift from what the app applies.
+ * Four rows of five, the shape react-native-svg's FeColorMatrix wants. Not referenced by anything
+ * yet: the plates are blocked on artwork the user has not supplied (prompt.md §PLATES), so the
+ * matrix, the generator script and the preview script land together with them.
  */
 export const PLATE_DARK_MATRIX = '-0.2126 -0.7152 -0.0722 0 1 -0.2126 -0.7152 -0.0722 0 1 -0.2126 -0.7152 -0.0722 0 1 0 0 0 0 1';
 

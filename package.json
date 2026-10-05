@@ -12,8 +12,6 @@
     "test": "jest",
     "boundaries": "depcruise src --config .dependency-cruiser.cjs",
     "sounds": "node scripts/synth-sounds.mjs",
-    "plates:gen": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/plates.generated.mjs",
-    "plates:preview": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/plate-preview.mjs",
     "bundle": "EXPO_OFFLINE=1 expo export --platform android --output-dir /tmp/marginalia-export",
     "check": "npm run typecheck && npm run lint && npm run test && npm run boundaries"
   },
