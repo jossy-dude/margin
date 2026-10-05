@@ -446,7 +446,7 @@ noise appeared in logcat — a real cold boot is clean, as briefed.
 
 ---
 
-## BUG-021 — open — Major
+## BUG-021 — fixed — Major
 **Screen:** all routes — the floating bottom nav (chrome, not a route)
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro (deterministic, 3 taps + 1 key):**
@@ -486,6 +486,40 @@ reads it.
 **Why Major and not Minor:** it is not a cosmetic mismatch. The primary navigation of the app displays
 false state and one of five tabs stops responding, from a single hardware Back press — reachable from
 any tab, on the first thing V19 asks you to check.
+
+**Root cause (confirmed by reading the code and by the regression test, not inferred):**
+`src/navigation/Book.tsx:50` — `const on = route === t.name` read the **store**, while the rendered page
+is `state.routes[state.index]` (`:39`). The only sync, `:40`, was keyed on `[route]`, so an Android BACK
+(which pops `TabRouter` — its default `backBehavior` is `'firstRoute'`, which is exactly the observed
+"popped to Today") moved `cur` and left `route` stale: `:40`'s dependency never changed, so it never ran.
+Then `onPress` → `act.go(t.name)` hit `act.go`'s own guard `if (route === state.route) return`
+(`src/store/store.ts:99`) and did nothing. **The reported theory was correct in every part.**
+**Fix commit:** `bef5ae7`
+**Fix:** both directions now sync, each keyed on the side that moved, so they converge rather than fight
+(the forward one on `[route]`, a new reverse one on `[cur]` that calls `act.go`). The two one-way rules
+live in `src/navigation/sync.ts`. Everything the nav draws — the highlight `on`, and `hideNav` — now
+reads `cur`, so the highlight can never name a route the app is not on even for the one commit before
+the store catches up. The page-placement transition (`Placed`, `inMountWindow`, the 520 ms drop) is
+untouched, and `Placed`'s drop already ran on BACK before this change; it now also gets `fx.page()`,
+which is what V3 asks for anyway.
+**Regression test:** `src/test/nav-sync.test.ts` (9 tests). It models BookView's two effects commit by
+commit — each running only when its own key changed, which is what makes them converge — and asserts
+over 300 randomised hops that `store === cur` always holds, that **every** tab other than the current one
+still selects, and that the Focus route hides the nav and BACK brings it back. It also asserts the real
+mechanism with the real store (`act.go` on the route it already holds is a no-op) and reproduces the
+shipped defect from the shipped rules, so the model cannot quietly become a fiction.
+**Wiring is asserted too, because the model cannot see `Book.tsx`:** three checks read the file — the
+highlight is `cur === t.name` and never `route === t.name`, both syncs sit in `useEffect`s keyed on
+`[route]` / `[cur]`, and the mount window is still wired. These are coupled to the seam's names, so a
+rename is a mechanical test update; that is the price of covering a wiring bug with no device.
+**One new `eslint-disable` (8 in `src/`, was 7):** `src/navigation/Book.tsx:41` needs
+`react-hooks/exhaustive-deps` for the same reason the line above it already does — the effect closes
+over `route` but is deliberately keyed on `[cur]`. Same justification as BUG-017 records for `Book.tsx:40`.
+**Device verification still required:** yes — (1) tap **Grades**, (2) press hardware **BACK**, (3) confirm
+the nav highlights **Today** (not Grades), (4) tap the **Grades** tab and confirm the Grades page comes
+back (previously a no-op). Repeat To-do→BACK. Also from Focus: press BACK and confirm you land on Today
+with the nav visible. And V3: confirm the page still drops in from above-right and settles in ~0.5 s
+with its sound — BACK now plays `fx.page()` too, which it did not before.
 
 ---
 
@@ -857,11 +891,11 @@ with `saved.current = true` set before `act.saveTask`, or disable the button on 
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 3 | 2 | 0 |
+| Major | 2 | 3 | 0 |
 | Minor | 23 | 3 | 0 |
 | Polish | 4 | 0 | 0 |
 
-**Totals: 32 findings — 0 Critical, 5 Major (2 fixed), 26 Minor (3 fixed), 4 Polish.**
+**Totals: 32 findings — 0 Critical, 5 Major (3 fixed), 26 Minor (3 fixed), 4 Polish.**
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
 (BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
