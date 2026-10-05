@@ -1433,6 +1433,40 @@ BUG-015, BUG-016, BUG-024, BUG-025 (copy) and BUG-029**, and audited BUG-017 (no
 constraint, every one `fixed, pending device verification`, every one mutation-checked. **BUG-013 left
 open on purpose** — see its entry for why it needs a decision and a device rather than just code.
 
+### Machine gates — UI FIXER (clipping class), 2026-10-05, Node 24.16.0 / npm 11.13.0
+
+Both gates re-run after **each** commit, not once at the end. Every row is exit 0.
+
+| Gate | Before (209 tests / 23 suites) | After (254 tests / 28 suites) |
+|---|---|---|
+| `npm run typecheck` (`tsc --noEmit`) | 0 | 0 |
+| `npm run lint` (`eslint src --max-warnings=0`) | 0 · 0 warnings | 0 · 0 warnings |
+| `npm run test` (`jest`) | 0 · 209 | 0 · **254** |
+| `npm run boundaries` (`depcruise`) | 0 · 145 modules | 0 · 151 modules |
+| `npm run check` (all four chained) | 0 | 0 |
+| `npm run bundle` (`expo export --platform android`) | 0 · 3.8 MB | 0 · 3.8 MB |
+
+| Commit | Bug | Tests after |
+|---|---|---|
+| `396337b` | BUG-030 chart labels: pixels, not characters | 217 |
+| `63a8ec6` | BUG-023 the 28 heatmap cells now fit the card | 231 |
+| `837a719` | BUG-027 the Week hour scale's last label | 239 |
+| `cece297` | BUG-026 scrolling chip rows announce themselves | 248 |
+| `eec50de` | BUG-028 floating chrome yields to the keyboard | 254 |
+
+> **Nothing was weakened to reach green.** No `@ts-ignore`, no new `eslint-disable`, no test deleted or
+> skipped, no tsconfig loosened, no dependency changed. Four of the new tests failed **before** their
+> fixes were written — three of them because the first draft of the fix was wrong, not because the test
+> was: `heatRow` did not implement the label-yields-share branch it documented (320 dp overflowed);
+> `hourTop` clamped the *first* label down by its own 5 dp offset to defend against an unreachable grid;
+> `stripHasMore`'s stated boundaries were arithmetically wrong about its own slack. Each was corrected in
+> the **source**, and the reason is recorded in the relevant test's comment.
+
+> **One process note worth recording:** the BUG-028 mutation cleanup used `git checkout` on two files
+> whose fix was not yet committed, which silently reverted it and produced a red `npm run check`. The
+> fix was re-applied and re-verified on device (`qa/shots/fix_72_kb_final.png` is that second run, not a
+> copy of the first). Worth knowing before anyone trusts a clean gate on uncommitted work.
+
 ### Machine gates — FIXER (minors/polish) exit, 2026-10-05, Node 24.16.0 / npm 11.13.0
 
 Both gates re-run after **each** commit, not once at the end. Every row is exit 0.
