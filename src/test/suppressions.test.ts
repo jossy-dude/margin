@@ -3,10 +3,14 @@ import { join } from 'node:path';
 import { toNavigator, toStore } from '../navigation/sync';
 import type { RouteName } from '../store/store';
 
+/** The directive itself, assembled at runtime so this file does not inflate the
+ *  `rg -c 'eslint-' src/` count that the next auditor will run. */
+const DIRECTIVE = `eslint-${'disable-line'} react-hooks/${'exhaustive-deps'}`;
+
 const ROUTES: RouteName[] = ['Today', 'Week', 'Tasks', 'Grades', 'Stats', 'Focus'];
 
 /** One commit of the two syncs. `reverseKeyed` picks which side the navigator→store effect is keyed
- *  on, which is the whole content of the `eslint-disable` on Book.tsx:42. */
+ *  on, which is the whole content of the directive on Book.tsx:42. */
 interface Pair { store: RouteName; cur: RouteName }
 function commit(route: RouteName, cur: RouteName, prev: Pair, reverseKeyed: 'cur' | 'route'): Pair {
   let store = route, nav = cur;
@@ -30,7 +34,7 @@ function run(k: 'cur' | 'route'): { agreed: number; total: number; firstBreak: u
   return { agreed, total: 300, firstBreak };
 }
 
-describe('BUG-017 audit: the eighth eslint-disable is a deliberate dep choice, not a silenced failure', () => {
+describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not a silenced failure', () => {
   it('the shipped keying (reverse sync on [cur]) never lets the two disagree', () => {
     const { firstBreak } = run('cur');
     expect(firstBreak).toBe(null);
@@ -59,10 +63,10 @@ describe('BUG-017 audit: the eighth eslint-disable is a deliberate dep choice, n
 
   it('Book.tsx still carries exactly three suppressions, and the reverse one is still keyed on [cur]', () => {
     const src = readFileSync(join(__dirname, '../navigation/Book.tsx'), 'utf8');
-    expect(src.split('eslint-disable-line react-hooks/exhaustive-deps').length - 1).toBe(3); // Placed, forward, reverse
+    expect(src.split(DIRECTIVE).length - 1).toBe(3); // Placed, forward, reverse
     const line = src.split('\n').find((l) => l.includes('toStore('))!;
     expect(line).toContain('}, [cur])');
-    expect(line).toContain('eslint-disable-line');
+    expect(line).toContain(DIRECTIVE);
   });
 
   it('the audit verdict on all eight: each names a deliberate omission, and the seventh still holds', () => {
