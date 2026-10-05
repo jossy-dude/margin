@@ -1046,7 +1046,7 @@ right-hand border is intentionally absent (`Week.tsx:31` draws `i = 0…6`, one 
 
 ---
 
-## BUG-028 — open — Minor
+## BUG-028 — fixed — Minor
 **Screen:** To-do (search field) — V19
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:**
@@ -1064,6 +1064,37 @@ label. With an empty search the FAB instead overlaps the dashed **"Nothing match
 box, partly hiding the hint.
 **Evidence:** `qa/shots/a2_done_filter.png` (nav mid-screen, FAB over the "Reading response — Ch. 7"
 card's "tight"), `qa/shots/a2_search_empty.png` (FAB over the empty-state box), `qa/shots/a2_search_cleared.png`.
+
+**Root cause — and the measurement corrects the finding's framing.** The reported "stranded mid-screen"
+was real as an *appearance* but not as a *mis-position*. Measured on the SM-A516N at 411 dp with the
+keyboard up: the nav's bottom stroke sat at **y 1485** and the keyboard's top edge at **y 1521** — 36 px
+apart, i.e. ~14 dp at this density, which is the bar's own `navInset` padding. `AndroidManifest.xml:20`
+sets `windowSoftInputMode="adjustResize"`, so the window shrinks and `bottom: 0` **already tracks the
+keyboard's top edge**: V19's requirement ("the floating nav should stay at the bottom edge of the
+*visible* area") was **met**. The FAB likewise measured y 1131–1278 — not stranded, but sitting on top of
+page content. **So the defect is that anything floats over the content at all**, on a visible strip barely
+half the screen tall. A fix that *moved* the bar would have been treating a correct position as the bug.
+**Fix commit:** `eec50de`
+**Fix:** the chrome **yields** rather than moving. `useKeyboardUp()` (`src/ui/keyboard.ts`) reports
+keyboard visibility from one shared hook, and all three floating pieces consult it — nav
+(`hideNav = cur === 'Focus' || kbUp`), + button (`showFab = !sheet && route !== 'Focus' && !kbUp`), and
+the undo toast (which lifts to `max(ins.bottom, 8) + TOAST_CLEAR`, since the bar it used to sit above is
+not drawn). Neither control is usable without dismissing the keyboard first, and both return on
+`keyboardDidHide`.
+**Verified on device (SM-A516N, 411 dp):** with the keyboard up the stranded bar and the overlapping +
+button are both gone, and the empty-state hint "…add an assignment, exam or reading." is fully readable
+where the + button used to sit. Dismissing the keyboard brings the bar and the + button back in place.
+**Before:** `qa/shots/fix_15_kb3.png`.
+**After:** `qa/shots/fix_70_kb_after.png`, `fix_72_kb_final.png` (re-verified after a mutation cleanup
+briefly reverted the source), `fix_71_kb_back.png` (chrome restored).
+**Regression test:** `src/test/keyboard-chrome.test.ts` (6 tests). It asserts the hide in both consumers,
+the toast's lift, and the hook's listener teardown — plus, the non-vacuity half for the diagnosis, that
+the measured 36 px gap is dp-scale and far too small to be an uncleared keyboard, which is what pins
+"hide, do not reposition". One test forbids either consumer from subscribing to the keyboard itself, so
+the two pieces of chrome cannot decide differently; `ui/Sheet.tsx` is allowed to listen because it
+measures the keyboard's **height** to lift itself, a different question from visibility.
+**Verified by mutation, three times:** the nav not yielding fails 1 of the 6; the + button not yielding
+fails 3; leaking the listener pair fails 5.
 
 ---
 
@@ -1317,10 +1348,10 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 7 | 14 | 0 |
+| Minor | 6 | 15 | 0 |
 | Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (14 fixed), 5 Polish (2 fixed).
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (15 fixed), 5 Polish (2 fixed).
 Nothing verified.** Recounted from the per-bug headers
 (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
