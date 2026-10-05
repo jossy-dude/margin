@@ -52,11 +52,11 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Subject chip row + scroll | **fail** | 4th chip squeezed to 92 px and cut at the screen edge → **BUG-026** |
 | Group headers (Late · 8, Later · 1, Done · 1) | **pass** | Headers and counts correct: 8 + 1 = 9 open; Done 7 → 1 after purge |
 | "+ New task" button | untested | Rendered at the list foot |
-| Task card → open detail | untested | **device locked** |
-| Checkbox → done | untested | **device locked** |
-| Swipe right → done | untested | **device locked** |
-| Swipe left → crumple + Undo | untested | **device locked** |
-| Long-press → Focus | untested | **device locked** |
+| Task card → open detail | untested | **blocked by the keyguard (AGENT 2b)** |
+| Checkbox → done | untested | **blocked by the keyguard (AGENT 2b)** |
+| Swipe right → done | untested | **blocked by the keyguard (AGENT 2b)** — code read at `Swipe.tsx:21`, commits above `w*0.28` |
+| Swipe left → crumple + Undo | untested | **blocked by the keyguard (AGENT 2b)** — code read at `Swipe.tsx:21`, crumples below `-w*0.3` |
+| Long-press → Focus | untested | **blocked by the keyguard (AGENT 2b)** |
 | FAB → Add | **pass** | |
 | Nav + gear + theme | **fail** | Gear **pass**; theme toggle untested; nav → **BUG-021** |
 
@@ -126,12 +126,12 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Tight/Comfortable + latest start | untested | Needs a due date + effort → **Open** |
 | Priority chips | untested | None/Low/Medium/High rendered |
 | Subtasks add + tick | untested | "Add a step" rendered |
-| Save | untested | **Never pressed — this is where the run stopped** |
+| Save | untested | **Never pressed — the run stopped here (AGENT 2), and AGENT 2b never reached the screen either** |
 | Kind chips row | **fail** | 4th chip cut to "P…" → **BUG-026** |
-| Empty / whitespace / long / emoji / RTL input | untested | **device locked** |
-| Negative effort via stepper | untested | **device locked** |
-| Double-submit guard | untested | **device locked** |
-| Back out with unsaved input | untested | **device locked** |
+| Empty / whitespace / long / emoji / RTL input | untested | **blocked by the keyguard (AGENT 2b)** |
+| Negative effort via stepper | untested | **blocked by the keyguard (AGENT 2b)** |
+| Double-submit guard | **fail** | Static: `forms.tsx:65` mints a fresh `uid('t')` per `save()` call and the button is never disabled during the 210 ms close animation → **BUG-032**. Not device-confirmed |
+| Back out with unsaved input | untested | **blocked by the keyguard (AGENT 2b)** — code read: `Sheet.tsx:39` closes with no discard prompt |
 
 ## Sheet: WhenPicker / Status / Slip / Course / Meeting / Mark / Notice
 | Element | Status | Notes |
@@ -165,7 +165,7 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | Focus & breaks | untested | |
 | Data & export (XLSX/CSV/JSON, folder/share) | **pass** | All 3 formats × "Save to folder…" + "Share…" rendered with correct labels. Export not executed |
 | **Clear demo history** | **fail** | Executed. Done 7 → 1, focus 20 → 0, **everything else untouched**; no screen reaches a true empty state → **BUG-025** |
-| Diagnostics (crash log, test crash) | untested | Root row shows **"12 crashes recorded"** — not attributed. Open question |
+| Diagnostics (crash log, test crash) | untested | Root row shows **"12 crashes recorded"** — **NOT attributed, and AGENT 2b proved it cannot be read off-device** (file is in `/data/data/host.exp.exponent/files/`, permission-denied to `shell`; Expo Go is not debuggable so `run-as` refuses; no `su`/`root`). A human must open this sheet. Open question |
 | Reset (double-tap) | untested | "Reset to demo set" + its irreversibility warning rendered. Not triggered |
 | Sub-page back = up one level | **pass** | Back from Attendance & semester → root; back from Data & export → root |
 | Hardware back at Settings root | untested | |
@@ -184,7 +184,7 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
 | 360dp width | untested | |
 | 430dp width | untested | |
 | Landscape / rotation | untested | portrait-locked |
-| Persistence across force-stop | untested | **device locked before the first record was created** |
+| Persistence across force-stop | untested | **Zero `QA_` records exist**, so there is nothing to verify. AGENT 2b was blocked by the keyguard before creating any |
 | TalkBack labels + focus trap | untested | a11y tree inspected incidentally: every button, chip and cell I touched carries an `accessibilityLabel` and the `testID`s from BUG-006 resolve as `resource-id` |
 | Offline (no network in app) | n/a | app is fully local SQLite |
 | Notification delivery timing | untested | **release build only** |
@@ -210,6 +210,18 @@ Bottom nav = 5 tabs, hidden on Focus. Sheets: `add` `task` `status` `settings`
    put the phone to sleep and then behind a secure keyguard that no `adb` input could dismiss —
    which is what ended the run. Use `keyevent 224` (WAKEUP) if you need a wake that cannot sleep.
 5. **`purgeDemo` is not a database reset** — see BUG-025 and the baseline table in `DATA_LEDGER.md`.
+6. **`adb.sh locked` is BROKEN and always prints `UNLOCKED`** (AGENT 2b, **BUG-031**). It greps
+   `dumpsys window` for `mShowingLockscreen` / `isStatusBarKeyguard`, and **neither string exists on
+   this Android 13 build** — zero matches, so the `||` branch always wins. Use
+   `adb shell dumpsys trust | grep -o 'deviceLocked=[01]'` (or `isKeyguardShowing`) instead. **This is
+   how AGENT 2b spent a session against a locked device without noticing.**
+7. **`svc power stayon true` prevents the screen from SLEEPING, not from LOCKING.** Both agent runs
+   were stopped by the keyguard, not by a timeout. Treat "phone is unlocked" as a precondition to
+   *verify at the start of a run*, not an assumption from the previous agent's notes. The lock here is a
+   **pattern**, so `wm dismiss-keyguard` and swipes cannot clear it — only a human can.
+8. **`adb exec-out screencap -p` returns a 0-byte file with exit 0** while the keyguard/secure surface
+   is up, and works reliably again after a `keyevent 223` (SLEEP) + `keyevent 224` (WAKEUP) cycle. A
+   `0`-byte screenshot means "locked or secure", never "screen off".
 
 ---
 
@@ -259,16 +271,27 @@ pass/fail here so no agent re-runs them, and they were green again after the a11
 
 ## Summary
 Screens: 6 routes + 12 sheet types. Element rows in the tables above: **137**.
-**Pass 33 · Fail 16 · Untested 87 · n/a 1.**
+**Pass 33 · Fail 17 · Untested 86 · n/a 1.**
 (Static gates are tracked separately above and are not counted in these rows.)
 
-**AGENT 2 accounting.** The 33 pass / 16 fail come from one device session (SM-A516N, dark theme,
-Expo Go). The 16 failures map to BUG-021…BUG-030 — 2 Major (nav desync after hardware Back; Today
+**AGENT 2 accounting.** The 33 pass / 17 fail come from device sessions (SM-A516N, dark theme,
+Expo Go). The failures map to BUG-021…BUG-030 — 2 Major (nav desync after hardware Back; Today
 showing three different days) and 8 Minor, several of which own many rows each (BUG-026 alone accounts
-for six truncation rows, BUG-030 for four).
-**The 87 untested are not evenly spread, and that is the important caveat:** they are concentrated
-exactly where the run was cut off — the entire task-domain lifecycle (Parts 2, 3 and 4 of the AGENT 2
-brief). Everything downstream of "press Save in the Task sheet" is untested, because the phone's
-secure keyguard engaged at that moment and no `adb` input could dismiss it. Read the iteration log at
-the foot of `qa/BUGS.md` and the harness notes above before planning the next agent — and note that
-`qa/DATA_LEDGER.md` therefore contains **zero** `QA_` records and needs no cleanup.
+for six truncation rows, BUG-030 for four) — plus **BUG-032**, the static double-submit Major.
+
+**AGENT 2b added no pass rows, and that is the headline.** It was locked out for its entire session
+(pattern keyguard; `stayon` does not prevent locking) and reached zero app screens, so it converted no
+untested row to pass. It did produce the two findings above and the six harness traps.
+
+**The 86 untested are not evenly spread, and that is the important caveat:** they are concentrated
+exactly where the runs were cut off — **the entire task-domain lifecycle (Parts 2, 3 and 4 of the
+AGENT 2 brief) is still untested across two consecutive agent sessions.** Everything downstream of
+"press Save in the Task sheet" has never been exercised on a device: create → detail → edit → delete →
+Undo, swipe-right=done, swipe-left=crumple, the whole propagation matrix (list / group header /
+"N open" / search / All-Open-Done / By date-By priority-Newest / subject chip / Stats), every input
+edge case, and the force-stop persistence check.
+
+**Before dispatching another device agent, a human must unlock the phone and the agent must confirm it
+with `dumpsys trust`, not `adb.sh locked`.** Read the two iteration logs at the foot of `qa/BUGS.md`
+and the harness notes above first. Note that `qa/DATA_LEDGER.md` still contains **zero** `QA_` records
+and so still needs no cleanup — which is the one piece of good news here.

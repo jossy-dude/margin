@@ -86,7 +86,7 @@ Restore with `adb shell svc power stayon false`.
 
 1. **RN ignores swipes under ~800ms.** The default 300ms swipe was a silent no-op and
    nearly produced a false "the list does not scroll" bug. Default is now 800ms
-   (`SWIPE_MS` to override).
+   (`SWIPE_MS` to override). Later agents measured **900ms** as the safe value.
 2. **`uiautomator dump` exits 0 even when it prints "could not get idle state",** leaving the
    PREVIOUS xml in place. It once handed an agent the Expo Go home-screen tree while the app
    was foreground, i.e. a stale screen silently reported as the app. `adb.sh` now detects the
@@ -99,10 +99,40 @@ Restore with `adb shell svc power stayon false`.
 5. **Never report status-bar / edge-to-edge findings from Expo Go** — Expo Go owns that
    window. See BUG-004.
 
+## BLOCKING TRAP (added 2026-10-05 — read this before touching the device)
+
+6. **`svc power stayon true` does NOT stop the keyguard.** It stops the screen *sleeping*. The phone
+   can be fully awake (`mWakefulness=Awake`, `mState=ON`) and still be **locked**
+   (`dumpsys trust` → `deviceLocked=1`, `dumpsys window` → `isKeyguardShowing=true`), with the app
+   window `mHasSurface=false isVisible=false`. **Two consecutive agent sessions (AGENT 2 and AGENT 2b)
+   were ended by exactly this**, and AGENT 2b could not reach a single app screen.
+   - The lock is a secure **pattern**. `wm dismiss-keyguard`, swipes from five origins,
+     `motionevent` sequences, `keyevent` 3/4/82/224, `cmd statusbar collapse` and `am start` all fail.
+     `su` is absent, `adb root` is refused, `run-as host.exp.exponent` refuses (Expo Go is not
+     debuggable), and `locksettings` needs `--old <CREDENTIAL>`.
+   - **`./qa/scripts/adb.sh locked` is BROKEN and always prints `UNLOCKED`** (BUG-031) — it greps for
+     `mShowingLockscreen` / `isStatusBarKeyguard`, neither of which exists on this Android 13 build.
+   - **Check with `adb shell dumpsys trust | grep -o 'deviceLocked=[01]'` at the START of every session.**
+     Do not trust the previous agent's notes, and do not trust `adb.sh locked`.
+   - **`adb exec-out screencap -p` returns a 0-byte file with exit 0** while the keyguard is up. A
+     0-byte screenshot means "locked/secure", not "screen off". A `keyevent 223` + `224` cycle restores
+     capture.
+   - **A human has to unlock the phone.** Verify it before dispatching a device agent.
+
 ## Next action
 
+0. **HUMAN: unlock the phone.** Confirm with
+   `adb shell dumpsys trust | grep -o 'deviceLocked=[01]'` → must read `deviceLocked=0`.
+   Also open **Settings → Diagnostics** and read the crash log (the "12 crashes recorded" lead) —
+   it is unreadable off-device. Both are blocking for the task-domain QA that has now failed twice.
 1. Confirm `npm run check` and `npm run bundle` exit 0 on **Node 24** (project was
    last green on Node 22.22 — deviation to watch).
 2. Start Metro, launch Expo Go, confirm V1: no red screen, seeded Today renders.
 3. Dispatch STATIC AUDITOR, then FRESH-USER, then DATA (tasks), then
    INTERACTION SWEEPER and UI/VISUAL for the pass-1 screens.
+
+> **Progress note (2026-10-05):** STATIC AUDITOR, the Fixer and AGENT 2 (Parts 1 only) are done —
+> 30 findings, see `BUGS.md`. **Parts 2–4 of the task domain (V9 lifecycle, input edge cases,
+> persistence) are still UNTESTED after two blocked sessions.** The next agent should resume
+> directly from the AGENT 2b resume point at the foot of `BUGS.md`; the
+> `DATA_LEDGER.md` baseline is still valid because zero `QA_` records were ever created.

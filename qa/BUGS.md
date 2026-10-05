@@ -732,6 +732,82 @@ one of them, so it is a width bug and not a naming one:**
 
 ---
 
+# AGENT 2b findings (2026-10-05) — BLOCKED AT THE KEYGUARD, Parts 2–4 NOT RUN
+
+**No app defect was observed this session, because no app screen was ever reachable.** The device was
+locked behind a secure **pattern** lock before the first tap. The brief stated the device was unlocked and
+`svc power stayon true` was set; `stay_on_while_plugged_in` is indeed `7` and `screen_off_timeout` is
+`1800000`, so the screen was not sleeping — the device was simply **locked**, which is a different state and
+which `stayon` does not prevent. `adb.sh locked` reported `UNLOCKED` throughout (see BUG-031), so this was
+invisible to the harness until I queried `dumpsys trust` directly.
+
+Evidence that the app was never in front: `mCurrentFocus=Window{580c173 u0 NotificationShade}` and the app
+window itself was `mHasSurface=false isVisible=false` throughout. **The database still contains zero
+`QA_` records** — `DATA_LEDGER.md` remains correct as written and needs no cleanup.
+
+**What I attempted, all verified to fail** (`deviceLocked=1` and `isKeyguardShowing=true` after each):
+`wm dismiss-keyguard`; `input swipe` up from y = 1500 / 2000 / 2200 / 2350 / 2390 / 2399 at 200–900 ms;
+`input draganddrop`; a hand-rolled `motionevent DOWN/MOVE×10/UP` sequence; `keyevent` 3 (HOME) / 4 (BACK) /
+26-adjacent 223+224 (SLEEP/WAKEUP) / 82 (MENU); `cmd statusbar collapse`; `am start` on the already-running
+`ExperienceActivity`; tapping the face-recognition retry icon. **Input does reach SystemUI** — a swipe up
+visibly dismissed the pattern bouncer back to the clock screen — so the failure is specifically the
+**unknown pattern credential**, not a dead input path. `adb shell su` → `inaccessible or not found`;
+`adb root` → `cannot run as root in production builds`; `run-as host.exp.exponent` → `package not debuggable`.
+`locksettings` requires `--old <CREDENTIAL>` for every mutation and none is available.
+
+**A human must unlock the phone once more.** This is the same wall AGENT 2 hit. It is now a *pattern*, not a
+PIN, and `svc power stayon true` does not prevent it — recommend the orchestrator treat "phone unlocked" as a
+precondition to verify, not an assumption.
+
+## BUG-031 — open — Minor
+**Screen:** QA harness — `qa/scripts/adb.sh locked`
+**Found by:** TASK-DOMAIN QA (AGENT 2b) · device
+**Repro:** with the device locked behind its pattern, `./qa/scripts/adb.sh locked` prints `UNLOCKED`.
+**Expected:** the command reports `LOCKED`, so an agent can detect the blocker before burning a run.
+**Actual:** it **always** prints `UNLOCKED`. The probe is
+```bash
+$ADB shell dumpsys window | grep -qiE 'mShowingLockscreen|isStatusBarKeyguard' && echo LOCKED || echo UNLOCKED
+```
+On this Android 13 build **neither string exists** — `rg -c "mShowingLockscreen|isStatusBarKeyguard"` over
+`dumpsys window` returns **0 matches**. The real fields are `isKeyguardShowing=true` (WindowManager) and
+`deviceLocked=1` (`dumpsys trust`). So the `grep` never fires and the `||` branch always wins.
+**Evidence:** measured side by side this session — `adb.sh locked` → `UNLOCKED` while
+`dumpsys trust` → `deviceLocked=1` and `dumpsys window` → `isKeyguardShowing=true`.
+**Impact:** this is the harness defect that let AGENT 2b start a run against a locked device without noticing.
+It is the QA equivalent of the stale-dump trap already fixed in `ui_dump_raw`, and it is the reason a future
+agent will keep re-discovering this wall.
+**Fix (harness only, no app source):** replace the grep with
+`dumpsys trust | grep -q 'deviceLocked=0'` as the authority, optionally OR'd with `isKeyguardShowing`:
+```bash
+locked) $ADB shell dumpsys trust 2>/dev/null | grep -q 'deviceLocked=0' \
+           && echo UNLOCKED || echo LOCKED;;
+```
+
+## BUG-032 — open — Major (static, **not** device-confirmed)
+**Screen:** Add sheet → Assignment · every other create-form sheet
+**Found by:** TASK-DOMAIN QA (AGENT 2b) · source, while scoping the Part 3 double-submit test
+**Repro (needs a device to confirm):** To-do → FAB → Assignment → type a title → tap **Add** twice quickly
+(< 210 ms apart, i.e. a normal fast double-tap).
+**Expected (my Part 3 brief: "rapid double-submit … must not create two records"):** one task.
+**Actual:** `save()` is unguarded and **mints a fresh id on every call** —
+`src/sheets/forms.tsx:65`: `const t = { ...draft, id: existing?.id ?? uid('t'), ... }`. The Add button's only
+`disabled` prop is `disabled={!title.trim()}` (`forms.tsx:70`), so it stays enabled through the whole close
+animation. `Sheet.close()`'s `closing.current` latch (`src/ui/Sheet.tsx:39`) guards only the *animation* — it
+is checked inside `close()`, which runs **after** `act.saveTask(t)` on line 66. So the second tap reaches
+`save()`, `uid('t')` produces a **different** id, `saveTask` sees `state.tasks.some(x => x.id === t.id)` as
+false (`src/store/store.ts:113`), and a **second task is appended**.
+**Why it matters:** the create path is the one place in the app where a duplicated record is unrecoverable by
+the user — there is no id to match, so deleting one copy leaves an identical orphan, and the To-do count is
+silently wrong. Same pattern in all five sibling forms (`forms.tsx:122` subject, `:133` class, `:146` mark,
+`:160` note).
+**Severity honesty:** this is a static certainty in the code path, but I could **not** confirm it on device,
+because a physical double-tap must land inside a 210 ms window and I could not reach the screen. Treat as
+**Major pending device confirmation**, not as an observed defect.
+**Suggested fix:** latch in `save()` the way `Sheet.close()` already does — an `if (saved.current) return;`
+with `saved.current = true` set before `act.saveTask`, or disable the button on first press.
+
+---
+
 ## Observed, judged NOT a bug (recorded so nobody re-derives them)
 
 1. **The "Focus streak" ring reads "14 %" on a 1-day streak.** `Stats.tsx:36` computes
@@ -747,8 +823,17 @@ one of them, so it is a width bug and not a naming one:**
 4. **`Settings → Attendance & semester` day stepper is capped at `max={28}`.** A semester starting on
    the 29th/30th/31st cannot be set. Real but tiny; Polish, not filed as a defect.
 5. **Settings root reads "Diagnostics · 12 crashes recorded"** on a device that has been through
-   several agents' Metro reloads. Not yet attributed — I lost the device before I could open
-   Diagnostics and read the log. **Open question for the next agent**, see the iteration log.
+   several agents' Metro reloads. **STILL OPEN — AGENT 2b could not close it either.** Reading it needs
+   the Diagnostics sheet on screen, and the device was locked behind its pattern for the whole of the
+   AGENT 2b session. I tried every off-device route: the log is
+   `Paths.document/marginalia-crashes.jsonl` (`src/ui/crashlog.ts:29,37`), i.e.
+   `/data/data/host.exp.exponent/files/…`, which is **permission-denied** to the `shell` user,
+   `run-as host.exp.exponent` refuses (`package not debuggable` — expected for Expo Go), there is no
+   `su`, `adb root` is refused, and the app's files are not exposed under
+   `/sdcard/Android/data/host.exp.exponent/`. **So the crash log cannot be read off-device at all — a
+   human must open Settings → Diagnostics on an unlocked phone.** The most likely explanation remains
+   earlier agents' Metro reloads, but it is unverified, and a crash that reproduces on a cold boot would
+   be Critical.
 
 ---
 
@@ -772,14 +857,22 @@ one of them, so it is a width bug and not a naming one:**
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 2 | 2 | 0 |
-| Minor | 22 | 3 | 0 |
+| Major | 3 | 2 | 0 |
+| Minor | 23 | 3 | 0 |
 | Polish | 4 | 0 | 0 |
 
-**Totals: 30 findings — 0 Critical, 4 Major (2 fixed), 25 Minor (3 fixed), 4 Polish.**
+**Totals: 32 findings — 0 Critical, 5 Major (2 fixed), 26 Minor (3 fixed), 4 Polish.**
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
-(BUG-021…BUG-030, 2 Major + 8 Minor)**.
+(BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
+
+> **AGENT 2b is also blocked and Parts 2, 3 and 4 of the task domain remain UNTESTED.** The device was
+> locked behind a secure **pattern** before the first tap of the session; `svc power stayon true` prevents
+> the screen from sleeping but does **not** prevent the keyguard, and `adb.sh locked` reports `UNLOCKED`
+> regardless (BUG-031). Full detail, the complete list of attempted unlock vectors, and the one static
+> finding surfaced in its place are in the AGENT 2b section above.
+> **Do not read any V9 lifecycle clause as covered.** Zero `QA_` records exist; `DATA_LEDGER.md` needs no
+> cleanup.
 
 > **AGENT 2 exited early and blocked.** Parts 2, 3 and 4 (the task-domain lifecycle, the input
 > edge cases and the persistence check) are **largely untested** — the phone's secure keyguard
@@ -919,4 +1012,61 @@ probably earlier agents' Metro reloads, but the app has a `recordCrash` path and
 reproduces on a cold boot would be Critical. **Whoever has the device next should open Diagnostics
 and read the log before trusting any further result from this build.**
 
--
+---
+
+## AGENT 2b iteration log (2026-10-05) — blocked at the keyguard, ~40 min, zero app screens reached
+
+### Why the session ended
+
+The device was locked behind a secure **pattern** lock for the entire session. Not a sleeping screen —
+`dumpsys power` reported `mWakefulness=Awake`, `dumpsys display` reported `mState=ON`, and
+`stay_on_while_plugged_in=7` was confirmed set — but `dumpsys trust` reported `deviceLocked=1` and
+`dumpsys window` reported `isKeyguardShowing=true` throughout. The app window was
+`mHasSurface=false isVisible=false` from start to finish and `mCurrentFocus` was
+`Window{NotificationShade}`; every screenshot shows the lock screen.
+
+**`stayon` prevents sleep, not lock.** That distinction is the whole lesson of this session.
+
+### Unlock vectors attempted, all verified to fail
+
+`wm dismiss-keyguard` · `input swipe` up from y = 1500 / 2000 / 2200 / 2350 / 2390 / 2399 at 200–900 ms ·
+`input draganddrop` · a hand-rolled `motionevent DOWN/MOVE×10/UP` sequence · `keyevent` 3 / 4 / 82 / 223+224 ·
+`cmd statusbar collapse` · `am start` on the already-running `ExperienceActivity` · tapping the
+face-recognition retry icon. Escalation refused: `su` not found, `adb root` refused (production build),
+`run-as host.exp.exponent` refused (not debuggable), `locksettings` needs `--old <CREDENTIAL>`.
+
+**Input is not the problem** — a swipe up visibly dismissed the pattern bouncer back to the clock
+screen, so gestures land correctly. The blocker is solely the unknown pattern.
+
+### Two findings, neither of them an app defect observed on screen
+
+| Id | What | Severity |
+|---|---|---|
+| **BUG-031** | `adb.sh locked` always prints `UNLOCKED` — it greps `dumpsys window` for `mShowingLockscreen` / `isStatusBarKeyguard`, **neither of which exists on this Android 13 build** (0 matches). The real fields are `dumpsys trust → deviceLocked=0` and `isKeyguardShowing`. This is the harness defect that let this run start blind against a locked device. | Minor (harness) |
+| **BUG-032** | Static: `forms.tsx:65` mints `uid('t')` on **every** `save()` call and the Add button is never disabled during the 210 ms close animation, so a fast double-tap can create **two** tasks. Same in all five sibling forms. Not device-confirmed. | Major (static) |
+
+### Also recorded so nobody re-derives them
+
+1. **The crash log is unreadable off-device, full stop.** `marginalia-crashes.jsonl` lives in
+   `Paths.document` = `/data/data/host.exp.exponent/files/`, which `shell` cannot read; Expo Go is not
+   debuggable so `run-as` refuses; there is no `su`/`root`; and the files are not exposed under
+   `/sdcard/Android/data/host.exp.exponent/`. **A human must open Settings → Diagnostics.** The
+   "12 crashes recorded" lead stays open — see Observed-item 5.
+2. **`adb exec-out screencap -p` intermittently returns a 0-byte file with exit 0** while the keyguard
+   is up, then works reliably again after a `keyevent 223` (SLEEP) + `keyevent 224` (WAKEUP) cycle. Any
+   agent writing a `stat -c%s`-style guard on screenshot size should know a `0` means "keyguard/secure
+   surface", not "screen is off".
+
+### Parts 2, 3, 4 — status unchanged from AGENT 2
+
+| Part | Status |
+|---|---|
+| **Part 2 — task lifecycle (V9)** | **NOT RUN.** No record created, no detail opened, no edit, no delete, no Undo, no swipe-right=done, no crumple, no propagation counts diffed. |
+| **Part 3 — input edge cases** | **NOT RUN.** Only BUG-032 (rapid double-submit) was reached, statically. |
+| **Part 4 — persistence (V16)** | **NOT RUN.** No `QA_` records exist to verify. |
+| Diagnostics crash log | **NOT RUN** — see above. |
+
+**Resume point is unchanged and exact:** unlock the phone (a human, with the pattern) → verify with
+`adb shell dumpsys trust | grep deviceLocked=0` rather than `adb.sh locked` → cold-restart
+(`am force-stop host.exp.exponent`, relaunch) → then run the V9 script from
+`qa/DATA_LEDGER.md`'s "Counts to diff against" table, seed `QA_algebra_hw` first.

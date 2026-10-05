@@ -53,6 +53,13 @@ Expected on a cold, freshly-seeded DB: **9 open tasks**, 5 subjects, Stats non-e
 blocked by the device's secure keyguard before the first `Save` was pressed, so there is nothing to
 delete. See the iteration log at the foot of `qa/BUGS.md` for the exact resume point.
 
+**AGENT 2b (TASK-DOMAIN continuation, 2026-10-05) also created ZERO records.** The device was locked
+behind a secure **pattern** for the whole of its session and no app screen was ever reachable —
+`dumpsys trust` reported `deviceLocked=1` and `dumpsys window` reported `isKeyguardShowing=true`
+throughout, with the app window `mHasSurface=false isVisible=false`. Details and the attempted unlock
+vectors are in the AGENT 2b section of `qa/BUGS.md`. **The table above is therefore still accurate:
+zero `QA_` rows, nothing to clean up, and the baseline below is still the live baseline.**
+
 ### One thing AGENT 2 *did* change, and it is not reversible from the UI
 
 | Entity | What was done | Where | Reversible? |
@@ -100,15 +107,19 @@ Measured off the live app, not off the docs. **This is the baseline the next age
 
 ## Cleanup list (fill as data is created)
 
-**Nothing for the user to delete.** AGENT 2 created no `QA_`-prefixed records.
+**Nothing for the user to delete.** AGENT 2 and AGENT 2b created **no** `QA_`-prefixed records — both
+were blocked by the device keyguard before a single `Save` was pressed. No `QA_` task, subject, class,
+mark or note exists in the database. **There is no cleanup list to hand the user.**
 
-The only residue of this run is the demo-history purge in the table above. If the user wants the demo
-data back: **Settings → Reset → "Reset to demo set"** (double-tap; it cannot be undone, and it also
-resets every setting to its default).
+The only residue across both runs is the demo-history purge in the table above. If the user wants the
+demo data back: **Settings → Reset → "Reset to demo set"** (double-tap; it cannot be undone, and it
+also resets every setting to its default).
 
 **Standing instruction for the next agent:** every title you create must start with `QA_`, and append
 a row above with the exact field values, the expected display string, the expected counts, and the
-observed result — so this list stays a complete deletion list.
+observed result — so this list stays a complete deletion list. Suggested seeds from the brief:
+`QA_algebra_hw` (no subject), `QA_lab_prep 🔬` (subject set), `QA_مركة_اختبار` (RTL),
+`QA_essay draft v2` (duplicate-ish title).
 
 ## Template
 
