@@ -523,7 +523,7 @@ with its sound — BACK now plays `fx.page()` too, which it did not before.
 
 ---
 
-## BUG-022 — open — Major
+## BUG-022 — fixed — Major
 **Screen:** Today
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:**
@@ -570,6 +570,56 @@ Grades rate, the Stats attendance heatmap and the reminders, so a wrong mark is 
 top card explicitly ("Today · Mon 5 Oct") and move "Mark day" out of the strip's visual group /
 re-point it at `today` so the strip and the button always agree. Do not leave them adjacent and
 disagreeing.
+
+**Root cause (established from the code by running it, not by reading — and there are TWO causes, the
+finding only had one):**
+1. **As reported.** `src/screens/Today.tsx:22` built the deck and the `DayBar` strip from `todayOcc`
+   while `:47` ("Mark day") and `:61` (the class list) followed `sel`, so a tap on a different day left
+   the strip directly above the button naming a different day than the button. Verified by running
+   `Today.tsx:19-47`'s expressions against the real seed at `now` = Mon 5 Oct 2026 08:00 with
+   `sel` = Sat 10: title `Mon 5 Oct`, deck `4 of 4 left` over `[Intro to Economics, Discrete
+   Mathematics, Emerging Technology, Computer Programming]`, button key/date `2026-10-10`, title
+   `Sat 10 Oct`, class rows `0`.
+2. **Not in the finding, and worse: it needs no user action at all.** `Today.tsx:20` was
+   `useState(today)`, which snapshots the selected day from the **mount-time** `today`, while `today`
+   is `startOfDay(now)` and `now` is a 30 s `useNow` ticker. Open the app at 23:50 and let it roll past
+   midnight: measured at `now` = Tue 6 Oct 00:05 with `picked` = null, the page title reads
+   `2026-10-06` and the deck shows Tuesday's three classes, while the section title reads **Yesterday**
+   and "Mark day" opens **2026-10-05**. The whole day block strands a day behind, silently, on a
+   perfectly ordinary open.
+Both are one bug: the page mixed two independent notions of "the day" — a live one (`today`) and a
+snapshotted-then-tapped one (`sel`) — and let each half of the UI read whichever suited it.
+**Fix commit:** `9225562`
+**Fix:** `dayBlock(now, meetings, courses, att, dayMarks, picked)`
+(`src/domain/attendance.ts`) returns one day and everything derived from it — `day`, `date`, `occ`,
+`periods`, `cur`, `next` — and `Today.tsx` builds its day-scoped half from a single call:
+the strip, the class list, the section title, the day-mark label and the "Mark day" target all read
+the same `sel`/`selDate`. `sel` is now **derived** (`selectedDay(now, picked) = picked ?? startOfDay(now)`,
+`src/domain/time.ts`) rather than snapshotted, which is what closes cause 2. The deck's live "Period N
+of M / N of M left" line now reads the selected day's periods, so it can no longer contradict the button
+below it. `selectedDay` normalises a pick to `startOfDay`, which the test caught the seam missing.
+**No copy changed and nothing restyled:** with no day picked, `selectedDay(now, null)` is
+`startOfDay(now)` — exactly what the old `todayOcc` path used — so a normal open renders byte-identically
+to before. The title, clock face and "In class / Next up / All done for today / No classes today" line
+keep reading the **live** day: they are about the present, and rewording them for a picked day is the
+product decision the finding flagged, which this fix does not take.
+**Regression test:** `src/test/today-day.test.ts` (9 tests) against the real demo seed. It asserts that
+"Mark day" opens the selected day *and* that the strip above it is on that day too
+(`b.periods.every(p => startOfDay(p.start) === b.day)`), that every day-scoped readout agrees for five
+different picks, that **the day does not depend on when the screen was mounted** (the cause-2
+regression), that a pick survives midnight, and that "in class / next up" still follow the live day.
+It first proves Monday really has 4 classes and Saturday 0, so the assertions cannot pass vacuously.
+Three further checks read `Today.tsx` itself, since the seam cannot see it: it calls `dayBlock`, it no
+longer contains `useState(today)`, and the button is keyed on `selDate` with exactly one `mode: 'day'`
+`act.open` on the file.
+**Device verification still required:** yes — (1) open Today, do not tap anything, confirm the page is
+unchanged from the pre-fix build (title `Mon 5 Oct`, `4 of 4 left`, four class boxes, "Next up — Intro
+to Economics"); (2) tap **Sat 10**, confirm the `4 of 4 left` deck is **gone** (Saturday has no classes)
+and the strip, the "Sat 10 Oct" section and the "Mark day" target all name Saturday; (3) tap **Wed 7**,
+confirm the deck now shows Wednesday's three classes rather than Monday's four, and that "Mark day"
+still opens Wednesday; (4) **leave the app open across midnight** (or set the clock forward) and confirm
+the title, the strip and "Mark day" all move to the new day together — this is the cause-2 check and it
+cannot be reproduced any other way.
 
 ---
 
@@ -891,14 +941,16 @@ with `saved.current = true` set before `act.saveTask`, or disable the button on 
 | Severity | Open | Fixed | Verified |
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
-| Major | 2 | 3 | 0 |
+| Major | 1 | 4 | 0 |
 | Minor | 23 | 3 | 0 |
 | Polish | 4 | 0 | 0 |
 
-**Totals: 32 findings — 0 Critical, 5 Major (3 fixed), 26 Minor (3 fixed), 4 Polish.**
+**Totals: 32 findings — 0 Critical, 5 Major (4 fixed), 26 Minor (3 fixed), 4 Polish.**
 By agent: Phase 0 preflight 3 (BUG-001/002/003) · STATIC AUDITOR 15 (BUG-004…BUG-018) · FIXER 2
 (BUG-019, BUG-020), plus BUG-009 fixed by the FIXER · **AGENT 2 FRESH-USER + TASK-DOMAIN 10
 (BUG-021…BUG-030, 2 Major + 8 Minor)** · **AGENT 2b 2 (BUG-031 harness, BUG-032 static Major)**.
+**FIXER (majors, 2026-10-05, device-locked run) fixed BUG-021, BUG-022 and BUG-032 with jest
+regression tests** — no device, so each is `fixed, pending device verification`.
 
 > **AGENT 2b is also blocked and Parts 2, 3 and 4 of the task domain remain UNTESTED.** The device was
 > locked behind a secure **pattern** before the first tap of the session; `svc power stayon true` prevents
