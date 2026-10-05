@@ -8,6 +8,7 @@ import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore, type RouteName } from '../store/store';
 import { hexA } from '../tokens/theme';
 import { NAV_BODY, navInset } from '../ui/fit';
+import { useKeyboardUp } from '../ui/keyboard';
 import { inMountWindow } from './window';
 import { toNavigator, toStore } from './sync';
 
@@ -37,14 +38,18 @@ function Placed({ children, on, order, instant }: { children: React.ReactNode; o
 function BookView({ initialRouteName, children, screenOptions, id }: { initialRouteName?: string; children: React.ReactNode; screenOptions?: object; id?: string }) {
   const { state, descriptors, navigation, NavigationContent } = useNavigationBuilder(TabRouter, { initialRouteName, children, screenOptions, id } as never) as unknown as { state: Nav; descriptors: Record<string, { render: () => React.ReactNode }>; navigation: { navigate: (n: never) => void }; NavigationContent: React.ComponentType<{ children: React.ReactNode }> };
   const route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets(), firstName = useRef(state.routes[state.index]?.name ?? 'Today'), [visited, setVisited] = useState<Record<string, number>>({ [firstName.current]: 1 }), counter = useRef(1);
-  const cur = state.routes[state.index]?.name as RouteName | undefined;
+  const cur = state.routes[state.index]?.name as RouteName | undefined, kbUp = useKeyboardUp();
   useEffect(() => { const n = toNavigator(route, cur); if (n) navigation.navigate(n as never); }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const s = toStore(route, cur); if (s) act.go(s); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (cur) { counter.current += 1; setVisited((v) => ({ ...v, [cur]: counter.current })); } }, [cur]);
   /* Everything the nav draws reads `cur`, never `route`: a hardware BACK moves the navigator without
      the store changing, so a store-derived highlight would name a route the app is not on — and the
      tap on it would be `act.go` to the route it already holds, which does nothing. */
-  const hideNav = cur === 'Focus';
+  /* `adjustResize` already leaves the bar at the bottom of the *visible* area, which is what V19 asks
+     for — so it is not mis-positioned. What is wrong is that a floating bar and a 62 dp + button then sit
+     on the content being typed near, on a strip barely half the screen tall. Both yield to the keyboard;
+     neither is usable while typing. See `useKeyboardUp`. */
+  const hideNav = cur === 'Focus' || kbUp;
   return (
     <NavigationContent>
       <View style={{ flex: 1, backgroundColor: c.desk }}>

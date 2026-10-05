@@ -5,15 +5,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Btn, HandBox, Icon, Txt } from './kit';
 import { useTheme } from './theme-context';
 import { act, dismissToast, useStore } from '../store/store';
+import { useKeyboardUp } from './keyboard';
 import { AddSheet, CourseSheet, MarkSheet, MeetingSheet, NoticeSheet, StatusSheet, TaskSheet } from '../sheets/forms';
 import { SettingsSheet } from '../sheets/Settings';
 import { fx } from '../services/fx';
-import { FAB_GAP, navHeight, navInset, toastBottom } from './fit';
+import { FAB_GAP, TOAST_CLEAR, navHeight, navInset, toastBottom } from './fit';
 
 /** Renders whichever sheet the store says is open, plus the undo toast and the + button. */
 export function Overlay() {
   const sheet = useStore((s) => s.sheet), toast = useStore((s) => s.toast), route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets();
-  const showFab = !sheet && route !== 'Focus';
+  /* The + button floats over the page and covers whatever card is under it. While the keyboard is up
+     the visible strip is about half the screen and the button lands squarely on a task's text, and
+     neither it nor the nav can be used without dismissing the keyboard first. */
+  const kbUp = useKeyboardUp(), showFab = !sheet && route !== 'Focus' && !kbUp;
   return (
     // `importantForAccessibility` is the Android half of the sheet's modal focus trap — `accessibilityViewIsModal`
     // on the sheet itself only does anything on iOS (V14). App.tsx hides the navigator behind this view at the
@@ -31,7 +35,7 @@ export function Overlay() {
       {/* `toastBottom` is TOAST_CLEAR dp above the nav bar's top edge, which is exactly the 90 dp the old flat
           `Math.max(ins.bottom, 8) + 90` produced — same pixels, now derived from the shared nav metrics. */}
       {toast && (
-        <Animated.View key={toast.id} entering={FadeInDown.duration(220)} exiting={FadeOutDown.duration(180)} style={{ position: 'absolute', left: 14, right: 14, bottom: sheet ? navInset(ins.bottom) + 10 : toastBottom(ins.bottom), zIndex: 3000 }} accessibilityLiveRegion="polite">
+        <Animated.View key={toast.id} entering={FadeInDown.duration(220)} exiting={FadeOutDown.duration(180)} style={{ position: 'absolute', left: 14, right: 14, bottom: sheet ? navInset(ins.bottom) + 10 : kbUp ? Math.max(ins.bottom, 8) + TOAST_CLEAR : toastBottom(ins.bottom), zIndex: 3000 }} accessibilityLiveRegion="polite">
           <HandBox seed="toast" fill={c.ink} stroke={c.ink} sw={2} amp={1.4} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 6, paddingVertical: 6, gap: 8, minHeight: 52 }}>
             <Txt f="bold" s={19} c="paper" style={{ flex: 1 }}>{toast.text}</Txt>
             {toast.undo ? <Btn small kind="primary" label="Undo" onPress={() => { toast.undo?.(); dismissToast(); fx.undone(); }} /> : <Pressable testID="toast-dismiss" accessibilityLabel="Dismiss" accessibilityRole="button" onPress={dismissToast} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={20} color={c.paper} /></Pressable>}
