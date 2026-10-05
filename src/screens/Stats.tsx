@@ -6,7 +6,7 @@ import { useNow, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import * as A from '../domain/analytics';
-import { fmtDur, parseYmd, plural, weekdayOf } from '../domain/time';
+import { fmtDur, parseYmd, plural, startOfDay, weekdayOf } from '../domain/time';
 import { ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
@@ -15,22 +15,37 @@ const Card = ({ title, sub, children, seed }: { title: string; sub?: string; chi
 );
 export function StatsScreen() {
   const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan);
-  const st = { focus, tasks, courses, meetings, attendance, dayMarks, marks, adjusts, plan };
   const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(60_000), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
-  const days = useMemo(() => A.lastDays(105, now), [now]), start = weekdayOf(parseYmd(days[0] as string));
-  const focusD = useMemo(() => A.focusMinutesByDay(st.focus, days), [st.focus, days]), doneD = useMemo(() => A.doneByDay(st.tasks, days), [st.tasks, days]);
-  const ot = A.onTimeStats(st.tasks), att = A.overallAttendance(st.courses, st.meetings, st.attendance, st.dayMarks, 30, now), fs = A.streak(focusD), ds = A.streak(doneD);
+  /* Everything below is a full pass over the dataset, so it is split by what it actually depends on.
+     `useNow(60_000)` re-renders this screen every minute; keying the day-window work on the *day*
+     rather than on `now` is what stops it running 1440 times a day for a window that has not moved.
+     The three attendance derivations stay keyed on `now` on purpose: `effective()` infers "Here" once
+     a class has ended, so freezing them at midnight would leave a whole day reading as unmarked. */
+  const day = startOfDay(now);
+  const days = useMemo(() => A.lastDays(105, day), [day]), start = weekdayOf(parseYmd(days[0] as string));
+  const focusD = useMemo(() => A.focusMinutesByDay(focus, days), [focus, days]), doneD = useMemo(() => A.doneByDay(tasks, days), [tasks, days]);
+  const gCourse = gc ?? courses[0]?.id ?? '';
+  const data = useMemo(() => ({
+    ot: A.onTimeStats(tasks), fs: A.streak(focusD), ds: A.streak(doneD),
+    bySub: A.focusBySubject(focus, courses), gb: A.gradeBars(courses, marks, adjusts),
+    hours: A.doneByHour(tasks), fh: A.focusByHour(focus), series: A.markSeries(gCourse, marks),
+  }), [tasks, focus, courses, marks, adjusts, gCourse, focusD, doneD]);
+  const att = useMemo(() => ({
+    overall: A.overallAttendance(courses, meetings, attendance, dayMarks, 30, now),
+    rows: A.attendanceByCourse(courses, meetings, attendance, dayMarks, 60, now),
+    heat: A.attendanceHeat(courses, meetings, attendance, dayMarks, 28, now),
+  }), [courses, meetings, attendance, dayMarks, now]);
+  const { ot, fs, ds, bySub, gb, hours, fh, series } = data, attRows = att.rows, attHeat = att.heat, attOverall = att.overall;
   const week = focusD.slice(-7).reduce((a, b) => a + b, 0), prev = focusD.slice(-14, -7).reduce((a, b) => a + b, 0), totalMin = focusD.reduce((a, b) => a + b, 0), totalDone = doneD.reduce((a, b) => a + b, 0);
-  const bySub = A.focusBySubject(st.focus, st.courses), attRows = A.attendanceByCourse(st.courses, st.meetings, st.attendance, st.dayMarks, 60, now), attHeat = A.attendanceHeat(st.courses, st.meetings, st.attendance, st.dayMarks, 28, now), gb = A.gradeBars(st.courses, st.marks, st.adjusts);
-  const gCourse = gc ?? st.courses[0]?.id ?? '', series = A.markSeries(gCourse, st.marks), hours = A.doneByHour(st.tasks), fh = A.focusByHour(st.focus), hint = A.statsEmptyHint({ focusMinutes: totalMin, finished: totalDone });
+  const hint = A.statsEmptyHint({ focusMinutes: totalMin, finished: totalDone });
   const bestH = (h: number[]) => { const m = Math.max(...h); return m ? `${String(h.indexOf(m)).padStart(2, '0')}:00` : null; };
-  const lateWeeks = st.tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length;
+  const lateWeeks = useMemo(() => tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length, [tasks]);
   return (
     <Page title="Stats" sub="Everything the app tracks, in one place">
       {hint && <Empty icon="stats" text={hint} />}
       <Card seed="rings" title="At a glance" sub="Attendance is the last 30 days">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-          <Ring value={att.rate} label="Attendance" sub={`${att.here}/${att.held} classes`} />
+          <Ring value={attOverall.rate} label="Attendance" sub={`${attOverall.here}/${attOverall.held} classes`} />
           <Ring value={ot.pct} label="On time" sub={`${ot.onTime}/${ot.total} tasks`} />
           <Ring value={Math.min(1, week / 300)} label="Focus week" sub={`${fmtDur(week)} of 5h`} />
           <Ring value={Math.min(1, fs.current / 7)} label="Focus streak" sub={`${fs.current} d · best ${fs.best}`} />
@@ -59,15 +74,15 @@ export function StatsScreen() {
       </Card>
       <Section title="Grades">
         <Card seed="gb" title="Totals against goals">{gb.filter((g) => g.total !== null).length === 0 ? <Txt f="serif" s={16} c="mut">No marks yet.</Txt> : <HBars items={gb.filter((g) => g.total !== null).map((g) => ({ label: g.name, value: Math.round(g.total as number) }))} w={iw} fmt={(v) => `${v}`} max={100} />}</Card>
-        <Card seed="gl" title="Mark history" sub={st.courses.find((x) => x.id === gCourse)?.name}>
-          {st.courses.length === 0 ? <Txt f="serif" s={16} c="mut">No subjects yet. Add one to plot its marks.</Txt> : (<>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{st.courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</ScrollView>
-            {series.length ? <Line2 values={series.map((s) => s.score)} labels={series.map((s) => s.name)} w={iw} goal={st.courses.find((x) => x.id === gCourse)?.goal ?? null} /> : <Txt f="serif" s={16} c="mut">No scored marks for this subject.</Txt>}
+        <Card seed="gl" title="Mark history" sub={courses.find((x) => x.id === gCourse)?.name}>
+          {courses.length === 0 ? <Txt f="serif" s={16} c="mut">No subjects yet. Add one to plot its marks.</Txt> : (<>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</ScrollView>
+            {series.length ? <Line2 values={series.map((s) => s.score)} labels={series.map((s) => s.name)} w={iw} goal={courses.find((x) => x.id === gCourse)?.goal ?? null} /> : <Txt f="serif" s={16} c="mut">No scored marks for this subject.</Txt>}
           </>)}
         </Card>
       </Section>
       <Card seed="rem" title="Reminders" sub="What the app is set to deliver on this phone">
-        <Txt f="bold" s={19}>{st.plan ? `${st.plan.count} scheduled in the next 14 days${st.plan.shifted ? ` · ${st.plan.shifted} moved to stay out of class or quiet hours` : ''}${st.plan.deferred ? ` · ${st.plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
+        <Txt f="bold" s={19}>{plan ? `${plan.count} scheduled in the next 14 days${plan.shifted ? ` · ${plan.shifted} moved to stay out of class or quiet hours` : ''}${plan.deferred ? ` · ${plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
       </Card>
     </Page>
   );
