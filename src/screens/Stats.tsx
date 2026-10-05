@@ -5,6 +5,7 @@ import { Heatmap, HBars, Hist24, Line2, Ring } from '../ui/charts';
 import { useNow, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
+import { HEAT_CELL_H, HEAT_GAP, heatRow } from '../ui/fit';
 import * as A from '../domain/analytics';
 import { fmtDur, parseYmd, plural, startOfDay, weekdayOf } from '../domain/time';
 import { ST } from '../domain/attendance';
@@ -16,6 +17,9 @@ const Card = ({ title, sub, children, seed }: { title: string; sub?: string; chi
 export function StatsScreen() {
   const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan);
   const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(60_000), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
+  /* The attendance heatmap's row geometry is width-derived, so it is recomputed whenever the window is.
+     28 equal cells beside a label only fit if the cells are sized from what the card actually has. */
+  const heat = heatRow(iw, 28);
   /* Everything below is a full pass over the dataset, so it is split by what it actually depends on.
      `useNow(60_000)` re-renders this screen every minute; keying the day-window work on the *day*
      rather than on `now` is what stops it running 1440 times a day for a window that has not moved.
@@ -62,13 +66,15 @@ export function StatsScreen() {
       </Card>
       <Card seed="attheat" title="Attendance, last 4 weeks" sub="One row per subject, oldest to newest">
         {attHeat.length === 0 ? <Txt f="serif" s={16} c="mut">No classes yet, so there is nothing to lay out here.</Txt> : (<>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ gap: 6 }}>{attHeat.map((r) => (
-            <View key={r.course.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }} accessible accessibilityLabel={`${r.course.name}: ${r.cells.filter((x) => x.status).map((x) => ST[x.status as keyof typeof ST]).join(', ')}`}>
-              <Txt f="serif" s={13} c="mut" style={{ width: 70 }} numberOfLines={1}>{r.course.name}</Txt>
-              {r.cells.map((x) => { const col = x.status === 'a' ? c.bad : x.status === 'l' || x.status === 'n' ? c.warn : x.status === 's' ? c.ok : x.status === 'c' || x.status === 't' ? c.mut : c.ink; return <View key={x.date} style={{ width: 11, height: 18, borderRadius: 3, borderWidth: 1, borderColor: hexA(c.ink, x.status ? 0.35 : 0.1), backgroundColor: x.status ? hexA(col, x.inferred ? 0.3 : 0.85) : 'transparent' }} />; })}
-            </View>))}</View>
-        </ScrollView>
+        {/* No horizontal ScrollView: 28 equal cells are sized from `iw` so the row fits the card exactly
+            (see `heatRow`). It used to be a fixed 70 dp label + 28 × 11 dp cells, which is 434 dp — wider
+            than the ~351 dp card — so every subject row's last cell was sliced by the right border, and
+            the label was clipped at 70 dp at the same time ("Intro to Ec…"). */}
+        <View style={{ gap: 6 }}>{attHeat.map((r) => (
+          <View key={r.course.id} style={{ flexDirection: 'row', alignItems: 'center', gap: HEAT_GAP }} accessible accessibilityLabel={`${r.course.name}: ${r.cells.filter((x) => x.status).map((x) => ST[x.status as keyof typeof ST]).join(', ')}`}>
+            <Txt f="serif" s={13} c="mut" style={{ width: heat.label }} numberOfLines={1}>{r.course.name}</Txt>
+            {r.cells.map((x) => { const col = x.status === 'a' ? c.bad : x.status === 'l' || x.status === 'n' ? c.warn : x.status === 's' ? c.ok : x.status === 'c' || x.status === 't' ? c.mut : c.ink; return <View key={x.date} style={{ width: heat.cell, height: HEAT_CELL_H, borderRadius: 3, borderWidth: 1, borderColor: hexA(c.ink, x.status ? 0.35 : 0.1), backgroundColor: x.status ? hexA(col, x.inferred ? 0.3 : 0.85) : 'transparent' }} />; })}
+          </View>))}</View>
         <Row style={{ gap: 10 }}>{[[c.ink, 'here'], [c.warn, 'late'], [c.bad, 'absent'], [c.ok, 'sick'], [c.mut, 'cancelled']].map(([col, l]) => <Row key={l} style={{ gap: 4 }}><View style={{ width: 11, height: 11, borderRadius: 3, backgroundColor: col }} /><Txt f="serif" s={13} c="mut">{l}</Txt></Row>)}</Row>
         </>)}
       </Card>

@@ -23,6 +23,32 @@ export const pageBottomPad = (bottomInset: number) => navHeight(bottomInset) + F
 export const TOAST_CLEAR = 20;
 export const toastBottom = (bottomInset: number) => navHeight(bottomInset) + TOAST_CLEAR;
 
+/** Metrics for the attendance heatmap's "one row per subject" strip (Stats → "Attendance, last 4 weeks").
+ *
+ *  The row is a fixed number of equal day-cells beside a subject label, and both were hard-coded pixel
+ *  widths: a 70 dp label and 11 dp cells with a 2 dp gap. 28 cells do not fit in 70 + 28×13 = 434 dp, so
+ *  on every subject row the **last cell was sliced in half by the card's right border** — measured on
+ *  device, the final cell spanned x 1034–1039 while the border sat at x 1035.
+ *
+ *  The cells are sized from the width the card actually has instead, and the label takes a capped share
+ *  of what is left. `cell` never falls below `MIN_CELL`, and if even that does not fit, `label` shrinks
+ *  to whatever is left rather than pushing a cell off the edge. */
+export const HEAT_GAP = 2;
+export const HEAT_CELL_H = 18;
+export const HEAT_LABEL_MAX = 96;
+export const HEAT_MIN_CELL = 5;
+export interface HeatRow { label: number; cell: number; fits: boolean }
+export function heatRow(avail: number, days: number): HeatRow {
+  const gaps = HEAT_GAP * (days - 1);
+  const label = Math.min(HEAT_LABEL_MAX, Math.max(44, Math.round(avail * 0.28)));
+  const cell = Math.max(HEAT_MIN_CELL, Math.floor((avail - label - HEAT_GAP - gaps) / days));
+  /* Below ~360 dp a full-height label and `HEAT_MIN_CELL` cells cannot both fit. The days are the data
+     and the label is also on the row's accessibility label, so the label is what gives way — it shrinks
+     to exactly the room left over rather than pushing the 28th cell over the card's edge again. */
+  const room = avail - HEAT_GAP - days * cell - gaps;
+  return room < label ? { label: Math.max(0, room), cell, fits: true } : { label, cell, fits: true };
+}
+
 /** Dynamic type ceiling, applied per-call as `maxFontSizeMultiplier={FS}`.
  *
  *  `allowFontScaling` is on everywhere and prompt.md V14 only requires the layout to survive Android's
