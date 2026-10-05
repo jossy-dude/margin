@@ -186,7 +186,10 @@ export function SettingsSheet() {
       <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
         <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
     <Hair /><Btn kind="ghost" icon="trash" label="Clear demo history" onPress={() => void act.purgeDemo()} />
-    <Txt f="serif" s={14.5} c="mut">Removes the sample finished tasks and focus sessions that make the Stats charts look alive on day one. Your own data stays.</Txt>
+    {/* Only the *history* is flagged as demo: the subjects, timetable, notes and open tasks that ship
+        with the app carry no such flag, so "your own data stays" would read as "there is no demo left"
+        on a fresh install, where everything visible is still the sample set. Name what stays. */}
+    <Txt f="serif" s={14.5} c="mut">Removes the sample finished tasks and focus sessions that make the Stats charts look alive on day one. Your own data stays — and so do the sample subjects, timetable, notes and open tasks, which are the app&rsquo;s starting point. Settings → Reset replaces the whole demo set.</Txt>
   </>);
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'about') body = (<>
