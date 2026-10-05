@@ -945,7 +945,7 @@ via BUG-024's fix.
 
 ---
 
-## BUG-026 — open — Minor
+## BUG-026 — fixed — Minor
 **Screen:** To-do (subject chips) · Task sheet (three chip rows) · Stats "Mark history" chips ·
 Today "Notes" row
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
@@ -967,6 +967,38 @@ be sliced mid-glyph at the viewport edge with nothing to indicate there is more.
 unreachable — but on the Task sheet the kind and subject rows are the *only* way to pick a kind or a
 subject, and both are cut with no fade, no shadow and no partial-chip peek. `COVERAGE.md` had already
 flagged "possible clip at right edge" on the To-do chip row; this confirms it and widens the scope.
+
+**Root cause:** ten call sites were a bare
+`<ScrollView horizontal showsHorizontalScrollIndicator={false}>` — `screens/Stats.tsx` ×3,
+`screens/Today.tsx`, `screens/Tasks.tsx`, `screens/Grades.tsx`, `sheets/forms.tsx` ×2,
+`sheets/WhenPicker.tsx` ×2 (the Stats attendance-heatmap one has since been removed by BUG-023). Every
+one of them **suppressed the only affordance the platform gives away for free**. Nothing was broken; the
+scroll indicator was switched off, so a genuine overflow read as a hard clip. This is the one defect of
+the five whose fix belongs in a **primitive** rather than at a call site.
+**Fix commit:** `cece297`
+**Fix:** `HStrip` in `src/ui/kit.tsx` replaces all ten rows. The platform scrollbar stays off — it is a
+grey bar on a hand-drawn paper page — and a **fade at the trailing edge** takes its place, drawn in
+whatever paper colour sits behind the strip (`bg`: `c.paper` on a page, `c.card` inside a `Card` or a
+`Sheet`). The fade is **measured, not assumed**: `stripHasMore(contentW, viewW, offsetX)` shows it only
+when the content really is wider than the strip and only until the end is reached, so it can never
+suggest more than there is, and a row that fits shows no fade at all. Trailing padding grows 4 dp → 30 dp
+while the fade is up, so the last chip can be scrolled fully clear of it. `keyboardShouldPersistTaps`,
+`ref` and `onContentSizeChange` all survive the wrap — **Grades' attendance grid still auto-scrolls to
+the newest cell**, which the regression test asserts rather than assumes.
+`stripHasMore` and the fade metrics live in the dependency-free `src/ui/fit.ts` so they are
+unit-testable: `ui/kit.tsx` transitively imports `expo-audio`, which cannot load in the node test
+environment (a first draft of the test failed on exactly that).
+**Verified on device (SM-A516N, 411 dp):** the To-do subject row now fades "Dis…" out at the right edge
+instead of slicing it; after three left-swipes the fade is **gone** and "Database Systems" reads whole
+with a clean edge. Same behaviour inside a sheet (WhenPicker's presets fade behind "When I get home").
+**Before:** `qa/shots/fix_09_tasks.png`, `fix_65_task2.png`.
+**After:** `qa/shots/fix_60_strip_after.png` (fade up), `fix_62_strip_end.png` (fade gone at the end).
+**Regression test:** `src/test/hstrip.test.ts` (9 tests). The class-wide invariant is a **tree rule** — no
+`.tsx` outside `ui/kit.tsx` may suppress the scroll indicator — so a new bare `ScrollView` cannot
+reintroduce the class. Plus the predicate's boundaries (real overflow, arrival at the end, overscroll,
+sub-pixel measurement noise), the per-site paper colour, and the wiring Grades depends on.
+**Verified by mutation, twice:** making the predicate constant fails 3 of the 9; **dropping its
+sub-pixel slack** — the `± 1` that stops the fade blinking as a row reflows — fails 2.
 
 ---
 
@@ -1285,10 +1317,10 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 8 | 13 | 0 |
+| Minor | 7 | 14 | 0 |
 | Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (13 fixed), 5 Polish (2 fixed).
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (14 fixed), 5 Polish (2 fixed).
 Nothing verified.** Recounted from the per-bug headers
 (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
