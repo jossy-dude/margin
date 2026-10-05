@@ -794,7 +794,7 @@ cannot be reproduced any other way.
 
 ---
 
-## BUG-023 — open — Minor
+## BUG-023 — fixed — Minor
 **Screen:** Stats → the "Grades" section → "Attendance, last 4 weeks"
 **Found by:** FRESH-USER + TASK-DOMAIN QA (AGENT 2) · device
 **Repro:** Stats → scroll to "Attendance, last 4 weeks".
@@ -809,6 +809,33 @@ steals the width.
 **Scope note:** the two week-based heatmaps on the same page ("Focus heatmap", "Tasks finished") have
 no subject-label gutter and fit correctly — only this one clips. So it is this card's layout, not the
 `Heatmap` primitive.
+
+**Root cause (confirmed by measuring the screencap, not by reading alone):** the row was a **fixed**
+`70 dp` label plus 28 **fixed** `11 dp` cells with a `2 dp` gap — `70 + 2 + 28×11 + 27×2 = 434 dp` —
+drawn into a card that is `width − 32 − 28 ≈ 351 dp` at 411 dp. The arithmetic cannot fit at any screen:
+the row was **83 dp too wide** before a single label changed. On the device the last cell spanned
+**x 1034–1039** while the card's border stroke sat at **x 1035**, so the cell was cut *by* the border
+rather than merely ending near it. `src/screens/Stats.tsx:65-71` (was `:68-69` for the label/cells).
+The row did sit in a horizontal `ScrollView`, so the days were reachable — but
+`showsHorizontalScrollIndicator={false}`, nothing peeked past the edge, and at rest the row read as a
+clipped card.
+**Fix commit:** `63a8ec6`
+**Fix:** `heatRow(avail, days)` in `src/ui/fit.ts` derives the geometry from the width the card actually
+has — the label takes a capped 28 % share, the cells divide what is left. Below ~360 dp a full-height
+label and minimum-width cells cannot both fit, so the **label yields share** (73 dp → 64 dp at 320 dp)
+while the cells keep their `HEAT_MIN_CELL` floor: the 28 days are the data, and the row's
+`accessibilityLabel` already carries the full subject name. The horizontal `ScrollView` is **removed**,
+because the row now fits by construction rather than depending on the user discovering that it scrolls.
+**Verified on device (SM-A516N, 411 dp):** all 28 cells render whole on all five subject rows, clear of
+the border; the labels also read further than before ("Intro to Econom…", "Discrete Mathe…").
+**Before:** `qa/shots/fix_08_heat3.png` (last cell spans x 1034–1039, border at x 1035).
+**After:** `qa/shots/fix_40_heat_after.png`.
+**Regression test:** `src/test/heat-row.test.ts` (14 tests). It pins the invariant that matters —
+`label + 28 cells + gaps ≤ available width` — across five widths from 320 to 768 dp, states the shipped
+434 dp geometry *as the defect it was* so the test cannot drift, checks the cells never drop below the
+floor, and checks the row really is 28 cells against the **real demo seed** so the fit cannot pass over a
+stub. **Verified by mutation:** restoring `label = 70` / `cell = 11` fails 4 of the 14, including the
+baseline device.
 
 ---
 
@@ -1237,10 +1264,10 @@ and closes the sheet (the latch must not swallow the first press).
 |---|---|---|---|
 | Critical | 0 | 0 | 0 |
 | Major | 1 | 5 | 0 |
-| Minor | 10 | 11 | 0 |
+| Minor | 9 | 12 | 0 |
 | Polish | 3 | 2 | 0 |
 
-**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (11 fixed), 5 Polish (2 fixed).
+**Totals: 32 findings — 0 Critical, 6 Major (5 fixed), 21 Minor (12 fixed), 5 Polish (2 fixed).
 Nothing verified.** Recounted from the per-bug headers
 (`rg -o "^## BUG-\d+ — \w+ — \w+" qa/BUGS.md`), which are authoritative.
 
