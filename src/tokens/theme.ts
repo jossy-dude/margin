@@ -31,9 +31,15 @@ export const palettes = { refined: REFINED, original: ORIGINAL };
  *  pasted into components. `ONYX.dark` is the dial material of the dark-native clock faces: they keep it in the
  *  dark theme, where the theme's cream ink reads off it, and turn to `card` in the light theme (see `dialPal`) —
  *  a cream dial with cream hands would be invisible, and an onyx dial would be a black hole in the cream app.
- *  `ONYX.light` is the same material a shade down and stays for the plate work. Neither should follow
- *  `palette: 'original'` — but neither belongs in a screen. */
-export const ONYX = { light: '#26201A', dark: '#17130F' } as const;
+ *  It should not follow `palette: 'original'` — but it does not belong in a screen.
+ *
+ *  `ONYX.light` used to sit beside it, "the same material a shade down … for the plate work". It was read by
+ *  nothing, and the plate work was abandoned: `assets/plates/` does not exist, `FACES` has five entries, and
+ *  the `plates:gen` / `plates:preview` npm scripts were deleted with a test that keeps them deleted
+ *  (`scripts.test.ts`). A token that only exists to serve a feature that does not is the residue
+ *  `prompt.md` R5 asks to be cleaned up, so it is gone; if the plates ever come back the material comes back
+ *  with them. See `STATE.md` deviation 10. */
+export const ONYX = { dark: '#17130F' } as const;
 /** Dial materials for the clock faces, alongside ONYX and for the same reason: a dial is a physical plate,
  *  not a themed surface, so the same plate must not change material when the app flips to dark. ENAMEL is
  *  true white porcelain and LACQUER is true black lacquer — the two extremes, because an engraved ground

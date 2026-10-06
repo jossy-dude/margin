@@ -2,7 +2,13 @@ import { haptic, hapticBurst, setHapticsEnabled } from './haptics';
 import { configureAudio, play } from './audio';
 import type { AttStatus, Settings } from '../domain/types';
 
-/** One call per meaningful state change: sound + haptic together, each respecting its own toggle and volume. */
+/** One call per meaningful state change: sound + haptic together, each respecting its own toggle and volume.
+ *
+ *  Every member here is called from somewhere. `tapeStick()` was the exception for one release: defined,
+ *  mapped to a sound, and never requested — a leftover from when the break sticker got an arrival sound. It is
+ *  gone rather than wired up, because giving the sticker's appearance a sound is an audio decision that needs
+ *  ears, and there are none on this machine (`qa/COORDINATION.md` §0). `Feel: 'error'` was the other orphan and
+ *  it did not need deleting — see `denied()` below. */
 export function configureFx(s: Settings) { configureAudio(s.soundOn, s.soundVol); setHapticsEnabled(s.hapticsOn); }
 const STAMP: Record<AttStatus, Parameters<typeof play>[0]> = { p: 'stamp-here', l: 'stamp-late', n: 'stamp-late', a: 'stamp-absent', s: 'stamp-sick', c: 'stamp-cancel', t: 'stamp-cancel' };
 export const fx = {
@@ -10,7 +16,11 @@ export const fx = {
   swipe() { play('shuffle'); haptic('soft'); },
   crumple() { play('crumple'); hapticBurst('crumple', 4, 70); setTimeout(() => { play('thud'); haptic('fall'); }, 620); },
   stamp(s: AttStatus) { play(STAMP[s]); haptic(s === 'a' ? 'heavy' : s === 'p' ? 'stamp' : 'tap'); },
-  denied() { haptic('warn'); },
+  /** `'error'`, not `'warn'`. It is Android's `Reject` and iOS's `NotificationFeedbackType.Error` — a refusal,
+   *  where `warn` is `Context_Click`, a menu press. `prompt.md` V7 asks for a *distinct* feel for "denied
+   *  (locked cell)" and this was the feel that was mapped and never requested. Nothing else in the app is a
+   *  refusal, so it cannot be confused with another event. */
+  denied() { haptic('error'); },
   done() { play('done'); haptic('success'); },
   undone() { play('toggle-off'); haptic('off'); },
   chime() { play('notify'); haptic('success'); },
@@ -25,7 +35,6 @@ export const fx = {
   blip() { play('blip'); haptic('warn'); },
   roundDone() { play('round-done'); hapticBurst('success', 3, 140); },
   breakStart() { play('break-start'); haptic('tap'); },
-  tapeStick() { play('clack'); haptic('soft'); },
   nudge() { play('nudge'); haptic('warn'); },
   peel() { play('tape-peel'); haptic('peel'); },
   fall() { play('flutter'); setTimeout(() => { play('thud'); haptic('fall'); }, 780); },

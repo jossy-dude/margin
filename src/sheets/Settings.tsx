@@ -102,12 +102,11 @@ export function SettingsSheet() {
   const { c } = useTheme();
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
-  /* `Settings.onboarded` is A4's field and the patch to the shared `src/domain/types.ts` that declares it
-   *  has not landed (their `qa/HANDOFF-A4.md` §1). Reading and writing it through this one alias means
-   *  the row below works whether or not the optional field is on the type yet — `toured()` says `undefined`
-   *  and `0` both mean "not seen", which is also what a settings row written before the tour existed
-   *  means. Delete the alias when the field lands; nothing else changes. See `qa/HANDOFF-A6.md`. */
-  const onboarded = (s as Settings & { onboarded?: number }).onboarded, replay = (v: number) => act.setSettings({ onboarded: v } as Partial<Settings>);
+  /* Read and written straight off `Settings`. It arrived through `qa/HANDOFF-A4.md` as an optional field,
+   *  which needed a cast here while the shared-type patch was still pending; the patch landed, the cast and
+   *  the paragraph explaining it are gone, and `toured()` still reads `undefined` as "not seen" — which is
+   *  what a settings row written before the tour existed holds. */
+  const onboarded = s.onboarded, replay = (v: number) => act.setSettings({ onboarded: v });
   const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false);
   /* The action test really writes — that is the point of it — so it asks twice, like Reset and the
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer

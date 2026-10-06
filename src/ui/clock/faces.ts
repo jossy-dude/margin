@@ -22,19 +22,16 @@ export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id)
  *  only decides how the ENGRAVING reads on that ground, not what the ground is: the same cut is a dark
  *  line in white and a bright line in black. `second` is the sweep hand, red-brown per prompt.md V4 for
  *  the same reason — a material, not `acc`, because the pale peach `acc` becomes in the dark palette reads
- *  as grey at hairline width. */
+ *  as grey at hairline width.
+ *
+ *  `native` is still in the signature, and still unused by the body, because `FaceSpec.native` is the thing
+ *  that distinguishes the two light-native faces from the three dark-native ones — the picker groups by it and
+ *  `faces.test.ts` asserts the grouping. Removing it would decouple the palette from the face's declared
+ *  nature for no gain. */
 export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): Pal {
   void f;
   return { ink: c.ink, dial: dark ? DIAL.dark : DIAL.light, accent: c.acc, second: dark ? SECOND.dark : SECOND.light };
 }
-/**
- * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the
- * engraving turns into a photographic negative instead of disappearing into a black disc.
- * Four rows of five, the shape react-native-svg's FeColorMatrix wants. Not referenced by anything
- * yet: the plates are blocked on artwork the user has not supplied (prompt.md §PLATES), so the
- * matrix, the generator script and the preview script land together with them.
- */
-export const PLATE_DARK_MATRIX = '-0.2126 -0.7152 -0.0722 0 1 -0.2126 -0.7152 -0.0722 0 1 -0.2126 -0.7152 -0.0722 0 1 0 0 0 0 1';
 
 const PI = Math.PI, f1 = (v: number) => +v.toFixed(1), f2 = (v: number) => +v.toFixed(2);
 const P = (r: number, a: number): [number, number] => [r * Math.sin(a), -r * Math.cos(a)];

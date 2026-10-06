@@ -1,6 +1,6 @@
 import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Task } from './types';
 import { addDays, parseYmd, startOfDay, ymd } from './time';
-import { attendanceRate, effective, isCancelled, occurrencesBetween, occurrencesOn, type Occurrence } from './attendance';
+import { attendanceRate, effective, occurrencesBetween, occurrencesOn, type Occurrence } from './attendance';
 import { total } from './grades';
 
 /** oldest → newest, ending today */
@@ -78,4 +78,3 @@ export function overallAttendance(courses: Course[], meetings: Meeting[], att: R
 }
 export const gradeBars = (courses: Course[], marks: Mark[], adjusts: Record<string, number>) => courses.map((c) => ({ id: c.id, name: c.name, total: total(marks.filter((m) => m.courseId === c.id), adjusts[c.id] ?? 0), goal: c.goal }));
 export function markSeries(courseId: string, marks: Mark[]) { return marks.filter((m) => m.courseId === courseId && m.on && m.score !== null).sort((a, b) => a.sort - b.sort).map((m) => ({ name: m.name, score: m.score as number })); }
-export const cancelledCount = (occ: Occurrence[], att: Record<string, AttRecord>, days: Record<string, DayMark>, now: number) => occ.filter((o) => isCancelled(effective(o.date, o.meeting, att, days, now))).length;

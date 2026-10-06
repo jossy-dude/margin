@@ -57,7 +57,7 @@ describe('faces', () => {
     for (const p of ['refined', 'original'] as const) for (const mode of ['light', 'dark'] as const) for (const f of FACES) {
       const c = palettes[p][mode], pal = dialPal(f, c, mode === 'dark'), tone = Object.values(c);
       // the dial ground is a MATERIAL (DIAL/ONYX), not a theme surface, so only its ink and accent have to come from the theme
-      const MATERIALS: readonly string[] = [ONYX.dark, ONYX.light, DIAL.light, DIAL.dark];
+      const MATERIALS: readonly string[] = [ONYX.dark, DIAL.light, DIAL.dark];
       for (const v of [pal.ink, pal.accent, ...(MATERIALS.includes(pal.dial) ? [] : [pal.dial])]) expect(tone).toContain(v);
       expect(cr(pal.ink, pal.dial)).toBeGreaterThanOrEqual(4.5);
       // the second hand and the Scales sub-seconds hand are hairlines in their own red-brown material: 3:1 as non-text

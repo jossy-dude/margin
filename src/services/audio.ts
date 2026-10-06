@@ -101,7 +101,3 @@ export function play(n: SoundName, gain = 1): boolean {
     return true;
   } catch { return false; }
 }
-export function releaseAudio() {
-  pools.forEach((p) => p.forEach((x) => { try { x.remove(); } catch { /* ignore */ } }));
-  pools.clear(); active = []; seeking.clear(); lastAt.clear();
-}

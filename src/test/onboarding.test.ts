@@ -15,7 +15,6 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
 import { hydrate, stopResync } from '../store/store';
 import { TOUR_VERSION, toured, withDefaults } from '../domain/defaults';
-import type { Settings } from '../domain/types';
 import { SCREENS, TOUR_LEN } from '../ui/onboard/screens';
 import { Onboarding, type OnboardFinish } from '../screens/Onboarding';
 import { ThemeProvider } from '../ui/theme-context';
@@ -156,36 +155,44 @@ describe('the tour shows itself on a first launch and stays away afterwards', ()
 
 /* ───── the wiring contract with the shared files ───── */
 
-const FIELD = /onboarded\??\s*:\s*number\s*;/g;
-
-/** `Settings` is a shared, unowned type, so the one field the gate needs is applied by the
- *  orchestrator from `qa/HANDOFF-A4.md` rather than by me. This asserts the two halves of that
- *  contract without going red in the meantime: the patch is specified, spelled the same way on both
- *  sides, and applied at most once.
+/** `Settings.onboarded` arrived through `qa/HANDOFF-A4.md` as an OPTIONAL field, and optional is the whole
+ *  point: a settings row written before the tour existed has no such key, which is precisely the case
+ *  `toured(undefined)` answers, so `DEFAULT_SETTINGS` needs no entry and a cold start needs no migration.
  *
- *  `onboarded` is **optional** on purpose. A settings row written before the tour existed has no such
- *  key, which is precisely the case `toured(undefined)` answers, so `DEFAULT_SETTINGS` needs no entry
- *  and a cold start needs no migration. */
-describe('the one shared-type field the gate needs is specified, spelled once, and applied at most once', () => {
-  const handoff = readFileSync(join(__dirname, '..', '..', 'qa', 'HANDOFF-A4.md'), 'utf8');
+ *  This block used to assert two things about the hand-off *document* — that `qa/HANDOFF-A4.md` spelled
+ *  `onboarded?: number;`, and that it was spelled there at most once. Both were the same class of test as
+ *  `scripts.test.ts`'s `expect(faces).toContain('PLATE_DARK_MATRIX')`: a test that checks a word appears in a
+ *  file, passing exactly as long as the word does. One of them had already turned false — the patch landed
+ *  and the shared field is on the type — and nothing had noticed, which is the whole argument against them.
+ *  What is left asserts the three things that are still true of the shipped code. */
+/** `onboarded?: number;` or `onboarded: number;`, with or without the docstring's indentation. */
+const FIELD_ONE = /onboarded\??\s*:\s*number\s*;/;
+describe('the one shared-type field the gate needs is optional, declared once, and needs no default', () => {
   const types = readFileSync(join(__dirname, '..', 'domain', 'types.ts'), 'utf8');
 
-  it('the handoff spells it, as an optional number', () => {
-    expect(handoff.match(FIELD)?.length ?? 0).toBeGreaterThan(0);
-    expect(handoff).toMatch(/onboarded\?: number;/);
+  it('is declared on Settings exactly once — a re-applied patch would break the build', () => {
+    expect(types.match(new RegExp(FIELD_ONE.source, 'g'))?.length ?? 0).toBe(1);
+    expect(types).toMatch(FIELD_ONE);
+    // optional, not required: that is what makes an old settings row legal without a migration
+    expect(types).toMatch(/onboarded\?: number;/);
   });
 
-  it('the shared type declares it at most once — a re-applied patch would break the build', () => {
-    expect(types.match(FIELD)?.length ?? 0).toBeLessThanOrEqual(1);
+  it('and it is read off the type, with no cast left behind from the hand-off window', () => {
+    const settings = readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8');
+    expect(settings).toContain('const onboarded = s.onboarded');
+    // the intersection cast is what the hand-off needed while the field was optional-but-undeclared
+    expect(settings).not.toContain('Settings & { onboarded?: number }');
   });
 
   it('and the gate needs no default, because absent already means "has not seen it"', () => {
-    // This is the property that makes the whole thing survive a cold start: `withDefaults` never sees
-    // the field, so a fresh install has none, and `undefined` is already the answer that shows the
-    // tour. The intersection type is what lets this compile both before and after the field lands.
-    const fresh = withDefaults({}) as Settings & { onboarded?: number };
+    // This is the property that makes the whole thing survive a cold start: `withDefaults` never sees the
+    // field, so a fresh install has none, and `undefined` is already the answer that shows the tour.
+    const fresh = withDefaults({});
     expect(fresh.onboarded).toBeUndefined();
     expect(toured(fresh.onboarded)).toBe(false);
+    // and it must stay absent from DEFAULT_SETTINGS, or a settings row written by an older build would
+    // gain a field it never had. Asserted over the source, since the object type would allow either.
+    expect(readFileSync(join(__dirname, '..', 'domain', 'defaults.ts'), 'utf8')).not.toMatch(/DEFAULT_SETTINGS[^}]*onboarded/s);
   });
 });
 

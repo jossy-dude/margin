@@ -53,6 +53,14 @@ function ternaryArms(line: string): [string, string][] {
   return out;
 }
 
+/** Every `export` declaration, with the name. Three shapes: `export const x`, `export function x`,
+ *  `export interface x`, plus `export type X = …`. */
+function exportedNames(src: string): string[] {
+  const out: string[] = [];
+  for (const m of src.matchAll(/^export\s+(?:declare\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm)) out.push(m[1]!);
+  return out;
+}
+
 describe('no code that can never affect behaviour', () => {
   it('no ternary has two identical arms', () => {
     const hits: string[] = [];
@@ -92,6 +100,51 @@ describe('no code that can never affect behaviour', () => {
       }
     }
     expect(orphans).toEqual([]);
+  });
+
+  /**
+   * The sweep above only caught two shapes because those were the two that had been found by hand. This is
+   * the general one, and it is the mechanism the deletions in this pass rely on: a top-level `export` that
+   * nothing imports, by name or namespace, anywhere in `src/`.
+   *
+   * The whole tree is counted rather than only the imports, so a name used inside its own file still counts
+   * as "used" — which is the right line: `export const x` used by `x` three lines below is exported for a
+   * reason this test cannot see (a test file, or a deliberate public surface), and a name that appears
+   * exactly once in the entire tree is not that.
+   *
+   * `src/test/` is counted for *uses* but skipped for *declarations*, because the tests assert these rules
+   * and the names they import are exactly the ones this check would otherwise report.
+   */
+  it('no top-level export is referenced nowhere in the tree', () => {
+    // The walker above deliberately skips `test/`, so those files are re-collected here: a test importing a
+    // name IS a use of it. Skipping them would report `MemoryRepository` and `meshFractions` as orphans,
+    // which is how a correct guard teaches you to distrust it.
+    const testDir = join(SRC, 'test');
+    const testFiles: string[] = [];
+    (function walk(dir: string): void {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p); else if (/\.tsx?$/.test(e.name)) testFiles.push(p);
+      }
+    })(testDir);
+    const tokens = new Map<string, number>();
+    for (const f of [...files, ...testFiles]) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/[A-Za-z_$][\w$]*/g)) tokens.set(m[0], (tokens.get(m[0]) ?? 0) + 1);
+    }
+    const declaredSomewhere = new Set<string>();
+    for (const f of files) if (!f.startsWith(testDir)) for (const n of exportedNames(readFileSync(f, 'utf8'))) declaredSomewhere.add(n);
+    const orphans: string[] = [];
+    for (const f of files) {
+      if (f.startsWith(testDir)) continue;
+      for (const n of exportedNames(readFileSync(f, 'utf8'))) {
+        // one occurrence is the declaration itself; anything more is a real reference somewhere
+        if ((tokens.get(n) ?? 0) > 1) continue;
+        orphans.push(`${rel(f)} exports ${n}, and nothing in src/ mentions it again`);
+      }
+    }
+    expect(orphans).toEqual([]);
+    // not vacuous: the sweep must have found declarations to check
+    expect(declaredSomewhere.size).toBeGreaterThan(80);
   });
 });
 

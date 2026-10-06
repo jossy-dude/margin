@@ -45,7 +45,7 @@ export function Overlay() {
       {showFab && (<Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
       {sheet && (
         sheet.t === 'add' ? <AddSheet /> : sheet.t === 'task' ? <TaskSheet key={sheet.id ?? sheet.kind ?? 'new'} id={sheet.id} kind={sheet.kind} courseId={sheet.courseId} />
-        : sheet.t === 'status' || sheet.t === 'slip' ? <StatusSheet key={sheet.key} spec={sheet} /> : sheet.t === 'settings' ? <SettingsSheet />
+        : sheet.t === 'status' ? <StatusSheet key={sheet.key} spec={sheet} /> : sheet.t === 'settings' ? <SettingsSheet />
         : sheet.t === 'course' ? <CourseSheet key={sheet.id ?? 'new'} id={sheet.id} /> : sheet.t === 'meeting' ? <MeetingSheet key={sheet.id ?? 'new'} id={sheet.id} courseId={sheet.courseId} weekday={sheet.weekday} />
         : sheet.t === 'mark' ? <MarkSheet key={sheet.id ?? 'new'} courseId={sheet.courseId} id={sheet.id} /> : <NoticeSheet key={sheet.id ?? 'new'} id={sheet.id} />)}
       {/* `toastBottom` is TOAST_CLEAR dp above the nav bar's top edge, which is exactly the 90 dp the old flat

@@ -13,7 +13,6 @@ import { FS } from './fit';
 
 const SheetCtx = createContext<{ close: (after?: () => void) => void }>({ close: () => undefined });
 export const useSheet = () => useContext(SheetCtx);
-export type SheetClose = (after?: () => void) => void;
 const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
 
 /** One-hand bottom sheet: sits in the thumb zone, drags down to dismiss, Android back closes it, keyboard-aware, live-region title. */

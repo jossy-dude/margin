@@ -4,7 +4,7 @@ import { ECON } from './catalog/economics';
 import { DB } from './catalog/database';
 import { PROG } from './catalog/programming';
 import { TECH } from './catalog/tech';
-import type { GroupDef, GroupId, InstrumentDef, InstrumentId } from './types';
+import type { GroupDef, GroupId, InstrumentDef } from './types';
 
 /**
  * The catalogue: twenty-two instruments in the six groups the reference groups them in, in the
@@ -40,5 +40,3 @@ export const instrument = (id: string): InstrumentDef | undefined => INSTRUMENTS
 
 /** Every catalogue id, for tests and for the Settings picker. */
 export const INSTRUMENT_IDS = INSTRUMENTS.map((i) => i.id);
-
-export const isInstrument = (id: string): id is InstrumentId => instrument(id) !== undefined;

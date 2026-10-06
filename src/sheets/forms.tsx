@@ -135,7 +135,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
 }
 
 /* ───── class / day status ───── */
-export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' | 'slip' }> }) {
+export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }> }) {
   const dayMarks = useStore((s) => s.dayMarks), attendance = useStore((s) => s.attendance);
   const st = { dayMarks, attendance };
   const { close } = useSheet(), isDay = spec.t === 'status' && spec.mode === 'day';
