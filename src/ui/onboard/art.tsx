@@ -444,7 +444,10 @@ export function DialArt({ c, reduce }: ArtProps) {
             <Circle cx={DC} cy={DC} r={113.5} fill="none" stroke={c.ink} strokeWidth={1.2} strokeOpacity={0.7} />
             <Circle cx={DC} cy={DC} r={92.5} fill="none" stroke={hexA(c.ink, 0.34)} strokeWidth={1.5} />
             {[['60', 141, 16], ['15', 266, 141], ['30', 141, 266], ['45', 16, 141]].map(([t, x, y]) => (
-              <SText key={t as string} x={x as number} y={(y as number) + 4} fontSize={10} fontFamily={FONT.type} fill={c.mut} textAnchor="middle">{t as string}</SText>
+              /* `c.ink`, not `c.mut`: the numerals sit on the dial bed, which is `c.desk`, and `mut`/`desk` is
+                 4.03:1 in `original.light` — below the 4.5 this project sets. `ink`/`desk` clears it everywhere and
+                 the numerals are the dial's only text, so nothing is lost. See `src/test/ui.test.ts`. */
+              <SText key={t as string} x={x as number} y={(y as number) + 4} fontSize={10} fontFamily={FONT.type} fill={c.ink} textAnchor="middle">{t as string}</SText>
             ))}
           </Svg>
           {/* the knurl turns under the finger and the hand sweeps with it — both on the UI thread */}

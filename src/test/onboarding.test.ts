@@ -395,3 +395,51 @@ describe('the tour stops when it is gone', () => {
     expect(m?.[0]).not.toMatch(/time=/);
   });
 });
+
+/* ───── reduce-motion is about animation, not about being able to read the page ───── */
+
+/**
+ * The bug this file now guards: the tour's `ScrollView` carried `scrollEnabled={!rm}`, so the moment a
+ * user turned Android's "Remove animations" on, the tour became a fixed-height page that could not scroll.
+ * At the 1.3× font scale `prompt.md` V14 requires, or on the 320 dp screen V20 names, or at a 2.0× system
+ * font, the body text falls below the fold and there is no way to reach it. `useReduceMotion()` is a
+ * contract about *motion*; a locked ScrollView is not motion, it is content loss — and it is invisible in a
+ * render at default settings, which is exactly why it survived.
+ */
+describe('reduce-motion removes movement, never the ability to read', () => {
+  it('no ScrollView anywhere in the tour is gated on the motion preference', () => {
+    // source-level, because the render mock replaces ScrollView with a plain View and cannot see the prop
+    for (const rel of ['screens/Onboarding.tsx', 'ui/onboard/art.tsx', 'ui/kit.tsx', 'ui/Sheet.tsx']) {
+      const src = readFileSync(join(__dirname, '..', rel), 'utf8');
+      expect({ rel, gate: /scrollEnabled=\{[^}]*\brm\b/.test(src) || /scrollEnabled=\{!/.test(src) }).toEqual({ rel, gate: false });
+    }
+  });
+
+  it('and nothing in the rendered tree disables scrolling, at either motion setting', async () => {
+    for (const reduce of [false, true]) {
+      const s = await mount({ reduce });
+      const off = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { scrollEnabled?: unknown }).scrollEnabled === false);
+      expect({ reduce, disabledScrollers: off.length }).toEqual({ reduce, disabledScrollers: 0 });
+    }
+  });
+
+  it('every screen still renders its full body under reduce-motion, not just the heading', async () => {
+    for (let i = 0; i < TOUR_LEN; i++) {
+      const s = await mount({ from: i, reduce: true });
+      for (const line of SCREENS[i]!.body) expect(s.text()).toContain(line.slice(0, 40));
+    }
+  });
+
+  it('and reduce-motion is still honoured: every shared value starts at its end state and arms no tween', () => {
+    const screen = readFileSync(join(__dirname, '..', 'screens', 'Onboarding.tsx'), 'utf8');
+    const art = readFileSync(join(__dirname, '..', 'ui', 'onboard', 'art.tsx'), 'utf8');
+    // `Placed`: starts settled, and the effect only assigns 1 when reduced
+    expect(screen).toContain('const k = useSharedValue(reduce ? 1 : 0)');
+    expect(screen).toContain('k.set(reduce ? 1 : withTiming(1');
+    // the crumple, the tap, the ring and the sheet all collapse to their end state rather than fading
+    for (const v of ['p', 'tap', 'ring', 'rise']) expect(art).toMatch(new RegExp(`useSharedValue\\(reduce \\? 1 : 0\\)` + (v === 'p' ? '' : '')));
+    expect(art.match(/reduce \? 1 : 0/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(art).toContain('if (reduce) { p.set(1); return; }');
+    expect(art).toContain('if (reduce) { tap.set(1); ring.set(1); rise.set(1); return; }');
+  });
+});

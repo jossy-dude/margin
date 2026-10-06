@@ -75,7 +75,7 @@ export function Onboarding({ onFinish, reduce, from = 0 }: OnboardingProps) {
     <View style={{ flex: 1, backgroundColor: c.desk }}>
       <PaperBg />
       <View style={{ flex: 1, paddingTop: ins.top + 6, paddingBottom: Math.max(ins.bottom, 8) + 8 }}>
-        <View style={[{ flexDirection: 'row', alignItems: 'center', height: 46, paddingHorizontal: 16 }, i === 0 && { paddingLeft: 16 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', height: 46, paddingHorizontal: 16 }}>
           {i === 0 ? <View style={{ width: 44 }} /> : <Btn small kind="ghost" icon="back" a11y="Back" onPress={() => { fx.page(); setI((v) => v - 1); }} style={{ width: 44 }} />}
           <Txt f="type" s={13} c="mut" style={{ marginLeft: 4 }} accessibilityLiveRegion="polite" maxFontSizeMultiplier={FS}>{`${i + 1} / ${TOUR_LEN}`}</Txt>
           <View style={{ flex: 1 }} />
@@ -86,11 +86,14 @@ export function Onboarding({ onFinish, reduce, from = 0 }: OnboardingProps) {
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12, gap: 10 }}
-          scrollEnabled={!rm}
         >
           {/* `flexGrow: 1` + `justifyContent: center`: the artwork absorbs any spare height on a
               tall phone instead of pooling it into a hole, and on a short one the ScrollView takes
-              over rather than letting the artwork shrink under the text. */}
+              over rather than letting the artwork shrink under the text.
+              Scrolling is never disabled. It was gated on `rm` on the theory that a user who has asked for
+              reduced motion wants a still page — but the reduced-motion contract is about *animation*, and
+              locking a ScrollView is not one. At 1.3× font scale, or on a 320 dp screen, or with the system
+              font at 2.0×, the tour's body text falls below the fold and simply cannot be read. */}
           <View style={{ flexGrow: 1, justifyContent: 'center' }}>
             <Placed key={S.id} reduce={rm}><S.art c={c} reduce={rm} /></Placed>
           </View>

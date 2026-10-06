@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ART, ART_R, BALANCE, ESC_DEG, ESC_TEETH, FACES, MESHES, SKELETON, TONE, dialPal, engrave, escapementAngle,
+  ART, ART_R, BALANCE, ESC_DEG, ESC_TEETH, FACES, MESHES, SKELETON, TONE, dialPal, engrave, escapementAngle, handAngles,
   escapementTurn, hair, meshPhase, spinLayers, staticSvg, sw, handSvg, type FaceId, type FaceSpec,
 } from '../ui/clock/faces';
 import { palettes, PENS, SECOND, type Colors } from '../tokens/theme';
+
 
 /**
  * The clock engine's two contracts, both of which used to be broken and neither of which a number can catch:
@@ -310,5 +311,70 @@ describe('the face list itself', () => {
     expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']);
     expect(FACES.slice(0, 2).map((f) => f.native)).toEqual(['light', 'light']);
     expect(FACES.map((f) => f.id).every((id) => ['g', 'rb', 'c', 'sl', 's'].includes(id as FaceId))).toBe(true);
+  });
+});
+/**
+ * E. THE TIMEZONE OFFSET IS AN ARGUMENT, NOT A CONSTANT.  `prompt.md` R6.
+ *
+ * `ClockFace.tsx` used to read `new Date().getTimezoneOffset()` once at module scope and bake it into
+ * `MS_TZ`. An offset is by definition DST-dependent, so any app that stayed alive across a transition —
+ * a phone asleep on the table overnight — showed every face an hour wrong until the process restarted,
+ * and nothing in the tree could notice. The arithmetic is now `handAngles(utcMs, offsetMs)`, pure, so it
+ * can be asserted here; and the two live offsets can be told apart without a device.
+ */
+describe('E. the hand angles take the timezone offset as an argument (prompt.md R6)', () => {
+  /** 2026-01-15T15:24:00Z. Winter in northern Europe: UTC+1. */
+  const WINTER = Date.UTC(2026, 0, 15, 15, 24, 0);
+  /** the same wall clock six months later: UTC+2, because the zone is still on summer time. */
+  const SUMMER_OFFSET = -120, WINTER_OFFSET = -60;
+
+  it('reads the local wall clock at either offset', () => {
+    // 15:24Z at UTC+1 is 16:24 local = 4:24 on a 12-hour dial → 4 * 30 + 24 * 0.5 = 132. The hour hand
+    // sweeps: `ms / 3_600_000` carries the quarter-hour, so it is not pinned to the hour.
+    expect(handAngles(WINTER, WINTER_OFFSET * 60_000).ha).toBeCloseTo(132, 6);
+    // the same instant at UTC+2 is 17:24 local = 5:24 → 5 * 30 + 12 = 162
+    expect(handAngles(WINTER, SUMMER_OFFSET * 60_000).ha).toBeCloseTo(162, 6);
+    expect(handAngles(WINTER, WINTER_OFFSET * 60_000).ma).toBeCloseTo(24 * 6, 6);
+    expect(handAngles(WINTER, WINTER_OFFSET * 60_000).sec).toBeCloseTo(0, 6);
+  });
+
+  it('one hour of offset moves the hour hand by exactly 30 degrees and the minute hand not at all', () => {
+    const a = handAngles(WINTER, WINTER_OFFSET * 60_000), b = handAngles(WINTER, SUMMER_OFFSET * 60_000);
+    expect(b.ha - a.ha).toBeCloseTo(30, 6);
+    expect(b.ma).toBe(a.ma);
+    expect(b.sec).toBe(a.sec);
+  });
+
+  it('wraps into the day, so 00:30 local does not read as 12:30 on the previous day', () => {
+    // 00:30 local: minute hand at 180°, hour hand HALFWAY between 12 and 1 — 15°, not 0. An hour hand that
+    // reads 0° here would be a clock that only ticks on the hour, which is the bug this assertion exists to catch.
+    const midnight = Date.UTC(2026, 6, 1, 0, 30, 0);
+    const a = handAngles(midnight, 0);                 // UTC
+    expect(a.ma).toBeCloseTo(30 * 6, 6);
+    expect(a.ha).toBeCloseTo(15, 6);
+    const b = handAngles(Date.UTC(2026, 6, 1, 22, 30, 0), -120 * 60_000); // 00:30 local the next day
+    expect(b).toEqual(a);
+  });
+
+  it('the hour hand is 30° per hour and never leaves 0..360, at every hour and both offsets', () => {
+    for (const off of [WINTER_OFFSET, SUMMER_OFFSET]) {
+      for (let h = 0; h < 24; h++) {
+        const a = handAngles(Date.UTC(2026, 0, 15, h, 0, 0), off * 60_000);
+        expect(a.ha).toBeGreaterThanOrEqual(0);
+        expect(a.ha).toBeLessThan(360);
+        expect(a.ma).toBeCloseTo(0, 6);
+        expect(a.sec).toBeCloseTo(0, 6);
+      }
+    }
+  });
+
+  it('ClockFace.tsx no longer reads the offset at module scope', () => {
+    // the mutation check: reintroducing `const MS_TZ = new Date()…` at module scope fails this
+    const src = readFileSync(join(__dirname, '..', 'ui', 'clock', 'ClockFace.tsx'), 'utf8');
+    expect(src).not.toMatch(/^const\s+\w*TZ\s*=\s*new Date\(\)\.getTimezoneOffset\(\)/m);
+    expect(src).toMatch(/handAngles\(now, tz\.value\)/);
+    // and it really does re-read: an AppState resume plus a poll while the loop runs
+    expect(src).toMatch(/AppState\.addEventListener\('change'/);
+    expect(src).toMatch(/setInterval\(read, 60_000\)/);
   });
 });

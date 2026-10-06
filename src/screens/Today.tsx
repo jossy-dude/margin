@@ -251,13 +251,17 @@ export function TodayScreen() {
         })}
       </Section>
       <Section title="Notes" right={<Btn small kind="ghost" icon="plus" a11y="New note" onPress={() => act.open({ t: 'notice' })} />}>
+        {/* `hl` is a surface, and `ink` is the only text token that clears 4.5:1 on it in all four
+            palette×theme combinations — `mut`/`hl` is 4.02 in `original.dark`. COORDINATION.md §4 forbids
+            re-valuing a palette, so an important note prints in ink on its highlight and the ordinary card
+            keeps `mut`. Pinned by `src/test/color-drift.test.ts` and the table in `src/test/ui.test.ts`. */}
         {st.notices.length === 0 ? <Empty text="Nothing pinned. Add a reminder to yourself." /> : (
           <HStrip gap={12} contentStyle={{ paddingTop: 8 }}>
             {st.notices.map((n, i) => (
               <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`Note: ${n.text}`} onPress={() => act.open({ t: 'notice', id: n.id })} style={{ transform: [{ rotate: `${(i % 3 - 1) * 1.6}deg` }] }}>
                 <HandBox seed={n.id} fill={n.priority >= 2 ? c.hl : c.card} style={{ width: 220, minHeight: 110, padding: 12, paddingTop: 16 }}>
                   <Tape w={46} rot={-6} style={{ top: -9, left: 90 }} />
-                  <Txt f="serif" s={13.5} c="mut">{st.courses.find((x) => x.id === n.courseId)?.name ?? 'Reminder'}{n.priority >= 2 ? ' · important' : ''}</Txt>
+                  <Txt f="serif" s={13.5} c={n.priority >= 2 ? c.ink : 'mut'}>{st.courses.find((x) => x.id === n.courseId)?.name ?? 'Reminder'}{n.priority >= 2 ? ' · important' : ''}</Txt>
                   <Txt f="hand" s={19} numberOfLines={5}>{n.text}</Txt>
                 </HandBox>
               </Pressable>))}

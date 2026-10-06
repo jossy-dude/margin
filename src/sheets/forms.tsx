@@ -27,6 +27,13 @@ const PRI = ['None', 'Low', 'Medium', 'High'];
  * `qa/RESEARCH-PERF.md` §6 measured at 30-40 fps on Android, and the reason the chips' fills are not
  * animated (`qa/MOTION-INVENTORY.md` §6.1). Opacity on two plain views is free, and for a hand-cut card
  * swapping one piece of paper for another reads better than a colour bleeding into place anyway.
+ *
+ * **The warning colour is on the border, not on the words.** The box is filled with `hl` and used to
+ * print its sentence in `warn`; `warn`/`hl` is 4.40:1 in `original.light`, below the 4.5 this project
+ * sets for body text, and `COORDINATION.md` §4 forbids re-valuing a palette to fix it. So the text is
+ * `ink` — which clears 4.5 on `hl` in all four palette×theme combinations — and `warn` stays on the
+ * hand-cut stroke, which is where a warning colour actually reads at 1.6 px. `src/test/ui.test.ts`
+ * pins both halves of that.
  */
 function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: number; freeMin: number; startBy: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(tight ? 1 : 0);
@@ -38,7 +45,7 @@ function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: nu
         <HandBox seed="wl" shadow={false} fill={c.card} stroke={c.ink} style={{ padding: 10 }}><Txt f="bold" s={19}>Comfortable: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
       </Animated.View>
       <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, tightStyle]}>
-        <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19} c="warn">Tight: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
+        <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19}>Tight: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
       </Animated.View>
       <Txt f="serif" s={15} c="mut">Latest start: {startBy} (classes, sleep and quiet hours already excluded)</Txt>
     </View>

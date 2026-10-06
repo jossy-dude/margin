@@ -1,12 +1,11 @@
-import React, { memo, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { memo, useEffect, useMemo } from 'react';
+import { AppState, StyleSheet, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
-import { compositeSvg, dialPal, faceById, handSvg, spinLayers, staticSvg, type SpinLayer } from './faces';
+import { compositeSvg, dialPal, faceById, handAngles, handSvg, spinLayers, staticSvg, type SpinLayer } from './faces';
 import { FONT } from '../../tokens/theme';
 import { useTheme, useReduceMotion } from '../theme-context';
 
-const MS_TZ = new Date().getTimezoneOffset() * 60_000;
 function SpinView({ l, k, clock, still }: { l: SpinLayer; k: number; clock: SharedValue<number>; still: boolean }) {
   const st = useAnimatedStyle(() => {
     const t = clock.value / 1000, deg = still ? 0 : l.osc ? Math.sin((t / l.osc.period) * 2 * Math.PI) * l.osc.swing : (l.dps * t) % 360;
@@ -32,13 +31,24 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
    *  read at mount, so the activation is driven explicitly from the effect below — a hidden screen must not burn
    *  frames (prompt.md V17), and `live && !fixed` is the only condition under which the callback may run. */
   const ticking = live && !fixed;
+  /** The timezone offset, re-read rather than captured (`prompt.md` R6). Two triggers, because the two ways a DST
+   *  change reaches a live clock differ: the app was backgrounded across the transition (an `AppState` resume) or
+   *  it sat open across it (a minute's poll). Both only run while the frame loop is already running, so a face
+   *  that is not on screen — or a pinned `time` thumbnail — costs nothing. */
+  const tz = useSharedValue(new Date().getTimezoneOffset() * 60_000);
+  useEffect(() => {
+    if (!ticking) return;
+    const read = () => { const v = new Date().getTimezoneOffset() * 60_000; if (v !== tz.get()) tz.set(v); };
+    read();
+    const id = setInterval(read, 60_000), sub = AppState.addEventListener('change', (s) => { if (s === 'active') read(); });
+    return () => { clearInterval(id); sub.remove(); };
+  }, [tz, ticking]);
   const frame = useFrameCallback(() => {
-    const now = Date.now(), ms = (now - MS_TZ) % 86_400_000, sec = (ms % 60_000) / 1000;
-    clock.value = now; const s = reduce ? Math.floor(sec) : sec;
-    sa.value = s * 6; ma.value = (ms / 60_000 % 60) * 6; ha.value = (ms / 3_600_000 % 12) * 30;
+    const now = Date.now(), a = handAngles(now, tz.value);
+    clock.value = now; sa.value = (reduce ? Math.floor(a.sec) : a.sec) * 6; ma.value = a.ma; ha.value = a.ha;
   }, ticking);
-  React.useEffect(() => { frame.setActive(ticking); }, [ticking, frame]);
-  React.useEffect(() => { if (time) { ha.value = (time.h % 12) * 30 + time.m * 0.5; ma.value = time.m * 6 + time.s * 0.1; sa.value = time.s * 6; } }, [time, ha, ma, sa]);
+  useEffect(() => { frame.setActive(ticking); }, [ticking, frame]);
+  useEffect(() => { if (time) { ha.value = (time.h % 12) * 30 + time.m * 0.5; ma.value = time.m * 6 + time.s * 0.1; sa.value = time.s * 6; } }, [time, ha, ma, sa]);
   if (!live && !hands && !fixed) return <View style={{ width: size, height: size }}><SvgXml xml={compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size)} width={size} height={size} /></View>;
   return (
     <View style={{ width: size, height: size }} accessible accessibilityRole="image" accessibilityLabel={`${face.n} clock face`}>

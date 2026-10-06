@@ -65,8 +65,10 @@ HTML
       done
     done
     echo '</div>' >> /tmp/_sheet.html
+    # 10 figures in a 5-column grid is TWO rows. The window was 460 tall, which cropped the sheet to
+    # its first row: the file said "look at this first" and showed five of the ten faces.
     "$CHROME" --headless --disable-gpu --no-sandbox --hide-scrollbars \
-      --virtual-time-budget=4000 --window-size=2100,460 --screenshot="$OUT/CONTACTSHEET.png" \
+      --virtual-time-budget=4000 --window-size=2100,920 --screenshot="$OUT/CONTACTSHEET.png" \
       "file:///tmp/_sheet.html" >/dev/null 2>&1
     echo "$OUT/CONTACTSHEET.png  <- LOOK AT THIS FIRST"
     ;;

@@ -257,6 +257,24 @@ export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200): string
   return svg(`<circle r="99" fill="${ink}"/><circle r="97.2" fill="${pal.dial}"/><circle r="95.6" ${o(TONE.sub)} stroke-width="${sw(px, 1.3)}"/>${rings}${orn}${ticks}${nums}`);
 }
 export type HandKind = 'hour' | 'minute' | 'second';
+/**
+ * Hand angles for a UTC instant, given a timezone offset in ms. Pure, so it can be asserted without a renderer
+ * — which is the only way to prove R6 on a machine with no phone.
+ *
+ * `Date.now()` is UTC milliseconds; local wall time is `now - offset`, because `getTimezoneOffset()` is minutes
+ * *west* of UTC and so is negative east of it (UTC+2 returns `-120`, and subtracting `-7_200_000` adds the two
+ * hours back). The result is wrapped into one day, so all three hands are read off milliseconds-since-local-
+ * midnight rather than off a 24-hour clock.
+ *
+ * **The offset is a parameter, not a constant.** It used to be read once into a module-scope `MS_TZ` in
+ * `ClockFace.tsx`. An offset is by definition DST-dependent, so any app that stayed alive across a transition — a
+ * phone asleep on the table overnight — showed every face an hour wrong until the process restarted, and nothing
+ * in the tree could notice (`prompt.md` R6). `ClockFace.tsx` now keeps it in a shared value and re-reads it.
+ */
+export function handAngles(utcMs: number, offsetMs: number): { ha: number; ma: number; sec: number } {
+  const ms = (utcMs - offsetMs) % 86_400_000;
+  return { ha: (ms / 3_600_000 % 12) * 30, ma: (ms / 60_000 % 60) * 6, sec: (ms % 60_000) / 1000 };
+}
 /** Hands point to 12 and rotate about the dial centre (the host view is the dial's size, so its centre is the pivot). */
 export function handSvg(kind: HandKind, pal: Pal, px = 200): string {
   const L = kind === 'hour' ? 52 : kind === 'minute' ? 80 : 86, w = sw(px, kind === 'hour' ? 3.6 : kind === 'minute' ? 2.8 : 1.3);

@@ -11,8 +11,11 @@
  */
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, set, stopResync } from '../store/store';
+import { hydrate, getState, set, stopResync } from '../store/store';
+import { nudgeStep, nudgeWord } from '../domain/timer';
 import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
 import { clearCrashes, recordCrash, type CrashEntry } from '../ui/crashlog';
@@ -299,5 +302,56 @@ describe('Delivery status tells the truth about what this phone has actually don
     expect(s.text()).toContain('Test the buttons');
     expect(s.text()).toContain('really marks it'); // the cost is stated before the button is pressed
     expect(s.text()).toContain('Test in 10 s'); // …and the old plain-tap test is still there
+  });
+});
+
+/**
+ * The Focus & breaks page used to promise "nudges you every 5 minutes" for every break length, and the
+ * stepper on that same page offers 1–30. It was false for all of them: `nudgeStep` is a third of the break
+ * (so the default 5-minute break wiggles once a **minute**), capped at `NUDGE_MS`. This is the fix that
+ * cannot rot — the sentence is generated from `nudgeStep` itself — and these are the assertions that hold it.
+ */
+describe('the Focus & breaks page describes the cadence the timer will actually run', () => {
+  // `mount()` clears `settingsPath`, so the page is entered after it, not before
+  const focus = async (breakMin: number) => {
+    const s = await mount();
+    await act(async () => { set({ settings: { ...getState().settings, breakMin }, settingsPath: ['focus'] }); });
+    return s.text();
+  };
+
+  it('says every minute for the 5-minute default, which is what the code does', async () => {
+    expect(await focus(5)).toContain('nudges you every minute,');
+  });
+
+  it('says every five minutes once the third of the break reaches the cap', async () => {
+    expect(await focus(15)).toContain('nudges you every 5 minutes,');
+    expect(await focus(30)).toContain('nudges you every 5 minutes,');
+  });
+
+  it('never claims a cadence nudgeStep would not produce, anywhere in the stepper range', async () => {
+    for (let m = 1; m <= 30; m++) {
+      const said = nudgeWord(m * 60_000);
+      const mins = Math.round(nudgeStep(m * 60_000) / 60_000);
+      // the sentence is derived, so the real assertion is that it agrees with the timer at every length
+      const want = mins === 1 ? 'every minute' : `every ${mins} minutes`;
+      expect({ m, said, mins, agrees: said === want }).toEqual({ m, said, mins, agrees: true });
+    }
+  });
+
+  it('the copy is generated, not typed: the page interpolates nudgeWord rather than naming a number', () => {
+    const src = readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8');
+    expect(src).toContain('nudges you {nudgeWord(s.breakMin * 60_000)},');
+    // the negative runs over CODE with comments stripped — the paragraph above legitimately quotes the old copy
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code).toContain('nudges you {nudgeWord(');
+    expect(code).not.toContain('nudges you every');
+  });
+
+  it('and nudgeWord is nudgeStep in words, boundary by boundary', () => {
+    expect(nudgeWord(1 * 60_000)).toBe('every minute');   // no third to take; the one-minute floor wins
+    expect(nudgeWord(3 * 60_000)).toBe('every minute');
+    expect(nudgeWord(9 * 60_000)).toBe('every 3 minutes'); // floor(9/3) = 3
+    expect(nudgeWord(15 * 60_000)).toBe('every 5 minutes');// capped at NUDGE_MS
+    expect(nudgeWord(120 * 60_000)).toBe('every 5 minutes');
   });
 });

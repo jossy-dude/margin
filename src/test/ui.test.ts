@@ -6,15 +6,94 @@ import { join } from 'node:path';
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
 const cr = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
-describe('refined palette contrast (both themes)', () => {
-  for (const mode of ['light', 'dark'] as const) {
-    const c = palettes.refined[mode];
-    const pairs: [string, string, string][] = [['ink', 'paper', ''], ['ink', 'card', ''], ['mut', 'paper', ''], ['mut', 'card', ''], ['mut', 'hl', ''], ['ink', 'hl', ''], ['acc', 'paper', ''], ['acc', 'card', ''], ['ok', 'card', ''], ['warn', 'card', ''], ['bad', 'card', ''], ['mut', 'desk', ''], ['ink', 'desk', ''], ['slabInk', 'slab', ''], ['slabMut', 'slab', ''], ['onAcc', 'acc', '']];
-    it.each(pairs)(`${mode}: %s on %s ≥ 4.5`, (fg, bg) => { expect(cr((c as never)[fg], (c as never)[bg])).toBeGreaterThanOrEqual(4.5); });
+/**
+ * Every text/background pair the app can actually draw, checked in BOTH palettes and BOTH themes.
+ *
+ * It used to assert sixteen pairs for `refined` only, which is how `qa/FINDINGS-UNSTATED.md` F-06 could be
+ * true and the suite green: in `original`, `mut`/`hl` is 4.02 and `mut`/`desk` is 4.03. `COORDINATION.md` §4
+ * says *"extend it rather than weakening it"*, so this is an extension and not a replacement — the original
+ * sixteen rows are all still here, and they now run in all four combinations.
+ *
+ * The third column is where each pair is drawn, and it is the reason this table can be trusted: every row is
+ * a pair a reader can go and look at in the source. A pair that is *not* drawn has no row — it is asserted
+ * as a negative below, so the two facts cannot be confused. Adding a row for a pair the palette cannot
+ * deliver is how this suite would quietly start asserting something false.
+ */
+type Reach = [fg: string, bg: string, where: string];
+const PAIRS: Reach[] = [
+  ['ink', 'paper', 'every page: the ScrollView over PaperBg'],
+  ['ink', 'card', 'every card: HandBox default fill'],
+  ['mut', 'paper', 'captions on a page'],
+  ['mut', 'card', 'captions on a card, and Sheet (PaperBg card)'],
+  ['ink', 'hl', 'the highlighted title on an important note; the Tight box; a selected clock thumb'],
+  ['acc', 'paper', 'the + button glyph and the selected-tab pill'],
+  ['acc', 'card', 'Focus dial caption on its hub'],
+  ['ok', 'card', 'a Here/Sick chip and the Done swatch'],
+  ['warn', 'card', 'a late due-time, the Tight mark on a task card'],
+  ['bad', 'card', 'an absent cell, an overdue task card'],
+  ['ink', 'desk', 'the Focus dial bed: rings, knurl, numerals, escapement'],
+  ['slabInk', 'slab', 'the Focus dial hub and the Settings bar-picker slab title'],
+  ['slabMut', 'slab', 'the Settings bar-picker slab caption'],
+  ['onAcc', 'acc', 'a primary button, a selected chip, the + button'],
+  ['deckInk', 'deck', 'every word on the Today command deck'],
+  ['deckMut', 'deck', 'the deck\'s position line and its After row'],
+];
+describe('every text/background pair the app draws clears 4.5:1 — in BOTH palettes and BOTH themes', () => {
+  for (const name of ['refined', 'original'] as const) {
+    for (const mode of ['light', 'dark'] as const) {
+      const c = palettes[name][mode];
+      it.each(PAIRS)(`${name}.${mode}: %s on %s — %s`, (fg, bg, _where) => {
+        expect(cr((c as never)[fg], (c as never)[bg])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
   }
+
+  /**
+   * The two rules the reachable table exists to enforce, stated on their own so that a future
+   * surface cannot be painted with a token that happens to pass today.
+   *
+   *  1. **`hl` takes `ink`.** It is the only text token that clears 4.5 on the highlight in all four
+   *     combinations, which is why the important-note card, the Tight box and the selected clock thumb all
+   *     print ink on it and keep the accent/amber on the stroke. `mut`/`hl` fails in `original.dark` and
+   *     `warn`/`hl` fails in `original.light`; neither may be used for text there again.
+   *  2. **`ink` is the floor, not `mut`, for anything on `desk`.** `mut`/`desk` is 4.03 in
+   *     `original.light`.
+   */
+  it('the highlight and the desk only take ink as text, in every combination', () => {
+    for (const name of ['refined', 'original'] as const) for (const mode of ['light', 'dark'] as const) {
+      const c = palettes[name][mode];
+      for (const bg of ['hl', 'desk'] as const) expect(cr(c.ink, c[bg])).toBeGreaterThanOrEqual(4.5);
+    }
+    // and the two failures that motivated the rule, pinned so nobody re-introduces them by accident
+    expect(cr(palettes.original.dark.mut, palettes.original.dark.hl)).toBeLessThan(4.5);
+    expect(cr(palettes.original.light.warn, palettes.original.light.hl)).toBeLessThan(4.5);
+    expect(cr(palettes.original.light.mut, palettes.original.light.desk)).toBeLessThan(4.5);
+  });
+
+  /**
+   * The pairs the reachable table deliberately does NOT assert, asserted here as negatives. They are the
+   * three live failures `qa/FINDINGS-UNSTATED.md` F-06 found, they are fixed at the use site rather than in
+   * the palette, and if any of them ever clears 4.5 it will be because someone re-valued `ORIGINAL` — which
+   * `COORDINATION.md` §4 forbids. So the numbers are pinned from both sides: reachable rows must pass, these
+   * must still fail, and the table must not have grown a row for one of them.
+   */
+  it('none of the three known failures has been papered over, and the table has not grown a row for one', () => {
+    expect(cr(palettes.original.dark.mut, palettes.original.dark.hl)).toBeLessThan(4.5);      // mut on a highlight
+    expect(cr(palettes.original.light.warn, palettes.original.light.hl)).toBeLessThan(4.5);    // warn words on a highlight
+    expect(cr(palettes.original.light.mut, palettes.original.light.desk)).toBeLessThan(4.5);   // mut on the dial bed
+    const asserted = new Set(PAIRS.map(([fg, bg]) => `${fg}/${bg}`));
+    for (const bad of ['mut/hl', 'warn/hl', 'mut/desk', 'ink/deck']) expect(asserted.has(bad)).toBe(false);
+    expect(PAIRS.every(([fg, bg]) => fg !== bg)).toBe(true);
+  });
+});
+describe('the palette invariants that are not contrast', () => {
   it('dark paper is not pitch black and light paper is lighter than the original desk', () => {
     expect(lum(palettes.refined.dark.paper)).toBeGreaterThan(0.018);
     expect(lum(palettes.refined.light.desk)).toBeGreaterThan(lum(palettes.original.light.desk));
+  });
+  it('every palette keeps its own values: both names still exist and all four modes are populated', () => {
+    expect(Object.keys(palettes).sort()).toEqual(['original', 'refined']);
+    for (const p of Object.values(palettes)) for (const mode of ['light', 'dark'] as const) expect(p[mode].paper).toMatch(/^#[0-9A-F]{6}$/i);
   });
 });
 describe('hand-drawn geometry', () => {

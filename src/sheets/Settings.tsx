@@ -16,6 +16,7 @@ import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
 import { DW, fmtDur, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
+import { nudgeWord } from '../domain/timer';
 import { logState, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
 import { play, type SoundName } from '../services/audio';
@@ -284,7 +285,12 @@ export function SettingsSheet() {
     <Labelled label="Break length"><Stepper label="break" value={s.breakMin} min={1} max={30} fmt={(v) => `${v} min`} onChange={(v) => set({ breakMin: v })} /></Labelled>
     <Labelled label="Breaks per round"><Stepper label="breaks" value={s.breaksPerRound} min={0} max={4} fmt={(v) => String(v)} onChange={(v) => set({ breaksPerRound: v })} /></Labelled>
     <Toggle label="Flow mode by default" hint="Keep counting after the round ends" value={s.focusFlow} onChange={(v) => set({ focusFlow: v })} />
-    <Txt f="serif" s={15.5} c="mut">A break pauses the main clock. It unlocks after 5 minutes of focus, nudges you every 5 minutes, and the little taped clock falls off the page when it is over. New sessions pick these up.</Txt>
+    {/* The nudge sentence is generated from `nudgeStep`, the function the timer itself uses, so the page cannot
+        promise a cadence the code does not deliver. It used to read "nudges you every 5 minutes", which was
+        false for every length this page offers: the step is a third of the break, so the default 5-minute
+        break wiggles once a minute and a 25-minute break wiggles every five. See `nudgeWord` in
+        `domain/timer.ts` and the assertion in `src/test/settings-render.test.ts`. */}
+    <Txt f="serif" s={15.5} c="mut">A break pauses the main clock. It unlocks after 5 minutes of focus, nudges you {nudgeWord(s.breakMin * 60_000)}, and the little taped clock falls off the page when it is over. New sessions pick these up.</Txt>
   </>);
   if (page === 'data') body = (<>
     <Txt f="serif" s={15.5} c="mut">The whole dataset: subjects, timetable, every attendance mark, tasks, steps, reminders, notes, marks, focus sessions and settings. Named from the date you export.</Txt>

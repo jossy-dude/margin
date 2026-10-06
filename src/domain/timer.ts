@@ -13,6 +13,20 @@ export const NUDGE_MS = 5 * 60_000, MIN_BREAK_AFTER_MS = 5 * 60_000;
     length — never longer than NUDGE_MS, never shorter than a minute. A fixed 5-minute step silently never
     fires on a 5-minute break, which is the default, so the sticker sat perfectly still. */
 export const nudgeStep = (breakMs: number) => Math.max(60_000, Math.min(NUDGE_MS, Math.floor(breakMs / 3 / 60_000) * 60_000));
+/** How often the break sticker actually wiggles for a break of `breakMs`. The same arithmetic as
+ *  `nudgeStep`, as words.
+ *
+ *  This exists because Settings → Focus & breaks said "nudges you every 5 minutes" for every break length,
+ *  which was true of none of them: `floor(breakMs/3/60_000)` is 1 for anything from 3 to 8 minutes, so the
+ *  default 5-minute break wiggles once a **minute**, four times. The stepper on that page offers 1–30
+ *  minutes, so the honest thing is to say what the stepper is about to do rather than to name one number.
+ *  Below 3 minutes there is no third to take and the floor of one minute wins. `src/test/settings-render.test.ts`
+ *  asserts this sentence against `nudgeStep` over the whole 1–30 range, so the copy cannot drift from the code
+ *  again — the same class of failure `prompt.md` V10e already describes. */
+export function nudgeWord(breakMs: number): string {
+  const min = Math.round(nudgeStep(breakMs) / 60_000);
+  return min === 1 ? 'every minute' : `every ${min} minutes`;
+}
 /** Flow keeps crediting overtime past the round, but only this much: walking away must not bill focus that never happened. */
 export const FLOW_OVER_CAP_MS = 15 * 60_000;
 const overRoom = (overMs: number) => Math.max(0, FLOW_OVER_CAP_MS - overMs);
