@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Pressable } from 'react-native';
-import { Chip, HandBox, HStrip, Row, Stepper, Txt } from '../ui/kit';
+import { Chip, HandBox, HStrip, Reveal, Row, Stepper, Txt } from '../ui/kit';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { DW, MO, addDays, atTime, fmtWhen, fromMin, hm, startOfDay, weekdayOf } from '../domain/time';
@@ -26,8 +26,7 @@ export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceho
         {pre.map((p) => <Chip key={p.label} label={p.label} on={value === p.at} onPress={() => onChange(p.at)} />)}
         <Chip label={open ? 'Done' : 'Pick…'} icon={open ? 'check' : 'clock'} on={open} onPress={() => { if (!open && value === null) onChange(base); setOpen(!open); }} />
       </HStrip>
-      {open && (
-        <View style={{ gap: 8 }}>
+      <Reveal open={open}>
           <HStrip gap={6} bg={c.card}>
             {days.map((d) => { const on = startOfDay(base) === d, dt = new Date(d); return (
               <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${DW[weekdayOf(dt)]} ${dt.getDate()} ${MO[dt.getMonth()]}`} onPress={() => setDay(d)}>
@@ -36,8 +35,7 @@ export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceho
                 </HandBox></Pressable>); })}
           </HStrip>
           <Row><Stepper label="hour" value={Math.floor(minutes / 60)} min={0} max={23} fmt={(v) => String(v).padStart(2, '0')} onChange={(h) => setMin(h * 60 + (minutes % 60))} /><Txt f="marker" s={26}>:</Txt><Stepper label="minutes" value={minutes % 60} min={0} max={55} step={5} fmt={(v) => String(v).padStart(2, '0')} onChange={(m) => setMin(Math.floor(minutes / 60) * 60 + m)} /></Row>
-        </View>
-      )}
+      </Reveal>
     </View>
   );
 }

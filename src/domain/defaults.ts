@@ -34,3 +34,26 @@ export const withDefaults = (s: Partial<Settings>): Settings => ({
   soundVol: { ...DEFAULT_SETTINGS.soundVol, ...(s.soundVol ?? {}) },
   notif: { ...DEFAULT_NOTIF, ...(s.notif ?? {}) },
 });
+
+/* ───── the onboarding tour ─────
+ *
+ * **A version stamp, not a boolean.** `Settings.onboarded` holds how many builds of the tour this
+ * phone has finished, so "show me the tour again" is one write of `0` (Settings → Show the tour
+ * again) and there is no second piece of state anywhere — no `onboardingVisible`, no modal, no
+ * route. The gate in `App.tsx` is a single predicate: `!toured(settings.onboarded)`.
+ *
+ * `TOUR_VERSION` is bumped whenever the screen list in `ui/onboard/screens.ts` changes, and every
+ * phone is shown the new tour exactly once more. Bump it when a screen is *added or reworded*; do
+ * not bump it to nag anyone.
+ *
+ * **Why no default here.** `withDefaults` never sees the field, so on a fresh install
+ * `settings.onboarded` is `undefined` — and `toured(undefined)` is `false`, which is exactly right.
+ * That is also why this survives a cold start and a `withDefaults` round trip with no migration and
+ * no entry in `DEFAULT_SETTINGS`: absent means "has not seen it". A default of `0` would be the
+ * same answer, bought with a schema field that every existing settings row would be missing.
+ */
+export const TOUR_VERSION = 1;
+
+/** Has this phone finished the current tour? `undefined` (a settings row written before the tour
+ *  existed, or a fresh install) means no. */
+export const toured = (seen: number | undefined): boolean => (seen ?? 0) >= TOUR_VERSION;

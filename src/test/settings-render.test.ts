@@ -47,7 +47,11 @@ jest.mock('react-native-reanimated', () => {
   const api = {
     __esModule: true, View: mk(), Text: mk(), ScrollView: mk(), Image: mk(),
     createAnimatedComponent: (c: unknown) => c,
-    useSharedValue: (v: number) => ({ value: v }),
+    /* `get`/`set` alongside `.value`: the app writes shared values through the compiler-safe forms
+       (`app.json` has `reactCompiler: true`, and `navigation/Book.tsx` documents why). These doubles
+       predate that; `set` is a no-op so a render reads the value it was constructed with, which is
+       exactly what a smoke render wants. Same shape as `onboarding.test.ts`. */
+    useSharedValue: (v: number) => ({ value: v, get: () => v, set: () => {} }),
     useAnimatedStyle: (fn: () => object) => fn(),
     useAnimatedProps: (fn: () => object) => fn(),
     useDerivedValue: (fn: () => unknown) => ({ value: fn() }),
@@ -58,11 +62,13 @@ jest.mock('react-native-reanimated', () => {
     startMapper: () => {}, stopMapper: () => {}, makeMutable: (v: number) => ({ value: v }),
     Easing: { out: (f: unknown) => f, in: (f: unknown) => f, inOut: (f: unknown) => f, quad: 2, cubic: 3, bezier: () => (t: number) => t, back: () => (t: number) => t },
     interpolate: (_v: number, i: number[], o: number[]) => o[0] ?? 0,
+    interpolateColor: (_v: number, _i: number[], o: string[]) => o[0] ?? '',
     Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: {}, FadeOut: {}, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    /* Layout-animation builders are called as `FadeOut.duration(n)` in production. */
+    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
   };
   return { ...api, default: api };
 });

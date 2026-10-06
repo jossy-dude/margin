@@ -1,15 +1,20 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Linking, Pressable, View } from 'react-native';
-import { Btn, Chip, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { SvgXml } from 'react-native-svg';
+import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
 import { Label, Sheet } from '../ui/Sheet';
 import { Empty, Section } from '../screens/common';
 import { FaceThumb } from '../ui/clock/ClockFace';
 import { FACES } from '../ui/clock/faces';
 import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
-import { useTheme } from '../ui/theme-context';
+import { isBarKind } from '../ui/instruments/legacyKinds';
+import { GROUPS, INSTRUMENTS } from '../ui/instruments/catalogue';
+import { previewSvg } from '../ui/instruments/svg';
+import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
-import { SOUND_GROUPS } from '../domain/defaults';
+import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
 import { DW, fmtDur, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
 import { logState, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
@@ -21,8 +26,38 @@ import { crashCount, subscribeCrashes } from '../ui/crashlog';
 import { DiagnosticsPage } from './Diagnostics';
 import type { Settings, SoundGroup } from '../domain/types';
 
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', diagnostics: 'Diagnostics', about: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', diagnostics: 'Diagnostics', tour: 'The tour', about: 'Reset' };
 const SAMPLE: Record<SoundGroup, SoundName> = { paper: 'place', stamp: 'stamp-here', done: 'done', notify: 'notify', toggle: 'toggle-on', dial: 'detent-3', clock: 'tick', break: 'tape-peel' };
+
+/**
+ * One Settings page change, as paper pushed sideways.
+ *
+ * This sheet is the only place in the app with a *stack* of pages, and every one of them used to replace
+ * the previous one in a single commit — no motion at all, on the screen the user spends the most time
+ * navigating. Android's own Settings slides, so this does too: deeper enters from the right, Android
+ * Back enters from the left, 24 dp and a 0.7 degree tilt that settles flat. The tilt is the app's own
+ * page-placement language (3.8 degrees there, at 200 ms and 30 dp of travel); this is the same gesture
+ * at a tenth the size, because it is one control inside a sheet rather than a whole page replacing
+ * another.
+ *
+ * **No opacity.** A1 removed it from the page placement for a measured reason — an animated opacity on a
+ * wrapper keeps the whole subtree in an offscreen target and re-composites it every frame — and this
+ * wrapper holds every control on the page, several of them SVG. Direction comes from the depth in the
+ * store's `settingsPath`, which is a strict stack, so it never has to guess which way "back" was.
+ */
+function PageSwap({ depth, children }: { depth: number; children: React.ReactNode }) {
+  const reduce = useReduceMotion(), k = useSharedValue(0), dir = useSharedValue(1), prev = useRef(depth);
+  useEffect(() => {
+    if (prev.current === depth) return;
+    dir.set(depth > prev.current ? 1 : -1);
+    prev.current = depth;
+    if (reduce) { k.set(0); return; }
+    k.set(withSequence(withTiming(1, { duration: 80, easing: EASE }), withSpring(0, { duration: 220, dampingRatio: 0.74 })));
+  }, [depth, reduce, k, dir]);
+  const st = useAnimatedStyle(() => ({ transform: [{ translateX: dir.get() * 24 * k.get() }, { rotate: `${dir.get() * 0.7 * k.get()}deg` }] }));
+  return <Animated.View style={[{ gap: 12 }, st]}>{children}</Animated.View>;
+}
+
 const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: string; to: string }) => {
   const { c } = useTheme();
   return (
@@ -66,6 +101,12 @@ export function SettingsSheet() {
   const { c } = useTheme();
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
+  /* `Settings.onboarded` is A4's field and the patch to the shared `src/domain/types.ts` that declares it
+   *  has not landed (their `qa/HANDOFF-A4.md` §1). Reading and writing it through this one alias means
+   *  the row below works whether or not the optional field is on the type yet — `toured()` says `undefined`
+   *  and `0` both mean "not seen", which is also what a settings row written before the tour existed
+   *  means. Delete the alias when the field lands; nothing else changes. See `qa/HANDOFF-A6.md`. */
+  const onboarded = (s as Settings & { onboarded?: number }).onboarded, replay = (v: number) => act.setSettings({ onboarded: v } as Partial<Settings>);
   const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false);
   /* The action test really writes — that is the point of it — so it asks twice, like Reset and the
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
@@ -102,6 +143,7 @@ export function SettingsSheet() {
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
+    <Nav icon="note" label="Show the tour again" hint={`${toured(onboarded) ? 'Finished — it is replayable' : 'Not seen yet'}`} to="tour" />
     <Nav icon="trash" label="Reset" hint="Back to the demo set" to="about" />
   </>);
   if (page === 'appearance') body = (<>
@@ -125,12 +167,21 @@ export function SettingsSheet() {
       </Pressable>))}</View>
   </>);
   if (page === 'bar') body = (<>
-    {BAR_KINDS.map((b) => (
-      <Pressable key={b.id} accessibilityRole="radio" accessibilityState={{ selected: s.bar === b.id }} accessibilityLabel={`${b.n}. ${b.d}`} onPress={() => { set({ bar: b.id }); fx.select(); }}>
-        <HandBox seed={b.id} fill={c.slab} stroke={s.bar === b.id ? c.acc : c.slab} sw={s.bar === b.id ? 3 : 1.6} style={{ padding: 10, gap: 2 }}>
-          <Txt f="bold" s={19} c={c.slabInk}>{b.n}{s.bar === b.id ? '  ✓' : ''}</Txt><Txt f="serif" s={13.5} c={c.slabMut}>{b.d}</Txt>
-          <DayBar kind={b.id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={280} h={52} />
-        </HandBox></Pressable>))}
+    <Txt f="serif" s={15} c="mut">A bar that measures. The twenty-two instruments count the class you are in, from the
+      real clock: full when it starts, empty when the bell goes. The four at the top read your whole day
+      instead. Each keeps its own machine.</Txt>
+    <Label>Your whole day</Label>
+    {BAR_KINDS.map((b) => <BarPick key={b.id} id={b.id} n={b.n} d={b.d} on={s.bar === b.id} onPress={() => { set({ bar: b.id }); fx.select(); }} />)}
+    {GROUPS.map((g) => {
+      const list = INSTRUMENTS.filter((i) => i.g === g.id);
+      return (
+        <React.Fragment key={g.id}>
+          <Label>{g.n}</Label>
+          <Txt f="serif" s={13.5} c="mut">{g.hint}</Txt>
+          {list.map((i) => <BarPick key={i.id} id={i.id} n={i.n} d={i.d} on={s.bar === i.id} onPress={() => { set({ bar: i.id }); fx.select(); }} />)}
+        </React.Fragment>
+      );
+    })}
   </>);
   if (page === 'pen') body = <Seg value={s.pen} opts={[['warm', 'Warm sienna'], ['graphite', 'Graphite (original)'], ['red', 'Red pencil'], ['blue', 'Blue pencil']]} onChange={(v) => set({ pen: v })} />;
   if (page === 'notifications') body = (<>
@@ -247,12 +298,17 @@ export function SettingsSheet() {
     <Txt f="serif" s={14.5} c="mut">Removes the sample finished tasks and focus sessions that make the Stats charts look alive on day one. Your own data stays — and so do the sample subjects, timetable, notes and open tasks, which are the app&rsquo;s starting point. Settings → Reset replaces the whole demo set.</Txt>
   </>);
   if (page === 'diagnostics') body = <DiagnosticsPage />;
+  if (page === 'tour') body = (<>
+    <Txt f="serif" s={16} c="mut">The five-screen tour that runs the first time this app opens. It teaches the five things a first-time user cannot guess: that everything is on this phone, that the + is the only way to add anything, that swiping left crumples and Undo brings it back, that attendance is one tap and then a hold, and that the Focus dial is a real dial.</Txt>
+    <Btn kind="ghost" icon="play" label="Run it now" onPress={() => { replay(0); act.close(); }} />
+    <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You finished build ${TOUR_VERSION} of it. Running it again changes nothing about your data.` : 'You have not seen it yet, so it will run the next time this app opens anyway.'}</Txt>
+  </>);
   if (page === 'about') body = (<>
     <Txt f="serif" s={16} c="mut">This replaces everything with the original demo set and default settings. It cannot be undone, so export first if you care about your data.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Reset to demo set'} onPress={armReset} />
     <Txt f="serif" s={14} c="mut">Marginalia 1.0 · local-first, no account, no network needed.</Txt>
   </>);
-  return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek>{body}</Sheet>;
+  return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 
   /** The one irreversible action, guarded by the same double tap the boot-failure screen uses: the first tap
    *  arms it and the second one, within the window, does it. The timer is owned by an effect so closing the
@@ -267,3 +323,39 @@ export function SettingsSheet() {
 const clearSettingsPath = () => { while (getState().settingsPath.length) act.settingsPop(); };
 const DEMO_NOW = new Date(2026, 9, 5, 10, 20).getTime(), at = (h: number, m: number) => new Date(2026, 9, 5, h, m).getTime();
 const DEMO_PERIODS = [{ start: at(8, 30), end: at(9, 20), label: 'Economics' }, { start: at(10, 0), end: at(10, 50), label: 'Discrete' }, { start: at(11, 45), end: at(12, 35), label: 'Tech', cancelled: true }, { start: at(14, 0), end: at(14, 50), label: 'Code' }];
+/** DEMO_NOW is 10:20 and DEMO_PERIODS[1] runs 10:00–10:50, so every instrument preview is drawn at
+ *  30/50 remaining. Getting this wrong shows a state the user is never in. */
+const DEMO_TOTAL = 50 * 60_000, DEMO_P = 30 / 50;
+
+/**
+ * One row of the picker. The SELECTED kind is a live `DayBar`; the other twenty-five are static
+ * `SvgXml` strings from the same geometry module. That is not an optimisation for its own sake: the
+ * sheet mounts every kind at once and a live instrument is 20–95 react-native-svg nodes, so twenty-six
+ * live previews is roughly 800 nodes and twenty-six Reanimated worklet subscriptions in one bottom
+ * sheet. The static path draws the identical markup with the dash offset already baked in.
+ *
+ * **The four original kinds are always live.** `previewSvg` is the *instrument* geometry module, and
+ * `instrument('spines')` returns `undefined` — it would hand back an empty string and the four day-wide
+ * bars would show nothing at all. `isBarKind` is the app's own discriminator, so exactly four rows take
+ * the live path plus whichever instrument is selected: five live previews, not twenty-six.
+ *
+ * On ids (prompt.md R11): this page is exactly where a shared SVG id would collide, and A2's answer was
+ * to remove the need — the instruments emit no gradients, no clips and no patterns, so there is nothing
+ * to make unique. `bars.test.ts` asserts that across all 22 instruments.
+ */
+function BarPick({ id, n, d, on, onPress }: { id: string; n: string; d: string; on: boolean; onPress: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Pressable accessibilityRole="radio" accessibilityState={{ selected: on }}
+      accessibilityLabel={`${n}. ${d}`} onPress={onPress}>
+      <HandBox seed={id} fill={c.slab} stroke={on ? c.acc : c.slab} sw={on ? 3 : 1.6} style={{ padding: 10, gap: 2 }}>
+        <Txt f="bold" s={19} c={c.slabInk}>{n}{on ? '  ✓' : ''}</Txt><Txt f="serif" s={13.5} c={c.slabMut}>{d}</Txt>
+        {on || isBarKind(id)
+          ? <DayBar kind={id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={280} h={52} />
+          : <View style={{ height: 44, width: 280 }}>
+              <SvgXml xml={previewSvg(id, { p: DEMO_P, w: 280, ink: c.slabInk, slab: c.slab, acc: c.acc, warn: c.warn, total: DEMO_TOTAL, left: DEMO_P * DEMO_TOTAL })} width={280} height={44} />
+            </View>}
+      </HandBox>
+    </Pressable>
+  );
+}

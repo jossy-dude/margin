@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
+import Animated, { FadeOut } from 'react-native-reanimated';
 import { Chip, HandBox, HStrip, Row, Txt } from '../ui/kit';
 import { Heatmap, HBars, Hist24, Line2, Ring } from '../ui/charts';
-import { useNow, useTheme } from '../ui/theme-context';
+import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import { HEAT_CELL_H, HEAT_GAP, heatRow } from '../ui/fit';
@@ -16,7 +17,7 @@ const Card = ({ title, sub, children, seed }: { title: string; sub?: string; chi
 );
 export function StatsScreen() {
   const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan);
-  const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(60_000), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
+  const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useNow(60_000), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
   /* The attendance heatmap's row geometry is width-derived, so it is recomputed whenever the window is.
      28 equal cells beside a label only fit if the cells are sized from what the card actually has. */
   const heat = heatRow(iw, 28);
@@ -46,7 +47,13 @@ export function StatsScreen() {
   const lateWeeks = useMemo(() => tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length, [tasks]);
   return (
     <Page title="Stats" sub="Everything the app tracks, in one place">
-      {hint && <Empty icon="stats" text={hint} />}
+      {/* The one "the app woke up" moment on this screen, and the only entrance added here. It exits
+          rather than enters because that is the direction with meaning: the hint is here while there is
+          nothing to show and it leaves the moment there is. 180 ms, shorter than any enter in the app —
+          `make-interfaces-feel-better`'s "exits should be softer than enters" — and it is one small view,
+          not a per-card entrance. The rings behind it are already travelling to their new values
+          (`qa/MOTION-INVENTORY.md` §4.52), which is where the data arriving is actually felt. */}
+      {hint && <Animated.View exiting={FadeOut.duration(reduce ? 1 : 180)}><Empty icon="stats" text={hint} /></Animated.View>}
       <Card seed="rings" title="At a glance" sub="Attendance is the last 30 days">
         <HStrip gap={10} bg={c.card}>
           <Ring value={attOverall.rate} label="Attendance" sub={`${attOverall.here}/${attOverall.held} classes`} />

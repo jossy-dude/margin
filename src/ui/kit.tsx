@@ -1,11 +1,43 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, FONT, TAPE, hexA, type Colors } from '../tokens/theme';
 import { handPath, hashSeed, type Corners } from './hand';
 import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
-import { useTheme } from './theme-context';
+import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * The motion vocabulary, in one place, because every control in this file is the
+ * same kind of thing at a different size. Nothing here is a new language: `EASE`
+ * IS the page placement's curve (`PLACE_EASE` in `navigation/window.ts`), so a chip
+ * and a page decelerate with the same hand on the tween, and the app stops having
+ * four slightly different settles.
+ *
+ * Three numbers, and only three:
+ *   BEAT (90)  — press-in. The most repeated motion in the app; it has to be felt,
+ *                not watched. `expo-animation` puts press feedback at 100-150 ms
+ *                and this is the short end of it.
+ *   STEP (160) — a state change with no finger on it: a toggle, a selection, a
+ *                field taking focus, a button becoming available. `expo-animation`
+ *                puts "toggle, chip, small state change" at 150-200 ms.
+ *   The springs below are not a fourth number. A spring is used where the value is
+ *   CONTINUOUS or can be interrupted — a knob, a chip settling, a sheet released
+ *   from a drag — because a spring carries the velocity of whatever was happening
+ *   and a timing curve restarts from wherever it is told to, which on a control a
+ *   user hits ten times a minute reads as a hitch.
+ *
+ * Every one of these collapses under `useReduceMotion()` to an instant assignment.
+ * That is a correctness requirement, not a nicety (`COORDINATION.md` §5, prompt.md
+ * V14): the OS "remove animations" switch has to actually remove the animation,
+ * and a switch that is checked must not be lying about where it is.
+ */
+export const EASE = Easing.bezier(0.2, 0.9, 0.25, 1);
+export const BEAT = 90;
+export const STEP = 160;
+/** A settled detent: a small overshoot that reads as a mechanical part arriving. */
+export const KNOB = { duration: 220, dampingRatio: 0.78 } as const;
 
 type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';
 const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
@@ -58,75 +90,206 @@ export function Icon({ name, size = 22, color, sw = 1.8 }: { name: keyof typeof 
 }
 
 export interface BtnProps { label?: string; icon?: string; onPress?: () => void; kind?: 'primary' | 'ink' | 'ghost' | 'danger'; small?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; a11y?: string; flex?: boolean; quiet?: boolean; selected?: boolean; testID?: string }
+/**
+ * A button is a cut piece of paper. Pressing it dips that paper by 3 %, and letting go springs it
+ * back — `expo-animation`'s rule, "scale 0.97 in 100-150 ms on any button-like pressable", at the short
+ * end of the range because this is the control the app repeats most.
+ *
+ * Two things are deliberately NOT here:
+ *  · **No opacity in the press.** Opacity on a wrapper makes the renderer keep the subtree in an
+ *    offscreen target and re-composite every frame — the cost `navigation/Book.tsx` documents removing
+ *    from the page placement. `scale` is free and carries the label and the icon with it, which is what
+ *    makes it read as a physical thing rather than a colour change.
+ *  · **No animated `fill` when `kind` changes.** That is SVG geometry work; see `qa/MOTION-INVENTORY.md`
+ *    §6.1 for the measurement behind that decision and the one-line change that reverses it.
+ *
+ * The disabled fade is the exception, and it is animated on purpose: it is the *only* validation signal
+ * any form in this app has (every Save button is `disabled={!title.trim()}`), and a button that blinks
+ * into existence when you type the first character is a button you learn to distrust.
+ */
 export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, style, a11y, flex, quiet, selected, testID }: BtnProps) {
-  const { c } = useTheme();
+  const { c } = useTheme(), reduce = useReduceMotion(), press = useSharedValue(1), dim = useSharedValue(disabled ? 1 : 0);
   const bg = kind === 'primary' ? c.acc : kind === 'ink' ? c.ink : kind === 'danger' ? c.bad : 'transparent', fg = kind === 'primary' ? c.onAcc : kind === 'ink' ? c.paper : kind === 'danger' ? c.card : c.ink;
   const h = small ? 40 : 52;
+  useEffect(() => { dim.set(reduce || disabled ? 1 : withTiming(0, { duration: STEP, easing: EASE })); }, [disabled, reduce, dim]);
+  /* Press-in and press-out are two writes to one value, never a reset, so a button that is tapped again
+     before the spring finishes continues from where it is (V18: no stuck, half-animated state). */
+  const down = () => { if (!disabled) press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE })); };
+  const up = () => { press.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.72 })); };
+  const face = useAnimatedStyle(() => ({ opacity: interpolate(dim.get(), [0, 1], [1, 0.45]), transform: [{ scale: press.get() }] }));
   return (
     <Pressable testID={testID ?? tid(a11y ?? label)} accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
-      onPress={() => { if (!quiet) fx.tap(); onPress?.(); }} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4}
-      style={[{ minHeight: h, opacity: disabled ? 0.45 : 1, flex: flex ? 1 : undefined }, style]}>
+      onPress={() => { if (!quiet) fx.tap(); onPress?.(); }} onPressIn={down} onPressOut={up} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4}
+      style={[{ minHeight: h, flex: flex ? 1 : undefined }, style]}>
       {/* stroke is always the ink: a ghost button has a transparent fill so it needs its own border,
           and the three filled kinds all draw on the accent/ink/bad the label is drawn against. */}
-      <HandBox seed={`${label}${icon}`} fill={bg} stroke={c.ink} corners={RS} shadow={kind !== 'ghost'} style={{ minHeight: h, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: small ? 14 : 20 }}>
-        {icon ? <Icon name={icon} size={small ? 18 : 22} color={fg} /> : null}
-        {label ? <Txt f="bold" s={small ? 19 : 23} c={fg}>{label}</Txt> : null}
-      </HandBox>
+      <Animated.View style={[{ minHeight: h }, face]}>
+        <HandBox seed={`${label}${icon}`} fill={bg} stroke={c.ink} corners={RS} shadow={kind !== 'ghost'} style={{ minHeight: h, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: small ? 14 : 20 }}>
+          {icon ? <Icon name={icon} size={small ? 18 : 22} color={fg} /> : null}
+          {label ? <Txt f="bold" s={small ? 19 : 23} c={fg}>{label}</Txt> : null}
+        </HandBox>
+      </Animated.View>
     </Pressable>
   );
 }
+/**
+ * A chip is a small cut-out being pushed into a slot.
+ *
+ * Press and selection share ONE value, deliberately. A chip is 96 % of the time both pressed and
+ * selected, and two values would have to be reconciled on every tap; one value means the second write
+ * simply retargets the first, continuously. The selection leg is a `withSequence` on that value and
+ * never an assignment of a fresh start, so ten taps in a second read as one continuous swell rather
+ * than a strobe through zero ten times.
+ */
 export function Chip({ label, on, onPress, icon, tone, small }: { label: string; on?: boolean; onPress?: () => void; icon?: string; tone?: string; small?: boolean }) {
-  const { c } = useTheme(), fg = on ? c.onAcc : c.ink, bg = on ? tone ?? c.acc : c.card;
+  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), was = useRef(!!on);
+  const fg = on ? c.onAcc : c.ink, bg = on ? tone ?? c.acc : c.card;
+  useEffect(() => {
+    if (was.current === !!on) return;
+    was.current = !!on;
+    if (reduce) { s.set(1); return; }
+    s.set(withSequence(withTiming(1.06, { duration: 110, easing: EASE }), withSpring(1, { duration: 220, dampingRatio: 0.6 })));
+  }, [on, reduce, s]);
+  const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   return (
-    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} onPress={() => { fx.select(); onPress?.(); }} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}>
-      <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-        {icon ? <Icon name={icon} size={16} color={fg} /> : null}
-        <Txt f="bold" s={small ? 17 : 19} c={fg}>{label}</Txt>
-      </HandBox>
+    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+      onPress={() => { fx.select(); onPress?.(); }} onPressIn={() => s.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
+      <Animated.View style={[{ minHeight: small ? 34 : 42 }, face]}>
+        <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {icon ? <Icon name={icon} size={16} color={fg} /> : null}
+          <Txt f="bold" s={small ? 17 : 19} c={fg}>{label}</Txt>
+        </HandBox>
+      </Animated.View>
     </Pressable>
   );
 }
+/**
+ * The switch, as a thing with a part that moves.
+ *
+ * Today the knob was `left: value ? 26 : 3` and the track was `backgroundColor: value ? c.acc : c.card`
+ * — both recomputed on the React thread and applied in a single commit, so a switch snapped. It is the
+ * most-repeated snapped state change in the app: nine of them sit on the first three Settings pages.
+ *
+ * One shared value `k` in 0..1 drives the knob's position, the track's colour and the knob's own
+ * colour, so they physically cannot disagree — and the position can overshoot its detent while the
+ * *colour* is clamped to 0..1, which is what is wanted: a knob that bounces into place, paint that
+ * does not. `interpolateColor` on a plain `View` is one native setter per frame; the equivalent on an
+ * SVG node is not (see `qa/MOTION-INVENTORY.md` §6.1).
+ *
+ * Under reduce-motion the value is assigned, not animated: the knob still moves, because where the knob
+ * IS the state — dropping the movement would leave the switch lying about its own position.
+ */
 export function Toggle({ value, onChange, label, hint, disabled }: { value: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
-  const { c } = useTheme();
+  const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(value ? 1 : 0);
+  useEffect(() => { if (reduce) { k.set(value ? 1 : 0); return; } k.set(withSpring(value ? 1 : 0, KNOB)); }, [value, reduce, k]);
+  const track = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { backgroundColor: interpolateColor(p, [0, 1], [c.card, c.acc]) }; });
+  const knob = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { transform: [{ translateX: interpolate(t, [0, 1], [3, 26]) }], backgroundColor: interpolateColor(p, [0, 1], [c.ink, c.onAcc]) }; });
   return (
     <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }}
       android_ripple={{ color: hexA(c.ink, 0.12) }} style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }}>
       <View style={{ flex: 1 }}><Txt f="bold" s={21}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" style={{ marginTop: 1 }}>{hint}</Txt> : null}</View>
-      <View style={{ width: 54, height: 30, borderRadius: 15, borderWidth: 1.6, borderColor: c.ink, backgroundColor: value ? c.acc : c.card, justifyContent: 'center' }}>
-        <View style={{ position: 'absolute', left: value ? 26 : 3, width: 22, height: 22, borderRadius: 11, backgroundColor: value ? c.onAcc : c.ink }} />
-      </View>
+      <Animated.View style={[{ width: 54, height: 30, borderRadius: 15, borderWidth: 1.6, borderColor: c.ink, justifyContent: 'center' }, track]}>
+        <Animated.View style={[{ position: 'absolute', left: 0, width: 22, height: 22, borderRadius: 11 }, knob]} />
+      </Animated.View>
     </Pressable>
   );
 }
+/** 0.95 and not 0.96: this is a 26 dp glyph, not a card, and a hair more travel is what makes it
+ *  legible at all. Still inside `make-interfaces-feel-better`'s "never below 0.95". */
 function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: boolean; a: string }) {
-  const { c } = useTheme();
+  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1);
+  const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   return (
-    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }}>
-      <Txt f="marker" s={26}>{t}</Txt>
+    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350}
+      onPressIn={() => s.set(reduce || dis ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
+      android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }}>
+      <Animated.View style={[{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }, face]}><Txt f="marker" s={26}>{t}</Txt></Animated.View>
     </Pressable>
   );
 }
+/**
+ * A stepper's value changing IS a state change, so it moves.
+ *
+ * The hard part is the fast repeat: `onLongPress` at 350 ms, and V18's "toggle done 10x", mean the
+ * value can change several times inside one animation. The fix is structural rather than a longer
+ * duration: `k` is only ever *retargeted*, never assigned a fresh start, so ten increments leave the
+ * digits travelling continuously out of and back into place instead of strobing through zero ten
+ * times. `dir` is a shared value rather than a ref because the UI thread has to read it.
+ */
 export function Stepper({ value, onChange, min, max, step = 1, fmt, label }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; fmt?: (v: number) => string; label?: string }) {
+  const reduce = useReduceMotion(), k = useSharedValue(0), dir = useSharedValue(-1), last = useRef(value);
   const dec = () => onChange(Math.max(min, value - step)), inc = () => onChange(Math.min(max, value + step));
+  useEffect(() => {
+    if (last.current === value) return;
+    dir.set(value > last.current ? -1 : 1); // the digits travel up when the number rises
+    last.current = value;
+    if (reduce) { k.set(0); return; }
+    k.set(withSequence(withTiming(1, { duration: 60, easing: EASE }), withSpring(0, { duration: 180, dampingRatio: 0.7 })));
+  }, [value, reduce, k, dir]);
+  const nudge = useAnimatedStyle(() => ({ transform: [{ translateY: dir.get() * -3.5 * k.get() }, { scale: interpolate(k.get(), [0, 1], [1, 0.93]) }] }));
   return (
     <HandBox seed={`st${label}`} shadow={false} corners={RS} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
       <StepBtn t="−" onPress={dec} dis={value <= min} a={`Decrease ${label ?? ''}`} />
-      <View style={{ minWidth: 74, alignItems: 'center' }} accessibilityLiveRegion="polite"><Txt f="bold" s={22}>{fmt ? fmt(value) : String(value)}</Txt></View>
+      <Animated.View style={[{ minWidth: 74, alignItems: 'center' }, nudge]} accessibilityLiveRegion="polite"><Txt f="bold" s={22}>{fmt ? fmt(value) : String(value)}</Txt></Animated.View>
       <StepBtn t="+" onPress={inc} dis={value >= max} a={`Increase ${label ?? ''}`} />
     </HandBox>
   );
 }
+/**
+ * A field's focus rule wipes in from the left instead of its border getting thicker.
+ *
+ * `borderBottomWidth` is a layout property: animating it re-runs Yoga for the input *and its siblings*
+ * on every frame, in a text field, while the user is typing. So the input keeps a static ink hairline
+ * and the accent rule is a separate `Animated.View` scaled on the x axis from `transformOrigin: 'left'`
+ * (RN 0.76+, and this app is 0.86 on the New Architecture, which `transformOrigin` requires).
+ */
 export function Field({ label, style, multiline, ...p }: TextInputProps & { label?: string }) {
-  const { c } = useTheme(), [focus, setFocus] = useState(false);
+  const { c } = useTheme(), reduce = useReduceMotion(), [focus, setFocus] = useState(false), k = useSharedValue(0);
+  useEffect(() => { k.set(reduce || focus ? 1 : 0); if (!reduce) k.set(withTiming(focus ? 1 : 0, { duration: STEP, easing: EASE })); }, [focus, reduce, k]);
+  const rule = useAnimatedStyle(() => ({ transform: [{ scaleX: k.get() }] }));
   return (
     <View style={style as StyleProp<ViewStyle>}>
       {label ? <Txt f="serif" s={14.5} c="mut" style={{ marginBottom: 2 }}>{label}</Txt> : null}
       <TextInput {...p} testID={tid(label ?? p.placeholder)} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
-        style={{ fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: focus ? 2.2 : 1.4, borderBottomColor: focus ? c.acc : c.ink }} />
+        style={{ fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: 1.4, borderBottomColor: c.ink }} />
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />
     </View>
   );
 }
 export const Row = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, style]}>{children}</View>;
+
+/**
+ * A section of a form that opens and closes, as paper sliding out from under another sheet of paper.
+ *
+ * Five call sites: the Task sheet's Start date and at-a-time sections, and the day/time pickers behind
+ * both. Every one of them used to appear in a single commit — a label, a stepper and a whole date strip,
+ * with nothing moving.
+ *
+ * The exit is the part that has to be built rather than declared: unmounting on `open === false` would
+ * remove the section in the same commit that *starts* the tween, so `shown` holds it mounted until the
+ * tween reports that it is finished. Transform and opacity only, never height — animating a height
+ * re-runs Yoga for the whole form on every frame, in the one sheet where the keyboard is usually up.
+ */
+export function Reveal({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const reduce = useReduceMotion(), k = useSharedValue(open ? 1 : 0);
+  /* `held` means "keep rendering, the exit is still running". It is cleared by the tween's own callback
+   * and by nothing else, so the section is on screen for exactly as long as its exit takes — returning
+   * null the moment `open` flips would remove it in the same commit that *starts* the tween. Re-opening
+   * sets it back during render, which is React's own "adjust state when a prop changes" pattern; doing
+   * it in an effect would cost an extra commit before the section could begin to appear.
+   *
+   * Under reduce-motion the tween is 1 ms rather than absent, so the same callback clears `held` on the
+   * same path. A separate branch that assigned `held` from an effect would be a second, differently
+   * tested code path for the one case that must never be wrong. */
+  const [held, setHeld] = useState(open);
+  if (open && !held) setHeld(true);
+  useEffect(() => {
+    k.set(open ? withTiming(1, { duration: reduce ? 1 : 220, easing: EASE }) : withTiming(0, { duration: reduce ? 1 : 160, easing: EASE }, (done) => { if (done) runOnJS(setHeld)(false); }));
+  }, [open, reduce, k]);
+  const st = useAnimatedStyle(() => ({ opacity: k.get(), transform: [{ translateY: interpolate(k.get(), [0, 1], [-8, 0]) }] }));
+  if (!open && !held) return null;
+  return <Animated.View style={[{ gap: 8 }, st]}>{children}</Animated.View>;
+}
 
 /** A horizontal strip that scrolls when it overflows **and says so**.
  *

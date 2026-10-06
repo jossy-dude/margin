@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Pressable, View, useWindowDimensions, type View as RNView } from 'react-native';
+import { BackHandler, Image, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useFrameCallback, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, Path, Pattern } from 'react-native-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -13,6 +13,7 @@ import { canBreak, view, MIN_BREAK_AFTER_MS, FLOW_OVER_CAP_MS } from '../domain/
 import { fmtClock, fmtDur } from '../domain/time';
 import { fx } from '../services/fx';
 import { handPath } from '../ui/hand';
+import { escapementAngle, ESC_DEG, ESC_TEETH } from '../ui/clock/faces';
 import { hexA } from '../tokens/theme';
 
 const PAGE = require('../../assets/images/journal-page.jpg');
@@ -21,8 +22,17 @@ function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { childre
   return <HandBox seed={seed} fill={fill ?? c.card} sw={sw} amp={1.5} shadow={shadow} style={style}>{children}</HandBox>;
 }
 const D = 282, C0 = 141;
-/** the readout is a hand-cut paper hub concentric with the dial (was a rectangle pasted over the face) */
-const HUB = 52, HUB_S = HUB * 2, HUB_BOX = HUB_S + 4, HUB_RAD = { h: [HUB, HUB, HUB, HUB], v: [HUB, HUB, HUB, HUB] } as const;
+/** the readout is a hand-cut paper capsule concentric with the dial (was a rectangle pasted over the face).
+ *
+ *  A disc has to be as wide as the numeral *and* as tall again, so the old 104-unit disc claimed 57 units of
+ *  dial radius and hid the entire centre of the selected clock face — which is where the guilloché and the two
+ *  rosette lattices live, and the thing the owner asked to see. A capsule is the concentric-correct shape for a
+ *  six-character lockup (outer radius = inner radius + padding) and it only claims 22, so the centre artifact is
+ *  on show right up to the number. Nothing about the number itself changed: same face, same size. */
+const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2, CAP_BOX = CAP_W + 4;
+const CAP_RAD = { h: [CAP_R, CAP_R, CAP_R, CAP_R], v: [CAP_R, CAP_R, CAP_R, CAP_R] } as const;
+/** the clock face is drawn a little larger than the knurled bed's inner step so its center artifact has room */
+const FACE = 196, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
 const P = (r: number, deg: number): [number, number] => { const a = (deg * Math.PI) / 180; return [C0 + r * Math.sin(a), C0 - r * Math.cos(a)]; };
 const sector = (r0: number, r1: number, deg: number) => {
   if (deg <= 0.2) return ''; if (deg >= 359.8) return `M${C0 + r1} ${C0}A${r1} ${r1} 0 1 1 ${C0 - r1} ${C0}A${r1} ${r1} 0 1 1 ${C0 + r1} ${C0}ZM${C0 + r0} ${C0}A${r0} ${r0} 0 1 0 ${C0 - r0} ${C0}A${r0} ${r0} 0 1 0 ${C0 + r0} ${C0}Z`;
@@ -33,14 +43,53 @@ const sector = (r0: number, r1: number, deg: number) => {
 const BED_RING = `M${C0 + 139} ${C0}A139 139 0 1 1 ${C0 - 139} ${C0}A139 139 0 1 1 ${C0 + 139} ${C0}ZM${C0 + 114} ${C0}A114 114 0 1 0 ${C0 - 114} ${C0}A114 114 0 1 0 ${C0 + 114} ${C0}Z`;
 const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
 
+/* ── the escapement: the countdown as a mechanism ──────────────────────────────────────────────────────────────
+   Three real invariants decide this, and they are why it is not a scale pulse any more.
+   1. A mechanism's motion is *continuous and derived*, so the escape wheel's angle comes from the clock — one
+      tooth per elapsed second, on the frame callback — and not from the 1 Hz React tick that renders the digits.
+   2. The *tick is discrete*: the wheel is locked and released once a second, so its timing tooth snaps across a
+      fixed index on the chapter ring. That snap is asymmetric — impulse out, overshoot back through rest,
+      settle — because a sprung pallet lever does exactly that. Expanding and shrinking by the same amount in
+      both directions is a breath, and it is what this replaced.
+   3. Nothing that carries meaning moves. The numeral is the thing being read, so it does not scale, pulse or
+      bounce; the motion is carried by a bezel outside the center artifact, the index it passes, and a single
+      low-contrast lift on the paper that repeats the audible tick rather than replacing it.
+   The bezel sits in the gap between the face's center artifact (48 units, scaled by FACE/200) and its chapter
+   ring, so it reads as part of the mechanism and never lands on the engraving or on the number. */
+const ESC_R0 = 46.8, ESC_R1 = 55.2, ESC_MARK = 56.4, ESC_R = 57.6;
+/** one tooth = one second. tooth 0 is the timing tooth: longer and heavier, so the release is visible. */
+const ESC_TOOTH = (i: number) => {
+  const a = (i * ESC_DEG * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a), mark = i === 0;
+  const r1 = mark ? ESC_MARK : ESC_R1, w = mark ? 4.8 : 3.4, pt = (r: number, o: number) => `${(C0 + r * ca - o * sa).toFixed(1)} ${(C0 + r * sa + o * ca).toFixed(1)}`;
+  return `M${pt(ESC_R0, w / 2)}L${pt(r1, w / 2)}L${pt(r1, -w / 2)}L${pt(ESC_R0, -w / 2)}Z`;
+};
+const ESC_PATH = Array.from({ length: ESC_TEETH }, (_, i) => ESC_TOOTH(i)).join('');
+/** the fixed index the timing tooth is released past: a radial bar at 12 o'clock, on the chapter ring */
+const ESC_INDEX = `M${C0 - 2} ${C0 - 58.2}H${C0 + 2}V${C0 - 55.2}H${C0 - 2}Z`;
+
 function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readout, tick, wash }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean; readout: string; tick: SharedValue<number>; wash: SharedValue<number> }) {
   const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), route = useStore((s) => s.route), reduce = useReduceMotion();
   const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), knob = useSharedValue(0), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0), warnSV = useSharedValue(0);
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
   const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
+  const totalMs = min * 60_000, wholeSec = Math.floor(leftMs / 1000);
+  /** elapsed whole seconds, plus a live sub-second remainder so the wheel is smooth between the 1 Hz digit updates */
+  const stamp = useSharedValue(0), elapsed = useSharedValue(0), kick = useSharedValue(0);
   useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
   useEffect(() => { if (drag.value) return; hand.value = reduce || live ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
-  useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [Math.floor(leftMs / 1000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [wholeSec, running, flowing, jolt]);
+  /* The escape wheel is derived from elapsed time, so it needs a frame source and not the 1 Hz render tick:
+     the wheel turns continuously while the release that indexes it happens once a second. It runs only while a
+     round is actually counting on this screen — a paused, set, off-screen or reduce-motion dial holds still. */
+  useEffect(() => { stamp.value = Date.now(); elapsed.value = Math.max(0, (totalMs - leftMs) / 1000); }, [leftMs, totalMs, stamp, elapsed]);
+  const spin = useFrameCallback(() => { elapsed.value = Math.max(0, (totalMs - leftMs) / 1000 + (Date.now() - stamp.value) / 1000); }, running && !reduce);
+  useEffect(() => { spin.setActive(running && !reduce); }, [running, reduce, spin]);
+  /* the release: impulse out, overshoot back through rest, settle. 190 ms total, because it repeats every second
+     for half an hour and anything longer accumulates into a shimmer. */
+  useEffect(() => {
+    if (!running || reduce) { kick.value = 0; return; }
+    kick.value = withSequence(withTiming(1, { duration: 38, easing: Easing.out(Easing.quad) }), withTiming(-0.42, { duration: 62, easing: Easing.out(Easing.cubic) }), withTiming(0, { duration: 90, easing: Easing.inOut(Easing.quad) }));
+  }, [wholeSec, running, reduce, kick]);
   const warnOn = running && leftMs > 0 && leftMs <= 10_000; // the last 10 seconds are announced by a red ring, not only by a blip
   useEffect(() => { if (warnOn && !reduce) warnSV.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 300 })); }, [warnOn, reduce, warnSV]);
   const pan = Gesture.Pan().enabled(editable).minDistance(0)
@@ -53,39 +102,59 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
     })
     .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
   const gripS = useAnimatedStyle(() => ({ transform: [{ rotate: `${knob.value}deg` }] })), handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
-  const tickS = useAnimatedStyle(() => ({ transformOrigin: '50% 50%', transform: [{ scale: 1 + tick.value * 0.045 }] })), washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 })), warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
-  /** The bed is the tone the page surface takes one step off: deeper than the paper in light, raised above the
-   *  desk in dark. Read from the theme so it follows the palette instead of staying warm-tinted under Original. */
-  const bed = dark ? c.card : c.desk, ink = c.ink;
+  /** one tooth per second, plus the release kick on the wheel's own rotation — never on the numeral, and never as a
+   *  scale: a bezel that grows and shrinks by the same amount in both directions reads as breathing, not as a clock.
+   *  Under reduce-motion `kick` stays 0 and the frame loop is off, so the wheel simply holds its whole-second angle. */
+  const escS = useAnimatedStyle(() => ({ transform: [{ rotate: `${escapementAngle(elapsed.value, kick.value)}deg` }] }));
+  /** the one lift that is not on the bezel: a 13 % wash on the paper, riding the audible tick so the two agree.
+   *  Collapsed under reduce-motion, like every other thing here. */
+  const tickS = useAnimatedStyle(() => ({ opacity: reduce ? 0 : tick.value * 0.13 }));
+  /** the flow-overtime wash: the accent floods the capsule and drains, once, when a round runs past its cap */
+  const washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 }));
+  const warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
+  /** The bed is cut *into* the page in both themes, so the depth reads the same way round: deeper than the paper in
+   *  light, deeper than the desk in dark. Reading from `desk` in light and `card` in dark made the ring switch from
+   *  a recess to a raised plate, which is why the dark dial never looked like a design and only a filter. */
+  const bed = dark ? c.slab : c.desk, ink = c.ink;
+  /** labels sit on the torn photograph, so their halo has to be the colour of what is actually behind them — the
+   *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing. */
+  const halo = dark ? c.desk : c.paper;
   const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360;
   const grip = useMemo(() => <Svg width={D} height={D}>
     <Path d={BED_RING} fill={bed} fillRule="evenodd" /><Path d={BED_RING} fill={hexA(ink, 0.13)} fillRule="evenodd" />
-    {Array.from({ length: 60 }, (_, i) => { const a = (i * 6 * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a); return <Line key={i} x1={C0 + 131 * ca} y1={C0 + 131 * sa} x2={C0 + 138 * ca} y2={C0 + 138 * sa} stroke={ink} strokeWidth={1.7} strokeOpacity={0.5} />; })}
+    {Array.from({ length: 60 }, (_, i) => { const a = (i * 6 * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a); return <Line key={i} x1={C0 + 131 * ca} y1={C0 + 131 * sa} x2={C0 + 138 * ca} y2={C0 + 138 * sa} stroke={hexA(ink, 0.5)} strokeWidth={1.7} />; })}
     <Circle cx={C0} cy={C0} r={139} fill="none" stroke={ink} strokeWidth={1.6} /><Circle cx={C0} cy={C0} r={113.5} fill="none" stroke={ink} strokeWidth={1.2} strokeOpacity={0.7} />
   </Svg>, [bed, ink]);
   const hatch = useMemo(() => <Defs><Pattern id="hatch" width={5.5} height={5.5} patternUnits="userSpaceOnUse" patternTransform="rotate(135)"><Line x1={0} y1={0} x2={0} y2={5.5} stroke={ink} strokeWidth={1.6} /></Pattern></Defs>, [ink]);
-  const marks = useMemo(() => [['60', 141, 18], ['15', 264, 141], ['30', 141, 264], ['45', 18, 141]].map(([t, x, y]) => <Txt key={t as string} f="type" s={10} pointerEvents="none" style={{ position: 'absolute', left: (x as number) - 10, top: (y as number) - 6, width: 20, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{t}</Txt>), [c.paper]);
-  const hub = useMemo(() => handPath(HUB_S, HUB_S, HUB_RAD, 7717, 1.6), []);
+  const marks = useMemo(() => [['60', 141, 18], ['15', 264, 141], ['30', 141, 264], ['45', 18, 141]].map(([t, x, y]) => <Txt key={t as string} f="type" s={10} pointerEvents="none" style={{ position: 'absolute', left: (x as number) - 10, top: (y as number) - 6, width: 20, textAlign: 'center', textShadowColor: halo, textShadowRadius: dark ? 6 : 4 }}>{t}</Txt>), [halo, dark]);
+  const hub = useMemo(() => handPath(CAP_W, CAP_H, CAP_RAD, 7717, 1.6), []);
   const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
+  const escBox = { left: C0 - ESC_R, top: C0 - ESC_R, width: ESC_R * 2, height: ESC_R * 2 };
   return (
     <GestureDetector gesture={pan}>
       <View collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: `${live ? Math.ceil(leftMs / 60_000) + ' minutes left' : min + ' minutes'}` }}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
-        <View style={{ position: 'absolute', left: (D - 185) / 2, top: (D - 185) / 2, borderRadius: 93, overflow: 'hidden', borderWidth: 1.5, borderColor: hexA(ink, 0.34) }}><ClockFace id={face} size={182} hands={false} live={route === 'Focus'} /></View>
+        <View style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', borderWidth: 1.5, borderColor: hexA(ink, 0.34) }}><ClockFace id={face} size={FACE} hands={false} live={route === 'Focus'} /></View>
+        {/* the escapement sits over the dial and under the pointer: the pointer is the hand, so it passes in front */}
+        <Animated.View pointerEvents="none" style={[escBox, escS]}><Svg width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_PATH} fill={c.acc} /></Svg></Animated.View>
+        <Svg pointerEvents="none" style={escBox} width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_INDEX} fill={ink} /></Svg>
         <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">{hatch}<Path d={sector(95, 112, progDeg)} fill="url(#hatch)" /></Svg>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, gripS]}>{grip}</Animated.View>
         {marks}
         {/* the timer reads inside its own dial: a round paper hub on the dial's centre, so the face, the cliff photo and the pointer all stay readable */}
-        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: C0 - HUB, top: C0 - HUB, width: HUB_S, height: HUB_S, alignItems: 'center', justifyContent: 'center' }, tickS]}>
-          <Svg width={HUB_BOX} height={HUB_BOX} style={{ position: 'absolute', left: -2, top: -2 }} viewBox={`-2 -2 ${HUB_BOX} ${HUB_BOX}`}>
-            <Path d={hub} transform="translate(2.6 3)" fill={hexA(c.shadow, 0.2)} /><Path d={hub} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
-          </Svg>
-          {warnOn && <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -2, top: -2 }, warnS]}><Svg width={HUB_BOX} height={HUB_BOX} viewBox={`-2 -2 ${HUB_BOX} ${HUB_BOX}`}><Circle cx={HUB + 2} cy={HUB + 2} r={HUB + 4} fill="none" stroke={c.bad} strokeWidth={2.6} /></Svg></Animated.View>}
-          <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 4, top: 4, right: 4, bottom: 4, borderRadius: HUB - 4, backgroundColor: c.acc }, washS]} />
+        <View pointerEvents="none" style={{ position: 'absolute', left: (D - CAP_W) / 2, top: (D - CAP_H) / 2, width: CAP_W, height: CAP_H, alignItems: 'center', justifyContent: 'center' }}>
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Svg width={CAP_BOX} height={CAP_BOX} style={{ position: 'absolute', left: -2, top: -2 }} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}>
+              <Path d={hub} transform="translate(2.6 3)" fill={hexA(c.shadow, 0.2)} /><Path d={hub} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
+            </Svg>
+            <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -2, top: -2 }, tickS]}><Svg width={CAP_BOX} height={CAP_BOX} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}><Path d={hub} fill={c.hl} stroke="none" /></Svg></Animated.View>
+            {warnOn && <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -2, top: -2 }, warnS]}><Svg width={CAP_BOX} height={CAP_BOX} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}><Path d={hub} fill="none" stroke={c.bad} strokeWidth={2.6} /></Svg></Animated.View>}
+          </View>
+          <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 4, top: 4, right: 4, bottom: 4, borderRadius: CAP_R - 4, backgroundColor: c.acc }, washS]} />
           <Txt f="type" s={27} style={{ letterSpacing: -0.8 }} accessibilityLiveRegion="none">{readout}</Txt>
-        </Animated.View>
+        </View>
       </View>
     </GestureDetector>
   );
@@ -158,7 +227,13 @@ export function FocusScreen() {
       <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
         <View style={{ width: 440, height: 1001, transformOrigin: '0% 0%', transform: [{ scale: s }] }}>
           <Image source={PAGE} style={{ position: 'absolute', width: 440, height: 1001 }} />
-          {dark && <View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.desk, opacity: 0.62 }} />}
+          {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
+              luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos, the knurl and the bed all had
+              nothing to sit against and the page read as the light one with the brightness pulled down. Two layers
+              off the theme's own desk do the work instead: a deep scrim that takes the page to a ground ink can be
+              read on, then a thin lift of the theme's paper so the photograph's own relief survives as a plate
+              rather than disappearing into a brown. */}
+          {dark && <><View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.desk, opacity: 0.82 }} /><View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.paper, opacity: 0.07 }} /></>}
           <Box seed="rnd" style={{ position: 'absolute', left: 32, top: 6 + topOff, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8, transform: [{ rotate: '-1.5deg' }] }}>
             <Txt f="bold" s={19} accessibilityLiveRegion="polite">Round {rn} · {phaseLabel}</Txt>
             <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1, 2, 3].map((i) => <View key={i} style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.6, borderColor: c.ink, backgroundColor: i < t.rounds % 4 || (t.rounds > 0 && t.rounds % 4 === 0) ? c.ink : 'transparent' }} />)}</View>

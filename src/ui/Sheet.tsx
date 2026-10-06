@@ -19,8 +19,8 @@ const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
 /** One-hand bottom sheet: sits in the thumb zone, drags down to dismiss, Android back closes it, keyboard-aware, live-region title. */
 export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null }) {
   const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c } = useTheme(), reduce = useReduceMotion();
-  const y = useSharedValue(H), [kb, setKb] = useState(0), restH = useRef(H), closing = useRef(false), after = useRef(afterClose()).current;
-  useEffect(() => { y.value = reduce ? 0 : withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }); fx.page(); }, [y, reduce]);
+  const y = useSharedValue(H), [kb, setKb] = useState(0), [gone, setGone] = useState(false), restH = useRef(H), closing = useRef(false), after = useRef(afterClose()).current;
+  useEffect(() => { y.set(reduce ? 0 : withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) })); fx.page(); }, [y, reduce]);
   useEffect(() => { const a = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates.height)), b = Keyboard.addListener('keyboardDidHide', () => setKb(0)); return () => { a.remove(); b.remove(); }; }, []);
   /** Android lifts the window for the keyboard in one of two ways: `adjustResize` shrinks it, `adjustPan` /
       edge-to-edge leaves it alone and covers it. `restH` is the tallest height seen with no keyboard up, so
@@ -45,19 +45,34 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
      for the untracked `setTimeout` the focus buttons used to defer their navigation with. */
   const close = useCallback((next?: () => void) => {
     after.ask(next); if (closing.current) return;
-    closing.current = true; Keyboard.dismiss(); if (reduce) finish(); else y.value = withTiming(H, { duration: 210, easing: Easing.in(Easing.cubic) }, (done) => { if (done) runOnJS(finish)(); });
-  }, [H, after, finish, reduce, y]);
+    closing.current = true; setGone(true); Keyboard.dismiss(); if (reduce) finish(); else y.set(withTiming(H, { duration: 210, easing: Easing.in(Easing.cubic) }, (done) => { if (done) runOnJS(finish)(); }));
+  }, [H, after, finish, reduce, y, setGone]);
+  /* Caught mid-dismiss. The sheet is only removed from the store when the close animation FINISHES, so a
+     user who drags it back up inside that 210 ms has not dismissed anything — they have caught it. The
+     latch has to come off, because `close()` returns early while it is set: without this, catching a
+     closing sheet leaves a sheet that can never be dismissed again, which is exactly what prompt.md V18's
+     "open/close Settings 10x" produces. This is a stuck state, not a feel problem. */
+  const catchBack = useCallback(() => { if (closing.current) { closing.current = false; setGone(false); } }, [setGone]);
   useEffect(() => { const s = BackHandler.addEventListener('hardwareBackPress', () => { if (back) { back(); return true; } close(); return true; }); return () => s.remove(); }, [close, back]);
-  const pan = Gesture.Pan().activeOffsetY(8).onUpdate((e) => { y.value = Math.max(0, e.translationY); }).onEnd((e) => { if (e.translationY > 110 || e.velocityY > 900) runOnJS(close)(); else y.value = withSpring(0, { damping: 22, stiffness: 260 }); });
-  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
-  const dim = useAnimatedStyle(() => ({ opacity: interpolate(y.value, [0, H], [peek ? 0.12 : 0.42, 0], 'clamp') }));
+  const pan = Gesture.Pan().activeOffsetY(8).onUpdate((e) => { y.set(Math.max(0, e.translationY)); }).onEnd((e) => {
+    if (e.translationY > 110 || e.velocityY > 900) { runOnJS(close)(); return; }
+    runOnJS(catchBack)();
+    /* The release velocity is handed to the spring. `expo-animation`'s table is explicit about this one:
+     * "reposition / snap back after a drag -> { duration, dampingRatio, velocity }". Without it the sheet
+     * springs from rest while the finger is still travelling, and a sheet flicked up from half way reads
+     * as a stall followed by a correction instead of as one movement. `e.velocityY` is dp/s and `y` is
+     * dp, so the units already agree. */
+    y.set(withSpring(0, { damping: 22, stiffness: 260, mass: 1, velocity: e.velocityY }));
+  });
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }));
+  const dim = useAnimatedStyle(() => ({ opacity: interpolate(y.get(), [0, H], [peek ? 0.12 : 0.42, 0], 'clamp') }));
   return (
     <SheetCtx.Provider value={{ close }}>
       {/* `accessibilityViewIsModal` traps focus on iOS only, so Android gets the matching
           `importantForAccessibility`; App.tsx hides the navigator behind this sheet at the same time. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none" accessibilityViewIsModal importantForAccessibility="yes">
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, dim]}><Pressable testID="sheet-dismiss" style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel="Close" accessibilityRole="button" /></Animated.View>
-        <Animated.View importantForAccessibility="yes" style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
+        <Animated.View importantForAccessibility={gone ? 'no-hide-descendants' : 'yes'} pointerEvents={gone ? 'none' : 'auto'} style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
           <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={c.ink}>
             <PaperBg card />
             <GestureDetector gesture={pan}>

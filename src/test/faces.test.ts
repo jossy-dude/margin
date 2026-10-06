@@ -24,9 +24,15 @@ describe('faces', () => {
   it('ships five distinct faces, none of the removed duplicates', () => { expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']); expect(new Set(FACES.map((f) => f.n)).size).toBe(5); });
   it('renders every face in both themes at three moments and writes them for the visual check', () => {
     mkdirSync('/tmp/faces', { recursive: true });
+    // written at every size the app actually draws a face at: 96 (Settings picker), 124 (Today) and 400 (the
+    // contact sheet). The engine compensates weight and numeral size for the render scale, so these are three
+    // genuinely different drawings and the point of writing all three is that they have to be looked at.
     for (const f of FACES) for (const dark of [false, true]) {
       const pal = dialPal(f, palettes.refined[dark ? 'dark' : 'light'], dark);
-      for (const [i, secs] of [0, 1.7, 5.3].entries()) { const s = compositeSvg(f, pal, 'Newsreader', { h: 10, m: 10, s: 30 }, secs); expect(s.startsWith('<svg')).toBe(true); expect(s).not.toContain('NaN'); if (i === 0) writeFileSync(`/tmp/faces/${f.id}-${dark ? 'dark' : 'light'}.svg`, s); }
+      for (const [i, secs] of [0, 1.7, 5.3].entries()) {
+        const t = { h: 10, m: 10, s: 30 };
+        for (const px of [96, 124, 400]) { const s = compositeSvg(f, pal, 'Newsreader', t, secs, px); expect(s.startsWith('<svg')).toBe(true); expect(s).not.toContain('NaN'); if (i === 0) writeFileSync(`/tmp/faces/${f.id}-${dark ? 'dark' : 'light'}${px === 400 ? '' : `-${px}`}.svg`, s); }
+      }
     }
   });
   it('only faces with motion declare spin layers', () => { const ids = (['g', 'rb', 'c', 'sl', 's'] as FaceId[]).filter((i) => spinLayers(i, dialPal(FACES[0]!, palettes.refined.light, false)).length); expect(ids).toEqual(['g', 'rb', 'sl', 's']); });

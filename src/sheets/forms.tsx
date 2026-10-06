@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { Btn, Chip, Field, HandBox, HStrip, Icon, Row, Stepper, Toggle, Txt, Hair } from '../ui/kit';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Btn, Chip, EASE, Field, HandBox, HStrip, Icon, Reveal, Row, STEP, Stepper, Toggle, Txt, Hair } from '../ui/kit';
 import { Label, Sheet, useSheet } from '../ui/Sheet';
 import { latch } from '../ui/latch';
-import { useTheme } from '../ui/theme-context';
+import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { WhenPicker, nextHome } from './WhenPicker';
 import { act, toast, useStore, type SheetSpec } from '../store/store';
@@ -15,6 +16,34 @@ import { fx } from '../services/fx';
 
 const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'exam', l: 'Exam', i: 'exam' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'other', l: 'Other', i: 'pencil' }];
 const PRI = ['None', 'Low', 'Medium', 'High'];
+
+/**
+ * The "Tight / Comfortable" box — the one place in the app where a *colour* changes as a direct
+ * consequence of something the user just did: raising the estimate past the free time repaints it from
+ * cream-and-ink to highlight-and-warning, and it did both in one frame.
+ *
+ * It is a cross-fade of two complete, static cards rather than a colour interpolation, and that is
+ * deliberate. Interpolating would mean animated `fill` and `stroke` on two SVG paths — the class
+ * `qa/RESEARCH-PERF.md` §6 measured at 30-40 fps on Android, and the reason the chips' fills are not
+ * animated (`qa/MOTION-INVENTORY.md` §6.1). Opacity on two plain views is free, and for a hand-cut card
+ * swapping one piece of paper for another reads better than a colour bleeding into place anyway.
+ */
+function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: number; freeMin: number; startBy: string }) {
+  const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(tight ? 1 : 0);
+  useEffect(() => { k.set(reduce ? (tight ? 1 : 0) : withTiming(tight ? 1 : 0, { duration: STEP, easing: EASE })); }, [tight, reduce, k]);
+  const comfortable = useAnimatedStyle(() => ({ opacity: interpolate(k.get(), [0, 1], [1, 0]) })), tightStyle = useAnimatedStyle(() => ({ opacity: interpolate(k.get(), [0, 1], [0, 1]) }));
+  return (
+    <View>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, comfortable]}>
+        <HandBox seed="wl" shadow={false} fill={c.card} stroke={c.ink} style={{ padding: 10 }}><Txt f="bold" s={19}>Comfortable: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
+      </Animated.View>
+      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, tightStyle]}>
+        <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19} c="warn">Tight: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
+      </Animated.View>
+      <Txt f="serif" s={15} c="mut">Latest start: {startBy} (classes, sleep and quiet hours already excluded)</Txt>
+    </View>
+  );
+}
 
 export function CourseChips({ value, onChange, none = 'No subject' }: { value: string | null; onChange: (v: string | null) => void; none?: string | null }) {
   const courses = useStore((s) => s.courses), { c } = useTheme();
@@ -77,17 +106,17 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
       <HStrip gap={8} bg={c.card}>{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</HStrip>
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" />
-      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" /></>}
+      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" /></Reveal>}
       <Label>How long will it take?</Label>
       <Stepper label="effort" value={est} min={0} max={720} step={15} fmt={(v) => (v ? fmtDur(v) : 'unknown')} onChange={setEst} />
-      {w && <HandBox seed="wl" shadow={false} fill={w.tight ? c.hl : c.card} stroke={w.tight ? c.warn : c.ink} style={{ padding: 10 }}><Txt f="bold" s={19} c={w.tight ? 'warn' : 'ink'}>{w.tight ? 'Tight: ' : 'Comfortable: '}needs ~{fmtDur(w.needMin)}, you have ~{fmtDur(Math.round(w.freeMin))} free before it is due.</Txt><Txt f="serif" s={15} c="mut">Latest start: {fmtWhen(w.startBy, now)} (classes, sleep and quiet hours already excluded)</Txt></HandBox>}
+      {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now)} />}
       {due ? <>
         <Label>Remind me</Label>
         <Row>{OFFS.map((o) => <Chip key={o.m} label={o.l} on={has(o.m)} onPress={() => toggleOff(o.m)} small />)}
           {home && home < due && <Chip label="When I get home" icon="bell" on={hasHome} small onPress={() => setRem((r) => (hasHome ? r.filter((x) => !(x.mode === 'abs' && x.label === 'When I get home')) : [...r, { id: uid('r'), mode: 'abs', at: home, label: 'When I get home' }]))} />}
           {rem.filter((r) => (r.mode === 'before' && !OFFS.some((o) => o.m === r.minutes)) || (r.mode === 'abs' && r.label !== 'When I get home')).map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}</Row>
         <Row><Stepper label="custom lead" value={custom} min={5} max={10080} step={5} fmt={fmtDur} onChange={setCustom} /><Btn small kind="ghost" label="+ add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); }} /><Btn small kind="ghost" label="+ at a time" onPress={() => setAddAt(!addAt)} /></Row>
-        {addAt && <><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></>}
+        {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
       </> : <Txt f="serif" s={15} c="mut">Set a due date to choose reminders.</Txt>}
       <Label>Priority</Label><Row>{PRI.map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
       <Label>Steps</Label>
