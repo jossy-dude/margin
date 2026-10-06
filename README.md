@@ -5,7 +5,7 @@ Hand-drawn school planner. Expo SDK 57 + React Native + TypeScript. Offline-firs
 ```bash
 npm install
 npx expo run:android --variant release   # builds + installs the standalone app
-npm run check                 # typecheck + lint + 82 tests + architecture rules
+npm run check                 # typecheck + lint + jest + architecture rules (the count moves daily; read it off the run)
 npm run bundle                # proves the Android bundle compiles
 npm run sounds                # regenerate assets/sounds/*.wav (deterministic)
 ```

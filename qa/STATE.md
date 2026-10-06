@@ -16,7 +16,7 @@ Agents: append findings, do not rewrite history. One agent at a time.
 | Device | Samsung SM-A516N, Android 13 (SDK 33), 1080x2400 @ 420dpi = **411dp wide** | `adb` |
 | Connection | USB (`R5CR117MTJJ`) — `adb reverse` used, Wi-Fi never touched | `adb devices -l` |
 | Test accounts | None needed — no auth in this app | — |
-| Machine gates | `npm run check` (tsc + eslint + 104 jest + depcruise), `npm run bundle` | `package.json` |
+| Machine gates | `npm run check` (tsc + eslint + jest + depcruise), `npm run bundle` | `package.json` |
 
 **Safety: no backend risk.** There is no server, no API URL and no user data at risk.
 All test data is local SQLite and is wiped with `adb shell pm clear <pkg>`.

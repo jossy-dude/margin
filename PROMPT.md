@@ -45,7 +45,7 @@ Read in this order:
 8. STATE.md at REPO ROOT — prior decisions and the deviation ledger. Read, never edit.
 
 Already established — do NOT re-derive, do NOT re-run:
-- `npm run check` exits 0: tsc clean, eslint 0 warnings, **313 jest tests / 29 suites**, depcruise clean.
+- `npm run check` exits 0: tsc clean, eslint 0 warnings, jest green, depcruise clean. (Read the count off the run; a number written here is wrong the moment the next agent lands.)
 - `npm run bundle` exits 0: 3.8 MB Hermes bytecode. Test-count history: 82→104→111→148→209→254→313.
 - Node here is v24.16.0 (docs say 22.22; gates pass regardless).
 - The app seeds demo data on first run. Settings → Clear demo history does NOT reach an empty DB
