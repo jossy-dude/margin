@@ -66,7 +66,12 @@ function SheetUnder({ c, w, h, x, y, deg, seed }: { c: Colors; w: number; h: num
 }
 
 /** The real bottom nav, at `Book.tsx`'s own metrics: `corners={RS} sw={2} amp={1.6}`, five 56 dp
- *  targets, a 52×30 accent pill on the selected tab, and the 62 dp `+` floating clear above it. */
+ *  targets, a 52×30 accent pill on the selected tab, and the 62 dp `+` floating clear above it.
+ *
+ *  A mock of the product that differs from the product is worse than no mock, so this copy is held to the
+ *  original attribute by attribute — including the things that look like oversights. The tab labels were
+ *  capped at `FS` here and are NOT capped in `Book.tsx:88`, so at a 1.4× system font this drawing shrank
+ *  its own nav while the real one grew. `src/test/onboarding.test.ts` now diffs the two. */
 function MapArt({ c, reduce }: ArtProps) {
   const TABS: [string, string][] = [['today', 'Today'], ['week', 'Week'], ['tasks', 'To-do'], ['grades', 'Grades'], ['stats', 'Stats']];
   const [sel, setSel] = useState(0);
@@ -99,7 +104,7 @@ function MapArt({ c, reduce }: ArtProps) {
               <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? hexA(c.acc, 0.2) : 'transparent', borderWidth: on ? 1.5 : 0, borderColor: c.acc }}>
                 <Icon name={i} size={23} color={on ? c.acc : c.ink} sw={on ? 2.2 : 1.8} />
               </View>
-              <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'} maxFontSizeMultiplier={FS}>{l}</Txt>
+              <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'}>{l}</Txt>
             </View>
           );
         })}
@@ -361,7 +366,14 @@ export function AttendanceArt({ c, reduce }: ArtProps) {
  *  5-minute detents and the same 5–240 limits. */
 const DIAL = 282, DC = 141;
 const BED_RING = `M${DC + 139} ${DC}A139 139 0 1 1 ${DC - 139} ${DC}A139 139 0 1 1 ${DC + 139} ${DC}ZM${DC + 114} ${DC}A114 114 0 1 0 ${DC - 114} ${DC}A114 114 0 1 0 ${DC + 114} ${DC}Z`;
-const HUB = 52, HUB_R = { h: [HUB, HUB, HUB, HUB], v: [HUB, HUB, HUB, HUB] } as const;
+/** The readout's hub is a CAPSULE and not a disc, and that is `Focus.tsx`'s own decision copied deliberately.
+ *  Its comment records why the disc was thrown out: "A disc has to be as wide as the numeral *and* as tall
+ *  again, so the old 104-unit disc claimed 57 units of dial radius and hid the entire centre of the selected
+ *  clock face — which is where the guilloché and the two rosette lattices live, and the thing the owner asked
+ *  to see." This file had a 104-unit disc anyway, and the guilloché underneath is invisible because of it.
+ *  `CAP_W x CAP_H = 108 x 44` is Focus's pair exactly; the disc claimed 104 units of *diameter* and this
+ *  claims 22 units of radius. Both are visible side by side in `/tmp/render/a8/DIALBUG.png`. */
+const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2, HUB_R = { h: [CAP_R, CAP_R, CAP_R, CAP_R], v: [CAP_R, CAP_R, CAP_R, CAP_R] } as const;
 const DIAL_MIN = 5, DIAL_MAX = 240, DIAL_STEP = 5;
 /** The app's own figure: one full turn of the dial is 60 minutes. */
 const DEG_PER_MIN = 6;
@@ -412,7 +424,7 @@ export function DialArt({ c, reduce }: ArtProps) {
       <Circle cx={DC} cy={DC} r={6.5} fill={c.ink} />
     </G>
   ), [c.ink]);
-  const hubPath = useMemo(() => handPath(HUB * 2, HUB * 2, HUB_R, 7717, 1.6), []);
+  const hubPath = useMemo(() => handPath(CAP_W, CAP_H, HUB_R, 7717, 1.6), []);
   const atLimit = min <= DIAL_MIN || min >= DIAL_MAX;
   /** `Focus.tsx` resolves the bed as one step off the page surface — deeper than paper in light,
    *  raised above the desk in dark. Copying that is why the dial belongs on both themes. */
@@ -458,8 +470,14 @@ export function DialArt({ c, reduce }: ArtProps) {
             <Svg width={S} height={S} viewBox={`0 0 ${DIAL} ${DIAL}`}>{pointer}</Svg>
           </Animated.View>
           {/* the readout on its own hand-cut paper hub, concentric with the dial */}
-          <View pointerEvents="none" style={{ position: 'absolute', left: DC * k - HUB * k, top: DC * k - HUB * k, width: HUB * 2 * k, height: HUB * 2 * k, alignItems: 'center', justifyContent: 'center' }}>
-            <Svg width={HUB * 2 * k + 4 * k} height={HUB * 2 * k + 4 * k} style={{ position: 'absolute', left: -2 * k, top: -2 * k }} viewBox={`${-HUB - 2} ${-HUB - 2} ${HUB * 2 + 4} ${HUB * 2 + 4}`}>
+          <View pointerEvents="none" style={{ position: 'absolute', left: DC * k - (CAP_W / 2) * k, top: DC * k - (CAP_H / 2) * k, width: CAP_W * k, height: CAP_H * k, alignItems: 'center', justifyContent: 'center' }}>
+            {/* `viewBox="-2 -2 108 108"`, NOT a frame centred on the dial. `handPath` always walks a box
+                from (0,0) — that is its whole contract and `ui/hand.ts` says so — so the hub path occupies
+                0…104 and a frame of `-54 -54 108 108` shows only its top-left quadrant: the number sat on the
+                bare clock face with a stray arc of outline up and to the left of it. This is `Focus.tsx:154`
+                exactly (`-2 -2 CAP_BOX CAP_BOX` over a 0-based path), and it was only findable by looking:
+                the arithmetic is off by 52 px in each axis and every assertion about it passes. */}
+            <Svg width={(CAP_W + 4) * k} height={(CAP_H + 4) * k} style={{ position: 'absolute', left: -2 * k, top: -2 * k }} viewBox="-2 -2 112 112">
               <Path d={hubPath} transform={`translate(${2.6} ${3})`} fill={hexA(c.shadow, 0.2)} />
               <Path d={hubPath} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
             </Svg>

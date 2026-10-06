@@ -450,3 +450,73 @@ describe('reduce-motion removes movement, never the ability to read', () => {
     expect(art).toContain('if (reduce) { tap.set(1); ring.set(1); rise.set(1); return; }');
   });
 });
+
+/* ───── the dial's readout hub: the defect two renders found and one assertion could not ───── */
+
+/**
+ * `DialArt`'s paper hub had **two** faults stacked, and the second was hiding the first.
+ *
+ *  1. The path is `handPath(104, 104, …)`, which by `ui/hand.ts`'s contract walks a box from `(0,0)`. The
+ *     `Svg` around it declared `viewBox="-54 -54 108 108"` — a frame centred on the dial. So the hub occupied
+ *     0…104 inside a frame showing −54…54: **only its top-left quadrant was on screen**, the ink arc appeared
+ *     up and to the left of the centre, and the `25` sat on the bare guilloché, illegible. `Focus.tsx:154` gets
+ *     this right (`viewBox="-2 -2 CAP_BOX CAP_BOX"` over a 0-based path) and this file did not copy it.
+ *  2. Fixing the viewBox alone made it *worse*: the hub was a **104-unit disc**, and `Focus.tsx`'s own comment
+ *     records that a disc was thrown out precisely because "a disc has to be as wide as the numeral and as tall
+ *     again … and hid the entire centre of the selected clock face — which is where the guilloché and the two
+ *     rosette lattices live, and the thing the owner asked to see."
+ *
+ * The tour had copied a geometry the owner had already rejected, then buried it under fault 1.
+ * `/tmp/render/a8/DIALBUG.png` shows all three states side by side at 411 px.
+ *
+ * **This is what a test cannot do.** Every number involved was plausible, `handPath` returned a valid non-empty
+ * path, and a render was the only thing that showed a paper capsule in the wrong place. So the assertions below
+ * pin the *arithmetic* — path extent against viewBox — which is what was actually wrong, and the visual
+ * judgement is recorded in the render.
+ */
+describe('the dial readout sits on a capsule that is actually on screen', () => {
+  const art = () => readFileSync(join(__dirname, '..', 'ui', 'onboard', 'art.tsx'), 'utf8');
+
+  it('uses the capsule Focus.tsx uses, not a disc — 108x44 claims 22 units of radius, 104x104 claims 52', () => {
+    const s = art();
+    expect(s).toContain('const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2');
+    expect(s).toMatch(/handPath\(CAP_W, CAP_H, HUB_R, 7717, 1\.6\)/);
+    // and the container is centred on the dial using the CAPSULE's half-extent
+    expect(s).toContain('left: DC * k - (CAP_W / 2) * k, top: DC * k - (CAP_H / 2) * k, width: CAP_W * k, height: CAP_H * k');
+  });
+
+  it('the hub path lies inside its own viewBox — the defect the render found', () => {
+    // comments are stripped: the note recording the old value quotes it verbatim
+    const code = art().replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    // `handPath` fills 0..CAP_W by 0..CAP_H, so the frame must start at (or below) 0 and reach at least CAP_W.
+    // the Svg is the one whose width is derived from the capsule, not from DIAL
+    const m = /width=\{\(CAP_W \+ 4\) \* k\}[^>]*viewBox="(-?\d+) (-?\d+) (\d+) (\d+)"/.exec(code);
+    expect(m).not.toBeNull();
+    const box = m!.slice(1).map(Number);
+    const CAP_W = 108, CAP_H = 44;
+    // the frame must reach CAP_W across and CAP_H down, and start at 0 or below to admit the path
+    expect({ x: box[0], w: box[2], reachesCapW: box[0]! <= 0 && box[0]! + box[2]! >= CAP_W }).toEqual({ x: -2, w: 112, reachesCapW: true });
+    expect({ y: box[1], h: box[3], reachesCapH: box[1]! <= 0 && box[1]! + box[3]! >= CAP_H }).toEqual({ y: -2, h: 112, reachesCapH: true });
+  });
+
+  it('and the readout is centred in the same capsule, so the paper is behind the number', () => {
+    const s = art();
+    expect(s).toContain("<Txt f=\"type\" s={27 * k} style={{ letterSpacing: -0.8 }}");
+    // the Svg is inset by the same 2 dp shadow bleed Focus uses, so the outline is not clipped
+    expect(s).toContain('left: -2 * k, top: -2 * k');
+    expect(s).toContain('transform={`translate(${2.6} ${3})`}');
+  });
+
+  it('no Svg in the tour declares a viewBox its own path cannot reach', () => {
+    // `DialArt`'s other three are `0 0 DIAL DIAL` over 0-based paths (bed, knurl, pointer), which is correct;
+    // this is the general statement, so a future centred frame cannot slip back in.
+    const s = art().replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const frames = [...s.matchAll(/viewBox=[{"`]([^"`]+)["`}]/g)].map((m) => m[1]!);
+    for (const f of frames) {
+      const n = f.trim().split(/\s+/).map(Number);
+      // a negative origin is only legal for a path that is itself centred on the origin, and `handPath` never is:
+      // the only frame with one is the 2 dp shadow bleed that `Focus.tsx` also uses
+      if ((n[0] ?? 0) < 0 || (n[1] ?? 0) < 0) expect(f).toMatch(/^-2 -2 /);
+    }
+  });
+});
