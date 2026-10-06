@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useEffect, useId, useMemo } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
@@ -23,7 +23,14 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
   const { dark, c } = useTheme(), reduce = useReduceMotion(), face = faceById(id), pal = useMemo(() => dialPal(face, c, dark), [face, c, dark]), k = size / 200;
   // every drawing is generated at `size`, because stroke weight and numeral size are compensated for the render
   // scale (see faces.ts): the same ornament drawn 200-unit-wide for a 96 dp picker would stipple its own hairlines
-  const base = useMemo(() => staticSvg(face, pal, FONT.serifB, size), [face, pal, size]), layers = useMemo(() => spinLayers(face.id, pal, size), [face, pal, size]);
+  /** Scales and Lily is the one face that emits an element id (its scale band's `clipPath`). Two copies of it can
+   *  be mounted at once — the live clock on Today and its thumbnail in Settings → Clock face — and two documents
+   *  both answering to `url(#sc)` is `prompt.md` R11 exactly. `useId()` is unique per instance; the replace is
+   *  because React's ids can contain characters that are not legal in an XML name and this is parsed as XML.
+   *  (`PaperBg` and `HStrip` use `useId()` unsanitised; the same reasoning applies to them and it is a
+   *  separate, smaller question than this one.) */
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const base = useMemo(() => staticSvg(face, pal, FONT.serifB, size, uid), [face, pal, size, uid]), layers = useMemo(() => spinLayers(face.id, pal, size), [face, pal, size]);
   const hx = useMemo(() => ({ hour: handSvg('hour', pal, size), minute: handSvg('minute', pal, size), second: handSvg('second', pal, size) }), [pal, size]);
   const clock = useSharedValue(0), ha = useSharedValue(0), ma = useSharedValue(0), sa = useSharedValue(0);
   const fixed = !!time;
@@ -49,7 +56,7 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
   }, ticking);
   useEffect(() => { frame.setActive(ticking); }, [ticking, frame]);
   useEffect(() => { if (time) { ha.value = (time.h % 12) * 30 + time.m * 0.5; ma.value = time.m * 6 + time.s * 0.1; sa.value = time.s * 6; } }, [time, ha, ma, sa]);
-  if (!live && !hands && !fixed) return <View style={{ width: size, height: size }}><SvgXml xml={compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size)} width={size} height={size} /></View>;
+  if (!live && !hands && !fixed) return <View style={{ width: size, height: size }}><SvgXml xml={compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size, uid)} width={size} height={size} /></View>;
   return (
     <View style={{ width: size, height: size }} accessible accessibilityRole="image" accessibilityLabel={`${face.n} clock face`}>
       <SvgXml xml={base} width={size} height={size} />
@@ -64,6 +71,7 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
 /** Static thumbnail for pickers (no frame loop at all) */
 export const FaceThumb = memo(function FaceThumb({ id, size }: { id: string; size: number }) {
   const { dark, c } = useTheme(), face = faceById(id), pal = useMemo(() => dialPal(face, c, dark), [face, c, dark]);
-  const xml = useMemo(() => compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size), [face, pal, size]);
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, ''); // see ClockFace: one id, two mounted copies
+  const xml = useMemo(() => compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size, uid), [face, pal, size, uid]);
   return <SvgXml xml={xml} width={size} height={size} />;
 });

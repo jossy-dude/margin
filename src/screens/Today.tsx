@@ -214,7 +214,16 @@ export function TodayScreen() {
         <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPress={() => { act.open({ t: 'settings' }); act.settingsPush('appearance'); act.settingsPush('clock'); }}><ClockFace id={st.settings.clock} size={124} live={st.route === 'Today'} /></Pressable>
         <View style={{ flex: 1, gap: 4 }}>
           <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
-          <Txt f="marker" s={23} numberOfLines={2}>{cur?.label ?? next?.label ?? (todayPeriods.length ? 'Nice work' : 'Free day')}</Txt>
+          {/* The class name used to sit here as well as on the deck, in the same marker face, ~120 px up the
+              page — two Permanent Marker lines saying the same two words with nothing useful between them, which
+              reads as a rendering fault rather than as emphasis. It is the deck's job: the reference's masthead
+              carries a greeting, a date and the clock and NOT a subject (`marginalia-v10(1).html`, `today:()`),
+              and its `h2` is the only place the subject appears.
+
+              What is kept is the line the deck cannot say. "until 09:50" is a wall-clock time and the deck's
+              "26:00 min left" is a duration — different facts, and the one a person looks at a clock to read —
+              so a clock row that answers "how long?" in the clock's own terms is not a duplicate of anything.
+              Compared by render: `/tmp/render/a8/DUP.png`, both variants at 411 px. */}
           {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end)}` : `at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}`}</Txt>}
         </View>
       </View>

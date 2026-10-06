@@ -1,6 +1,7 @@
 import { FACES, SKELETON, MESHES, meshFractions, gearGeometry, compositeSvg, dialPal, spinLayers, staticSvg, handSvg, engrave, type FaceId } from '../ui/clock/faces';
 import { palettes, ONYX, DIAL } from '../tokens/theme';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
 const cr = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
@@ -77,5 +78,54 @@ describe('faces', () => {
     for (const f of FACES) for (const s of [staticSvg(f, pal, 'Newsreader'), ...spinLayers(f.id, pal).map((l) => l.svg), handSvg('hour', pal), handSvg('minute', pal), handSvg('second', pal)]) {
       expect(s).not.toMatch(/(stroke|fill)-opacity=/);
     }
+  });
+});
+
+/**
+ * R11: an element id inside a component that can be mounted twice. `staticSvg` emits exactly one — Scales and
+ * Lily's `clipPath id="sc"`, which clips the scale band to r=62 — and two copies of that face really are mounted
+ * at the same time: the live clock on Today and its thumbnail in Settings → Clock face. `inMountWindow` keeping
+ * two screens mounted made that coexistence permanent rather than accidental.
+ *
+ * `qa/FINDINGS-UNSTATED.md` F-14 called this latent rather than broken, and it still is: `EXPO_GO_AUDIT` B11 saw
+ * the case survive. So this does not claim a bug the renderer does not have — it claims that the *shape* is now
+ * impossible, which is checkable here and was not before.
+ */
+describe('the one element id the dial engine emits is per-instance', () => {
+  it('two composites of the same face never share an element id', () => {
+    const f = FACES.find((x) => x.id === 'sl')!;
+    const pal = dialPal(f, palettes.refined.dark, true);
+    const idsOf = (s: string) => [...s.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]!);
+    const a = compositeSvg(f, pal, 'Newsreader', { h: 10, m: 10, s: 30 }, 0, 400, 'one');
+    const b = compositeSvg(f, pal, 'Newsreader', { h: 10, m: 10, s: 30 }, 0, 400, 'two');
+    // the id exists, so the test is not passing because the clip went away
+    expect(idsOf(a)).toEqual(['scone']);
+    expect(idsOf(a)).not.toEqual(idsOf(b));
+    // and each document's own reference resolves inside itself
+    expect(a).toContain('clip-path="url(#scone)"');
+    expect(b).toContain('clip-path="url(#sctwo)"');
+    expect(a).not.toContain('url(#sctwo)');
+  });
+
+  it('the clip is still doing its job at the default suffix, so the faces render unchanged', () => {
+    const sl = FACES.find((x) => x.id === 'sl')!, s = staticSvg(sl, dialPal(sl, palettes.refined.dark, true), 'Newsreader', 400);
+    expect(s).toContain('<clipPath id="sca"><circle r="62"/></clipPath>');
+    expect(s).toContain('clip-path="url(#sca)"');
+    // every other face emits no id at all
+    for (const f of FACES) if (f.id !== 'sl') expect(staticSvg(f, dialPal(f, palettes.refined.light, false), 'Newsreader', 400)).not.toMatch(/\bid="/);
+  });
+
+  it('and no screen hardcodes an element id any more', () => {
+    // Week's grid used to open with a `<Pattern id="hx">` that NOTHING filled — `rg 'url(#hx)'` returned no
+    // hits, so it was markup that produced nothing, and it has been deleted rather than suffixed.
+    // comments are stripped first, because the note recording the Week deletion has to quote the old id
+    const code = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const rel of ['screens/Week.tsx', 'screens/Focus.tsx', 'ui/DayBar.tsx', 'ui/instruments/InstrumentBar.tsx', 'ui/PaperBg.tsx', 'ui/kit.tsx']) {
+      expect({ rel, hardcoded: /id="[A-Za-z][\w-]*"/.test(code(rel)) }).toEqual({ rel, hardcoded: false });
+    }
+    // Focus's one pattern is now per-instance and XML-legal
+    const focus = readFileSync(join(__dirname, '..', 'screens', 'Focus.tsx'), 'utf8');
+    expect(focus).toMatch(/useId\(\)\.replace\(\/\[\^a-zA-Z0-9_-\]\/g, ''\)/);
+    expect(focus).toContain('fill={`url(#${hid})`}');
   });
 });

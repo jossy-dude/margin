@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
-import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
+import Svg, { Line, Rect } from 'react-native-svg';
 import { BEAT, Btn, EASE, HandBox, Icon, Row, Txt } from '../ui/kit';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
@@ -48,8 +48,11 @@ export function WeekScreen() {
       <HandBox seed="wk" style={{ padding: 0 }} sw={1.8}>
         <View style={{ flexDirection: 'row', paddingLeft: tw }}>{DW.map((d, i) => { const day = addDays(mon, i), today = day === startOfDay(now); return <View key={d} style={{ width: cw, alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1.4, borderColor: c.rule }}><Txt f="serif" s={12.5} c={today ? 'acc' : 'mut'}>{d}</Txt><Txt f="marker" s={17} c={today ? 'acc' : 'ink'}>{new Date(day).getDate()}</Txt></View>; })}</View>
         <View style={{ height: H, flexDirection: 'row' }}>
+          {/* This grid used to open with a `<Defs><Pattern id="hx" … patternTransform="rotate(45)">` — a
+              45° hatch at 6 px that NOTHING filled with. `rg 'url(#hx)' src/` returns no hits, so it was
+              markup that cost a node to parse and produced nothing, and it was the last hardcoded SVG id in
+              the page. The rules below are the grid; the hatch was never on it. */}
           <Svg width={gw} height={H} style={{ position: 'absolute' }}>
-            <Defs><Pattern id="hx" width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><Line x1={0} y1={0} x2={0} y2={6} stroke={c.mut} strokeWidth={1} /></Pattern></Defs>
             {hours.map((h, i) => <Line key={h} x1={tw - 4} x2={gw} y1={i * 60 * PX + 0.5} y2={i * 60 * PX + 0.5} stroke={c.dot} strokeWidth={1} />)}
             {DW.map((_, i) => <Line key={i} x1={tw + i * cw} x2={tw + i * cw} y1={0} y2={H} stroke={c.dot} strokeWidth={1} />)}
             {off === 0 && nowY > 0 && nowY < H && <Line x1={tw - 4} x2={gw} y1={nowY} y2={nowY} stroke={c.acc} strokeWidth={2} />}

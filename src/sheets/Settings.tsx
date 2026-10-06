@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Linking, Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
 import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
@@ -350,15 +350,20 @@ const DEMO_TOTAL = 50 * 60_000, DEMO_P = 30 / 50;
  */
 function BarPick({ id, n, d, on, onPress }: { id: string; n: string; d: string; on: boolean; onPress: () => void }) {
   const { c } = useTheme();
+  /* The preview's width, derived the way every other width in the app is. It was a literal 280, which fits
+     * 360/390/411/430 dp with room to spare and clips 12 dp at the 320 dp screen V20 names — the sheet's own
+     *  16 dp gutters plus this card's 10 dp padding leave `width - 52`, and nothing here was measuring it.
+     *  44 dp is the floor so a preview is never squeezed into a sliver on a very narrow screen. */
+  const { width: winW } = useWindowDimensions(), w = Math.max(44, winW - 52);
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ selected: on }}
       accessibilityLabel={`${n}. ${d}`} onPress={onPress}>
       <HandBox seed={id} fill={c.slab} stroke={on ? c.acc : c.slab} sw={on ? 3 : 1.6} style={{ padding: 10, gap: 2 }}>
         <Txt f="bold" s={19} c={c.slabInk}>{n}{on ? '  ✓' : ''}</Txt><Txt f="serif" s={13.5} c={c.slabMut}>{d}</Txt>
         {on || isBarKind(id)
-          ? <DayBar kind={id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={280} h={52} />
-          : <View style={{ height: 44, width: 280 }}>
-              <SvgXml xml={previewSvg(id, { p: DEMO_P, w: 280, ink: c.slabInk, slab: c.slab, acc: c.acc, warn: c.warn, total: DEMO_TOTAL, left: DEMO_P * DEMO_TOTAL })} width={280} height={44} />
+          ? <DayBar kind={id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={w} h={52} />
+          : <View style={{ height: 44, width: w }}>
+              <SvgXml xml={previewSvg(id, { p: DEMO_P, w, ink: c.slabInk, slab: c.slab, acc: c.acc, warn: c.warn, total: DEMO_TOTAL, left: DEMO_P * DEMO_TOTAL })} width={w} height={44} />
             </View>}
       </HandBox>
     </Pressable>

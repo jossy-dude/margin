@@ -423,3 +423,62 @@ function occurrencesAt(day: number): Occurrence[] {
     { date: new Date(day), meeting: { id: 'm-1-10:55-E', courseId: 'E', weekday: 1, start: '10:55', end: '11:45' } },
     { date: new Date(day), meeting: { id: 'm-1-13:15-B', courseId: 'B', weekday: 1, start: '13:15', end: '14:05' } }];
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   THE SUBJECT IS NAMED ONCE.
+
+   A5 built the deck into a page whose masthead already named the current class, and left both: two
+   Permanent Marker lines, the same two words, ~120 px apart with nothing useful between them. It reads
+   as a rendering fault rather than as emphasis. Confirmed by rendering both variants side by side at
+   411 px — `/tmp/render/a8/DUP.png` — because the measurement (two `marker` lines printing `label`)
+   is easy and the judgement (does it read as a bug?) is not.
+
+   The reference settles it. `marginalia-v10(1).html`'s `today:()` builds a masthead of greeting + date +
+   semester stamp + clock, then the deck immediately after; the subject appears once, as the deck's `h2`.
+   So the deck keeps the name and the masthead keeps only what the deck cannot say — a wall-clock time,
+   where the deck gives a duration.
+   ─────────────────────────────────────────────────────────────────────────── */
+describe('the class name is stated once, not twice ~120px apart', () => {
+  const src = () => readFileSync(join(__dirname, '..', 'screens', 'Today.tsx'), 'utf8');
+
+  /** Every `<Txt … f="marker" …>` in the file, with the expression it prints. */
+  const markerLines = (s: string) =>
+    s.split('\n').flatMap((line, i) => {
+      const m = /<Txt f="marker"[^>]*>([^<]*)</.exec(line);
+      return m ? [{ line: i + 1, body: m[1]! }] : [];
+    });
+
+  it('exactly one marker line prints a class label: the deck title', () => {
+    const hits = markerLines(src()).filter((m) => /\b(label|course\?\.name)\b/.test(m.body));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.body).toContain('d.period.label');
+  });
+
+  it('the masthead row keeps its state word and its clock time, and drops the name', () => {
+    const s = src();
+    // the three lines the clock row is made of, in order
+    const clock = s.slice(s.indexOf('<ClockFace id={st.settings.clock}'), s.indexOf('{periods.length > 0 && ('));
+    expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
+    // the time line is the one that survives: a wall clock, which the deck's duration is not
+    expect(clock).toContain('until ${fmtTime(cur.end)}');
+    expect(clock).toContain('at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}');
+    // and nothing in it prints a subject name
+    expect(clock).not.toMatch(/cur\?\.label|next\?\.label/);
+  });
+
+  it('the no-class branch said the same thing once, not three times', () => {
+    // line 1 already says "All done for today" / "No classes today"; the removed masthead marker line said
+    // "Nice work" / "Free day" over the top of it, and with no classes at all the deck is not even mounted.
+    // "Nice work" existed nowhere else and is gone.
+    expect(src()).not.toContain('Nice work');
+    expect(src()).toContain("todayPeriods.length ? 'All done for today' : 'No classes today'");
+    // the deck's own no-period title is the reference's wording and stays — a day whose only classes are
+    // cancelled still mounts the card, and it must still say something
+    expect(src()).toContain("d.period ? d.period.label : 'Free day'");
+  });
+
+  it('the deck is still mounted on a day with classes, and only then', () => {
+    const s = src();
+    expect(s).toContain('{periods.length > 0 && (\n        <ActiveCard');
+  });
+});

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useFrameCallback, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
@@ -125,7 +125,12 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
     {Array.from({ length: 60 }, (_, i) => { const a = (i * 6 * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a); return <Line key={i} x1={C0 + 131 * ca} y1={C0 + 131 * sa} x2={C0 + 138 * ca} y2={C0 + 138 * sa} stroke={hexA(ink, 0.5)} strokeWidth={1.7} />; })}
     <Circle cx={C0} cy={C0} r={139} fill="none" stroke={ink} strokeWidth={1.6} /><Circle cx={C0} cy={C0} r={113.5} fill="none" stroke={ink} strokeWidth={1.2} strokeOpacity={0.7} />
   </Svg>, [bed, ink]);
-  const hatch = useMemo(() => <Defs><Pattern id="hatch" width={5.5} height={5.5} patternUnits="userSpaceOnUse" patternTransform="rotate(135)"><Line x1={0} y1={0} x2={0} y2={5.5} stroke={ink} strokeWidth={1.6} /></Pattern></Defs>, [ink]);
+  /** Per-instance, and sanitised. `useId()` is the right source of uniqueness — it is what `PaperBg` and
+   *  `HStrip` already use — but React's ids can contain characters that are not legal in an XML name, and this
+   *  markup is parsed as XML. `prompt.md` R11 names a bare element id resolving another element's `url(#…)` as
+   *  exactly this failure; `hatch` was the last hardcoded one left in a screen. */
+  const hid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const hatch = useMemo(() => <Defs><Pattern id={hid} width={5.5} height={5.5} patternUnits="userSpaceOnUse" patternTransform="rotate(135)"><Line x1={0} y1={0} x2={0} y2={5.5} stroke={ink} strokeWidth={1.6} /></Pattern></Defs>, [ink, hid]);
   const marks = useMemo(() => [['60', 141, 18], ['15', 264, 141], ['30', 141, 264], ['45', 18, 141]].map(([t, x, y]) => <Txt key={t as string} f="type" s={10} pointerEvents="none" style={{ position: 'absolute', left: (x as number) - 10, top: (y as number) - 6, width: 20, textAlign: 'center', textShadowColor: halo, textShadowRadius: dark ? 6 : 4 }}>{t}</Txt>), [halo, dark]);
   const hub = useMemo(() => handPath(CAP_W, CAP_H, CAP_RAD, 7717, 1.6), []);
   const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
@@ -139,7 +144,7 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
         {/* the escapement sits over the dial and under the pointer: the pointer is the hand, so it passes in front */}
         <Animated.View pointerEvents="none" style={[escBox, escS]}><Svg width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_PATH} fill={c.acc} /></Svg></Animated.View>
         <Svg pointerEvents="none" style={escBox} width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_INDEX} fill={ink} /></Svg>
-        <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">{hatch}<Path d={sector(95, 112, progDeg)} fill="url(#hatch)" /></Svg>
+        <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">{hatch}<Path d={sector(95, 112, progDeg)} fill={`url(#${hid})`} /></Svg>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, gripS]}>{grip}</Animated.View>
         {marks}

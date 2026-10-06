@@ -217,8 +217,16 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
   }
   return [];
 }
-/** the fixed part of a face: case, dial, chapter ring, ornament, numerals */
-export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200): string {
+/**
+ * The fixed part of a face: case, dial, chapter ring, ornament, numerals.
+ *
+ * `uid` suffixes the one element id this emits (Scales and Lily's `clipPath id="sc"`), because two copies of a
+ * face can be mounted at once — the live clock on Today and its thumbnail in Settings → Clock face, which is
+ * exactly the case `prompt.md` R11 describes and which `inMountWindow` made permanent by keeping two screens
+ * mounted by design. `useId()` is the source, sanitised by `ClockFace.tsx` to an XML-legal name; the default is
+ * a literal so the offline render and the tests keep a stable filename.
+ */
+export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = 'a'): string {
   const ink = pal.ink, o = (t: number) => `stroke="${engrave(pal, t)}" fill="none"`;
   let orn = '';
   if (f.id === 'g') orn = `${ART.guilloche(pal, px)}<circle r="30" ${o(TONE.sub)} stroke-width="${sw(px, 1.1)}"/>`;
@@ -228,7 +236,7 @@ export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200): string
     // 96 dp dial is a grey disc, so a smaller plate gets a coarser scale
     const s = 6.2 * (px < 150 ? 1.55 : px < 260 ? 1.2 : 1), rows = px < 260 ? 16 : 24;
     const band = each(rows, (j) => { const y = -64 + (j * (128 / rows)); const off = j % 2 ? s : 0; return each(rows, (i) => { const x = -66 + i * s * 2 + off; return `<path d="M${f1(x - s)} ${f1(y)}a${s} ${s} 0 0 0 ${2 * s} 0"/>`; }); });
-    orn = `<clipPath id="sc"><circle r="62"/></clipPath><g clip-path="url(#sc)" ${o(TONE.texture)} stroke-width="${sw(px, .9)}">${band}</g><g transform="translate(0 -38)" fill="${engrave(pal, TONE.structure)}"><path d="M0 -8C-5 -3-5 4 0 8 5 4 5 -3 0 -8Z"/><path d="M-3 6C-10 4-13-4-8-8-8-3-6 1-2 3ZM3 6C10 4 13-4 8-8 8-3 6 1 2 3Z"/><rect x="-5" y="7" width="10" height="1.6" rx=".8"/></g>`;
+    orn = `<clipPath id="sc${uid}"><circle r="62"/></clipPath><g clip-path="url(#sc${uid})" ${o(TONE.texture)} stroke-width="${sw(px, .9)}">${band}</g><g transform="translate(0 -38)" fill="${engrave(pal, TONE.structure)}"><path d="M0 -8C-5 -3-5 4 0 8 5 4 5 -3 0 -8Z"/><path d="M-3 6C-10 4-13-4-8-8-8-3-6 1-2 3ZM3 6C10 4 13-4 8-8 8-3 6 1 2 3Z"/><rect x="-5" y="7" width="10" height="1.6" rx=".8"/></g>`;
   }
   if (f.id === 's') {
     // the plate under the movement — pitch circles, bridge, jewel slits. Not the wheels: `gearSvg`/`balanceSvg` are
@@ -280,8 +288,8 @@ export function handSvg(kind: HandKind, pal: Pal, px = 200): string {
   return svg(`<path d="M0 ${f1(L * 0.14)}V${f1(y + q)}M0 ${f1(y - q)}V${f1(-L * 0.68)}" stroke="${pal.ink}" stroke-width="${w}" stroke-linecap="round"/><circle cy="${f1(y)}" r="${f1(q)}" fill="none" stroke="${pal.ink}" stroke-width="${f2(w * 0.8)}"/><path d="M0 ${-L}L${f1(w * 1.7)} ${f1(-L * 0.7)}L0 ${f1(-L * 0.63)}L${f1(-w * 1.7)} ${f1(-L * 0.7)}Z" fill="${pal.ink}"/><circle r="${f1(w * 1.7)}" fill="${pal.ink}"/>`);
 }
 /** Whole face as one static SVG at a given moment — used by tests/offline rendering and the small Settings thumbnails. */
-export function compositeSvg(f: FaceSpec, pal: Pal, font: string, t = { h: 10, m: 10, s: 30 }, secs = 0, px = 200): string {
-  const body = staticSvg(f, pal, font, px).replace(/^<svg[^>]*>|<\/svg>$/g, '');
+export function compositeSvg(f: FaceSpec, pal: Pal, font: string, t = { h: 10, m: 10, s: 30 }, secs = 0, px = 200, uid = 'a'): string {
+  const body = staticSvg(f, pal, font, px, uid).replace(/^<svg[^>]*>|<\/svg>$/g, '');
   const layers = spinLayers(f.id, pal, px).map((l) => {
     const ang = l.osc ? Math.sin((secs / l.osc.period) * 2 * PI) * l.osc.swing : l.dps * secs, inner = l.svg.replace(/^<svg[^>]*>|<\/svg>$/g, '');
     return `<g transform="translate(${l.x} ${l.y}) rotate(${f1(ang)})">${inner}</g>`;
