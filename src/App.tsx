@@ -24,6 +24,8 @@ import { TasksScreen } from './screens/Tasks';
 import { GradesScreen } from './screens/Grades';
 import { StatsScreen } from './screens/Stats';
 import { FocusScreen } from './screens/Focus';
+import { Onboarding } from './screens/Onboarding';
+import { TOUR_VERSION, toured } from './domain/defaults';
 import { getState, hydrate, set, useStore, wireLifecycle, act } from './store/store';
 import { openRepository } from './data/sqliteExpo';
 import { configureNotifications } from './services/notifications';
@@ -116,9 +118,14 @@ function FontsFailed({ message, onRetry }: { message: string; onRetry: () => voi
 }
 
 function Gate() {
-  const ready = useStore((s) => s.ready), error = useStore((s) => s.error);
+  const ready = useStore((s) => s.ready), error = useStore((s) => s.error), onboarded = useStore((s) => s.settings.onboarded);
   if (!ready) return <Splash />;
   if (error) return <Fatal message={error} />;
+  // The tour REPLACES the shell rather than covering it, so no page is mounted underneath it: nothing hidden
+  // ticks, nothing fills off-screen, and no gesture can reach the app through it (prompt.md V17). That is why
+  // it is a screen and not a sheet. Skipping and finishing write the same value — the point is only that it is
+  // not shown twice — and Settings → "Show the tour again" replays it by writing `0`.
+  if (!toured(onboarded)) return <Onboarding onFinish={() => act.setSettings({ onboarded: TOUR_VERSION })} />;
   return <Shell />;
 }
 

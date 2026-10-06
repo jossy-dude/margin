@@ -1,5 +1,5 @@
 import type { AttRecord, AttStatus, Course, DayMark, Meeting } from './types';
-import { atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
+import { DAY_MS, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
 
 export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late · stayed out', a: 'Absent', s: 'Sick', c: 'Cancelled', t: 'Teacher out' };
 export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
@@ -33,7 +33,20 @@ export function occurrencesOn(date: Date, meetings: Meeting[]): Occurrence[] {
 /** One day's classes as the day bar draws them: named, timed, and flagged cancelled. */
 export interface Period { start: number; end: number; label: string; cancelled: boolean }
 export function periodsOn(occ: Occurrence[], courses: Course[], att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()): Period[] {
-  return occ.map(({ date, meeting }) => ({ start: atTime(date.getTime(), meeting.start), end: atTime(date.getTime(), meeting.end), label: courses.find((c) => c.id === meeting.courseId)?.name ?? '?', cancelled: isCancelled(effective(date, meeting, att, days, now)) }));
+  return occ.map(({ date, meeting }) => {
+    const start = atTime(date.getTime(), meeting.start), end = atTime(date.getTime(), meeting.end);
+    return {
+      start,
+      /* A class stored 23:30–00:30 has BOTH ends stamped on the day it occurs, by `atTime`, so it comes out
+       * with `end <= start` — and every consumer assumes `start < end`: `dayBlock`'s `cur`/`next` can never
+       * match it, `activePeriod` filters it out of the card and of all twenty-six instruments, and Week
+       * clamps it to a 20 dp stub. An overnight class ends on the NEXT day; say so here, once, at the only
+       * place a Period is built, rather than patching it in every view that reads one. */
+      end: end > start ? end : end + DAY_MS,
+      label: courses.find((c) => c.id === meeting.courseId)?.name ?? '?',
+      cancelled: isCancelled(effective(date, meeting, att, days, now)),
+    };
+  });
 }
 
 /** Everything a page's day-scoped half is built from, and it is all ONE day: the day itself, its

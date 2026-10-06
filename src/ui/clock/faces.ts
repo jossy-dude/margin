@@ -1,4 +1,4 @@
-import { ONYX, type Colors } from '../../tokens/theme';
+import { DIAL, SECOND, type Colors } from '../../tokens/theme';
 
 /**
  * Dial engine — a TypeScript port of the clock-variations engine. Pure: it returns SVG strings (viewBox -100 -100 200 200 unless noted),
@@ -16,16 +16,16 @@ export const FACES: FaceSpec[] = [
   { id: 's', n: 'Skeleton Movement', native: 'dark', ns: 11, nr: 78, tk: 'line', rings: [] },
 ];
 export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id) ?? (FACES[1] as FaceSpec);
-/** Dial palette for a face in a theme, read from the resolved theme colours so it follows the palette as well as
- *  light/dark. `native` records where a face comes from (its material in the source engraving), not what the dial
- *  has to be: a dark-native face keeps the onyx disc only in the dark theme, where the cream ink reads off it, and
- *  turns to the card tone in the light theme, where dark ink on cream is the inverse of the same engraving. Without
- *  that inversion every dark-native face is a black disc punched into the cream app.
- *  `second` is the sweep hand: prompt.md V4 calls it red-brown, which is a *material* (lacquered red-brown steel),
- *  not a theme accent — the pale peach `acc` becomes in the dark palette reads as grey at hairline width. It falls
- *  back to `acc` until the token exists; see qa/HANDOFF-A3.md. */
+/** Dial palette for a face in a theme. The GROUND is a material, not a theme surface — see `DIAL` in
+ *  tokens/theme.ts — so every face is white enamel in light and black lacquer in dark, and the two themes
+ *  are genuinely different instruments rather than one being a filtered version of the other. `native` then
+ *  only decides how the ENGRAVING reads on that ground, not what the ground is: the same cut is a dark
+ *  line in white and a bright line in black. `second` is the sweep hand, red-brown per prompt.md V4 for
+ *  the same reason — a material, not `acc`, because the pale peach `acc` becomes in the dark palette reads
+ *  as grey at hairline width. */
 export function dialPal(f: Pick<FaceSpec, 'native'>, c: Colors, dark: boolean): Pal {
-  return { ink: c.ink, dial: dark && f.native === 'dark' ? ONYX.dark : c.card, accent: c.acc, second: c.acc };
+  void f;
+  return { ink: c.ink, dial: dark ? DIAL.dark : DIAL.light, accent: c.acc, second: dark ? SECOND.dark : SECOND.light };
 }
 /**
  * Dark mode for a bitmap plate (see <plates>): a luminance invert, R'=G'=B'=1−L, alpha kept, so the

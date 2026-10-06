@@ -46,6 +46,12 @@ export interface Settings {
   lockAttendance: boolean; reduceMotion: 'system' | 'on' | 'off';
   taskFilter: 'all' | 'open' | 'done'; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
   breakMin: number; breaksPerRound: number; focusFlow: boolean; focusPresetMin: number;
+  /** How many builds of the onboarding tour this phone has finished. `0` or absent = not seen. See `toured()`
+   *  in `domain/defaults.ts`. Optional on purpose: a settings row written before the tour existed has no such
+   *  key, which is the same answer as "has not seen it", so `DEFAULT_SETTINGS` needs no entry and a cold start
+   *  needs no migration. It is a version stamp rather than a boolean so replay is one write of `0` — there is
+   *  no second source of truth that can disagree with it. */
+  onboarded?: number;
   notif: NotifSettings;
 }
 export interface Snapshot {

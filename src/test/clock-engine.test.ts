@@ -4,7 +4,7 @@ import {
   ART, ART_R, BALANCE, ESC_DEG, ESC_TEETH, FACES, MESHES, SKELETON, TONE, dialPal, engrave, escapementAngle,
   escapementTurn, hair, meshPhase, spinLayers, staticSvg, sw, handSvg, type FaceId, type FaceSpec,
 } from '../ui/clock/faces';
-import { palettes, PENS, type Colors } from '../tokens/theme';
+import { palettes, PENS, SECOND, type Colors } from '../tokens/theme';
 
 /**
  * The clock engine's two contracts, both of which used to be broken and neither of which a number can catch:
@@ -222,14 +222,22 @@ describe('D. the second hand is a material of its own, not the theme accent', ()
     expect(spinLayers('sl', pal, 200)[0]!.svg).toContain(`stroke="${pal.second}"`);
   });
 
-  it('pal.second tracks the theme, so it still follows palette and pen — it just stops being the pale accent', () => {
-    // currently a fall-back to `acc` until the token exists; see qa/HANDOFF-A3.md. This asserts the *contract*:
-    // whatever second is, it must come from the resolved theme, never from a literal in faces.ts.
-    expect(dialPal({ native: 'light' }, themeOf('refined', 'light'), false).second).toBe(themeOf('refined', 'light').acc);
+  it('pal.second is the red-brown material, not the accent and not a literal in faces.ts', () => {
+    // The sweep hand is a *material* (lacquered red-brown steel, prompt.md V4), so it does not follow the
+    // accent pen: `refined.dark.acc` is #E0A47A, a pale peach that reads grey at hairline width. It comes
+    // from tokens/theme.ts like ONYX and DIAL, never from a hex pasted into the engine.
+    for (const m of ['light', 'dark'] as const) {
+      expect(dialPal({ native: 'light' }, themeOf('refined', m), m === 'dark').second).toBe(SECOND[m]);
+    }
+    // deliberately independent of both the pen and the palette: changing those must not repaint the hand
     for (const p of ['refined', 'original'] as const) for (const pen of ['red', 'blue'] as const) {
       const c = { ...themeOf(p, 'light'), acc: PENS[pen].light };
-      expect(dialPal({ native: 'light' }, c, false).second).toBe(PENS[pen].light);
+      expect(dialPal({ native: 'light' }, c, false).second).toBe(SECOND.light);
     }
+    // The whole point of the token: `refined.dark.acc` is #E0A47A and `SECOND.dark` is not. (In LIGHT the
+    // two coincide — refined's light accent already is that red-brown — so the assertion belongs in dark.)
+    expect(themeOf('refined', 'dark').acc).not.toBe(SECOND.dark);
+    expect(dialPal({ native: 'light' }, themeOf('refined', 'dark'), true).second).not.toBe(themeOf('refined', 'dark').acc);
   });
 
   it('whatever it resolves to, the sweep hand clears 3:1 against its own dial in every palette and theme', () => {

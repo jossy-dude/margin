@@ -40,11 +40,11 @@ const COURSES: Course[] = [
   { id: 'X', name: 'Personal Seminar', room: '', teacher: '', goal: null, sort: 3 },
 ];
 
-/* ── the model of `deckOf` in src/screens/Today.tsx ───────────────────────── */
-const overMidnight = (p: Period): Period => (p.end > p.start ? p : { ...p, end: p.end + DAY_MS });
-
+/* ── the model of `deckOf` in src/screens/Today.tsx ───────────────────────────
+   `Period.end` arrives already normalised from `periodsOn` (the domain owns the overnight rule now), so
+   `deckOf` indexes `periods` one-for-one and does no re-opening of its own. */
 function deckOf(periods: Period[], t: number, isToday: boolean) {
-  const ps = periods.map((p, i) => ({ p: overMidnight(p), i })).filter((x) => !x.p.cancelled);
+  const ps = periods.map((p, i) => ({ p, i })).filter((x) => !x.p.cancelled);
   const cur = isToday ? ps.find((x) => t >= x.p.start && t < x.p.end) : undefined;
   const next = isToday ? ps.find((x) => x.p.start > t) : ps[0];
   const hit = cur ?? next;
@@ -152,23 +152,33 @@ describe('a class that runs past midnight', () => {
   const late: Period = { start: at('23:30'), end: at('00:30'), label: 'Evening Seminar', cancelled: false };
   const LATE_OCC: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-late', courseId: 'X', weekday: 1, start: '23:30', end: '00:30' } }];
 
-  it('the data really does produce end <= start, so this is not a hypothetical', () => {
-    // `atTime` stamps both ends on the same day, so an overnight class comes out inverted …
+  it('raw, the pair IS inverted — atTime stamps both ends on the day it occurs', () => {
     expect(late.end).toBeLessThan(late.start);
-    // … and `periodsOn`, which is what every screen reads, hands that inverted pair straight on.
-    const periods = periodsOn(LATE_OCC, COURSES, {}, {});
-    expect(periods).toHaveLength(1);
-    expect(periods[0]!.end).toBeLessThan(periods[0]!.start);
   });
 
-  it('un-normalised it is invisible: the bar drops it and would show no class at all', () => {
-    // This is the defect `overMidnight` exists for, pinned so it cannot be "simplified" away.
+  it('periodsOn normalises it once, in the domain, so no view has to', () => {
+    // The rule lives here because THREE views read a Period and all three were separately wrong: the card,
+    // `activePeriod` (which drops an inverted period, hiding the class in the one hour it is running) and
+    // the week grid (which clamps it to a 20dp stub). Fixing it in each caller would have been three fixes
+    // and three chances to forget one.
+    const periods = periodsOn(LATE_OCC, COURSES, {}, {});
+    expect(periods).toHaveLength(1);
+    expect(periods[0]!.end).toBe(periods[0]!.start + 60 * 60_000);
+    expect(periods[0]!.end).toBeGreaterThan(periods[0]!.start);
+  });
+
+  it('an ordinary same-day class is untouched by that rule', () => {
+    const ok: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-ok', courseId: 'X', weekday: 1, start: '09:00', end: '10:00' } }];
+    const p = periodsOn(ok, COURSES, {}, {})[0]!;
+    expect(p.end - p.start).toBe(60 * 60_000);
+  });
+
+  it('un-normalised the bar drops it, which is why the domain fix was not cosmetic', () => {
     expect(activePeriod([late], at('23:45'))).toBeNull();
   });
 
   it('normalised, it is found and it counts down the real time', () => {
-    const fixed = overMidnight(late);
-    expect(fixed.end).toBe(at('00:30') + DAY_MS);
+    const fixed = periodsOn(LATE_OCC, COURSES, {}, {})[0]!;
     const a = activePeriod([fixed], at('23:45'))!;
     expect(a.phase).toBe('running');
     expect(a.left).toBe(45 * 60_000);
@@ -177,20 +187,22 @@ describe('a class that runs past midnight', () => {
   });
 
   it('and it is over, not running, the moment it ends', () => {
-    expect(activePeriod([overMidnight(late)], at('00:30') + DAY_MS)).toMatchObject({ p: 0, ended: true, phase: 'over' });
+    const fixed = periodsOn(LATE_OCC, COURSES, {}, {})[0]!;
+    expect(activePeriod([fixed], at('00:30') + DAY_MS)).toMatchObject({ p: 0, ended: true, phase: 'over' });
   });
 
   it('the card counts it down like any other class', () => {
-    const d = deckOf([late], at('23:45'), true);
-    expect(d).toMatchObject({ state: 'live', word: 'Now', unit: 'min left', countdown: '45:00', at: 0 });
-    expect(deckOf([late], at('23:30'), true).countdown).toBe('1:00:00');
+    const fixed = periodsOn(LATE_OCC, COURSES, {}, {});
+    expect(deckOf(fixed, at('23:45'), true)).toMatchObject({ state: 'live', word: 'Now', unit: 'min left', countdown: '45:00', at: 0 });
+    expect(deckOf(fixed, at('23:30'), true).countdown).toBe('1:00:00');
     // …and before it starts it is the next one, not a live class.
-    expect(deckOf([late], at('22:00'), true)).toMatchObject({ state: 'soon', word: 'Next up', unit: 'until it starts', countdown: '1:30:00' });
+    expect(deckOf(fixed, at('22:00'), true)).toMatchObject({ state: 'soon', word: 'Next up', unit: 'until it starts', countdown: '1:30:00' });
   });
 
   it('a BarPeriod and a Period are the same shape, so the bar takes the card list unchanged', () => {
-    const asBar: BarPeriod[] = [overMidnight(late)];
-    expect(activePeriod(asBar, at('23:45'))!.period.label).toBe('Evening Seminar');
+    // (the label is the course name for id 'X' in `COURSES`, which is what `periodsOn` resolves)
+    const asBar: BarPeriod[] = periodsOn(LATE_OCC, COURSES, {}, {});
+    expect(activePeriod(asBar, at('23:45'))!.period.label).toBe('Personal Seminar');
   });
 });
 
@@ -355,8 +367,12 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('<Txt f="marker" s={32} numberOfLines={2}');
   });
 
-  it('the midnight guard is in the file, and only in the file', () => {
-    expect(src).toContain('const overMidnight = (p: Period): Period => (p.end > p.start ? p : { ...p, end: p.end + DAY_MS });');
+  it("the midnight rule is NOT re-implemented in the view — it is the domain's, once", () => {
+    // Regression guard on a refactor that went the other way: three views read a `Period` and each was
+    // separately wrong about an overnight class, so the normalisation was pushed down into `periodsOn`.
+    // If this guard has to be relaxed, the card is carrying a second copy of a domain rule again.
+    expect(src).not.toContain('overMidnight');
+    expect(src).toMatch(/const ps = periods\.map\(\(p, i\) => \(\{ p, i \}\)\)/);
   });
 
   it('the ring around the room code is sized by its glyph, so a grown font cannot clip it', () => {
@@ -364,10 +380,13 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).not.toMatch(/width: 2[0-9], height: 2[0-9], borderRadius: 1[0-9]/);
   });
 
-  it('the deck still draws the same bar, at the same width, over the same slab', () => {
-    expect(src).toContain('ink={c.slabInk} bg={c.slab}');
+  it('the deck still draws the same bar, at the same width, over the same surface', () => {
+    // The surface is now the inverting `deck` triple rather than `slab` (qa/HANDOFF-A5.md): `slab` is
+    // darker than the page in dark, so the card was not an object at all there. Same geometry, new token.
+    expect(src).toContain('ink={c.deckInk} bg={c.deck}');
     expect(src).toContain('w={width - 32 - DECK_PAD_X * 2}');
-    expect(src).toContain('fill={c.slab}');
+    expect(src).toContain('fill={c.deck}');
+    expect(src).not.toMatch(/c\.slab/);
   });
 });
 

@@ -4,14 +4,23 @@ import type { Settings } from '../domain/types';
 export interface Colors {
   paper: string; card: string; desk: string; ink: string; mut: string; acc: string; hl: string; rule: string; dot: string; shadow: string;
   ok: string; warn: string; bad: string; slab: string; slabInk: string; slabMut: string; grain: number; photo: number; onAcc: string;
+  /**
+   * The command deck's own surface. `slab` is the ink bed Focus's dial and the bar picker's chips sit on;
+   * this is the one card that INVERTS against the page — `marginalia-v10(1).html`'s `.dk` re-points
+   * `--card` and `--ink` at each other, so the deck is the theme's INK in light and its PAPER-bright in
+   * dark, and the card is always the highest-contrast object on the page. In light these repeat
+   * `slab`/`slabInk` exactly, so the light card does not move; only dark does, from a surface 1.14:1
+   * against the page (invisible) to 12.52:1. Measured: deckInk 12.5–14.8:1, deckMut 5.5–9.8:1.
+   */
+  deck: string; deckInk: string; deckMut: string;
 }
 const REFINED: Record<'light' | 'dark', Colors> = {
-  light: { paper: '#FAF4E6', card: '#FFFBF1', desk: '#E9DFC9', ink: '#2A241C', mut: '#665B4B', acc: '#8A4B27', hl: '#F3E3A8', rule: '#2A241C33', dot: '#2A241C26', shadow: '#2A241C', ok: '#3F6B4A', warn: '#8F5A00', bad: '#9C3322', slab: '#2F2920', slabInk: '#FAF4E6', slabMut: '#D9CDB4', grain: 0.5, photo: 0.22, onAcc: '#FFFBF1' },
-  dark: { paper: '#2B2620', card: '#353029', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E0A47A', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F08C7A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
+  light: { paper: '#FAF4E6', card: '#FFFBF1', desk: '#E9DFC9', ink: '#2A241C', mut: '#665B4B', acc: '#8A4B27', hl: '#F3E3A8', rule: '#2A241C33', dot: '#2A241C26', shadow: '#2A241C', ok: '#3F6B4A', warn: '#8F5A00', bad: '#9C3322', slab: '#2F2920', slabInk: '#FAF4E6', slabMut: '#D9CDB4', deck: '#2A241C', deckInk: '#FAF4E6', deckMut: '#D9CDB4', grain: 0.5, photo: 0.22, onAcc: '#FFFBF1' },
+  dark: { paper: '#2B2620', card: '#353029', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E0A47A', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F08C7A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', deck: '#F2EAD8', deckInk: '#2B2620', deckMut: '#665B4B', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
 };
 const ORIGINAL: Record<'light' | 'dark', Colors> = {
-  light: { paper: '#FAF5EB', card: '#FEFBF5', desk: '#C0B9B2', ink: '#26201C', mut: '#57514C', acc: '#67696B', hl: '#E4DECD', rule: '#26201C33', dot: '#26201C26', shadow: '#26201C', ok: '#4B6B52', warn: '#8A5A12', bad: '#8F3A2C', slab: '#26201C', slabInk: '#FAF5EB', slabMut: '#C9C3BA', grain: 0.6, photo: 0.3, onAcc: '#FEFBF5' },
-  dark: { paper: '#10141A', card: '#1C1F26', desk: '#030407', ink: '#E7E4DC', mut: '#A8A49D', acc: '#A6A9AC', hl: '#3D434C', rule: '#E7E4DC3D', dot: '#E7E4DC1F', shadow: '#000000', ok: '#8FBF9A', warn: '#D9A94A', bad: '#E58A78', slab: '#E7E4DC', slabInk: '#10141A', slabMut: '#3D434C', grain: 0.5, photo: 0.25, onAcc: '#10141A' },
+  light: { paper: '#FAF5EB', card: '#FEFBF5', desk: '#C0B9B2', ink: '#26201C', mut: '#57514C', acc: '#67696B', hl: '#E4DECD', rule: '#26201C33', dot: '#26201C26', shadow: '#26201C', ok: '#4B6B52', warn: '#8A5A12', bad: '#8F3A2C', slab: '#26201C', slabInk: '#FAF5EB', slabMut: '#C9C3BA', deck: '#26201C', deckInk: '#FAF5EB', deckMut: '#C9C3BA', grain: 0.6, photo: 0.3, onAcc: '#FEFBF5' },
+  dark: { paper: '#10141A', card: '#1C1F26', desk: '#030407', ink: '#E7E4DC', mut: '#A8A49D', acc: '#A6A9AC', hl: '#3D434C', rule: '#E7E4DC3D', dot: '#E7E4DC1F', shadow: '#000000', ok: '#8FBF9A', warn: '#D9A94A', bad: '#E58A78', slab: '#E7E4DC', slabInk: '#10141A', slabMut: '#3D434C', deck: '#E7E4DC', deckInk: '#10141A', deckMut: '#57514C', grain: 0.5, photo: 0.25, onAcc: '#10141A' },
 };
 export const PENS: Record<Exclude<Settings['pen'], 'warm' | 'graphite'>, { light: string; dark: string }> = {
   red: { light: '#9C3322', dark: '#F08C7A' }, blue: { light: '#2F4F7A', dark: '#9DB9E3' },
@@ -25,6 +34,19 @@ export const palettes = { refined: REFINED, original: ORIGINAL };
  *  `ONYX.light` is the same material a shade down and stays for the plate work. Neither should follow
  *  `palette: 'original'` — but neither belongs in a screen. */
 export const ONYX = { light: '#26201A', dark: '#17130F' } as const;
+/** Dial materials for the clock faces, alongside ONYX and for the same reason: a dial is a physical plate,
+ *  not a themed surface, so the same plate must not change material when the app flips to dark. ENAMEL is
+ *  true white porcelain and LACQUER is true black lacquer — the two extremes, because an engraved ground
+ *  only reads as engraving when the ink is as far from it as it can get, and that is what stops a dial
+ *  reading as haze. `refined.dark.card` is `#353029`, a brown-grey that belongs to no material and that
+ *  made the ornament read as dust; a cream dial is likewise four steps off `paper`, so the dial stopped
+ *  being an object. SECOND is the sweep hand and the Scales sub-seconds: `prompt.md` V4 calls it
+ *  red-brown, which is a lacquered-steel colour and not a theme accent — `refined.dark.acc` is `#E0A47A`,
+ *  a pale peach that reads grey at hairline width. Contrast against their own grounds: 6.7:1 in light,
+ *  5.2:1 in dark, both over the 3:1 a non-text accent needs. Like ONYX, none of these follow
+ *  `palette: 'original'`: they are materials, not theme colours. */
+export const DIAL = { light: '#FFFFFF', dark: '#000000' } as const;
+export const SECOND = { light: '#8A4B27', dark: '#C0663A' } as const;
 export const TAPE = {
   light: { fill: '#E7D9AE99', edge: '#B8A56E55' },
   dark: { fill: '#C9B98F55', edge: '#C9B98F66' },

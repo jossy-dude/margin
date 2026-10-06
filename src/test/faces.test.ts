@@ -1,5 +1,5 @@
 import { FACES, SKELETON, MESHES, meshFractions, gearGeometry, compositeSvg, dialPal, spinLayers, staticSvg, handSvg, engrave, type FaceId } from '../ui/clock/faces';
-import { palettes, ONYX } from '../tokens/theme';
+import { palettes, ONYX, DIAL } from '../tokens/theme';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
@@ -56,11 +56,12 @@ describe('faces', () => {
   it('every dial colour comes from the palette, in both palettes and both themes, and stays legible', () => {
     for (const p of ['refined', 'original'] as const) for (const mode of ['light', 'dark'] as const) for (const f of FACES) {
       const c = palettes[p][mode], pal = dialPal(f, c, mode === 'dark'), tone = Object.values(c);
-      // the onyx dial is the face's own material, so only its ink and accent have to come from the theme
-      for (const v of [pal.ink, pal.accent, ...(pal.dial === ONYX.dark ? [] : [pal.dial])]) expect(tone).toContain(v);
+      // the dial ground is a MATERIAL (DIAL/ONYX), not a theme surface, so only its ink and accent have to come from the theme
+      const MATERIALS: readonly string[] = [ONYX.dark, ONYX.light, DIAL.light, DIAL.dark];
+      for (const v of [pal.ink, pal.accent, ...(MATERIALS.includes(pal.dial) ? [] : [pal.dial])]) expect(tone).toContain(v);
       expect(cr(pal.ink, pal.dial)).toBeGreaterThanOrEqual(4.5);
-      // the second hand and the Scales sub-seconds hand are hairlines in the accent: they need 3:1 as non-text
-      expect(cr(pal.accent, pal.dial)).toBeGreaterThanOrEqual(3);
+      // the second hand and the Scales sub-seconds hand are hairlines in their own red-brown material: 3:1 as non-text
+      expect(cr(pal.second, pal.dial)).toBeGreaterThanOrEqual(3);
     }
   });
   it('the faintest ornament tone the engine can emit is still a readable 3:1 against its own dial', () => {

@@ -6,7 +6,7 @@ import type { AttStatus, Settings } from '../domain/types';
 export function configureFx(s: Settings) { configureAudio(s.soundOn, s.soundVol); setHapticsEnabled(s.hapticsOn); }
 const STAMP: Record<AttStatus, Parameters<typeof play>[0]> = { p: 'stamp-here', l: 'stamp-late', n: 'stamp-late', a: 'stamp-absent', s: 'stamp-sick', c: 'stamp-cancel', t: 'stamp-cancel' };
 export const fx = {
-  page() { play('place'); haptic('place'); },
+  page() { play('place'); haptic('place'); },   // 0.22s, matched to PLACE_MS=200 in navigation/window.ts
   swipe() { play('shuffle'); haptic('soft'); },
   crumple() { play('crumple'); hapticBurst('crumple', 4, 70); setTimeout(() => { play('thud'); haptic('fall'); }, 620); },
   stamp(s: AttStatus) { play(STAMP[s]); haptic(s === 'a' ? 'heavy' : s === 'p' ? 'stamp' : 'tap'); },

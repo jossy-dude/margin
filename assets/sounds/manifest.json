@@ -1,8 +1,8 @@
 {
  "place": {
-  "seconds": 0.42,
-  "peak": 0.8,
-  "dc": 0.00229,
+  "seconds": 0.22,
+  "peak": 0.97,
+  "dc": 0,
   "clipped": 0
  },
  "shuffle": {

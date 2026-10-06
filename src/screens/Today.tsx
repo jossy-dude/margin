@@ -8,7 +8,7 @@ import { RunningTimer } from '../ui/RunningTimer';
 import { useNow, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
-import { DAY_MS, DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
+import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
 import { effective, dayBlock, isCancelled, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
@@ -27,22 +27,20 @@ import type { Course } from '../domain/types';
    because a fixed tighter leading collides with itself at the 1.3x font scale V14 asks to survive.
 
    The reference's `.dk` re-points its own tokens so the card inverts against the page — near-black
-   with cream text in light, cream with near-black text in dark. `c.slab` is this app's command-deck
-   slab and `DayBar` already draws `ink` on `bg` for exactly this surface, so that is the card. The
-   dark half of the inversion needs a token this file does not own; it is written up as exact code
-   in `qa/HANDOFF-A5.md` rather than hard-coded here. */
+   with cream text in light, cream with near-black text in dark. `c.deck` is this app's command-deck
+   token (`c.deck`/`c.deckInk`/`c.deckMut`, see `tokens/theme.ts`) and `DayBar` already draws `ink`
+   on `bg` for exactly this surface, so that is the card. */
 
 /** The reference's `.dk{padding:15px 16px 14px}`, and `.bar{height:48px}`. Both are named so the bar's
  *  width is derived from the padding instead of repeating `28` and drifting a pixel away from it. */
 const DECK_PAD_X = 16;
 const DECK_BAR_H = 48;
 
-/** A class stored `23:30`–`00:30` has `end <= start`, because `atTime` stamps both ends on the same
- *  day. Left alone it disappears — `activePeriod` drops any period whose end is not after its start,
- *  so the card would show no class at all in the one hour it is genuinely running. The end moves to
- *  the next day here, in this file, so nothing outside the card changes behaviour; the honest fix
- *  belongs in `domain/attendance.ts` and is written up in `qa/HANDOFF-A5.md`. */
-const overMidnight = (p: Period): Period => (p.end > p.start ? p : { ...p, end: p.end + DAY_MS });
+/* An overnight class (23:30–00:30) has both ends stamped on the day it occurs, so it arrives here with
+ *  `end <= start` and disappears — `activePeriod` drops any period whose end is not after its start, and
+ *  the card would show no class at all in the one hour it is genuinely running. `periodsOn` now pushes
+ *  the end into the next day, once, in the domain, so nothing in this file re-opens the period and the
+ *  other two views that read a Period stop being wrong separately. */
 
 export type DeckState = 'live' | 'soon' | 'first' | 'rest';
 
@@ -73,9 +71,9 @@ export interface Deck {
  * start time instead of a countdown.
  */
 export function deckOf(periods: Period[], t: number, isToday: boolean): Deck {
-  /* `i` is carried alongside because `filter` renumbers: the card needs the index into the UNfiltered
-     `periods` to find the same class in `occ`, which `dayBlock` builds index-for-index with it. */
-  const ps = periods.map((p, i) => ({ p: overMidnight(p), i })).filter((x) => !x.p.cancelled);
+  // `Period.end` is already correct for an overnight class (see `periodsOn`), so this is index-for-index
+  // with the `occ` list `dayBlock` builds, which is what lets the card find the same class in both.
+  const ps = periods.map((p, i) => ({ p, i })).filter((x) => !x.p.cancelled);
   const cur = isToday ? ps.find((x) => t >= x.p.start && t < x.p.end) : undefined;
   const next = isToday ? ps.find((x) => x.p.start > t) : ps[0];
   const hit = cur ?? next;
@@ -140,26 +138,26 @@ const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isTod
   const room = mine?.room?.trim() ?? '';
   const afterText = after ? [after.name, after.room.trim()].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
   return (
-    <HandBox seed="deck" fill={c.slab} stroke={c.slab} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
-      <SlabHatch ink={c.slabInk} />
+    <HandBox seed="deck" fill={c.deck} stroke={c.deck} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
+      <SlabHatch ink={c.deckInk} />
       {/* `.tg` — the state word is the card's own ink inverted back out, as the reference's `.tg b` is:
           the one place inside the slab that is lighter than the slab, so it reads first. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
           <View style={{ transform: [{ rotate: '-2deg' }] }}>
-            <HandBox seed={`deck-pill-${d.word}`} fill={c.slabInk} stroke={c.slabInk} corners={RS} shadow={false} sw={1.6} amp={0.8}>
-              <Txt f="bold" s={22} c={c.slab} maxFontSizeMultiplier={FS} style={{ paddingHorizontal: 10, paddingVertical: 1 }}>{d.word}</Txt>
+            <HandBox seed={`deck-pill-${d.word}`} fill={c.deckInk} stroke={c.deckInk} corners={RS} shadow={false} sw={1.6} amp={0.8}>
+              <Txt f="bold" s={22} c={c.deck} maxFontSizeMultiplier={FS} style={{ paddingHorizontal: 10, paddingVertical: 1 }}>{d.word}</Txt>
             </HandBox>
           </View>
-          <Txt f="serif" s={15} c={c.slabMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>
+          <Txt f="serif" s={15} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>
         </View>
         {/* `.tg span > .R` … and the room code beside it. */}
         {room !== '' && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 999, borderWidth: 2.2, borderColor: c.slabInk, transform: [{ rotate: '-7deg' }] }}>
-              <Txt f="marker" s={15} maxFontSizeMultiplier={FS} style={{ color: c.slabInk }}>R</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 999, borderWidth: 2.2, borderColor: c.deckInk, transform: [{ rotate: '-7deg' }] }}>
+              <Txt f="marker" s={15} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>R</Txt>
             </View>
-            <Txt f="marker" s={22} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ color: c.slabInk }}>{room}</Txt>
+            <Txt f="marker" s={22} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ color: c.deckInk }}>{room}</Txt>
           </View>
         )}
       </View>
@@ -167,19 +165,19 @@ const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isTod
           reference's tighter `1.05` leading is not reproduced: `Txt` sets `1.25` for the marker face so
           scaled glyphs still have their line box, and a fixed 1.05 would overlap them past 1.3x. The
           card is therefore about 20 px taller than the reference's, all of it in this row. */}
-      <Txt f="marker" s={32} numberOfLines={2} style={{ color: c.slabInk, marginTop: 8, marginBottom: 6 }}>{d.period ? d.period.label : 'Free day'}</Txt>
+      <Txt f="marker" s={32} numberOfLines={2} style={{ color: c.deckInk, marginTop: 8, marginBottom: 6 }}>{d.period ? d.period.label : 'Free day'}</Txt>
       {/* `.cnt` — `tabular-nums` because these digits change every second; without it the readout is
           the one thing on the page that can shuffle its own neighbours as it counts. The reference's
           `letter-spacing: -.04em` is relative; RN wants absolute, so it is resolved at this size. */}
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 9 }}>
-        <Txt f="type" s={42} style={{ color: c.slabInk, letterSpacing: -1.7, fontVariant: ['tabular-nums'] }}>{d.countdown}</Txt>
-        <Txt f="bold" s={22} maxFontSizeMultiplier={FS} style={{ color: c.slabInk }}>{d.unit}</Txt>
+        <Txt f="type" s={42} style={{ color: c.deckInk, letterSpacing: -1.7, fontVariant: ['tabular-nums'] }}>{d.countdown}</Txt>
+        <Txt f="bold" s={22} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>{d.unit}</Txt>
       </View>
-      <DayBar kind={bar} periods={periods} now={t} ink={c.slabInk} bg={c.slab} w={w} h={DECK_BAR_H} live={live} />
+      <DayBar kind={bar} periods={periods} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
       {/* `.aft` — a dashed rule, then what the day does next. */}
-      <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.slabMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
-        <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ color: c.slabInk }}>After</Txt>
-        <Txt f="serif" s={17} maxFontSizeMultiplier={FS} style={{ color: c.slabMut, flexShrink: 1 }}>{afterText}</Txt>
+      <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
+        <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>After</Txt>
+        <Txt f="serif" s={17} maxFontSizeMultiplier={FS} style={{ color: c.deckMut, flexShrink: 1 }}>{afterText}</Txt>
       </View>
     </HandBox>
   );

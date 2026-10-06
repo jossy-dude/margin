@@ -5,7 +5,7 @@
 //
 // The live folder is never touched by a bare run. Every recipe is built from the same material
 // vocabulary: card stock, masking tape, pencil, rubber stamps and a knurled brass dial.
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -68,7 +68,16 @@ const DRIVE = 1.4;
 
 // ---------------------------------------------------------------- paper
 NOTE.place = 'a card laid down on the desk: soft card slap, then the edge settles';
-S.place = (() => { const r = R(1), o = mk(0.30); add(o, body(0.28, 250, 190, 0.07), 0, 0.7); add(o, slap(r, 0.12, 850, 0.042), 0, 0.85); add(o, stroke(r, 0.09, 2600, 0.9, 0.05), 0.006, 0.22); add(o, stroke(r, 0.10, 1400, 1.2, 0.06), 0.04, 0.16); return o; })();
+/* 0.22s, not 0.42. The page placement is 200ms (see navigation/window.ts PLACE_MS), and a sound tail longer
+ * than the gesture it belongs to becomes the perceived duration of the interaction — which is exactly the
+ * "it takes half a second" complaint the faster transition was meant to remove. Same attack and the same
+ * three layers (paper body, card slap, two edge strokes), only the decay is tighter: shortening the release
+ * rather than truncating the file, so it cannot read as a cut.
+ * NOTE on loudness: `encode` normalises every sound to the same 200Hz-8kHz RMS, so perceived level is matched
+ * automatically and needs no per-sound trim. The peak RISES from 0.80 to the 0.97 ceiling because a shorter
+ * tail is a denser transient (crest 19.2dB vs the old file's) — that is peak headroom, not loudness. It is
+ * still 1.8dB of headroom below clipping, which is what `ui.test.ts` asserts. */
+S.place = (() => { const r = R(1), o = mk(0.22); add(o, body(0.20, 250, 190, 0.11), 0, 0.7); add(o, slap(r, 0.09, 850, 0.055), 0, 0.85); add(o, stroke(r, 0.07, 2600, 0.9, 0.06), 0.006, 0.22); add(o, stroke(r, 0.07, 1400, 1.2, 0.07), 0.04, 0.16); return o; })();
 NOTE.shuffle = 'four card edges squared on the desk, then one firm tap';
 S.shuffle = (() => { const r = R(2), o = mk(0.30); add(o, body(0.06, 230, 195, 0.03), 0, 0.28); const at = [0, 0.042, 0.084, 0.126, 0.168]; at.forEach((t, i) => add(o, stroke(r, 0.07, 2400 + r() * 2400, 0.9 + r() * 0.7, 0.03 + 0.01 * r(), 0.0018), t + r() * 0.008, 0.62 - 0.02 * i)); add(o, slap(r, 0.09, 700, 0.042), 0.166, 0.5); return o; })();
 NOTE.crumple = 'a sheet crushed in the fist: dense crackle that builds fast, then lets go';
@@ -188,8 +197,19 @@ const live = process.argv.includes('--live');
 const OUT = live ? LIVE : CAND;
 mkdirSync(OUT, { recursive: true });
 
-const rows = [], manifest = {};
-for (const [name, data] of Object.entries(S)) {
+/* `--only <name>[,<name>]` regenerates just those sounds and merges their rows into the existing manifest
+ * instead of rewriting it. The live set is an APPROVED set: each file's peak was balanced by ear against
+ * the others, so a full `--live` run re-grades all 28 and silently changes the mix. Use `--only` when one
+ * sound's recipe changed. A bare run still writes every candidate, which is the audition path. */
+const onlyArg = process.argv.indexOf('--only');
+const ONLY = onlyArg > -1 ? process.argv[onlyArg + 1].split(',').map((s) => s.trim()) : null;
+if (ONLY) for (const n of ONLY) if (!S[n]) { console.error(`unknown sound '${n}'`); process.exit(1); }
+const NAMES = ONLY ?? Object.keys(S);
+
+const rows = [], manifest = ONLY && existsSync(join(OUT, 'manifest.json')) ? JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8')) : {};
+for (const name of NAMES) {
+  const data = S[name];
+  if (!data) continue;
   const { buf, clip, dc } = encode(data);
   writeFileSync(join(OUT, `${name}.wav`), buf);
   let peak = 0, sq = 0, bsq = 0;

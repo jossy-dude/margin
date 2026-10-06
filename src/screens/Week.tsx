@@ -60,8 +60,11 @@ export function WeekScreen() {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
             return (
               <View key={i} style={{ width: cw, height: H }}>
-                {occ.map(({ date, meeting }) => {
-                  const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, h = (hm(meeting.end) - hm(meeting.start)) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
+{occ.map(({ date, meeting }) => {
+              // A class stored 23:30–00:30 has negative raw minutes; it ends the NEXT day, so its column is
+              // the height of the remainder of that first day. Without this it collapses to a 20dp stub at
+              // the top of the column — see `periodsOn`, which applies the same rule to a `Period`.
+              const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, mins = hm(meeting.end) - hm(meeting.start), h = (mins > 0 ? mins : mins + 24 * 60) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
                   return (
                     <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${meeting.start} to ${meeting.end}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
                       style={{ position: 'absolute', left: 2, right: 2, top, height: Math.max(20, h - 2) }}>
