@@ -39,6 +39,31 @@ export const STEP = 160;
 /** A settled detent: a small overshoot that reads as a mechanical part arriving. */
 export const KNOB = { duration: 220, dampingRatio: 0.78 } as const;
 
+/**
+ * The focus ring, for the focus TalkBack does not draw for itself.
+ *
+ * Two different focusses exist on Android and only one of them has always had a picture. TalkBack's
+ * *accessibility* focus paints its own rectangle over whatever it lands on; *input* focus — a hardware
+ * keyboard's Tab, a switch-access scan, anything that arrives through `onFocus` on a focusable view —
+ * paints nothing on a custom control, so a form of paper buttons was invisible to exactly the users
+ * prompt.md V14 is about. `Pressable` is focusable by default on Android, so the event already arrives;
+ * what was missing was the ring.
+ *
+ * The ring is the platform `outline`, not a child `View`: RN's Android renderer draws it as its own
+ * path outside the box (`OutlineDrawable`), it follows the control when it dips under a finger, and it
+ * costs no extra view, no animation and no Yoga. It is not gated on reduce-motion because it never
+ * moves — it is a state, like the switch's position, and a state has to be shown either way.
+ *
+ * Touch does not set it: Android only takes input focus from a tap when the view is focusable *in
+ * touch mode*, and these are not — the same rule that keeps a native button from ringing after a tap.
+ */
+function useFocusRing() {
+  const { c } = useTheme();
+  const [on, setOn] = useState(false);
+  const ring: StyleProp<ViewStyle> = on ? { outlineColor: c.acc, outlineWidth: 2, outlineOffset: 2, outlineStyle: 'solid' } : null;
+  return [{ onFocus: () => setOn(true), onBlur: () => setOn(false) }, ring] as const;
+}
+
 type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';
 const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
 /** `testID` fallback. On RN Android a `testID` surfaces as `resource-id` in a `uiautomator` dump, which is how the
@@ -95,6 +120,10 @@ export interface BtnProps { label?: string; icon?: string; onPress?: () => void;
  * back — `expo-animation`'s rule, "scale 0.97 in 100-150 ms on any button-like pressable", at the short
  * end of the range because this is the control the app repeats most.
  *
+ * The ACTION and the dip both start on press-IN, so nothing waits for the finger to lift;
+ * `instant-actions.test.ts` drives a real render to hold that. `kind="danger"` is the one exception
+ * and the reason is in the comment on `down`.
+ *
  * Two things are deliberately NOT here:
  *  · **No opacity in the press.** Opacity on a wrapper makes the renderer keep the subtree in an
  *    offscreen target and re-composite every frame — the cost `navigation/Book.tsx` documents removing
@@ -109,18 +138,37 @@ export interface BtnProps { label?: string; icon?: string; onPress?: () => void;
  */
 export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, style, a11y, flex, quiet, selected, testID }: BtnProps) {
   const { c } = useTheme(), reduce = useReduceMotion(), press = useSharedValue(1), dim = useSharedValue(disabled ? 1 : 0);
+  const [focusProps, ring] = useFocusRing();
   const bg = kind === 'primary' ? c.acc : kind === 'ink' ? c.ink : kind === 'danger' ? c.bad : 'transparent', fg = kind === 'primary' ? c.onAcc : kind === 'ink' ? c.paper : kind === 'danger' ? c.card : c.ink;
   const h = small ? 40 : 52;
   useEffect(() => { dim.set(reduce || disabled ? 1 : withTiming(0, { duration: STEP, easing: EASE })); }, [disabled, reduce, dim]);
-  /* Press-in and press-out are two writes to one value, never a reset, so a button that is tapped again
+  /* A button answers on the FINGER-DOWN frame, not on the lift.
+     `onPress` is dispatched on RELEASE, which puts the user's own hold time — typically 60–150 ms —
+     in front of every action in the app. That hold is what "after I press a button" actually was, and
+     it is why `navigation/Book.tsx`'s tab bar already moved to `onPressIn` and documented it there.
+     `onPressIn` is the frame the touch event arrives, which is where the dip already starts, so the
+     action and its feedback now begin together.
+     `danger` is the one deliberate exception: `onPressIn` commits on touch-down even if the finger
+     slides off before release, and a button whose slide-off destroys data is not one anyone can
+     safely correct. It keeps `onPress`, and pays the hold time for it.
+     `claimed` exists for TalkBack, and deleting `onPress` instead is not an option: Android's
+     accessibility activation arrives as a NON-POINTER click, and `Pressability.onClick` routes those
+     straight to `onPress` without ever running the responder sequence
+     (react-native/Libraries/Pressability/Pressability.js). A press-in-only button is therefore silent
+     to a screen reader. The flag is set when press-in acts and consumed by the release's `onPress`, so
+     one gesture fires once on either path, and the accessibility path stays live behind it. */
+  const claimed = useRef(false);
+  /* Press-in and press-out are two writes to one value, never a reset, so a button tapped again
      before the spring finishes continues from where it is (V18: no stuck, half-animated state). */
-  const down = () => { if (!disabled) press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE })); };
+  const fire = () => { if (!quiet) fx.tap(); onPress?.(); };
+  const down = () => { if (disabled) return; if (kind !== 'danger') { claimed.current = true; fire(); } press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE })); };
   const up = () => { press.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.72 })); };
+  const lift = () => { if (claimed.current) { claimed.current = false; return; } fire(); };
   const face = useAnimatedStyle(() => ({ opacity: interpolate(dim.get(), [0, 1], [1, 0.45]), transform: [{ scale: press.get() }] }));
   return (
     <Pressable testID={testID ?? tid(a11y ?? label)} accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
-      onPress={() => { if (!quiet) fx.tap(); onPress?.(); }} onPressIn={down} onPressOut={up} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4}
-      style={[{ minHeight: h, flex: flex ? 1 : undefined }, style]}>
+      onPress={lift} onPressIn={down} onPressOut={up} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4} {...focusProps}
+      style={[{ minHeight: h, flex: flex ? 1 : undefined }, ring, style]}>
       {/* stroke is always the ink: a ghost button has a transparent fill so it needs its own border,
           and the three filled kinds all draw on the accent/ink/bad the label is drawn against. */}
       <Animated.View style={[{ minHeight: h }, face]}>
@@ -143,6 +191,7 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
  */
 export function Chip({ label, on, onPress, icon, tone, small }: { label: string; on?: boolean; onPress?: () => void; icon?: string; tone?: string; small?: boolean }) {
   const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), was = useRef(!!on);
+  const [focusProps, ring] = useFocusRing();
   const fg = on ? c.onAcc : c.ink, bg = on ? tone ?? c.acc : c.card;
   useEffect(() => {
     if (was.current === !!on) return;
@@ -152,7 +201,10 @@ export function Chip({ label, on, onPress, icon, tone, small }: { label: string;
   }, [on, reduce, s]);
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   return (
-    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+    /* top/bottom slop is 5 and not 4 because a small chip is 34 dp tall: 34 + 10 is the 44 dp touch
+       target, and HStrip now pads its strips 6 so the slop lands inside the strip's own bounds rather
+       than being clipped away by the ScrollView it sits in. */
+    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={{ top: 5, bottom: 5, left: 2, right: 2 }} {...focusProps} style={ring}
       onPress={() => { fx.select(); onPress?.(); }} onPressIn={() => s.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
       <Animated.View style={[{ minHeight: small ? 34 : 42 }, face]}>
         <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -180,13 +232,20 @@ export function Chip({ label, on, onPress, icon, tone, small }: { label: string;
  * IS the state — dropping the movement would leave the switch lying about its own position.
  */
 export function Toggle({ value, onChange, label, hint, disabled }: { value: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(value ? 1 : 0);
+  const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(value ? 1 : 0), press = useSharedValue(1);
+  const [focusProps, ring] = useFocusRing();
   useEffect(() => { if (reduce) { k.set(value ? 1 : 0); return; } k.set(withSpring(value ? 1 : 0, KNOB)); }, [value, reduce, k]);
-  const track = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { backgroundColor: interpolateColor(p, [0, 1], [c.card, c.acc]) }; });
+  /* The switch dips under the finger the way every other control in the kit does, on the same value
+     the knob and the paint already ride past — it is a part, and a part that ignores a press is a part
+     that reads as a picture. The row is 56 dp and the switch is 54×30, so the dip is the switch's and
+     not the label's: type that jumps under a finger is noise, and the whole row is the hit area. */
+  const down = () => { if (!disabled) press.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE })); };
+  const up = () => { press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 })); };
+  const track = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { backgroundColor: interpolateColor(p, [0, 1], [c.card, c.acc]), transform: [{ scale: press.get() }] }; });
   const knob = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { transform: [{ translateX: interpolate(t, [0, 1], [3, 26]) }], backgroundColor: interpolateColor(p, [0, 1], [c.ink, c.onAcc]) }; });
   return (
-    <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }}
-      android_ripple={{ color: hexA(c.ink, 0.12) }} style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }}>
+    <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }} onPressIn={down} onPressOut={up} {...focusProps}
+      android_ripple={{ color: hexA(c.ink, 0.12) }} style={[{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }, ring]}>
       <View style={{ flex: 1 }}><Txt f="bold" s={21}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" style={{ marginTop: 1 }}>{hint}</Txt> : null}</View>
       <Animated.View style={[{ width: 54, height: 30, borderRadius: 15, borderWidth: 1.6, borderColor: c.ink, justifyContent: 'center' }, track]}>
         <Animated.View style={[{ position: 'absolute', left: 0, width: 22, height: 22, borderRadius: 11 }, knob]} />
@@ -198,11 +257,12 @@ export function Toggle({ value, onChange, label, hint, disabled }: { value: bool
  *  legible at all. Still inside `make-interfaces-feel-better`'s "never below 0.95". */
 function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: boolean; a: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1);
+  const [focusProps, ring] = useFocusRing();
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   return (
-    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350}
+    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} {...focusProps}
       onPressIn={() => s.set(reduce || dis ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
-      android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }}>
+      android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={[{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }, ring]}>
       <Animated.View style={[{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }, face]}><Txt f="marker" s={26}>{t}</Txt></Animated.View>
     </Pressable>
   );
@@ -256,7 +316,7 @@ export function Field({ label, style, multiline, ...p }: TextInputProps & { labe
     </View>
   );
 }
-export const Row = ({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) => <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, style]}>{children}</View>;
+export const Row = ({ children, style, gap }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; gap?: number }) => <View style={[{ flexDirection: 'row', alignItems: 'center', gap: gap ?? 8, flexWrap: 'wrap' }, style]}>{children}</View>;
 
 /**
  * A section of a form that opens and closes, as paper sliding out from under another sheet of paper.
@@ -302,7 +362,11 @@ export function Reveal({ open, children }: { open: boolean; children: React.Reac
  *  a fade at the trailing edge, in whatever paper colour sits behind the strip (`bg`). It is *measured*,
  *  not assumed — it appears only when the content really is wider than the strip, and it disappears once
  *  you reach the end — so it never suggests more than there is. Trailing padding grows while it is shown
- *  so the last chip can be scrolled fully clear of the fade rather than sitting under it. */
+ *  so the last chip can be scrolled fully clear of the fade rather than sitting under it.
+ *
+ *  The vertical padding is 6 rather than 4 for one reason: a small chip is 34 dp tall, its hit area is
+ *  34 + 10 (see `Chip`), and a ScrollView only hit-tests inside its own bounds — slop that pokes past
+ *  the strip is slop a finger can never reach. 6 + 34 + 6 = 46, so the 44 dp target actually exists. */
 export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSizeChange, ref, ...rest }: ScrollViewProps & { gap?: number; bg?: string; contentStyle?: StyleProp<ViewStyle>; ref?: React.Ref<ScrollView> }) {
   const { c } = useTheme(), id = useId(), [vw, setVw] = useState(0), [cw, setCw] = useState(0), [x, setX] = useState(0);
   const more = stripHasMore(cw, vw, x), paper = bg ?? c.paper;
@@ -312,7 +376,7 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
         onLayout={(e) => setVw(e.nativeEvent.layout.width)}
         onScroll={(e) => setX(e.nativeEvent.contentOffset.x)}
         onContentSizeChange={(w, h) => { setCw(w); onContentSizeChange?.(w, h); }}
-        contentContainerStyle={[{ gap, paddingVertical: 4, paddingRight: more ? STRIP_FADE : 4 }, contentStyle]}>{children}</ScrollView>
+        contentContainerStyle={[{ gap, paddingVertical: 6, paddingRight: more ? STRIP_FADE : 4 }, contentStyle]}>{children}</ScrollView>
       {more ? (
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%" accessibilityRole="none">
           <Defs><LinearGradient id={id} x1="0" y1="0" x2="1" y2="0">
