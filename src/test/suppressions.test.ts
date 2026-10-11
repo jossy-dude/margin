@@ -19,7 +19,9 @@ function commit(route: RouteName, cur: RouteName, prev: Pair, reverseKeyed: 'cur
   if (reverseRan) { const s = toStore(route, cur); if (s) store = s; }
   return { store, cur: nav };
 }
-const tapTab = (p: Pair, to: RouteName, k: 'cur' | 'route'): Pair => (to === p.store ? p : commit(to, p.cur, p, k));
+/** A store-first navigation: what a tab tap was before Book.tsx batched it into one event, and what
+ *  the focus entry / a notification still do — the forward-sync path the keying analysis is about. */
+const storeHop = (p: Pair, to: RouteName, k: 'cur' | 'route'): Pair => (to === p.store ? p : commit(to, p.cur, p, k));
 const hardwareBack = (p: Pair, k: 'cur' | 'route'): Pair => (p.cur === 'Today' ? p : commit(p.store, 'Today', p, k));
 const settled = (p: Pair, k: 'cur' | 'route'): Pair => commit(p.store, p.cur, p, k);
 
@@ -28,7 +30,7 @@ function run(k: 'cur' | 'route'): { agreed: number; total: number; firstBreak: u
   let p: Pair = { store: 'Today', cur: 'Today' }, seed = 7, agreed = 0, firstBreak: unknown = null;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   for (let i = 0; i < 300 && !firstBreak; i++) {
-    p = settled(rnd() < 0.25 ? hardwareBack(p, k) : tapTab(p, ROUTES[Math.floor(rnd() * ROUTES.length)]!, k), k);
+      p = settled(rnd() < 0.25 ? hardwareBack(p, k) : storeHop(p, ROUTES[Math.floor(rnd() * ROUTES.length)]!, k), k);
     if (p.store === p.cur) agreed++; else firstBreak = { i, ...p };
   }
   return { agreed, total: 300, firstBreak };
@@ -49,7 +51,7 @@ describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not 
     expect(agreed).toBeLessThan(300); // so the failure is a real regression, not one unlucky hop
   });
 
-  it('and the one-hop case is concrete: obeying the linter leaves the two disagreeing after one tap', () => {
+  it('and the one-hop case is concrete: obeying the linter leaves the two disagreeing after one store-first hop', () => {
     const before: Pair = { store: 'Today', cur: 'Today' };
     // Effects run in declaration order, so the forward one moves the navigator to Grades and the
     // reverse one then reads `route` as stale and yanks the store back to Today: the nav shows
@@ -57,13 +59,15 @@ describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not 
     expect(commit('Grades', 'Today', before, 'route')).toEqual({ store: 'Today', cur: 'Grades' });
     expect(commit('Grades', 'Today', before, 'route').store).not.toBe(commit('Grades', 'Today', before, 'route').cur);
     // Keyed on [cur] the reverse effect does not run at all this commit, because the navigator had
-    // not moved *yet* — which is exactly what keeps the store→navigator tap working.
+    // not moved *yet* — which is exactly what keeps the store→navigator sync working.
     expect(commit('Grades', 'Today', before, 'cur')).toEqual({ store: 'Grades', cur: 'Grades' });
   });
 
-  it('Book.tsx still carries exactly three suppressions, and the reverse one is still keyed on [cur]', () => {
+  it('Book.tsx still carries exactly two suppressions, and the reverse one is still keyed on [cur]', () => {
     const src = readFileSync(join(__dirname, '../navigation/Book.tsx'), 'utf8');
-    expect(src.split(DIRECTIVE).length - 1).toBe(3); // Placed, forward, reverse
+    // Two, not three: forward and reverse. The third went with the hide-schedule effect that the
+    // removal of the drop took with it — there is no layout effect on `Placed` left to silence.
+    expect(src.split(DIRECTIVE).length - 1).toBe(2); // forward, reverse
     const line = src.split('\n').find((l) => l.includes('toStore('))!;
     expect(line).toContain('}, [cur])');
     expect(line).toContain(DIRECTIVE);
