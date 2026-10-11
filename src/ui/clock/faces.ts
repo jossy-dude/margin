@@ -3,11 +3,14 @@ import { DIAL, SECOND, type Colors } from '../../tokens/theme';
 /**
  * Dial engine — a TypeScript port of the clock-variations engine. Pure: it returns SVG strings (viewBox -100 -100 200 200 unless noted),
  * so the same code draws the live clock, the Settings thumbnails and the Focus dial, and can be rendered offline in tests.
- * Surviving faces: g, rb, c, sl, s. Dropped as duplicates: f (≈g), or (≈rb), gn, gn2 (≈s).
+ * Surviving faces: g, rb, c, sl, s. Dropped as duplicates: f (≈g), gn, gn2 (≈s). `or` (Onyx Rosette, dial 07) was dropped
+ * as ≈rb but is being re-cut against the page for the preview in design/preview-03-07 — its branches below are live for
+ * rendering that preview while FACES still ships the original five; it joins FACES only after that review, at which point
+ * this line and faces.test.ts's pinned id list change together.
  */
 export interface Pal { ink: string; dial: string; accent: string; second: string }
 export interface FaceSpec { id: FaceId; n: string; native: 'light' | 'dark'; ns: number; nr: number; tk: 'line' | 'dot'; rings: number[]; nosec?: boolean; drop6?: boolean }
-export type FaceId = 'g' | 'rb' | 'c' | 'sl' | 's';
+export type FaceId = 'g' | 'rb' | 'c' | 'sl' | 's' | 'or';
 export const FACES: FaceSpec[] = [
   { id: 'g', n: 'Guilloché Ivory', native: 'light', ns: 12.5, nr: 68, tk: 'line', rings: [58] },
   { id: 'rb', n: 'Rosette Blanc', native: 'light', ns: 11.5, nr: 75, tk: 'line', rings: [62, 58] },
@@ -181,10 +184,43 @@ export const ART_R = 48;
    is a breath* (so nothing scales). These two functions are the whole of that arithmetic, kept pure so the numbers
    the screen runs on every frame can be asserted without a renderer. */
 export const ESC_TEETH = 30, ESC_DEG = 360 / ESC_TEETH;
-/** degrees the wheel has turned after `elapsedSec`, one tooth per second: continuous, derived, monotonic */
-export const escapementTurn = (elapsedSec: number) => elapsedSec * ESC_DEG;
+/** degrees the wheel has turned after `elapsedSec`, one tooth per second: continuous, derived, monotonic.
+ *
+ *  **The `'worklet'` directives on these three are load-bearing, not decoration.** `Focus.tsx`'s escapement
+ *  style and `ClockFace`'s frame callback both run on the UI runtime, and a plain JS function captured in a
+ *  worklet closure is serialised as a *remote* function — calling it from the UI thread then throws
+ *  `[Worklets] Tried to synchronously call a Remote Function`. That is not a warning; it took the whole app
+ *  down on the first frame of the live clock, and `handAngles` was introduced by `eac2a65` ("DST clock")
+ *  with the same mistake, so neither had ever run on a phone. `src/test/worklet-hosts.test.ts` asserts the
+ *  directive is present on everything a worklet closes over, and reads it from the real Metro bundle when
+ *  one is reachable, because `tsc` and `jest` both pass straight over this. */
+export const escapementTurn = (elapsedSec: number) => {
+  'worklet';
+  return elapsedSec * ESC_DEG;
+};
 /** the rendered angle: the turn, wound back by the release. `kick` runs 0 → 1 → −0.42 → 0 over 190 ms. */
-export const escapementAngle = (elapsedSec: number, kick = 0) => -escapementTurn(elapsedSec) + kick * 1.7;
+export const escapementAngle = (elapsedSec: number, kick = 0) => {
+  'worklet';
+  return -escapementTurn(elapsedSec) + kick * 1.7;
+};
+
+/* ── Onyx Rosette (dial 07) — the candidate under review in design/preview-03-07 ─────────────────────────────
+   The centre figure is three parts, all of which the page turns: 16 petals in two passes (a 12% wash and a 28%
+   hairline of the same ellipses) at +24 dps, a 24-tooth wheel at −24 dps, and the wheel's hub. The hub circle is
+   drawn AFTER the gear on the page; `plateSvg` draws `staticSvg` before the layers, so a static hub here would sit
+   under the wheel's fill and never be seen — and it is a circle, which a rotation does not move, so keeping it in
+   the wheel layer costs nothing. */
+const onyxWheel = (): string => {
+  const g = { n: 24, m: 2, ph: 0 }, { rp, rf } = gearGeometry(g);
+  const hb = rp * 0.2, ri = rf - Math.max(g.m * 0.5, 0.6), band = ri - hb;
+  let d = toothPath({ ...g, x: 0, y: 0, w: -24, t: 0.14, spokes: 0 }) + ring(0, 0, hb);
+  if (band > 3) {
+    const kk = band > 5.4 ? 6 : band > 4.2 ? 5 : 4, ro = (hb + ri) / 2, hr = band * 0.3;
+    for (let i = 0; i < kk; i++) { const p = P(ro, (g.ph * PI) / 180 + (i * 2 * PI) / kk); d += ring(p[0], p[1], hr); }
+  }
+  return d;
+};
+const ONYX_WHEEL_R = gearGeometry({ n: 24, m: 2 }).ra + 1.5;
 
 /** Layers that move on their own (gear trains, rosettes, the balance wheel, the Scales sub-seconds). */
 export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
@@ -214,6 +250,21 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
   if (id === 'sl') {
     const R = 15, body = `<circle r="14" fill="${pal.dial}"/><circle r="14" fill="none" stroke="${engrave(pal, .85)}" stroke-width="${sw(px, 1.4)}"/>${each(12, (i) => `<line y1="-12.5" y2="-10.5" stroke="${engrave(pal, .85)}" stroke-width="${sw(px, 1)}" transform="rotate(${i * 30})"/>`)}<path d="M0 3V-11" stroke="${pal.second}" stroke-width="${sw(px, 1.2)}" stroke-linecap="round"/><circle r="1.3" fill="${pal.second}"/>`;
     return [{ key: 'sub', x: 0, y: 36, R, svg: svg(body, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 6 }];
+  }
+  if (id === 'or') {
+    const R = 47, ell = (i: number) => `<ellipse rx="46" ry="15" transform="rotate(${i * 11.25})"/>`;
+    // two passes of one figure, each composited once as a group so the crossings inside a pass do not stack —
+    // the same reason `ART.latOut` is a `mesh` (see the comment on `mesh`)
+    const petal = mesh(`<g fill="${pal.ink}" stroke="none">${each(16, ell)}</g>`, 0.12) +
+      mesh(`<g fill="none" stroke="${pal.ink}" stroke-width="${sw(px, 0.6)}">${each(16, ell)}</g>`, 0.28);
+    const flat = engrave(pal, 0.14);
+    const wheel = `<path d="${onyxWheel()}" fill="${flat}" stroke="${flat}" stroke-width="${sw(px, 0.5)}" fill-rule="evenodd"/>` +
+      `<circle r="9" fill="none" stroke="${engrave(pal, 0.3)}" stroke-width="${sw(px, 1)}"/>`;
+    const R2 = ONYX_WHEEL_R;
+    return [
+      { key: 'petal', x: 0, y: 0, R, svg: svg(petal, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 24 },
+      { key: 'wheel', x: 0, y: 0, R: R2, svg: svg(wheel, `${-R2} ${-R2} ${2 * R2} ${2 * R2}`), dps: -24 },
+    ];
   }
   return [];
 }
@@ -259,7 +310,12 @@ export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = '
     if (f.drop6 && j === 6) return ''; const p = P(f.nr, (j * PI) / 6), x = f1(p[0]), y = f1(p[1]), rot = j > 3 && j < 9 ? j * 30 + 180 : j * 30;
     return `<text x="${x}" y="${f1(p[1] + ns * 0.34)}" font-size="${ns}" font-family="${font}" fill="${ink}" text-anchor="middle" transform="rotate(${rot === j * 30 ? 0 : rot} ${x} ${y})">${RN[j]}</text>`;
   });
-  return svg(`<circle r="99" fill="${ink}"/><circle r="97.2" fill="${pal.dial}"/><circle r="95.6" ${o(TONE.sub)} stroke-width="${sw(px, 1.3)}"/>${rings}${orn}${ticks}${nums}`);
+  /* The bezel. On a porcelain plate it is ink. On an onyx plate the bezel cut from the same ink is
+   *  the single brightest object on a dark page — a hard ring the eye goes to first — so it takes a
+   *  fraction of that ink instead: a dark warm metal that still reads as a bezel, and that sits a step
+   *  below the page rather than above it. */
+  const bezel = pal.dial === DIAL.dark ? engrave(pal, 0.16) : ink;
+  return svg(`<circle r="99" fill="${bezel}"/><circle r="97.2" fill="${pal.dial}"/><circle r="95.6" ${o(TONE.sub)} stroke-width="${sw(px, 1.3)}"/>${rings}${orn}${ticks}${nums}`);
 }
 export type HandKind = 'hour' | 'minute' | 'second';
 /**
@@ -275,8 +331,14 @@ export type HandKind = 'hour' | 'minute' | 'second';
  * `ClockFace.tsx`. An offset is by definition DST-dependent, so any app that stayed alive across a transition — a
  * phone asleep on the table overnight — showed every face an hour wrong until the process restarted, and nothing
  * in the tree could notice (`prompt.md` R6). `ClockFace.tsx` now keeps it in a shared value and re-reads it.
+ *
+ * **This function is a worklet.** `ClockFace`'s `useFrameCallback` runs on the UI runtime, and a plain JS
+ * function captured in a worklet closure is serialised as a *remote* function, so calling it from there
+ * throws `[Worklets] Tried to synchronously call a Remote Function` — which is how `eac2a65` shipped a
+ * version of this app whose first frame was a red box, on a repository where every gate was green.
  */
 export function handAngles(utcMs: number, offsetMs: number): { ha: number; ma: number; sec: number } {
+  'worklet';
   const ms = (utcMs - offsetMs) % 86_400_000;
   return { ha: (ms / 3_600_000 % 12) * 30, ma: (ms / 60_000 % 60) * 6, sec: (ms % 60_000) / 1000 };
 }
@@ -287,13 +349,26 @@ export function handSvg(kind: HandKind, pal: Pal, px = 200): string {
   const y = -L * 0.56, q = w * 2.1;
   return svg(`<path d="M0 ${f1(L * 0.14)}V${f1(y + q)}M0 ${f1(y - q)}V${f1(-L * 0.68)}" stroke="${pal.ink}" stroke-width="${w}" stroke-linecap="round"/><circle cy="${f1(y)}" r="${f1(q)}" fill="none" stroke="${pal.ink}" stroke-width="${f2(w * 0.8)}"/><path d="M0 ${-L}L${f1(w * 1.7)} ${f1(-L * 0.7)}L0 ${f1(-L * 0.63)}L${f1(-w * 1.7)} ${f1(-L * 0.7)}Z" fill="${pal.ink}"/><circle r="${f1(w * 1.7)}" fill="${pal.ink}"/>`);
 }
-/** Whole face as one static SVG at a given moment — used by tests/offline rendering and the small Settings thumbnails. */
-export function compositeSvg(f: FaceSpec, pal: Pal, font: string, t = { h: 10, m: 10, s: 30 }, secs = 0, px = 200, uid = 'a'): string {
+/** The dial plate and its spin layers, and *nothing else* — no hands at all.
+ *
+ *  This is the document a caller wants when the hands are not its own: the Focus dial and the onboarding
+ *  tour's dial both draw their own pointer over this face and both pass `hands={false}`. `compositeSvg` is
+ *  the same plate with a fixed 10:10:30 dropped on top, which is right for a picker thumbnail and wrong
+ *  everywhere else — it used to be the *only* way to get a still face, so `hands={false}` was silently a
+ *  no-op on that path and the tour dial grew a second hour hand, a second minute hand and a red second hand
+ *  sitting on top of its own pointer at 10:10:30. `src/test/faces.test.ts` pins the difference. */
+export function plateSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = 'a', secs = 0): string {
   const body = staticSvg(f, pal, font, px, uid).replace(/^<svg[^>]*>|<\/svg>$/g, '');
   const layers = spinLayers(f.id, pal, px).map((l) => {
     const ang = l.osc ? Math.sin((secs / l.osc.period) * 2 * PI) * l.osc.swing : l.dps * secs, inner = l.svg.replace(/^<svg[^>]*>|<\/svg>$/g, '');
     return `<g transform="translate(${l.x} ${l.y}) rotate(${f1(ang)})">${inner}</g>`;
   }).join('');
-  const ha = (t.h % 12) * 30 + t.m * 0.5, ma = t.m * 6 + t.s * 0.1, sa = t.s * 6, strip = (s: string) => s.replace(/^<svg[^>]*>|<\/svg>$/g, '');
-  return svg(`${body}${layers}<g transform="rotate(${ha})">${strip(handSvg('hour', pal, px))}</g><g transform="rotate(${ma})">${strip(handSvg('minute', pal, px))}</g>${f.nosec ? '' : `<g transform="rotate(${sa})">${strip(handSvg('second', pal, px))}</g>`}`);
+  return svg(`${body}${layers}`);
+}
+/** Whole face as one static SVG at a given moment — used by tests/offline rendering and the small Settings thumbnails. */
+export function compositeSvg(f: FaceSpec, pal: Pal, font: string, t = { h: 10, m: 10, s: 30 }, secs = 0, px = 200, uid = 'a'): string {
+  const strip = (s: string) => s.replace(/^<svg[^>]*>|<\/svg>$/g, '');
+  const base = plateSvg(f, pal, font, px, uid, secs).replace(/^<svg[^>]*>|<\/svg>$/g, '');
+  const ha = (t.h % 12) * 30 + t.m * 0.5, ma = t.m * 6 + t.s * 0.1, sa = t.s * 6;
+  return svg(`${base}<g transform="rotate(${ha})">${strip(handSvg('hour', pal, px))}</g><g transform="rotate(${ma})">${strip(handSvg('minute', pal, px))}</g>${f.nosec ? '' : `<g transform="rotate(${sa})">${strip(handSvg('second', pal, px))}</g>`}`);
 }

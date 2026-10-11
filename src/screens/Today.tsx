@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Svg, { Line } from 'react-native-svg';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { DayBar, type AnyBarKind } from '../ui/DayBar';
 import { Btn, HandBox, HStrip, Icon, Tape, Txt } from '../ui/kit';
+import { handPath } from '../ui/hand';
 import { RunningTimer } from '../ui/RunningTimer';
 import { useNow, useTheme } from '../ui/theme-context';
+import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
@@ -35,6 +37,9 @@ import type { Course } from '../domain/types';
  *  width is derived from the padding instead of repeating `28` and drifting a pixel away from it. */
 const DECK_PAD_X = 16;
 const DECK_BAR_H = 48;
+/* The masthead clock. It used to be 124 and sit alone above the deck; it is now taped to the card's
+ *  top-left corner, so its size is a named constant the card's `headPad` is derived from. */
+const CLOCK = 92;
 
 /* An overnight class (23:30–00:30) has both ends stamped on the day it occurs, so it arrives here with
  *  `end <= start` and disappears — `activePeriod` drops any period whose end is not after its start, and
@@ -115,6 +120,38 @@ function SlabHatch({ ink }: { ink: string }) {
   );
 }
 
+/** Both countdown presentations live in one 96-high slot: the disc while the class is coming, the
+ *  digits once it is here — so the bell never changes the card's height and never walks the day
+ *  strip or the list under it. The disc is the break sticker's own geometry (Focus.tsx BreakSticker):
+ *  hand-cut paper, a ring that fills across the wait, the time inside. */
+const COUNT_H = 96;
+/* The disc was 96 square and sat in the card's own column flow, where it pushed the subject down and
+ *  hollowed out the left half of the slab. It is now a small badge taped to the card's right edge —
+ *  a sticker on the paper, not a hole in it — so it reads as an annotation of the countdown rather
+ *  than as the countdown's frame. */
+const DISC = { h: [28, 28, 28, 28], v: [28, 28, 28, 28] } as const;
+
+function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
+  const { c } = useTheme(), size = 56, R = 22, circ = 2 * Math.PI * R;
+  const prog = gapMs > 0 ? Math.max(0, Math.min(1, 1 - leftMs / gapMs)) : 0;
+  const d = React.useMemo(() => handPath(size, size, DISC, 77, 1.6), []);
+  return (
+    <View accessible accessibilityRole="timer" accessibilityLabel={`Class starts in ${fmtClock(leftMs / 1000)}`}
+      style={{ width: size, height: size }}>
+      <Svg width={size + 8} height={size + 8} style={{ position: 'absolute', left: -2, top: -2 }} viewBox={`-2 -2 ${size + 8} ${size + 8}`}>
+        <Path d={d} transform="translate(3 4)" fill={hexA(c.shadow, 0.28)} />
+        <Path d={d} fill={c.card} stroke={c.ink} strokeWidth={1.8} />
+        <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={hexA(c.ink, 0.18)} strokeWidth={4} />
+        <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={c.acc} strokeWidth={4} strokeLinecap="round"
+          strokeDasharray={`${circ * prog} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      </Svg>
+      <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt f="type" s={14} maxFontSizeMultiplier={FS} accessibilityLiveRegion="none" style={{ fontVariant: ['tabular-nums'] }}>{fmtClock(leftMs / 1000)}</Txt>
+      </View>
+    </View>
+  );
+}
+
 /**
  * The card.
  *
@@ -123,8 +160,11 @@ function SlabHatch({ ink }: { ink: string }) {
  * same off-screen gate the page applies to its own `useNow` — `prompt.md` V17 asks that a hidden
  * screen does not tick fast — so off Today the card drops to the same 60 s the page uses.
  */
-const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isToday, bar, w, live }: {
+export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isToday, bar, w, live, headPad = 0 }: {
   periods: Period[]; occ: Occurrence[]; courses: Course[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
+  /** Extra left padding on the header row, for when the clock is taped over the card's top-left
+   *  corner and the state pill has to start clear of it. */
+  headPad?: number;
 }) {
   const { c } = useTheme();
   const t = useNow(live ? 1000 : 60_000);
@@ -137,12 +177,18 @@ const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isTod
   const mine = courseAt(d.at), after = d.at >= 0 ? courseAt(d.at + 1) : null;
   const room = mine?.room?.trim() ?? '';
   const afterText = after ? [after.name, after.room.trim()].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
+  /* The disc fills across the gap the card is actually in: from the previous non-cancelled class's end
+     (or midnight when this is the first class), floored at a minute so a same-minute back-to-back swap
+     can never divide by zero or render a backwards ring. */
+  const soon = d.state === 'soon' && d.period !== null;
+  const prevEnd = soon ? periods.slice(0, d.at).filter((p) => !p.cancelled).pop()?.end ?? startOfDay(t) : 0;
+  const gapMs = soon ? Math.max(60_000, d.period!.start - prevEnd) : 0;
   return (
     <HandBox seed="deck" fill={c.deck} stroke={c.deck} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
       <SlabHatch ink={c.deckInk} />
       {/* `.tg` — the state word is the card's own ink inverted back out, as the reference's `.tg b` is:
           the one place inside the slab that is lighter than the slab, so it reads first. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: headPad }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
           <View style={{ transform: [{ rotate: '-2deg' }] }}>
             <HandBox seed={`deck-pill-${d.word}`} fill={c.deckInk} stroke={c.deckInk} corners={RS} shadow={false} sw={1.6} amp={0.8}>
@@ -169,10 +215,21 @@ const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isTod
       {/* `.cnt` — `tabular-nums` because these digits change every second; without it the readout is
           the one thing on the page that can shuffle its own neighbours as it counts. The reference's
           `letter-spacing: -.04em` is relative; RN wants absolute, so it is resolved at this size. */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 9 }}>
-        <Txt f="type" s={42} style={{ color: c.deckInk, letterSpacing: -1.7, fontVariant: ['tabular-nums'] }}>{d.countdown}</Txt>
-        <Txt f="bold" s={22} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>{d.unit}</Txt>
+      <View style={{ height: COUNT_H, justifyContent: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 9 }}>
+          <Txt f="type" s={42} style={{ color: c.deckInk, letterSpacing: -1.7, fontVariant: ['tabular-nums'] }}>{d.countdown}</Txt>
+          <Txt f="bold" s={22} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>{d.unit}</Txt>
+        </View>
       </View>
+      {/* The ring-progress badge. It used to BE the countdown's presentation — 96 square, pushed the
+          subject down and hollowed the slab's left half. It is now a small sticker taped over the
+          card's right edge, tilted the way the state pill and the room tag already are, so it reads
+          as the same kind of annotation. The digits above stay the thing actually read. */}
+      {soon && (
+        <View pointerEvents="none" style={{ position: 'absolute', right: DECK_PAD_X - 10, top: 86, transform: [{ rotate: '-8deg' }] }}>
+          <StartCircle leftMs={Math.max(0, d.period!.start - t)} gapMs={gapMs} />
+        </View>
+      )}
       <DayBar kind={bar} periods={periods} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
       {/* `.aft` — a dashed rule, then what the day does next. */}
       <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
@@ -186,9 +243,13 @@ const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isTod
 export function TodayScreen() {
   /* Narrow selectors: each slice subscribes on its own, so toast/timer/sheet/plan writes no longer
      re-render this whole page — only the slices it actually reads. `st` is rebuilt locally each render. */
-  const route = useStore((s) => s.route), settings = useStore((s) => s.settings), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
-  const st = { route, settings, meetings, courses, attendance, dayMarks, tasks, notices };
-  const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(st.route === 'Today' ? 30_000 : 60_000), today = startOfDay(now);
+  const settings = useStore((s) => s.settings), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
+  const st = { settings, meetings, courses, attendance, dayMarks, tasks, notices };
+  /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
+     so a store subscription here would re-render the whole of Today on every tap anywhere in the app —
+     including the taps that have nothing to do with it. */
+  const focused = useScreenLive();
+  const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(focused ? 30_000 : 60_000), today = startOfDay(now);
   /* The day block — strip, class list, "Mark day" — is ONE day, chosen by the user and otherwise the
      live today; the title, clock and "in class / next up" line above it stay about now, so they read
      the live day instead. Both come from `dayBlock`, so they cannot drift apart. */
@@ -204,33 +265,32 @@ export function TodayScreen() {
   const nDone = open.length;
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
-      right={<Pressable testID="open-focus" accessibilityRole="button" accessibilityLabel="Start a focus session" onPress={() => act.focusOpen(null)} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={27} /></Pressable>}>
-      {/* The one place outside Focus that admits a round is live. `prompt.md` R4 records the indicator as
-          unbuilt and V10h asks for it here: back out of Focus lands on Today, so Today is where you find
-          out whether to resume or start again. Same first-child placement To-do uses, and it reads the
-          store itself, so it costs this page nothing to be wrong about. */}
-      <RunningTimer />
-      <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-        <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPress={() => { act.open({ t: 'settings' }); act.settingsPush('appearance'); act.settingsPush('clock'); }}><ClockFace id={st.settings.clock} size={124} live={st.route === 'Today'} /></Pressable>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
-          {/* The class name used to sit here as well as on the deck, in the same marker face, ~120 px up the
-              page — two Permanent Marker lines saying the same two words with nothing useful between them, which
-              reads as a rendering fault rather than as emphasis. It is the deck's job: the reference's masthead
-              carries a greeting, a date and the clock and NOT a subject (`marginalia-v10(1).html`, `today:()`),
-              and its `h2` is the only place the subject appears.
-
-              What is kept is the line the deck cannot say. "until 09:50" is a wall-clock time and the deck's
-              "26:00 min left" is a duration — different facts, and the one a person looks at a clock to read —
-              so a clock row that answers "how long?" in the clock's own terms is not a duplicate of anything.
-              Compared by render: `/tmp/render/a8/DUP.png`, both variants at 411 px. */}
-          {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end)}` : `at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}`}</Txt>}
+      right={<RunningTimer />}>
+      {/* The clock and the deck read as ONE artifact: the clock is taped to the card's top-left corner
+          and overlaps it, rather than floating above a separate slab. `headPad` is the clock's width
+          plus a gap, so the state pill starts clear of the bezel. On a day with nothing on it there is
+          no card to attach to, so the clock stands alone with its status line. */}
+      {periods.length > 0 ? (
+        <View style={{ marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: -26, position: 'relative', zIndex: 2 }}>
+            <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPressIn={() => act.openSettingsAt('clock')}><ClockFace id={st.settings.clock} size={CLOCK} live={focused} /></Pressable>
+            {/* `paddingBottom` equals the overlap, so the status line's second row clears the card's top
+                edge instead of grazing it. */}
+            <View style={{ flex: 1, gap: 4, paddingBottom: 26 }}>
+              <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
+              {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end)}` : `at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}`}</Txt>}
+            </View>
+          </View>
+          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} isToday={sel === today} bar={st.settings.bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} headPad={CLOCK + 14 - DECK_PAD_X} />
         </View>
-      </View>
-      {/* The command deck, over the SELECTED day — the day strip above it can move it, so the bar under
-          it and the class list below it always describe the same day. */}
-      {periods.length > 0 && (
-        <ActiveCard periods={periods} occ={selOcc} courses={st.courses} isToday={sel === today} bar={st.settings.bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={st.route === 'Today'} />
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+          <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPressIn={() => act.openSettingsAt('clock')}><ClockFace id={st.settings.clock} size={CLOCK} live={focused} /></Pressable>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
+            {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end)}` : `at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}`}</Txt>}
+          </View>
+        </View>
       )}
       <Section title="This week" right={<Btn small kind="ghost" label={dayMark ? ST[dayMark.status] : 'Mark day'} onPress={() => act.open({ t: 'status', mode: 'day', key: selDate, title: fmtDay(sel, now), date: selDate })} />}>
         <View style={{ flexDirection: 'row', gap: 5 }}>

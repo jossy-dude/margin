@@ -5,7 +5,7 @@
      (Settings -> Look & feel shows "auto · refined"). The Original palette cannot be expressed in a
      native resource at all; see BUG-001 for the app.json-vs-native-folder ownership question. -->
 <resources>
-  <color name="splashscreen_background">#2B2620</color>
-  <color name="iconBackground">#2B2620</color>
-  <color name="activityBackground">#2B2620</color>
+  <color name="splashscreen_background">#3C352C</color>
+  <color name="iconBackground">#3C352C</color>
+  <color name="activityBackground">#3C352C</color>
 </resources>

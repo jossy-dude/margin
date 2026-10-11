@@ -16,7 +16,11 @@ export interface Colors {
 }
 const REFINED: Record<'light' | 'dark', Colors> = {
   light: { paper: '#FAF4E6', card: '#FFFBF1', desk: '#E9DFC9', ink: '#2A241C', mut: '#665B4B', acc: '#8A4B27', hl: '#F3E3A8', rule: '#2A241C33', dot: '#2A241C26', shadow: '#2A241C', ok: '#3F6B4A', warn: '#8F5A00', bad: '#9C3322', slab: '#2F2920', slabInk: '#FAF4E6', slabMut: '#D9CDB4', deck: '#2A241C', deckInk: '#FAF4E6', deckMut: '#D9CDB4', grain: 0.5, photo: 0.22, onAcc: '#FFFBF1' },
-  dark: { paper: '#2B2620', card: '#353029', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E0A47A', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F08C7A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', deck: '#F2EAD8', deckInk: '#2B2620', deckMut: '#665B4B', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
+  /* Only `paper` moves. `card`, `desk`, `slab` and the deck's inks are contrast-tuned against their
+     *  own pairs (ui.test.ts pins every pair at 4.5:1) and lifting them with the background silently
+     *  breaks pairs that were passing — measured: deckMut on deck fell to 3.3:1, bad on card to 4.4:1.
+     *  The page reads as "too dark" because of the paper, so the paper is the only token that lifts. */
+  dark: { paper: '#3C352C', card: '#353029', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E0A47A', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F08C7A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', deck: '#F2EAD8', deckInk: '#2B2620', deckMut: '#665B4B', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
 };
 const ORIGINAL: Record<'light' | 'dark', Colors> = {
   light: { paper: '#FAF5EB', card: '#FEFBF5', desk: '#C0B9B2', ink: '#26201C', mut: '#57514C', acc: '#67696B', hl: '#E4DECD', rule: '#26201C33', dot: '#26201C26', shadow: '#26201C', ok: '#4B6B52', warn: '#8A5A12', bad: '#8F3A2C', slab: '#26201C', slabInk: '#FAF5EB', slabMut: '#C9C3BA', deck: '#26201C', deckInk: '#FAF5EB', deckMut: '#C9C3BA', grain: 0.6, photo: 0.3, onAcc: '#FEFBF5' },

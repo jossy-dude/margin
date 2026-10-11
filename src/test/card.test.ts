@@ -318,8 +318,9 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
   const src = readFileSync(join(__dirname, '../screens/Today.tsx'), 'utf8');
   const all = src.split('\n');
 
-  it('a running round is visible on Today, not only on To-do', () => {
-    expect(all.some((l) => l.trim() === '<RunningTimer />')).toBe(true);
+  it('a running round is visible on Today in the header slot, not as its own row', () => {
+    expect(src).toContain('right={<RunningTimer />}');
+    expect(all.some((l) => l.trim() === '<RunningTimer />')).toBe(false); // no strip in the flow
     expect(src).toContain("import { RunningTimer } from '../ui/RunningTimer'");
   });
 
@@ -332,7 +333,7 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
 
   it('the countdown ticks at 1 Hz only while Today is on screen (prompt.md V17)', () => {
     expect(src).toContain('const t = useNow(live ? 1000 : 60_000);');
-    expect(src).toContain('live={st.route === \'Today\'}');
+    expect(src).toContain('live={focused}'); // the navigator's focus context, never a store-route sub
   });
 
   it('the saved bar setting is not cast to the four legacy kinds it may not be', () => {
@@ -388,6 +389,34 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('fill={c.deck}');
     expect(src).not.toMatch(/c\.slab/);
   });
+
+  it('while class is upcoming the ring-progress badge rides the card\'s right edge, and the digits stay the readout', () => {
+    expect(src).toContain('function StartCircle');
+    /* The disc used to be the countdown's whole presentation — 96 square, in the card's column flow,
+       pushing the subject down. It is now a small tilted sticker on the card's right edge, so the
+       slab keeps its left half for the subject and the digits. */
+    expect(src).toContain('size = 56');
+    expect(src).toContain("rotate: '-8deg'");
+    expect(src).toContain('right: DECK_PAD_X - 10');
+    expect(src).toContain('const COUNT_H = 96');
+    expect(src).toContain('height: COUNT_H');
+    expect(src).toContain("d.state === 'soon' && d.period !== null");
+    // and the digits are still the thing actually read, in every state
+    expect(src).toContain('>{d.countdown}</Txt>');
+    expect(src).toContain('>{d.unit}</Txt>');
+  });
+
+  it('the disc\'s ring measures the wait the card is actually in, with a floor so it cannot invert', () => {
+    expect(src).toContain('periods.slice(0, d.at)');
+    expect(src).toContain('startOfDay(t)');
+    expect(src).toContain('Math.max(60_000,');
+    expect(src).toContain('strokeDasharray={`${circ * prog} ${circ}`}');
+  });
+
+  it('once the class is here the big digits are back, on the same 42px row as before', () => {
+    expect(src).toContain('s={42}');
+    expect(src).toContain('fontVariant: [\'tabular-nums\']');
+  });
 });
 
 describe('RunningTimer on Today — the page you land on after leaving Focus', () => {
@@ -399,9 +428,12 @@ describe('RunningTimer on Today — the page you land on after leaving Focus', (
     expect(today).toContain("import { RunningTimer } from '../ui/RunningTimer'");
   });
 
-  it('it reads the timer itself and only navigates — it cannot start or reset a round', () => {
+  it('idle it is the header\'s own focus button; while a round exists it only navigates', () => {
+    expect(rt).toContain('testID="open-focus"');
     expect(rt).toContain('const timer = useStore((s) => s.timer);');
-    expect(rt).toContain("onPress={() => act.go('Focus')}");
+    expect(rt).toContain("const idle = v.phase === 'set';");
+    expect(rt).toContain('if (idle) act.focusOpen(null)');
+    expect(rt).toContain("act.go('Focus')");
     expect(rt).not.toMatch(/onPress=\{\(\) => act\.(focus(Start|Reset)|timer(Start|Reset))/);
   });
 
@@ -409,9 +441,20 @@ describe('RunningTimer on Today — the page you land on after leaving Focus', (
     expect(rt).toContain('const v = view(timer, now);');
   });
 
-  it('it reserves its height in every phase, so arriving cannot walk the list under the user\'s thumb', () => {
-    expect(rt).toContain('minHeight: 44');
-    expect(rt).toMatch(/const now = useNow\(timer\.running \? 1000 : 30_000\)/);
+  it('it sits in the header at the gear\'s own height, with no slab and no reserved row', () => {
+    expect(rt).toContain('minHeight: 46');
+    // 1 s while a live round can move, 30 s while it cannot — and a hidden header drops to a minute,
+    // because there is no one reading it and the pump is Focus's job (Focus ticks at 1 Hz while running).
+    expect(rt).toMatch(/const now = useNow\(live \? \(timer\.running \? 1000 : 30_000\) : 60_000\)/);
+    expect(rt).toContain('const live = useScreenLive();');
+    expect(rt).not.toContain('HandBox');
+    expect(rt).not.toContain('seed="rt"');
+  });
+
+  it('To-do uses the same header node, not a strip row', () => {
+    const tasks = readFileSync(join(__dirname, '../screens/Tasks.tsx'), 'utf8');
+    expect(tasks).toContain('right={<RunningTimer />}');
+    expect(tasks.split('\n').some((l) => l.trim() === '<RunningTimer />')).toBe(false);
   });
 });
 
@@ -456,8 +499,10 @@ describe('the class name is stated once, not twice ~120px apart', () => {
 
   it('the masthead row keeps its state word and its clock time, and drops the name', () => {
     const s = src();
-    // the three lines the clock row is made of, in order
-    const clock = s.slice(s.indexOf('<ClockFace id={st.settings.clock}'), s.indexOf('{periods.length > 0 && ('));
+    // the three lines the clock row is made of, in order. The clock now lives inside the
+    // `periods.length > 0` branch and is taped to the deck's corner, so the slice runs to the
+    // card it is taped to.
+    const clock = s.slice(s.indexOf('<ClockFace id={st.settings.clock}'), s.indexOf('<ActiveCard'));
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
     // the time line is the one that survives: a wall clock, which the deck's duration is not
     expect(clock).toContain('until ${fmtTime(cur.end)}');
@@ -479,6 +524,11 @@ describe('the class name is stated once, not twice ~120px apart', () => {
 
   it('the deck is still mounted on a day with classes, and only then', () => {
     const s = src();
-    expect(s).toContain('{periods.length > 0 && (\n        <ActiveCard');
+    /* The deck is now taped to the clock's corner, so the branch that mounts it is a conditional
+       expression rather than a `&&`, and the card sits one level deeper inside the wrapper that
+       carries the overlap. The property is unchanged: classes present, card mounted. */
+    expect(s).toContain('{periods.length > 0 ? (');
+    expect(s).toContain('<ActiveCard periods={periods}');
+    expect(s).toContain('headPad={CLOCK + 14 - DECK_PAD_X}');
   });
 });
