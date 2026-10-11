@@ -21,6 +21,8 @@
  *     the `onClick` handler). So `onPress` cannot simply be deleted — it stays as the accessibility
  *     path, and a guard keeps one tap firing exactly once on either path.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 
@@ -149,5 +151,75 @@ describe('a button acts on the finger-down frame, not on the lift', () => {
     // and the accessibility path is still live after all of them
     await a11yActivate(n);
     expect(fired).toHaveLength(11);
+  });
+});
+
+/* ═══════════════════════════════════════════════ the rest of the kit ════ */
+
+const { Chip, Toggle, Stepper } = jest.requireActual<typeof import('../ui/kit')>('../ui/kit') as typeof import('../ui/kit');
+
+/** The control with this accessibility label. Filtering on the label rather than on a handler prop is
+ *  what stops a stepper's two buttons from collapsing onto each other. */
+const byLabel = (r: TestRenderer.ReactTestRenderer, label: string): ControlNode =>
+  r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === label
+    && typeof (n.props as { onPressIn?: unknown }).onPressIn === 'function')[0] as unknown as ControlNode;
+
+describe('every other control in the kit answers on the down frame too', () => {
+  it('a chip selects on press-in, and the release does not select again', async () => {
+    const fired: number[] = [];
+    const r = await mount(React.createElement(Chip, { label: 'Algebra', onPress: () => fired.push(fired.length) }));
+    const n = byLabel(r, 'Algebra');
+    await act(async () => { n.props.onPressIn?.(); });
+    expect(fired).toHaveLength(1);
+    await act(async () => { n.props.onPressOut?.(); n.props.onPress?.(); });
+    expect(fired).toHaveLength(1);
+  });
+
+  it('a switch flips on press-in, and the release does not flip it back', async () => {
+    const seen: boolean[] = [];
+    const r = await mount(React.createElement(Toggle, { label: 'Sound', value: false, onChange: (v: boolean) => seen.push(v) }));
+    const n = byLabel(r, 'Sound');
+    await act(async () => { n.props.onPressIn?.(); });
+    expect(seen).toEqual([true]);
+    await act(async () => { n.props.onPressOut?.(); n.props.onPress?.(); });
+    expect(seen).toEqual([true]); // exactly one flip per press — a toggle that double-fires is a lie
+  });
+
+  it('a stepper steps on press-in and still keeps its long-press repeat', async () => {
+    const seen: number[] = [];
+    const r = await mount(React.createElement(Stepper, { label: 'Estimate', value: 30, min: 0, max: 120, step: 5, onChange: (v: number) => seen.push(v) }));
+    const n = byLabel(r, 'Increase Estimate');
+    await act(async () => { n.props.onPressIn?.(); });
+    expect(seen).toEqual([35]); // the first step is on the down frame
+    await act(async () => { n.props.onPressOut?.(); n.props.onPress?.(); });
+    expect(seen).toEqual([35]);
+    // and the repeat path is still there for a hold
+    const long = r.root.findAll((x) => typeof (x.props as { onLongPress?: unknown }).onLongPress === 'function')[0] as unknown as ControlNode;
+    expect(long).toBeDefined();
+  });
+
+  it('their accessibility path still works, on all three', async () => {
+    for (const node of [
+      React.createElement(Chip, { key: 'c', label: 'Algebra', onPress: () => {} }),
+      React.createElement(Toggle, { key: 't', label: 'Sound', value: false, onChange: () => {} }),
+      React.createElement(Stepper, { key: 's', label: 'Estimate', value: 30, min: 0, max: 120, onChange: () => {} }),
+    ]) {
+      const r = await mount(node);
+      const target = node.type === Chip ? 'Algebra' : node.type === Toggle ? 'Sound' : 'Increase Estimate';
+      const n = byLabel(r, target);
+      expect(typeof n.props.onPress).toBe('function'); // never deleted: it is TalkBack's only route
+    }
+  });
+});
+
+describe('the + button opens the sheet on the down frame', () => {
+  it('and keeps onPress as the accessibility route', () => {
+    // `Fab` is module-local to Overlay.tsx, so this is a shape assertion rather than a render.
+    const overlay = readFileSync(join(__dirname, '../ui', 'Overlay.tsx'), 'utf8');
+    const fab = overlay.slice(overlay.indexOf('function Fab('), overlay.indexOf('function Fab(') + 900);
+    expect(fab).toContain('usePressIn(onPress)');
+    expect(fab).toContain('onPress={actLift}'); // the accessibility path is not deleted
+    expect(fab).toContain('actIn();');          // and the action is dispatched from press-in
+    expect(fab).not.toMatch(/onPressIn=\{\(\) => s\.set/);
   });
 });
