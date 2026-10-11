@@ -1,89 +1,100 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { createNavigatorFactory, TabRouter, useNavigationBuilder, type ParamListBase, type TabNavigationState } from '@react-navigation/native';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HandBox, Icon, Txt } from '../ui/kit';
-import { useReduceMotion, useTheme } from '../ui/theme-context';
+import { useTheme } from '../ui/theme-context';
 import { act, useStore, type RouteName } from '../store/store';
 import { hexA } from '../tokens/theme';
 import { NAV_BODY, navInset } from '../ui/fit';
 import { useKeyboardUp } from '../ui/keyboard';
-import { inMountWindow, PLACE_EASE, PLACE_FROM, PLACE_MS, PLACE_SHADOW } from './window';
+import { ScreenLive } from '../ui/live';
 import { toNavigator, toStore } from './sync';
 
 const TABS: { name: RouteName; label: string; icon: string }[] = [{ name: 'Today', label: 'Today', icon: 'today' }, { name: 'Week', label: 'Week', icon: 'week' }, { name: 'Tasks', label: 'To-do', icon: 'tasks' }, { name: 'Grades', label: 'Grades', icon: 'grades' }, { name: 'Stats', label: 'Stats', icon: 'stats' }];
 type Nav = TabNavigationState<ParamListBase>;
 
-/** Page that is "placed on the table": the new sheet drops in from above and to the right, tilted, then settles flat while its shadow tightens.
+/** One page, mounted for the session, in the DRAW tree exactly while it is focused.
  *
- *  Three things in here are about the frame budget rather than the gesture, and all three are load-bearing.
+ *  Everything about this component is about a frame budget, and each of the three decisions is
+ *  load-bearing in one direction only — this file is the evidence, so the reasoning is kept.
  *
- *  **No opacity on the page.** An animating `opacity` on a view that *wraps* a whole page forces the
- *  renderer to keep that page in an offscreen target and re-composite it every single frame — and
- *  Reanimated routes the prop through the shadow tree, so every frame of the fade also pays for a Yoga
- *  layout pass, for a property that cannot affect layout at all. It was also the reason the incoming page
- *  was invisible for a frame: the shared value was reset to 0 and then animated from a passive effect, so
- *  the commit that mounted the page and the frame that painted it both happened at full invisibility.
- *  Paper arrives by *moving*. The shadow underneath still fades, and it is a leaf view with a solid
- *  colour, so that is one blend rather than a re-rasterised page.
+ *  **Mount is unconditional.** Every route mounts on the navigator's first render and stays for the
+ *  session, so no navigation ever cold-mounts a page: the subtree's effects, the text measuring, the
+ *  SVG pattern and the grain tile are all paid once, behind the splash. The cost used to be paid on
+ *  every tap, on the UI thread, between the press and the first frame the finger sees.
  *
- *  **The placement is armed from a layout effect, not a passive one**, so it starts in the same frame as
- *  the commit that mounted the page instead of the frame after it. That frame was pure latency: the new
- *  page was already committed at its start position and nothing was moving yet.
+ *  **The page does not move.** The paper drop — 70 dp of travel, a tilt, a scale, a shadow overlay,
+ *  ten frames of two composited full-screen pages — is gone. `perf-placement.test.ts` holds the
+ *  curve that everything else still uses; nothing in the page swap needs it. The press answers on the
+ *  finger-down frame already, so the page is a cut: `display` flips from 'none' to 'flex' in the
+ *  commit that carries the tab write and it is simply the one on top.
  *
- *  **`get()`/`set()` rather than `.value`.** The app runs the React Compiler, and mutating
- *  `sv.value` is the documented incompatibility; `get`/`set` are the compiler-safe forms. */
-function Placed({ children, on, instant }: { children: React.ReactNode; on: boolean; instant: boolean }) {
-  const reduce = useReduceMotion(), { c } = useTheme(), k = useSharedValue(instant ? 1 : 0), mounted = useRef(false);
-  useLayoutEffect(() => {
-    if (!mounted.current) { mounted.current = true; if (!on || instant) { k.set(1); return; } }
-    if (!on) return;
-    /* Reset only from a settled page. Mid-flight the value re-targets from wherever it already is, so a
-       second tap inside the 200 ms continues the same motion instead of snapping back to the start and
-       leaving the page visibly half-animated. */
-    if (k.get() >= 1) k.set(0);
-    k.set(reduce ? 1 : withTiming(1, { duration: PLACE_MS, easing: Easing.bezier(...PLACE_EASE) }));
-  }, [on]); // eslint-disable-line react-hooks/exhaustive-deps
-  const st = useAnimatedStyle(() => {
-    const p = on ? k.get() : 1;
-    return { transform: [{ translateY: interpolate(p, [0, 1], [PLACE_FROM.y, 0]) }, { translateX: interpolate(p, [0, 1], [PLACE_FROM.x, 0]) }, { rotate: `${interpolate(p, [0, 0.7, 1], [PLACE_FROM.tilt, -0.4, 0])}deg` }, { scale: interpolate(p, [0, 0.8, 1], [PLACE_FROM.lift, 1, 1]) }] };
-  });
-  const sh = useAnimatedStyle(() => ({ opacity: on ? interpolate(k.get(), [0, PLACE_SHADOW.goneBy], [PLACE_SHADOW.peak, 0]) : 0 }));
-  /* z-order follows focus, not the visit stamp. Only two pages are ever mounted, so "focused is on top"
-     is the whole rule — and reading it here means it cannot be wrong for the one commit between the
-     navigator moving and the stamp bookkeeping catching up. */
+ *  **A hidden page leaves the DRAW tree.** Six full-screen pages — each a base colour, a full-screen
+ *  SVG pattern, a tiled grain bitmap and a blended photograph — stacked under one is ~20 full-screen
+ *  fills per frame. `display: 'none'` sets `YogaDisplay.NONE` on the node
+ *  (ReactAndroid/.../uimanager/LayoutShadowNode.kt), which makes Yoga SKIP the subtree: the page is
+ *  neither laid out nor drawn. Note this is NOT `View.INVISIBLE` — layout is dropped, not parked —
+ *  so the flip back to 'flex' rebuilds it from scratch. That rebuild is paid in the commit that
+ *  focuses the page, and it is proportional to the page's node count: cheap for a light page, and
+ *  the reason To-do is the worst tab, since it renders every row via `.map()` with no virtualisation
+ *  (screens/Tasks.tsx) and so costs more as the task list grows. Whether that rebuild or the
+ *  overdraw it avoids is the larger cost is a per-device question, and the trade is deliberate.
+ *
+ *  `zIndex` follows focus rather than a visit bookkeeping table, so the layer order moves in the same
+ *  commit as the navigator with nothing left to catch up. Focus travels to the page as a plain boolean
+ *  (`ui/live.ts`) rather than as a store-route subscription, which is what keeps a tap from
+ *  re-rendering every mounted page. */
+function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: on ? 2 : 1 }, st]}>
-      {children}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.shadow }, sh]} />
-    </Animated.View>
+    <View style={[StyleSheet.absoluteFill, { zIndex: on ? 2 : 1, display: on ? 'flex' : 'none' }]}>
+      <ScreenLive.Provider value={on}>{children}</ScreenLive.Provider>
+    </View>
   );
 }
 function BookView({ initialRouteName, children, screenOptions, id }: { initialRouteName?: string; children: React.ReactNode; screenOptions?: object; id?: string }) {
   const { state, descriptors, navigation, NavigationContent } = useNavigationBuilder(TabRouter, { initialRouteName, children, screenOptions, id } as never) as unknown as { state: Nav; descriptors: Record<string, { render: () => React.ReactNode }>; navigation: { navigate: (n: never) => void }; NavigationContent: React.ComponentType<{ children: React.ReactNode }> };
-  const route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets(), firstName = useRef(state.routes[state.index]?.name ?? 'Today'), [visited, setVisited] = useState<Record<string, number>>({ [firstName.current]: 1 }), counter = useRef(1);
+  const route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets();
   const cur = state.routes[state.index]?.name as RouteName | undefined, kbUp = useKeyboardUp();
-  useEffect(() => { const n = toNavigator(route, cur); if (n) navigation.navigate(n as never); }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const s = toStore(route, cur); if (s) act.go(s); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (cur) { counter.current += 1; setVisited((v) => ({ ...v, [cur]: counter.current })); } }, [cur]);
+  /* A tab tap does NOT come through these syncs: `onPressIn` writes the store and moves the navigator
+   *  in the SAME event handler, React batches both into ONE render, and that render already has
+   *  `route === cur` — so the finger pays a single render pass instead of two. The store-first flow
+   *  needed a second full BookView + nav-bar render plus a scheduler round-trip before the pass that
+   *  shows the new page: store write → render 1 (nothing visible changes) → this effect → navigator →
+   *  render 2 → the page the finger asked for. That dead time before the first frame is what read as
+   *  "a delay in the transition", with the place sound and haptic firing at the tap and the page
+   *  waiting behind them.
+   * It is `onPressIn`, not `onPress`, for the same reason in reverse: `onPress` fires on LIFT, so the
+   *  whole chain sat behind the user's own hold time — typically 60–150 ms — which is the "after I
+   * press a tab" report. Press-in is the frame of the touch event, where the ripple already starts.
+   * The cost is that a touch-down commits even if the finger slides off before the lift; accepted,
+   *  because a tab bar's whole job is to switch on contact, and the app's own `kit.tsx` buttons take
+   *  their press feedback on press-in for the same reason.
+   * The syncs still carry everything that is NOT a tab tap: store-only navigation (the focus entry, a
+   *  notification open) forward, Android BACK reverse. Both are LAYOUT effects because a passive one
+   *  waits for paint — the same latency, on the non-tap paths. Keying is load-bearing: forward on
+   *  `[route]`, reverse on `[cur]`, so neither runs in a commit where the other is mid-flight. */
+  useLayoutEffect(() => { const n = toNavigator(route, cur); if (n) navigation.navigate(n as never); }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { const s = toStore(route, cur); if (s) act.go(s); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
   /* Everything the nav draws reads `cur`, never `route`: a hardware BACK moves the navigator without
      the store changing, so a store-derived highlight would name a route the app is not on — and the
      tap on it would be `act.go` to the route it already holds, which does nothing. */
-  /* `adjustResize` already leaves the bar at the bottom of the *visible* area, which is what V19 asks
-     for — so it is not mis-positioned. What is wrong is that a floating bar and a 62 dp + button then sit
-     on the content being typed near, on a strip barely half the screen tall. Both yield to the keyboard;
-     neither is usable while typing. See `useKeyboardUp`. */
+  /* `adjustResize` already leaves the bar at the bottom of the *visible* area, so a floating bar and a
+     62 dp + button sitting on the content being typed near is what is wrong; both yield to the keyboard. */
   const hideNav = cur === 'Focus' || kbUp;
   return (
     <NavigationContent>
       <View style={{ flex: 1, backgroundColor: c.paper }}>
-        {state.routes.map((r, i) => (inMountWindow(visited, counter.current, r.name) ? <Placed key={r.key} on={i === state.index} instant={visited[r.name] === 1}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{descriptors[r.key]?.render()}</View></Placed> : null))}
+        {/* Every route mounts on this first render and stays for the session: a tap's only pre-paint
+            work is the shell and the two pages whose focus flipped, so no tap ever pays a cold mount.
+            Hidden pages answer `live=false` from the navigator context, tick at the slow cadence, and
+            are out of the draw tree entirely — mounted, laid out, not composited. */}
+        {state.routes.map((r, i) => (<Placed key={r.key} on={i === state.index}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{descriptors[r.key]?.render()}</View></Placed>))}
         {!hideNav && (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
             <HandBox seed="nav" fill={c.card} sw={2} amp={1.6} style={{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }}>
               {TABS.map((t) => { const on = cur === t.name; return (
-                <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPress={() => act.go(t.name)} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                   <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? hexA(c.acc, 0.2) : 'transparent', borderWidth: on ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
                   <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}

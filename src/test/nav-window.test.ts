@@ -42,10 +42,10 @@ describe('book navigator mount policy', () => {
     // "Mounted" is not "composited". Six always-mounted full-screen pages — each a base colour, a
     // pattern, a grain bitmap and a blended photograph — stacked under a moving one is ~20
     // full-screen fills per frame, which is the overdraw the cut exists to remove. `display:
-    // 'none'` is `View.INVISIBLE` on Android: the renderer skips the subtree entirely, while the
-    // mounted views and their measured layout all stay. The hide is NOT deferred: there is no
-    // placement left to wait for, so `shown` and `setShown` are gone from the file entirely rather
-    // than merely unused.
+    // 'none'` sets `YogaDisplay.NONE` (ReactAndroid/.../LayoutShadowNode.kt), so Yoga skips the
+    // subtree: neither laid out nor drawn. The hide is NOT deferred — there is no placement left
+    // to wait for, so `shown` and `setShown` are gone from the file entirely rather than merely
+    // unused.
     expect(book).toContain("display: on ? 'flex' : 'none'");
     expect(book).not.toContain('setShown');
     expect(book).not.toContain('PLACE_MS');
