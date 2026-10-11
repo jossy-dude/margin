@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BEAT, Btn, EASE, HandBox, Icon, Txt } from './kit';
+import { BEAT, Btn, EASE, HandBox, Icon, Txt, usePressIn } from './kit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { act, dismissToast, useStore } from '../store/store';
 import { useKeyboardUp } from './keyboard';
@@ -19,9 +19,12 @@ import { FAB_GAP, TOAST_CLEAR, navHeight, navInset, toastBottom } from './fit';
 function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
   const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1);
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
+  /* The sheet opens on the down frame, like every other control — a sheet that waits for the lift is
+     a sheet that waits for the user's own hold time. */
+  const [actIn, actLift] = usePressIn(onPress);
   return (
-    <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={onPress}
-      onPressIn={() => s.set(reduce ? 1 : withTiming(0.94, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.7 }))}
+    <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={actLift}
+      onPressIn={() => { actIn(); s.set(reduce ? 1 : withTiming(0.94, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.7 }))}
       style={{ position: 'absolute', right: 18, bottom: navHeight(bottom) + FAB_GAP }}>
       <Animated.View style={[{ width: 62, height: 62 }, face]}>
         <HandBox seed="fab" fill={c.acc} stroke={c.ink} sw={2.2} amp={1.8} corners={{ h: [34, 30, 34, 30], v: [30, 34, 30, 34] }} style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={32} color={c.onAcc} sw={2.6} /></HandBox>
@@ -42,7 +45,15 @@ export function Overlay() {
     // on the sheet itself only does anything on iOS (V14). App.tsx hides the navigator behind this view at the
     // same time, so while a sheet is open nothing behind it can be reached or read out.
     <View pointerEvents="box-none" importantForAccessibility={sheet ? 'yes' : 'auto'} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 2000 }}>
-      {showFab && (<Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
+      {/* The desktop surface puts its own `+` at the foot of the margin — in the place the FAB occupies on
+          a phone, so the gesture the student already knows lands in the same corner of the same idea. Two
+          buttons to add the same thing, one of them floating over an inspector panel, is one too many.
+
+          The gate is here rather than folded into `showFab` on purpose: `showFab` is about *when* the
+          phone's floating chrome must get out of the way of the keyboard (BUG-028), and that reason is
+          unchanged by which surface we are on. A platform check folded into the boolean would have made
+          this file's keyboard test pin a different string to say the same thing. */}
+      {showFab && (Platform.OS === 'web' ? null : <Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
       {sheet && (
         sheet.t === 'add' ? <AddSheet /> : sheet.t === 'task' ? <TaskSheet key={sheet.id ?? sheet.kind ?? 'new'} id={sheet.id} kind={sheet.kind} courseId={sheet.courseId} />
         : sheet.t === 'status' ? <StatusSheet key={sheet.key} spec={sheet} /> : sheet.t === 'settings' ? <SettingsSheet />

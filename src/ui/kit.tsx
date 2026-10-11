@@ -64,8 +64,31 @@ function useFocusRing() {
   return [{ onFocus: () => setOn(true), onBlur: () => setOn(false) }, ring] as const;
 }
 
-type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';
-const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
+/** Dispatch a control's action on the finger-DOWN frame instead of on the lift.
+ *
+ *  `onPress` is dispatched by React Native on RELEASE, which puts the user's own hold time — typically
+ *  60–150 ms — in front of every action in the app. That hold is what "after I press a button" actually
+ *  was, and it is why `navigation/Book.tsx`'s tab bar had already moved to `onPressIn` on its own.
+ *
+ *  What makes this more than moving a call is that `onPress` CANNOT be deleted. Android's accessibility
+ *  activation arrives as a NON-POINTER click, and `Pressability.onClick` routes those straight to
+ *  `onPress` without ever running the responder sequence
+ *  (react-native/Libraries/Pressability/Pressability.js) — so a press-in-only control is silent to
+ *  TalkBack. `claimed` is therefore set when press-in acts and consumed by the release's `onPress`, so
+ *  one gesture fires exactly once on either path and the accessibility path stays live behind it.
+ *
+ *  Pass `onLift` for a control that must not act on touch-down — a `danger` button, where a slide-off
+ *  must never destroy. Such a control skips press-in entirely and keeps `onPress` as its only route.
+ *
+ *  Returns the two handlers to spread; each control composes its own dip on top of `down`. */
+export function usePressIn(action: () => void, opts?: { onLift?: boolean }) {
+  const claimed = useRef(false);
+  const down = () => { if (opts?.onLift) return; claimed.current = true; action(); };
+  const lift = () => { if (claimed.current) { claimed.current = false; return; } action(); };
+  return [down, lift] as const;
+}
+
+type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
 /** `testID` fallback. On RN Android a `testID` surfaces as `resource-id` in a `uiautomator` dump, which is how the
  *  QA agents find an element without guessing at its bounds, so every interactive element gets one. It is derived
  *  from the same string that is already the accessibility label, so no call site has to change and the id always
@@ -157,17 +180,18 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
      (react-native/Libraries/Pressability/Pressability.js). A press-in-only button is therefore silent
      to a screen reader. The flag is set when press-in acts and consumed by the release's `onPress`, so
      one gesture fires once on either path, and the accessibility path stays live behind it. */
-  const claimed = useRef(false);
   /* Press-in and press-out are two writes to one value, never a reset, so a button tapped again
-     before the spring finishes continues from where it is (V18: no stuck, half-animated state). */
-  const fire = () => { if (!quiet) fx.tap(); onPress?.(); };
-  const down = () => { if (disabled) return; if (kind !== 'danger') { claimed.current = true; fire(); } press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE })); };
+     before the spring finishes continues from where it is (V18: no stuck, half-animated state).
+     `usePressIn` carries the dispatch and the TalkBack guard; `danger` is the one kind that opts out,
+     because `onPressIn` commits on touch-down even if the finger slides off, and a button whose
+     slide-off destroys data is not one anyone can safely correct. It pays the hold time for that. */
+  const [actIn, actLift] = usePressIn(() => { if (!quiet) fx.tap(); onPress?.(); }, { onLift: kind === 'danger' });
+  const down = () => { if (disabled) return; actIn(); press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE })); };
   const up = () => { press.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.72 })); };
-  const lift = () => { if (claimed.current) { claimed.current = false; return; } fire(); };
   const face = useAnimatedStyle(() => ({ opacity: interpolate(dim.get(), [0, 1], [1, 0.45]), transform: [{ scale: press.get() }] }));
   return (
     <Pressable testID={testID ?? tid(a11y ?? label)} accessibilityRole="button" accessibilityLabel={a11y ?? label} accessibilityState={{ disabled: !!disabled, selected: !!selected }} disabled={disabled}
-      onPress={lift} onPressIn={down} onPressOut={up} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4} {...focusProps}
+      onPress={actLift} onPressIn={down} onPressOut={up} android_ripple={{ color: hexA(c.ink, 0.18), borderless: false }} hitSlop={4} {...focusProps}
       style={[{ minHeight: h, flex: flex ? 1 : undefined }, ring, style]}>
       {/* stroke is always the ink: a ghost button has a transparent fill so it needs its own border,
           and the three filled kinds all draw on the accent/ink/bad the label is drawn against. */}
@@ -200,12 +224,13 @@ export function Chip({ label, on, onPress, icon, tone, small }: { label: string;
     s.set(withSequence(withTiming(1.06, { duration: 110, easing: EASE }), withSpring(1, { duration: 220, dampingRatio: 0.6 })));
   }, [on, reduce, s]);
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
+  const [actIn, actLift] = usePressIn(() => { fx.select(); onPress?.(); });
   return (
     /* top/bottom slop is 5 and not 4 because a small chip is 34 dp tall: 34 + 10 is the 44 dp touch
        target, and HStrip now pads its strips 6 so the slop lands inside the strip's own bounds rather
        than being clipped away by the ScrollView it sits in. */
     <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={{ top: 5, bottom: 5, left: 2, right: 2 }} {...focusProps} style={ring}
-      onPress={() => { fx.select(); onPress?.(); }} onPressIn={() => s.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
+      onPress={actLift} onPressIn={() => { actIn(); s.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
       <Animated.View style={[{ minHeight: small ? 34 : 42 }, face]}>
         <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           {icon ? <Icon name={icon} size={16} color={fg} /> : null}
@@ -239,12 +264,13 @@ export function Toggle({ value, onChange, label, hint, disabled }: { value: bool
      the knob and the paint already ride past — it is a part, and a part that ignores a press is a part
      that reads as a picture. The row is 56 dp and the switch is 54×30, so the dip is the switch's and
      not the label's: type that jumps under a finger is noise, and the whole row is the hit area. */
-  const down = () => { if (!disabled) press.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE })); };
+  const [actIn, actLift] = usePressIn(() => { fx.toggle(!value); onChange(!value); });
+  const down = () => { if (disabled) return; actIn(); press.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE })); };
   const up = () => { press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 })); };
   const track = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { backgroundColor: interpolateColor(p, [0, 1], [c.card, c.acc]), transform: [{ scale: press.get() }] }; });
   const knob = useAnimatedStyle(() => { const t = k.get(), p = t < 0 ? 0 : t > 1 ? 1 : t; return { transform: [{ translateX: interpolate(t, [0, 1], [3, 26]) }], backgroundColor: interpolateColor(p, [0, 1], [c.ink, c.onAcc]) }; });
   return (
-    <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => { fx.toggle(!value); onChange(!value); }} onPressIn={down} onPressOut={up} {...focusProps}
+    <Pressable testID={tid(label)} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} disabled={disabled} onPress={actLift} onPressIn={down} onPressOut={up} {...focusProps}
       android_ripple={{ color: hexA(c.ink, 0.12) }} style={[{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, opacity: disabled ? 0.5 : 1 }, ring]}>
       <View style={{ flex: 1 }}><Txt f="bold" s={21}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" style={{ marginTop: 1 }}>{hint}</Txt> : null}</View>
       <Animated.View style={[{ width: 54, height: 30, borderRadius: 15, borderWidth: 1.6, borderColor: c.ink, justifyContent: 'center' }, track]}>
@@ -258,10 +284,15 @@ export function Toggle({ value, onChange, label, hint, disabled }: { value: bool
 function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: boolean; a: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1);
   const [focusProps, ring] = useFocusRing();
+  /* The first step lands on press-in like everything else. `onLongPress` stays the repeat path and is
+     deliberately NOT routed through `usePressIn`: a long press is a separate signal, and React Native
+     already suppresses the release's `onPress` once one has fired (`isPressCanceledByLongPress`), so
+     holding gives exactly one press-in step followed by the repeats and never a stray extra. */
+  const [actIn, actLift] = usePressIn(() => { fx.select(); onPress(); });
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   return (
-    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={() => { fx.select(); onPress(); }} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} {...focusProps}
-      onPressIn={() => s.set(reduce || dis ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
+    <Pressable testID={tid(a)} accessibilityRole="button" accessibilityLabel={a} accessibilityState={{ disabled: dis }} disabled={dis} onPress={actLift} onLongPress={() => { fx.select(); onPress(); }} delayLongPress={350} {...focusProps}
+      onPressIn={() => { actIn(); s.set(reduce || dis ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
       android_ripple={{ color: hexA(c.ink, 0.2), borderless: true }} style={[{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center', opacity: dis ? 0.35 : 1 }, ring]}>
       <Animated.View style={[{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }, face]}><Txt f="marker" s={26}>{t}</Txt></Animated.View>
     </Pressable>
