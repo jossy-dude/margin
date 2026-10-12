@@ -398,7 +398,9 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('size = 56');
     expect(src).toContain("rotate: '-8deg'");
     expect(src).toContain('right: DECK_PAD_X - 10');
-    expect(src).toContain('const COUNT_H = 96');
+    // the slot is fixed rather than sized to the digits, so the card cannot reflow a minute; it is
+    // sized to the digit that fills it (68) rather than to the disc that used to (96) — see Today.tsx
+    expect(src).toContain('const COUNT_H = 68');
     expect(src).toContain('height: COUNT_H');
     expect(src).toContain("d.state === 'soon' && d.period !== null");
     // and the digits are still the thing actually read, in every state

@@ -124,7 +124,14 @@ function SlabHatch({ ink }: { ink: string }) {
  *  digits once it is here — so the bell never changes the card's height and never walks the day
  *  strip or the list under it. The disc is the break sticker's own geometry (Focus.tsx BreakSticker):
  *  hand-cut paper, a ring that fills across the wait, the time inside. */
-const COUNT_H = 96;
+/* The countdown's reserved height. It has to be a fixed slot, not the digits' own height: these
+ *  digits change every second and "9:59" is narrower than "10:00", so letting the row size itself
+ *  would reflow the card once a minute — the same failure `tabular-nums` stops horizontally. But it
+ *  was reserved at 96 for the disc that used to live in this slot; now that the disc is a badge on
+ *  the card's right edge, the only thing in here is a 42 pt numeral, and 96 left ~85 px of dead
+ *  paper between the readout and the "After" rule. 68 holds the digits with room for the largest
+ *  form and no void. */
+const COUNT_H = 68;
 /* The disc was 96 square and sat in the card's own column flow, where it pushed the subject down and
  *  hollowed out the left half of the slab. It is now a small badge taped to the card's right edge —
  *  a sticker on the paper, not a hole in it — so it reads as an annotation of the countdown rather
