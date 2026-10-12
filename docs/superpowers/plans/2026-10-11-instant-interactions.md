@@ -293,3 +293,46 @@ The typecheck and lint failures are the same root cause and are **not from this 
 | Buttons act on lift | `ui/kit.tsx` `Btn`: `onPress={() => { if (!quiet) fx.tap(); onPress?.(); }}` with `onPressIn={down}` doing only the scale |
 | The tab bar already does it right | `navigation/Book.tsx` `onPressIn={() => { act.go(t.name); navigation.navigate(...) }}` with a comment explaining press-in vs press |
 | The To-do re-layout is a known per-tap cost | `Book.tsx` `Placed` doc: "The flip back to 'flex' costs a Yoga re-layout... a long To-do list expensively" |
+
+## Round 2 — the owner's overnight report
+
+The owner reported four further problems: the transition "better but nowhere near instant", the
+Settings clock picker "so slow", the add-sheet keyboard "breaks", and the backend needing an audit.
+Three of the four were measurable without a device.
+
+### The measurement harness was lying, and now is not
+
+| Finding | Evidence |
+|---|---|
+| `page.click()` never fires this app's `onPressIn` | React Native Web's Pressability answers on **pointerdown**. Instrumented `tab-week` for all six pointer/mouse events: a real `mouse.down()/up()` produced `pointerdown,mousedown,pointerup,mouseup,click` **and switched the page**; `page.click()` produced the events but left Today on screen |
+| The earlier `probe-tab` 42–66 ms was meaningless | Its needle was `'Week'`, `'Tasks'`… — text the **nav bar** always contains. It was measuring the bar, not the page |
+| The tab probe is invalid until fixed | `tools/probe-tab.mjs` rewritten: real down/up, plus page-unique needles (`This week`, `swipe right`, `Average`, `Everything the app tracks`) |
+| **Page transition, corrected** | **press-in → destination painted: 25–31 ms across 3 rounds, 0 long tasks** |
+| `tools/cap.mjs` had the same defect | Every screenshot from it could have been of a page that never changed. Fixed at source with a `tap` helper that presses the element's centre |
+
+### Where a switch's cost actually lives
+
+The swap is a `display` flip, and `display:'none'` drops layout, so the price of a switch is
+rebuilding the destination. That price is proportional to its node count — measured on web:
+
+| Page | DOM nodes | SVG shapes |
+|---|---|---|
+| Week | 286 | 64 |
+| Today | 639 | 292 |
+| To-do | 658 | 129 |
+| Stats | 727 | 369 |
+| Grades | 756 | 43 |
+
+**The draw strategy was deliberately not changed.** `perf-placement.test.ts` pins that a page
+carries no `opacity` and no `transform`, and `Book.tsx` records the rebuild-vs-overdraw trade as
+"a per-device question". There is no device attached, so changing it would be guessing — the one
+thing the owner asked us not to do. The numbers above are what a device run has to beat.
+
+### The clock picker, and the one cost that is a strict win
+
+| Claim | Evidence |
+|---|---|
+| The SVG is not the cost | Benchmarked `compositeSvg` for all 5 faces at 96 dp: **0.15–1.75 ms each**, ~2.4 ms total |
+| The mount is the cost | The 5 thumbnails are **833 SVG shapes** (78 KB of XML) built into native views at once |
+| `sl` is 44% of it | Per face at 96 dp: g 117, rb 114, c 101, **sl 366**, s 135 |
+| Coarsening is both faster *and* cleaner | `faces.ts` already argued a dense ground at 96 dp "is a grey disc". A new tier below 130 dp takes `sl` **366 → 231** and the picker **833 → 698** shapes. Verified by rendering all five faces at 96 dp in both themes (`/tmp/shots/21-faces-light.png`): the lily ground still reads as a woven scale |
