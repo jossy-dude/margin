@@ -11,7 +11,7 @@ import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
 import { isBarKind } from '../ui/instruments/legacyKinds';
 import { GROUPS, INSTRUMENTS } from '../ui/instruments/catalogue';
 import { previewSvg } from '../ui/instruments/svg';
-import { useReduceMotion, useTheme } from '../ui/theme-context';
+import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
@@ -98,10 +98,21 @@ const LogRow = ({ r, now }: { r: NotifLogRow; now: number }) => {
 };
 
 export function SettingsSheet() {
-  const path = useStore((s) => s.settingsPath), s = useStore((s) => s.settings), notifStatus = useStore((s) => s.notifStatus), plan = useStore((s) => s.plan), courses = useStore((s) => s.courses), now = useStore((s) => s.now), log = useStore((s) => s.notifLog), tasks = useStore((s) => s.tasks);
+  const path = useStore((s) => s.settingsPath), s = useStore((s) => s.settings), notifStatus = useStore((s) => s.notifStatus), plan = useStore((s) => s.plan), courses = useStore((s) => s.courses), log = useStore((s) => s.notifLog), tasks = useStore((s) => s.tasks);
+  /* `s.now` is written by `hydrate()` and by the AppState handler and by nothing else, so every
+     relative stamp on the Delivery status page — "5 min ago", `fmtWhen`, `testTarget` and each log
+     row — was frozen at the moment the app last came to the foreground. This page is the one place
+     that reads wall time as CONTENT rather than as a tick, so it subscribes to a clock at the slow
+     30 s cadence its own granularity deserves, not at the 1 s the live countdowns need. */
+  const now = useNow(30_000);
   const { c } = useTheme();
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
+  /* A `settings.bar` persisted by an older build can name a bar in neither `BAR_KINDS` nor
+     `INSTRUMENTS`. Drawing is safe — `DayBar` falls back to Sight glass — but this sheet read the raw
+     id, so the Progress bar page showed an empty hint and no selected chip: it claimed nothing was
+     chosen while the app drew one. The picker resolves the id exactly the way the renderer does. */
+  const bar = BAR_KINDS.some((b) => b.id === s.bar) || INSTRUMENTS.some((i) => i.id === s.bar) ? s.bar : 'glass';
   /* Read and written straight off `Settings`. It arrived through `qa/HANDOFF-A4.md` as an optional field,
    *  which needed a cast here while the shared-type patch was still pending; the patch landed, the cast and
    *  the paragraph explaining it are gone, and `toured()` still reads `undefined` as "not seen" — which is
@@ -147,7 +158,7 @@ export function SettingsSheet() {
     <Nav icon="trash" label="Reset" hint="Back to the demo set" to="about" />
   </>);
   if (page === 'appearance') body = (<>
-    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === s.bar)?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
+    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
   </>);
   if (page === 'theme') body = (<>
     <Label>Theme</Label><Seg value={s.theme} opts={[['light', 'Cream'], ['dark', 'Dark'], ['auto', 'Follow phone']]} onChange={(v) => set({ theme: v })} />
@@ -167,18 +178,18 @@ export function SettingsSheet() {
       </Pressable>))}</View>
   </>);
   if (page === 'bar') body = (<>
-    <Txt f="serif" s={15} c="mut">A bar that measures. The twenty-two instruments count the class you are in, from the
-      real clock: full when it starts, empty when the bell goes. The four at the top read your whole day
+    <Txt f="serif" s={15} c="mut">A bar that measures. The sixteen instruments count the class you are in, from the
+      real clock: full when it starts, empty when the bell goes. The one at the top reads your whole day
       instead. Each keeps its own machine.</Txt>
     <Label>Your whole day</Label>
-    {BAR_KINDS.map((b) => <BarPick key={b.id} id={b.id} n={b.n} d={b.d} on={s.bar === b.id} onPress={() => { set({ bar: b.id }); fx.select(); }} />)}
+    {BAR_KINDS.map((b) => <BarPick key={b.id} id={b.id} n={b.n} d={b.d} on={bar === b.id} onPress={() => { set({ bar: b.id }); fx.select(); }} />)}
     {GROUPS.map((g) => {
       const list = INSTRUMENTS.filter((i) => i.g === g.id);
       return (
         <React.Fragment key={g.id}>
           <Label>{g.n}</Label>
           <Txt f="serif" s={13.5} c="mut">{g.hint}</Txt>
-          {list.map((i) => <BarPick key={i.id} id={i.id} n={i.n} d={i.d} on={s.bar === i.id} onPress={() => { set({ bar: i.id }); fx.select(); }} />)}
+          {list.map((i) => <BarPick key={i.id} id={i.id} n={i.n} d={i.d} on={bar === i.id} onPress={() => { set({ bar: i.id }); fx.select(); }} />)}
         </React.Fragment>
       );
     })}
@@ -333,20 +344,20 @@ const DEMO_PERIODS = [{ start: at(8, 30), end: at(9, 20), label: 'Economics' }, 
 const DEMO_TOTAL = 50 * 60_000, DEMO_P = 30 / 50;
 
 /**
- * One row of the picker. The SELECTED kind is a live `DayBar`; the other twenty-five are static
+ * One row of the picker. The SELECTED kind is a live `DayBar`; the other sixteen are static
  * `SvgXml` strings from the same geometry module. That is not an optimisation for its own sake: the
- * sheet mounts every kind at once and a live instrument is 20–95 react-native-svg nodes, so twenty-six
- * live previews is roughly 800 nodes and twenty-six Reanimated worklet subscriptions in one bottom
+ * sheet mounts every kind at once and a live instrument is 20–95 react-native-svg nodes, so seventeen
+ * live previews is roughly 800 nodes and seventeen Reanimated worklet subscriptions in one bottom
  * sheet. The static path draws the identical markup with the dash offset already baked in.
  *
- * **The four original kinds are always live.** `previewSvg` is the *instrument* geometry module, and
- * `instrument('spines')` returns `undefined` — it would hand back an empty string and the four day-wide
- * bars would show nothing at all. `isBarKind` is the app's own discriminator, so exactly four rows take
- * the live path plus whichever instrument is selected: five live previews, not twenty-six.
+ * **The one original kind is always live.** `previewSvg` is the *instrument* geometry module, and
+ * `instrument('glass')` returns `undefined` — it would hand back an empty string and the day-wide
+ * bar would show nothing at all. `isBarKind` is the app's own discriminator, so exactly one row takes
+ * the live path plus whichever instrument is selected: two live previews, not seventeen.
  *
  * On ids (prompt.md R11): this page is exactly where a shared SVG id would collide, and A2's answer was
  * to remove the need — the instruments emit no gradients, no clips and no patterns, so there is nothing
- * to make unique. `bars.test.ts` asserts that across all 22 instruments.
+ * to make unique. `bars.test.ts` asserts that across all 16 instruments.
  */
 function BarPick({ id, n, d, on, onPress }: { id: string; n: string; d: string; on: boolean; onPress: () => void }) {
   const { c } = useTheme();

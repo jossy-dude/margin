@@ -1,13 +1,19 @@
-import React, { useEffect, useId, useRef } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Asset } from 'expo-asset';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, Pattern, Rect } from 'react-native-svg';
 import { EASE } from './kit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { useStore } from '../store/store';
 
-const GRAIN = require('../../assets/textures/grain.png');
-const PHOTO = require('../../assets/textures/t1.jpg');
+const GRAIN_SRC = require('../../assets/textures/grain.png');
+const PHOTO_SRC = require('../../assets/textures/t1.jpg');
+/* Web-only URLs for the two textures, resolved once at module scope by `expo-asset`, which is the
+   accessor that works on react-native-web (`Image.resolveAssetSource` is native-only). Native never
+   reads these and pays nothing for them. */
+const GRAIN_WEB = Asset.fromModule(GRAIN_SRC).uri;
+const PHOTO_WEB = Asset.fromModule(PHOTO_SRC).uri;
 
 /**
  * The paper itself: base colour + ruling pattern + texture. Pages, sheets and Settings all use it, so a texture change shows everywhere at once.
@@ -26,9 +32,12 @@ const PHOTO = require('../../assets/textures/t1.jpg');
  * same commit, so the paper flashed to bare cream for a frame. The ruling's opacity and the texture
  * cross-fade both over `PAPER_MS`.
  *
- * **Both texture images stay mounted.** That is the cost of a cross-fade and it is the whole cost: one
- * extra tiled bitmap on a screen. It is worth it — a texture that blinks out and in reads as a rendering
- * fault, not as a setting changing.
+ * **Only the chosen texture is mounted once the cross-fade has settled.** Both layers exist for
+ * `PAPER_MS` so the swap can cross-fade; holding the other one mounted forever costs every page in
+ * the app a full-screen tiled bitmap it never shows — and with the default `texture: 'grain'`, a
+ * full-screen photograph under a blend mode, on all six always-mounted pages at once. A texture
+ * change is a settings action, so the two-window mount is paid rarely and the steady state is one
+ * image.
  *
  * Deliberately NOT animated: the base `backgroundColor` and the theme-driven opacities. A theme switch
  * changes several hundred colour props at once; cross-fading it would mean animating all of them
@@ -36,6 +45,24 @@ const PHOTO = require('../../assets/textures/t1.jpg');
  * that reads as deliberate.
  */
 const PAPER_MS = 220;
+
+/** A full-bleed, repeating CSS background — the web's equivalent of `resizeMode="repeat"`. The asset
+ *  URLs are resolved through `Image.resolveAssetSource`, which is react-native-web's own accessor and
+ *  returns the dev-server path it serves the texture from.
+ *
+ *  **Each texture is tiled at its OWN natural size.** `backgroundSize` used to be the literal
+ *  `'256px 256px'` for both, which is exact for grain.png (256 square, so it tiled seamlessly and
+ *  nothing was ever resampled) and wrong for t1.jpg (520 square): the photograph was rescaled to 49%
+ *  and then repeated every 256 px, so its own detail re-appeared four times across a phone width and
+ *  the seams fell wherever the 256 grid landed. That is the ragged, "not well aligned" paper. Tiling
+ *  at the asset's own dimensions means the tile edge IS the image edge — no resampling, and a seam
+ *  that can only be where the photograph actually ends.
+ *
+ *  Native does not come through here at all: it is `resizeMode="repeat"` on an `Image`, which tiles at
+ *  the bitmap's own size already. */
+const GRAIN_PX = 256, PHOTO_PX = 520;
+const WEB = Platform.OS === 'web';
+const tiled = (uri?: string, px = GRAIN_PX) => ({ backgroundImage: uri ? `url("${uri}")` : undefined, backgroundRepeat: 'repeat', backgroundSize: `${px}px ${px}px` } as never);
 
 export function PaperBg({ card = false }: { card?: boolean }) {
   const { c, dark } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), tex = useStore((s) => s.settings.texture);
@@ -46,6 +73,8 @@ export function PaperBg({ card = false }: { card?: boolean }) {
   /* One ref PER effect. A single shared flag would be written by whichever effect ran first, and the
      second one would then believe it was a change and animate a layer that had only just mounted. */
   const seenRule = useRef(false), seenTex = useRef(false);
+  /* Both textures are mounted only while a change is cross-fading between them. */
+  const [cross, setCross] = useState(false);
   useEffect(() => {
     const first = !seenRule.current;
     seenRule.current = true;
@@ -55,9 +84,15 @@ export function PaperBg({ card = false }: { card?: boolean }) {
   useEffect(() => {
     const first = !seenTex.current;
     seenTex.current = true;
-    if (first || reduce) { grain.set(tex === 'grain' ? 1 : 0); photo.set(tex === 'photo' ? 1 : 0); return; }
-    grain.set(withTiming(tex === 'grain' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
-    photo.set(withTiming(tex === 'photo' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
+    if (first) { grain.set(tex === 'grain' ? 1 : 0); photo.set(tex === 'photo' ? 1 : 0); return; }
+    /* Hold both layers for the length of the cross-fade, then drop the one that is not showing. Under
+       reduce-motion the opacities snap, but the mounting still runs the two-window dance, so the
+       incoming texture never blinks out from under a one-frame swap. */
+    setCross(true);
+    const t = setTimeout(() => setCross(false), PAPER_MS);
+    grain.set(reduce ? (tex === 'grain' ? 1 : 0) : withTiming(tex === 'grain' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
+    photo.set(reduce ? (tex === 'photo' ? 1 : 0) : withTiming(tex === 'photo' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
+    return () => clearTimeout(t);
   }, [tex, reduce, grain, photo]);
   const ruleStyle = useAnimatedStyle(() => ({ opacity: rule.get() }));
   const grainStyle = useAnimatedStyle(() => ({ opacity: interpolate(grain.get(), [0, 1], [0, c.grain * (dark ? 0.55 : 0.8)]) }));
@@ -77,10 +112,20 @@ export function PaperBg({ card = false }: { card?: boolean }) {
           </Svg>
         </Animated.View>
       )}
-      {/* Both textures are mounted; `pointerEvents: none` on the outer view already keeps them inert, and
-          neither layer ever sits above content because the whole component is behind it. */}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle]}><Image source={GRAIN} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { mixBlendMode: dark ? 'screen' : 'multiply' }, photoStyle]}><Image source={PHOTO} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>
+      {/* `pointerEvents: none` on the outer view keeps both layers inert, and neither ever sits above
+          content because the whole component is behind it. The cross-fade window holds both; the
+          settled state mounts only the texture the setting names. */}
+      {(tex === 'grain' || cross) && (WEB
+        /* On the web, `Image resizeMode="repeat"` sizes its element to the *image* — a 256 px square —
+           rather than to `absoluteFill`, so the grain arrives as one dense tile in the top-left corner
+           and clean paper everywhere else. The texture looked like a rendering fault rather than like
+           paper. A CSS background on a genuinely full-bleed layer is the only thing that actually
+           repeats, so the web takes that path and native keeps the `Image` it has always used. */
+        ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle, tiled(GRAIN_WEB)]} />
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle]}><Image source={GRAIN_SRC} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>)}
+      {(tex === 'photo' || cross) && (WEB
+        ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tiled(PHOTO_WEB, PHOTO_PX), { mixBlendMode: dark ? 'screen' : 'multiply' } as never, photoStyle]} />
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { mixBlendMode: dark ? 'screen' : 'multiply' }, photoStyle]}><Image source={PHOTO_SRC} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>)}
     </View>
   );
 }

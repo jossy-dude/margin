@@ -11,7 +11,7 @@ import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, relDue, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
-import { effective, dayBlock, isCancelled, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
+import { effective, dayBlock, isCancelled, occEnd, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
 import { FS } from '../ui/fit';
@@ -308,7 +308,7 @@ export function TodayScreen() {
       </Section>
       <Section title={fmtDay(sel, now)}>
         {selOcc.length === 0 ? <Empty icon="today" text="No classes. Add one from the + button." /> : selOcc.map(({ date, meeting }) => {
-          const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), a = atTime(date.getTime(), meeting.start), b = atTime(date.getTime(), meeting.end), live = now >= a && now < b && !isCancelled(e), key = occKey(ymd(date), meeting), col = statusColor(e.status, c);
+          const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), a = atTime(date.getTime(), meeting.start), b = occEnd(date.getTime(), meeting), live = now >= a && now < b && !isCancelled(e), key = occKey(ymd(date), meeting), col = statusColor(e.status, c);
           return (
             <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${meeting.start} to ${meeting.end}, ${spokenStatus(e)}. Opens attendance.`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}>
               <HandBox seed={key} stroke={live ? c.acc : c.ink} sw={live ? 2.4 : 1.6} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 12, opacity: isCancelled(e) ? 0.7 : 1 }}>
