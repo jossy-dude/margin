@@ -18,7 +18,7 @@ function sizeOf(file: string): [number, number] {
   if (b[0] === 0x89 && b[1] === 0x50) return [b.readUInt32BE(16), b.readUInt32BE(20)]; // PNG IHDR
   for (let i = 2; i < b.length - 9;) {                                    // JPEG: walk to the SOF frame header
     if (b[i] !== 0xff) { i++; continue; }
-    const m = b[i + 1];
+    const m = b[i + 1] ?? -1;                                   // indexed reads are `number | undefined` here
     if (m === 0xd8 || m === 0xd9 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
     if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [b.readUInt16BE(i + 5), b.readUInt16BE(i + 7)];
     i += 2 + b.readUInt16BE(i + 2);
