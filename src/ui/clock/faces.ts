@@ -285,7 +285,12 @@ export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = '
   if (f.id === 'sl') {
     // the scale ground thins with the plate for the same reason the guilloché does: 576 half-pixel arcs in a
     // 96 dp dial is a grey disc, so a smaller plate gets a coarser scale
-    const s = 6.2 * (px < 150 ? 1.55 : px < 260 ? 1.2 : 1), rows = px < 260 ? 16 : 24;
+    // The tiers below 150 were not fine ENOUGH. Each arc is one native view on Android and one DOM node on
+    // web, and at masthead/thumbnail size the ground was 256 of them — a quarter of everything the Settings
+    // clock picker mounts at once, drawn at a pitch the eye resolves as flat grey anyway. Coarsening it is
+    // therefore the rare change that is both the cheaper one and the cleaner drawing: measured at 96 dp,
+    // 256 arcs -> 121.
+    const s = 6.2 * (px < 130 ? 2.1 : px < 150 ? 1.55 : px < 260 ? 1.2 : 1), rows = px < 130 ? 11 : px < 260 ? 16 : 24;
     const band = each(rows, (j) => { const y = -64 + (j * (128 / rows)); const off = j % 2 ? s : 0; return each(rows, (i) => { const x = -66 + i * s * 2 + off; return `<path d="M${f1(x - s)} ${f1(y)}a${s} ${s} 0 0 0 ${2 * s} 0"/>`; }); });
     orn = `<clipPath id="sc${uid}"><circle r="62"/></clipPath><g clip-path="url(#sc${uid})" ${o(TONE.texture)} stroke-width="${sw(px, .9)}">${band}</g><g transform="translate(0 -38)" fill="${engrave(pal, TONE.structure)}"><path d="M0 -8C-5 -3-5 4 0 8 5 4 5 -3 0 -8Z"/><path d="M-3 6C-10 4-13-4-8-8-8-3-6 1-2 3ZM3 6C10 4 13-4 8-8 8-3 6 1 2 3Z"/><rect x="-5" y="7" width="10" height="1.6" rx=".8"/></g>`;
   }

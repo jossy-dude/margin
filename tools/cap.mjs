@@ -24,6 +24,20 @@ const W = Number(arg('w', '393')), H = Number(arg('h', '851'));
 
 const b = await chromium.launch({ args: ['--no-sandbox', '--font-render-hinting=none'] });
 const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
+
+/* React Native Web's Pressability answers on POINTERDOWN, not on `click`. `page.click()` dispatches a
+ * full click sequence but the press-in handlers this app uses — every tab, every button — did not fire
+ * under it, which silently produced screenshots of the page that never changed. `tap` does a real
+ * down/up at the element's centre, which is the thing the finger actually does. */
+const tap = async (sel) => {
+  const box = await p.locator(sel).first().boundingBox();
+  if (!box) return false;
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await p.mouse.down();
+  await p.waitForTimeout(80);
+  await p.mouse.up();
+  return true;
+};
 // The app's default theme is 'auto', which resolves through React Native's useColorScheme —
 // so emulating the OS is both the reliable and the honest way to capture dark mode, rather
 // than clicking through Settings and hoping the sheet closed in time.
@@ -36,16 +50,16 @@ await p.goto(URL_, { waitUntil: 'networkidle', timeout: 180000 });
 await p.waitForTimeout(6000);
 
 // onboarding gates every screen; Skip is always top-right
-await p.click('text=Skip').catch(() => {});
+await tap('text=Skip').catch(() => {});
 await p.waitForTimeout(2500);
 
 if (theme) {
-  await p.click('[data-testid="open-settings"]').catch(() => {});
+  await tap('[data-testid="open-settings"]').catch(() => {});
   await p.waitForTimeout(2400);
   // Settings opens on "Look & feel"; theme lives one level deeper
-  await p.click('text=Theme & palette').catch(() => {});
+  await tap('text=Theme & palette').catch(() => {});
   await p.waitForTimeout(1800);
-  await p.click(`text=${theme === 'dark' ? 'Dark' : 'Cream'}`).catch(() => {});
+  await tap(`text=${theme === 'dark' ? 'Dark' : 'Cream'}`).catch(() => {});
   await p.waitForTimeout(1800);
   // the theme is applied on select; close so the page behind it can be captured
   await p.keyboard.press('Escape').catch(() => {});
@@ -57,17 +71,17 @@ if (theme) {
 }
 const settings = arg('settings', '');
 if (settings) {
-  await p.click('[data-testid="open-settings"]').catch(() => {});
+  await tap('[data-testid="open-settings"]').catch(() => {});
   await p.waitForTimeout(2400);
-  await p.click(`text=${settings}`).catch(() => {});
+  await tap(`text=${settings}`).catch(() => {});
   await p.waitForTimeout(2000);
 }
 if (has('sheet')) {
-  await p.click('[data-testid="fab-add"]').catch(() => {});
+  await tap('[data-testid="fab-add"]').catch(() => {});
   await p.waitForTimeout(2200);
 }
-if (route) { await p.click(`[data-testid="tab-${route}"]`).catch(() => {}); await p.waitForTimeout(Number(arg('wait', '2600'))); }
-for (const c of clicks) { await p.click(c).catch(() => {}); await p.waitForTimeout(1600); }
+if (route) { await tap(`[data-testid="tab-${route}"]`).catch(() => {}); await p.waitForTimeout(Number(arg('wait', '2600'))); }
+for (const c of clicks) { await tap(c).catch(() => {}); await p.waitForTimeout(1600); }
 await p.waitForTimeout(Number(arg('tail', '600')));
 
 await p.screenshot({ path: out, fullPage: false });

@@ -87,8 +87,13 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
       <View style={{ flex: 1, backgroundColor: c.paper }}>
         {/* Every route mounts on this first render and stays for the session: a tap's only pre-paint
             work is the shell and the two pages whose focus flipped, so no tap ever pays a cold mount.
-            Hidden pages answer `live=false` from the navigator context, tick at the slow cadence, and
-            are out of the draw tree entirely — mounted, laid out, not composited. */}
+            Hidden pages answer `live=false` from the navigator context and tick at the slow cadence.
+            They are out of the DRAW tree entirely — and, because `display:'none'` drops layout rather
+            than parking it, out of the layout tree too, so the flip back to 'flex' rebuilds the page
+            from scratch. That rebuild is the residual cost of a switch and is proportional to the
+            destination's node count (measured on web: week 286, today 639, tasks 658, stats 727,
+            grades 756). The trade against the ~20 full-screen fills a stacked set of pages would cost
+            every frame is deliberate; see the `Placed` note above. */}
         {state.routes.map((r, i) => (<Placed key={r.key} on={i === state.index}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{descriptors[r.key]?.render()}</View></Placed>))}
         {!hideNav && (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
