@@ -71,7 +71,9 @@ Gate for every workstream: builder implements → I re-run `npm run check` + rea
   Android-native: `AlarmManager.setAlarmClock`, full-screen ringing screen, boot reschedule, three
   permission flows. Check current Expo/Android docs + library maintenance status before choosing a
   library; if none fits, small local Expo module + config plugin. Math unit tests; grace fallback +
-  "needs the development build" banner in Expo Go/web. DeepSeek builders only.
+  "needs the development build" banner in Expo Go/web. DeepSeek builders only. **D4 (resolved):
+  lock-screen text setting** — toggle "Show reminder text on the lock screen", default ON; OFF →
+  channel `lockscreenVisibility: SECRET` on classes + tasks channels; onboarding asks it (W8).
 - **W6** — trips: start/stop + manual entry, route label; average + last 7 in Stats; average hint in
   the alarm form. New `trip` table comes from W1's migration.
 - **W7** — Stats marks chart (axes, value labels, %, points, weighted contribution, trend, goal line,
@@ -81,7 +83,8 @@ Gate for every workstream: builder implements → I re-run `npm run check` + rea
 - **W8** — `ONBOARDING_PLAN.md` first. Rebuild the five screens minimal: one animated demo, one
   headline, ≤1 supporting line, reduce-motion, replay from Settings (exists). Animation tool: **Reanimated,
   one timeline per screen** — Remotion's player is DOM-based and does not run in React Native, so it is
-  not used. (Decision recorded here as required.)
+  not used. (Decision recorded here as required.) **Plus the D4 ask**: the flow asks the lock-screen
+  reminder-text question (default ON) and writes it to settings.
 - **W9** — mechanical cleanup via fast-worker with pass/fail proof; strict TS, ESLint, `npx expo-doctor`
   clean, minimal Android permissions, `ARCHITECTURE.md`; perf measured where web allows (React Profiler,
   bundle size via `npm run bundle`, query timing), device perf UNVERIFIED-ON-DEVICE.

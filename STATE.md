@@ -60,8 +60,9 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 1.3a | Baseline visual review — attempt 1 | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | **errored**: provider timeout, no output |
 | 1.3b | Baseline visual review — retry on fixed `.shots/baseline/` | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | in flight |
 | 1.4 | **Code-audit triage** (2 critical, 4 high, 8 medium, 4 low): C1/C2→W1 A/B; H1–H3+L1→W1 C; per-screen boundary→W1 D; M2/M4/M5/M6→W1 E; H4→W5 (DECISIONS D4); M1/M3/M8/L3/L4→fast-worker batch after W1; M7/L2→W9; H1-revert→D5(a) | orchestrator | `briefs/W1-foundation.md`, `DECISIONS.md` D4/D5 |
-| 1.5 | Housekeeping commit (D3–D5, harness fixes, W1 brief, audit report; `.shots/` ignored) | orchestrator | commit `PENDING` |
+| 1.5 | Housekeeping commit (D3–D5, harness fixes, W1 brief, audit report; `.shots/` ignored) | orchestrator | commit `4f4b865` |
 | 2.1 | W1 builder dispatched (data safety + error plumbing + perf hygiene) | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W1-foundation.md` — in flight |
+| 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 
 ## Deviations & notes
 
