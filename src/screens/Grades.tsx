@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Btn, HandBox, HStrip, Icon, Row, Stepper, Txt } from '../ui/kit';
 import { useNow, useTheme } from '../ui/theme-context';
+import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
@@ -12,7 +13,10 @@ import type { Course } from '../domain/types';
 
 function AttendanceGrid({ course }: { course: Course }) {
   const locked = useStore((s) => s.settings.lockAttendance), semesterStart = useStore((s) => s.settings.semesterStart), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
-  const { c } = useTheme(), now = useNow(60_000), sem = parseYmd(semesterStart).getTime();
+  /* The grid's own clock, frozen while this page is not the one on screen (audit M5) — an inferred
+     "Here" only appears once a class has ended, so the tick is only useful under the finger. */
+  const live = useScreenLive();
+  const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = parseYmd(semesterStart).getTime();
   const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id)), [sem, now, meetings, course.id]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).

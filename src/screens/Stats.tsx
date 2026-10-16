@@ -4,6 +4,7 @@ import Animated, { FadeOut } from 'react-native-reanimated';
 import { Chip, HandBox, HStrip, Row, Txt } from '../ui/kit';
 import { Heatmap, HBars, Hist24, Line2, Ring } from '../ui/charts';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
+import { useScreenLive } from '../ui/live';
 import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import { HEAT_CELL_H, HEAT_GAP, heatRow } from '../ui/fit';
@@ -17,13 +18,17 @@ const Card = ({ title, sub, children, seed }: { title: string; sub?: string; chi
 );
 export function StatsScreen() {
   const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan);
-  const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useNow(60_000), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
+  const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions();
+  /* Frozen while this page is not the one on screen (audit M5): the tick re-derives nothing that is
+     visible, and a hidden page re-rendering every minute is what the always-mounted window costs. */
+  const live = useScreenLive(), now = useNow(live ? 60_000 : 0), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
   /* The attendance heatmap's row geometry is width-derived, so it is recomputed whenever the window is.
      28 equal cells beside a label only fit if the cells are sized from what the card actually has. */
   const heat = heatRow(iw, 28);
   /* Everything below is a full pass over the dataset, so it is split by what it actually depends on.
-     `useNow(60_000)` re-renders this screen every minute; keying the day-window work on the *day*
-     rather than on `now` is what stops it running 1440 times a day for a window that has not moved.
+     `useNow(live ? 60_000 : 0)` re-renders this screen every minute it is on screen; keying the
+     day-window work on the *day* rather than on `now` is what stops it running 1440 times a day for a
+     window that has not moved.
      The three attendance derivations stay keyed on `now` on purpose: `effective()` infers "Here" once
      a class has ended, so freezing them at midnight would leave a whole day reading as unmarked. */
   const day = startOfDay(now);

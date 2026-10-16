@@ -28,6 +28,11 @@ export function buildTables(s: Snapshot, now: number): Table[] {
     { name: 'Notices', header: ['id', 'course', 'text', 'date', 'priority'], rows: s.notices.map((n) => [n.id, cn(n.courseId), n.text, iso(n.dueAt), n.priority]) },
     { name: 'Marks', header: ['course', 'item', 'score', 'weight', 'counted'], rows: s.marks.map((m) => [cn(m.courseId), m.name, m.score, m.weight, m.on]) },
     { name: 'Focus sessions', header: ['id', 'course', 'started', 'ended', 'focus min', 'break min', 'overtime min', 'rounds', 'planned min'], rows: s.focus.map((f) => [f.id, cn(f.courseId), iso(f.startedAt), iso(f.endedAt), +(f.focusSec / 60).toFixed(1), +(f.breakSec / 60).toFixed(1), +(f.overSec / 60).toFixed(1), f.rounds, f.planMin]) },
+    /* W5/W6's two entities: empty on every database built before those workstreams, but the export has
+       to carry them the moment they are not, and a sheet that appears later would be a silent change to
+       the file's shape. Cheap enough to be honest now. */
+    { name: 'Trips', header: ['id', 'started', 'ended', 'route', 'note'], rows: s.trips.map((t) => [t.id, iso(t.startedAt), iso(t.endedAt), t.route, t.note]) },
+    { name: 'Alarms', header: ['id', 'at', 'label', 'enabled', 'kind', 'task'], rows: s.alarms.map((a) => [a.id, iso(a.at), a.label, a.enabled, a.kind, a.taskId]) },
     { name: 'Settings', header: ['key', 'value'], rows: Object.entries(st).map(([k, v]): Cell[] => [k, typeof v === 'object' ? JSON.stringify(v) : (v as Cell)]) },
   ];
   tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', 'Marginalia 1.0'], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });

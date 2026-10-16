@@ -57,7 +57,9 @@ export function DiagnosticsPage() {
         <View style={{ gap: 12 }}>{list.map((e) => (
           <HandBox key={e.id} seed={e.id} style={{ padding: 12, gap: 6 }}>
             <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-              <Txt f="bold" s={18} style={{ flexShrink: 1 }} numberOfLines={1}>{e.phase === 'boot' ? 'During boot' : `On ${e.route}`}</Txt>
+              {/* `boot`/`runtime` name the page the failure happened on; `save`/`data` happen with no
+                  page involved, so they name what the app was doing instead of inventing a route. */}
+              <Txt f="bold" s={18} style={{ flexShrink: 1 }} numberOfLines={1}>{e.phase === 'boot' ? 'During boot' : e.phase === 'save' ? 'While saving' : e.phase === 'data' ? 'While reading data' : `On ${e.route}`}</Txt>
               <Txt f="serif" s={14} c="mut">{when(e.at)}</Txt>
             </Row>
             <Txt f="bold" s={17} c="bad" numberOfLines={3}>{e.message}</Txt>

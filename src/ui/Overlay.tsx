@@ -35,11 +35,17 @@ function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
 
 /** Renders whichever sheet the store says is open, plus the undo toast and the + button. */
 export function Overlay() {
-  const sheet = useStore((s) => s.sheet), toast = useStore((s) => s.toast), route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets();
+  const sheet = useStore((s) => s.sheet), toast = useStore((s) => s.toast), { c } = useTheme(), ins = useSafeAreaInsets();
+  /* `ui/live.ts` removed the `s.route` subscription from every screen for the reason this file was
+     still doing it for one boolean: six pages watching one atom meant every tab tap re-rendered all of
+     them before the first moving frame, and the overlay + FAB subtree came with it (audit M6). The
+     selector returns a PRIMITIVE, so `useSyncExternalStore`'s `Object.is` comparison means a tap that
+     does not change this boolean does not re-render the unit at all. */
+  const fabAllowed = useStore((s) => !s.sheet && s.route !== 'Focus');
   /* The + button floats over the page and covers whatever card is under it. While the keyboard is up
      the visible strip is about half the screen and the button lands squarely on a task's text, and
      neither it nor the nav can be used without dismissing the keyboard first. */
-  const kbUp = useKeyboardUp(), showFab = !sheet && route !== 'Focus' && !kbUp;
+  const kbUp = useKeyboardUp(), showFab = fabAllowed && !kbUp;
   return (
     // `importantForAccessibility` is the Android half of the sheet's modal focus trap — `accessibilityViewIsModal`
     // on the sheet itself only does anything on iOS (V14). App.tsx hides the navigator behind this view at the

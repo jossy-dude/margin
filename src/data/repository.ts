@@ -1,6 +1,6 @@
-import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, Adjust } from '../domain/types';
+import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, Adjust, Trip, Alarm } from '../domain/types';
 
-export interface EntityMap { course: Course; meeting: Meeting; attendance: AttRecord; dayMark: DayMark; task: Task; notice: Notice; mark: Mark; adjust: Adjust; focus: FocusSession }
+export interface EntityMap { course: Course; meeting: Meeting; attendance: AttRecord; dayMark: DayMark; task: Task; notice: Notice; mark: Mark; adjust: Adjust; focus: FocusSession; trip: Trip; alarm: Alarm }
 export type EntityName = keyof EntityMap;
 export interface OutboxRow { seq: number; entity: string; id: string; op: 'put' | 'del' | 'restore'; at: number }
 export interface NotifLogRow { id: string; kind: string; dueAt: number; shownAt: number | null; openedAt: number | null }

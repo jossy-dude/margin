@@ -13,6 +13,7 @@ import { PermanentMarker_400Regular } from '@expo-google-fonts/permanent-marker/
 import { SpecialElite_400Regular } from '@expo-google-fonts/special-elite/400Regular';
 import { ThemeProvider, useTheme } from './ui/theme-context';
 import { CrashBoundary } from './ui/CrashBoundary';
+import { ScreenBoundary } from './ui/ScreenBoundary';
 import { recordCrash } from './ui/crashlog';
 import { PaperBg } from './ui/PaperBg';
 import { Btn, HandBox, Icon, Tape, Txt } from './ui/kit';
@@ -32,6 +33,20 @@ import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudio } from './services/audio';
 
 const Book = createBookNavigator();
+
+/** One page boundary per screen, built once at module scope so each `component` identity is stable —
+ *  a wrapper created inside `Shell`'s render would remount the whole page on every render, and
+ *  `navTree`'s `useMemo(() => …, [])` depends on that identity. A failure is then contained to the page
+ *  it happened on instead of replacing the shell (see `ui/ScreenBoundary`). The name is set because a
+ *  bare arrow here is anonymous and React DevTools would show six identical `guarded` entries. */
+const guarded = (route: string, C: React.ComponentType) => {
+  const Page = () => <ScreenBoundary route={route}><C /></ScreenBoundary>;
+  Page.displayName = `${route}Page`;
+  return Page;
+};
+const TodayGuarded = guarded('Today', TodayScreen), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
+const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('Stats', StatsScreen), FocusGuarded = guarded('Focus', FocusScreen);
+
 function Shell() {
   const { c } = useTheme();
   // While a sheet is open the navigator must not be reachable: `accessibilityViewIsModal` on the sheet is
@@ -45,8 +60,8 @@ function Shell() {
    *  re-rendering the whole navigator whenever Shell itself re-renders (sheet/toast writes). */
   const navTree = React.useMemo(() => (
     <Book.Navigator initialRouteName="Today" screenOptions={{}}>
-      <Book.Screen name="Today" component={TodayScreen} /><Book.Screen name="Week" component={WeekScreen} /><Book.Screen name="Tasks" component={TasksScreen} />
-      <Book.Screen name="Grades" component={GradesScreen} /><Book.Screen name="Stats" component={StatsScreen} /><Book.Screen name="Focus" component={FocusScreen} />
+      <Book.Screen name="Today" component={TodayGuarded} /><Book.Screen name="Week" component={WeekGuarded} /><Book.Screen name="Tasks" component={TasksGuarded} />
+      <Book.Screen name="Grades" component={GradesGuarded} /><Book.Screen name="Stats" component={StatsGuarded} /><Book.Screen name="Focus" component={FocusGuarded} />
     </Book.Navigator>
   ), []);
   return (

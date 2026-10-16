@@ -54,10 +54,15 @@ describe('book navigator mount policy', () => {
   it('a hidden page ticks at the slow cadence, not the live one', () => {
     // To-do re-filters and re-groups its whole list off `now`; the week grid moves twice a minute.
     // Both pay that every 30 s while hidden today — for a page nobody can see.
+    // W1/M5: the hidden cadence is now `0`, i.e. FROZEN — `useNow(0)` arms no timer at all, so a
+    // hidden page costs no wake-up and no re-render instead of one a minute. The pin moved with the
+    // call it pins: 60_000 measured the old behaviour, 0 is the fix.
     expect(tasks).toContain('const live = useScreenLive();');
-    expect(tasks).toContain('useNow(live ? 30_000 : 60_000)');
+    expect(tasks).toContain('useNow(live ? 30_000 : 0)');
     expect(week).toContain('live = useScreenLive()');
-    expect(week).toContain('useNow(live ? 30_000 : 60_000)');
+    expect(week).toContain('useNow(live ? 30_000 : 0)');
+    // …and the live cadence itself is unchanged, so this is a hidden-page fix and not a general slowdown
+    expect(week).not.toContain('useNow(0)');
   });
   it('no screen re-renders on a tap: focus is the context, never a store-route subscription', () => {
     // The latency this replaced was threefold — cold mount, plus every mounted page re-rendering on

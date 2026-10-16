@@ -14,8 +14,11 @@ export interface CrashEntry {
   id: string;
   /** epoch ms */
   at: number;
-  /** `boot` = the failure happened before the Gate was ready, `runtime` = after */
-  phase: 'boot' | 'runtime';
+  /** What the app was doing. `boot` = before the Gate was ready, `runtime` = a page failed to draw,
+   *  `save` = a write or a notification-bookkeeping call rejected, `data` = a stored value could not
+   *  be read back (audit H1–H3). The log is the Problems log: every kind lands in the same file and
+   *  the same Diagnostics page. */
+  phase: 'boot' | 'runtime' | 'save' | 'data';
   /** the store's route at the time, or `unknown` */
   route: string;
   message: string;
@@ -65,7 +68,7 @@ function trimAfterAppend(): void {
 }
 
 /** Append one crash. Returns the stored entry, or null if even the file could not be written. */
-export function recordCrash(e: unknown, phase: 'boot' | 'runtime', route = 'unknown'): CrashEntry | null {
+export function recordCrash(e: unknown, phase: CrashEntry['phase'], route = 'unknown'): CrashEntry | null {
   const err = e instanceof Error ? e : new Error(String((e as { message?: unknown })?.message ?? e));
   const entry: CrashEntry = {
     id: `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,

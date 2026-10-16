@@ -78,7 +78,8 @@ const mount = async () => {
   return { r, json: () => JSON.stringify(r.toJSON()) };
 };
 
-/** `useNow(60_000)` arms a real timer, so the renderer has to be torn down or jest leaks a worker. */
+/** With no navigator above it `useScreenLive()` is false, so W1's `useNow(live ? 60_000 : 0)` arms no
+ *  timer at all here; the renderer is still torn down because it holds a store subscription. */
 let live: TestRenderer.ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); });
 
@@ -122,8 +123,9 @@ describe('Stats does not re-derive the whole dataset on every render (BUG-014)',
   });
 
   it('the day series are keyed on the day, not on the 60 s tick', () => {
-    // `useNow(60_000)` re-renders every minute. `lastDays` depends only on the day, so keying the
-    // series on `now` would re-run them 1440 times a day for a window that has not moved.
+    // The 60 s tick re-renders the screen for every minute it is on screen. `lastDays` depends only on
+    // the day, so keying the series on `now` would re-run them 1440 times a day for a window that has
+    // not moved.
     const src = readFileSync(join(__dirname, '../screens/Stats.tsx'), 'utf8');
     expect(src).toContain('startOfDay(now)');
     expect(src).not.toContain('A.lastDays(105, now)');

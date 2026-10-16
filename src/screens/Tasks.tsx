@@ -13,10 +13,11 @@ export function TasksScreen() {
   const tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
   const st = { tasks, courses };
   /* The day groups and the cards' overdue marks only move at day granularity, so the list re-sorts on
-     the wall clock twice a minute while it is under your finger — and once a minute while it is not,
-     which is a hidden page re-filtering and re-grouping for nobody. */
+     the wall clock twice a minute while it is under your finger — and does not tick at all while it is
+     not, because a hidden page re-filtering and re-grouping for nobody is exactly the cost audit M5
+     measured (~600 text nodes across the hidden pages every minute). */
   const live = useScreenLive();
-  const now = useNow(live ? 30_000 : 60_000), [q, setQ] = useState(''), [cid, setCid] = useState<string | null | 'all'>('all');
+  const now = useNow(live ? 30_000 : 0), [q, setQ] = useState(''), [cid, setCid] = useState<string | null | 'all'>('all');
   const list = useMemo(() => {
     const f = st.tasks.filter((t) => (taskFilter === 'all' ? true : taskFilter === 'open' ? t.status !== 2 : t.status === 2) && (cid === 'all' || t.courseId === cid) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
     const cmp: Record<string, (a: Task, b: Task) => number> = { due: (a, b) => (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), priority: (a, b) => b.priority - a.priority || (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), created: (a, b) => b.createdAt - a.createdAt };

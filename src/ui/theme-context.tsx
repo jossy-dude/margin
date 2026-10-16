@@ -21,10 +21,18 @@ export function useReduceMotion(): boolean {
 /** Re-render every `ms` (default 1 s), aligned to the wall clock. The first fire is immediate on mount
  * and whenever `ms` changes — so a Focus screen coming back to the foreground with a round running
  * shows true time at once instead of up to `ms` of stale time — and every fire after that lands on the
- * next multiple of `ms` since the epoch, so minute-granular text flips the moment the clock does. */
+ * next multiple of `ms` since the epoch, so minute-granular text flips the moment the clock does.
+ *
+ * `ms = 0` means FROZEN: no timer is armed at all, and the hook returns the time it mounted with. A
+ * page nobody can see has no reason to re-render every minute (audit M5: the five hidden pages were
+ * re-rendering ~600 text nodes, 119 grid cells and 37 task cards per minute between them), and a
+ * frozen clock is exact where a slower cadence is only a smaller lie. The effect re-runs on an `ms`
+ * change and its first fire is `setTimeout(tick, 0)`, so a page becoming live gets true time in that
+ * same effect — it is never left showing the moment it was hidden. */
 export function useNow(ms = 1000) {
   const [n, setN] = useState(() => Date.now());
   useEffect(() => {
+    if (ms <= 0) return; // frozen: nothing is scheduled, so a hidden page costs no timer and no re-render
     let i: ReturnType<typeof setTimeout>;
     const tick = () => { setN(Date.now()); i = setTimeout(tick, ms - (Date.now() % ms)); };
     i = setTimeout(tick, 0); // async, so the re-align is not a setState *in* the effect (lint) nor a cascade

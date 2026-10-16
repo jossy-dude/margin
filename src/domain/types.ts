@@ -25,6 +25,12 @@ export interface FocusSession {
   id: string; taskId: string | null; courseId: string | null; startedAt: number; endedAt: number;
   focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; demo: boolean;
 }
+/** A commute/route log entry (W5). Stored and exported from W1; nothing writes one yet, so the shape
+ *  stays at the columns the brief named rather than guessing what the tracker will need. */
+export interface Trip { id: string; startedAt: number; endedAt: number | null; route: string; note: string }
+/** A leave-by / class alarm (W5). `kind` is a free string on purpose: the alarm types are a UI
+ *  decision, and a `TEXT NOT NULL DEFAULT 'leave'` column needs no migration to carry a new one. */
+export interface Alarm { id: string; at: number; label: string; enabled: boolean; kind: string; taskId: string | null }
 
 export type SoundGroup = 'paper' | 'clock' | 'stamp' | 'done' | 'notify' | 'toggle' | 'dial' | 'break';
 export interface NotifSettings {
@@ -57,5 +63,6 @@ export interface Settings {
 export interface Snapshot {
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
   tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[];
+  trips: Trip[]; alarms: Alarm[];
   settings: Partial<Settings>;
 }

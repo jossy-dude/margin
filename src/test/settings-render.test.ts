@@ -355,3 +355,25 @@ describe('the Focus & breaks page describes the cadence the timer will actually 
     expect(nudgeWord(120 * 60_000)).toBe('every 5 minutes');
   });
 });
+
+/* ───── the Problems log's own headers ───── */
+/** W1/C. `boot` and `runtime` name the page a failure happened on. `save` and `data` happen with no
+ *  page involved, so they must name what the app was doing instead — printing "On task" for a row that
+ *  failed to parse would send the reader looking for a screen that does not exist. */
+describe('a save or a data problem names what the app was doing, not an invented route', () => {
+  it('renders one header per kind, and keeps named routes for the kinds that have one', async () => {
+    const s = await mount(0);
+    await act(async () => {
+      recordCrash(new Error('task row skipped'), 'data', 'task');
+      recordCrash(new Error('the database is full'), 'save', 'Today');
+      recordCrash(new Error('boom'), 'runtime', 'Today');
+      set({ settingsPath: ['diagnostics'] }); // entered after the log is written: the page reads on mount
+    });
+    expect(s.json()).toContain('Test the crash reporter'); // …on the page, not somewhere else in the sheet
+
+    expect(s.text()).toContain('While reading data');
+    expect(s.text()).toContain('While saving');
+    expect(s.text()).toContain('On Today');
+    expect(s.text()).not.toContain('On task');
+  });
+});

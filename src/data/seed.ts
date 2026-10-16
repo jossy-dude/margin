@@ -49,5 +49,5 @@ export function seedSnapshot(now = Date.now()): Snapshot {
     const ago = (i * 7 + 3) % 33, d = addDays(day, -ago), h = [9, 10, 14, 16, 19, 20, 21][i % 7] ?? 10, c = COURSES[i % 5]?.[0] ?? 'E', min = [25, 45, 50, 25, 90][i % 5] ?? 25;
     focus.push({ id: `demo-focus-${i}`, taskId: null, courseId: c, startedAt: atTime(d, `${String(h).padStart(2, '0')}:05`), endedAt: atTime(d, `${String(h).padStart(2, '0')}:05`) + min * 60_000, focusSec: min * 60, breakSec: min >= 45 ? 300 : 0, overSec: 0, rounds: 1, planMin: min, demo: true });
   }
-  return { courses, meetings, attendance: {}, dayMarks: {}, tasks, notices, marks, adjusts: {}, focus, settings: { ...DEFAULT_SETTINGS, seededAt: now } };
+  return { courses, meetings, attendance: {}, dayMarks: {}, tasks, notices, marks, adjusts: {}, focus, trips: [], alarms: [], settings: { ...DEFAULT_SETTINGS, seededAt: now } };
 }

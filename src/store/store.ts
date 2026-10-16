@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { Appearance, AppState as RNAppState } from 'react-native';
-import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings } from '../domain/types';
+import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings, Trip, Alarm } from '../domain/types';
 import type { NotifLogRow, Repository } from '../data/repository';
 import { openRepository } from '../data/sqliteExpo';
+import { recordCrash } from '../ui/crashlog';
 import { seedSnapshot } from '../data/seed';
 import { withDefaults } from '../domain/defaults';
 import { ST } from '../domain/attendance';
@@ -24,14 +25,14 @@ export interface PlanInfo { count: number; deferred: number; shifted: number; ne
 export interface State {
   ready: boolean; error: string | null; now: number;
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
-  tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; settings: Settings;
+  tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; trips: Trip[]; alarms: Alarm[]; settings: Settings;
   timer: TimerState; sheet: SheetSpec | null; settingsPath: string[]; toast: Toast | null; route: RouteName; prevRoute: RouteName | null; focusTaskId: string | null;
   notifStatus: notifs.NotifStatus | null; plan: PlanInfo | null; notifLog: NotifLogRow[];
   fev: { k: string; at: number } | null;
 }
 let repo: Repository | null = null;
 let state: State = {
-  ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], settings: withDefaults({}),
+  ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: withDefaults({}),
   timer: initTimer(), sheet: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, notifLog: [], fev: null,
 };
 const subs = new Set<() => void>();
@@ -40,7 +41,15 @@ export const subscribe = (f: () => void) => { subs.add(f); return () => { subs.d
 export function set(patch: Partial<State> | ((s: State) => Partial<State>)) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; subs.forEach((f) => f()); }
 export function useStore<T>(sel: (s: State) => T): T { return useSyncExternalStore(subscribe, () => sel(state), () => sel(state)); }
 
-const persist = (p: Promise<unknown>) => p.catch((e) => set({ toast: { id: Date.now(), text: `Couldn't save: ${String((e as Error)?.message ?? e).slice(0, 60)}` } }));
+/** Every failed write lands here. The toast is 2.6 s of the user's attention; the Problems log is what
+ *  is still there tomorrow, so `persist` writes both (audit H1): a rejected `upsert` used to leave the
+ *  optimistic row on screen with no trace anywhere once the toast had gone, and Diagnostics showed
+ *  nothing at all. DECISIONS D5(a): the optimistic state is NOT rolled back — C1's serialised writes
+ *  remove the failure reachable from ordinary use, and reverting can wait until a real failure is seen. */
+const persist = (p: Promise<unknown>) => p.catch((e) => {
+  recordCrash(e, 'save', state.route);
+  set({ toast: { id: Date.now(), text: `Couldn't save: ${String((e as Error)?.message ?? e).slice(0, 60)}` } });
+});
 /** Every write goes through here. Throws a readable error instead of the old null-cast TypeError, which the fatal-error screen's only button used to swallow. */
 export const R = (): Repository => {
   if (!repo) throw new Error('Database is not open: call hydrate() first, or act.resetAll() to re-open it.');
@@ -66,17 +75,19 @@ const notifAccent = (s: Settings) => makeTheme(s, typeof Appearance?.getColorSch
 
 /** `notif_log` is bookkeeping. It must never be the reason a scheduling pass or a notification action
  *  fails, and a repository that is not open yet must not turn an event handler into a crash, so both
- *  halves swallow: the `try` for the synchronous throw `R()` raises, the `catch` for the rejected write. */
+ *  halves swallow: the `try` for the synchronous throw `R()` raises, the `catch` for the rejected write.
+ *  The rejected write leaves a breadcrumb in the Problems log (audit L1) — swallowing it entirely meant
+ *  a reminder could exist in the OS queue with no row here and no way to tell why. */
 function logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
   if (!id) return;
   // The log page is the only place this write is read, and it can already be on screen (a tapped
   // notification brings the app up), so it is re-read once the write has landed rather than at the
   // next resync — otherwise Delivery status keeps calling an opened reminder "queued".
-  try { void R().logNotif(id, kind, dueAt, event, at).catch(() => undefined).then(() => refreshNotifLog()); } catch { /* repository not open yet */ }
+  try { void R().logNotif(id, kind, dueAt, event, at).catch((e) => recordCrash(e, 'save', state.route)).then(() => refreshNotifLog()); } catch { /* repository not open yet */ }
 }
 function schedNotif(id: string, kind: string, dueAt: number) {
   if (!id) return;
-  try { void R().schedNotif(id, kind, dueAt).catch(() => undefined); } catch { /* repository not open yet */ }
+  try { void R().schedNotif(id, kind, dueAt).catch((e) => recordCrash(e, 'save', state.route)); } catch { /* repository not open yet */ }
 }
 /** Only the newest few rows: the page shows a handful, and `notif_log` itself keeps everything. */
 const LOG_KEEP = 12;
@@ -129,10 +140,13 @@ export async function hydrate(r: Repository) {
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
 }
 function applySnapshot(s: Snapshot) {
-  set({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, settings: withDefaults(s.settings),
-    timer: initTimer({ planMin: withDefaults(s.settings).focusPresetMin, flow: withDefaults(s.settings).focusFlow, breakMs: withDefaults(s.settings).breakMin * 60_000, breaksAllowed: withDefaults(s.settings).breaksPerRound }) });
+  // Computed once: `withDefaults` rebuilds the whole settings object (and `initTimer` reads four of its
+  // fields), so calling it per use rebuilt it four times per hydrate (audit M2).
+  const settings = withDefaults(s.settings);
+  set({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, trips: s.trips, alarms: s.alarms, settings,
+    timer: initTimer({ planMin: settings.focusPresetMin, flow: settings.focusFlow, breakMs: settings.breakMin * 60_000, breaksAllowed: settings.breaksPerRound }) });
 }
-export const snapshotOf = (s: State = state): Snapshot => ({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, settings: s.settings });
+export const snapshotOf = (s: State = state): Snapshot => ({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, trips: s.trips, alarms: s.alarms, settings: s.settings });
 
 /* ───── actions ───── */
 export const act = {
