@@ -67,7 +67,10 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 2.4 | Fast-worker batch dispatched (M1 type holes, M3 export cache leak, M8 nudge.wav promotion, L3 seed parity, L4 curl opt-in) | `fast-worker` (`opencode/cat-jam-free`) | delivered — see 2.5 |
 | 2.5 | **Fast-worker batch landed**: M3 (export cache cleanup), M8 (`nudge.wav` promotion + `.gitignore` + count test), L3 (seed parity + round-trip test), L4 (curl opt-in). **M1 skipped per scope rule** (needs call-site edits for dynamic colours) → moved to W9. Gate: orchestrator re-check green (49 suites / 786 tests) | `fast-worker` (`opencode/cat-jam-free`) + orchestrator | log `/tmp/opencode/logs/batch1-recheck.log`, commit `fbdc51a` (9 files) |
 | 2.6 | **W2 gate PASS**: investigation-grounded fix (RN `TilePostprocessor` bake for the grain block; RN's alpha-dropped status-bar default for the black band), diff reviewed (web branches byte-identical, RNW `StatusBar` is `return null`), orchestrator re-check green (49/786, then 50/793 with the guard test). **Vision loop waived with rationale** (native-only delta — web captures cannot judge it; `docs/DEVICE_CHECKLIST.md` W2.1–W2.5 are the compensating checks) | `builder` (`opencode/deepseek-v4.1-flash-free`) + `test-writer` (`opencode/deepseek-v4.1-flash-free`) + orchestrator | commit `bd26592`, logs `/tmp/opencode/logs/w2-{check,recheck,final}.log` |
-| 2.7 | W3 brief written + builder dispatched (Focus dial: see-through face + taped label + Part-B session row) | orchestrator + `builder` (`opencode/deepseek-v4.1-flash-free`) | `briefs/W3-focus-dial.md` — in flight |
+| 2.7 | W3 brief written + builder dispatched (Focus dial: see-through face + taped label + Part-B session row) | orchestrator + `builder` (`opencode/deepseek-v4.1-flash-free`) | `briefs/W3-focus-dial.md` |
+| 2.8 | W3 builder round 1 + **vision round 1** (4/4 PASS; three tightening flags — tape/rim graze = worst problem seen) → **builder tightening round** (slip 618/H 38, tape 40/−12, cluster 22; assertions 4–5 measure tape→rim 12.3 and tape→glyph 16.6 canvas units) | `builder` + `vision-critic` (`opencode/mimo-v2.6-flash-free`) | `reports/vision-w3.md` |
+| 2.9 | **Vision round 2: all PASS, no new problems.** W3 gate PASS and **committed `31d08d3`** (15 files; check green 50 suites / 802 tests; w3-assert 5/5) | orchestrator | logs `/tmp/opencode/logs/w3-{check2,recheck2,assert}.log` |
+| 2.10 | D6 added (dial default vs alternative, both screenshot sets) — awaiting Jossy's number | orchestrator | `DECISIONS.md` D6 |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -108,12 +111,11 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 
 ## Next
 
-- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`. In flight: **W3 (focus dial)** — the only writer.
-  The UX audit is still running; its late captures landed on a tree that changed under it (W1/batch1
-  landing mid-audit), so every finding gets re-verified against current HEAD at triage before it
-  becomes work.
-- Then W4 (Today countdown/time ranges) → W5 (D4 lock-screen toggle + alarms) → W6 (transport log)
-  → W7 (stats) → W8 (onboarding incl. the D4 ask) → W9 (production readiness, absorbs M7/L2 and M1).
+- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`. **W4 (Today countdown / time ranges)
+  is next** — brief + dispatch in this session; then W5 (D4 lock-screen toggle + alarms) → W6 (transport
+  log) → W7 (stats) → W8 (onboarding incl. the D4 ask) → W9 (production readiness, absorbs M7/L2 and M1).
+- The UX audit is still running (through Stats as of 12:56 — its last tab); every finding gets
+  re-verified against current HEAD at triage before it becomes work.
 - Gate per workstream: builder → orchestrator re-check + diffstat → vision loop (UI workstreams,
   max 4) → user-tester regression → commit. W2's vision loop is waived (native-only delta) — recorded
   in the task log.

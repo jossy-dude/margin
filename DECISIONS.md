@@ -91,6 +91,26 @@ row for a bricked app, which C2's fix exists precisely to avoid.
 
 **Resolved 2026-10-16 (owner): (a)** — as being implemented in W1.
 
+## D6 — Focus dial: the taped slip below the dial vs the translucent in-face readout
+
+W3 shipped the default you locked and captured the alternative from the same build. Screenshots (light
+theme, 412×915; `.shots/` is gitignored — open the files on disk): default = `.shots/w3/w3-default-set.png`
++ `w3-default-running.png`; alternative = `.shots/w3/w3-alt-set.png` + `w3-alt-running.png`.
+
+- **a (default, in effect):** see-through face (0.86) + the time on a hand-cut taped paper slip below the
+  dial. The rosette reads as a complete medallion; the countdown sits on clean cream. Costs: eye travel
+  dial → slip; the status line under the slip is the screen's tightest gap (6 canvas units — reviewed as
+  acceptable); the tape corner clears the feathered rim by 12.3 canvas units (measured in the browser).
+- **b:** same see-through face, time stays in the face's centre on a translucent readout. Keeps time +
+  progress one instrument, needs no extra element — but the readout covers exactly the artwork the
+  redesign exists to reveal, its digits cross the drawing's busiest lines, and it leaves a dead band
+  under the dial.
+
+**Recommendation: (a).** The vision review agrees: (a) is the only one where the rosette reads as a
+complete medallion, and "if glanceability is the worry, fix it inside (a), not by swapping designs."
+
+**Answer:** _(awaiting Jossy — "D6: a" keeps what is shipped; "D6: b" is a small swap)_
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._
