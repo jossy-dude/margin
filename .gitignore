@@ -9,3 +9,4 @@ android/.cxx
 ios/Pods
 ios/build
 qa/shots/*.tmp
+.shots/

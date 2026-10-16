@@ -35,6 +35,50 @@ finishes, and Stats already reads it. Adding a second session table would fork t
 
 **Recommendation: (a)** — smallest honest change, zero data fork, and the UI can still say "study session".
 
+## D3 — Where `stats_config` lives
+
+The brief's migration list names a `stats_config` table. The app already persists every setting —
+including the whole `NotifSettings` object — as rows in the `setting` KV table (`Settings` type,
+`putSettings`). A one-row config table would be the only settings-like object with its own schema.
+
+- **a (default, in effect):** stats config (tracked metrics, weekly goals per subject, week start day,
+  default range) is one typed `stats` key in the existing `setting` table, like `notif`.
+- **b:** create the `stats_config` table as named; one row per key.
+- **c:** per-subject study goals go on the `course` table as a column; the rest in `setting`.
+
+**Recommendation: (a)** — one persistence pattern, no orphan schema, export/import keeps working for free.
+
+## D4 — Lock-screen notification visibility
+
+The code audit (H4) found reminder titles and bodies — course and task names — go to the lock screen
+with the platform default visibility. Android offers per-channel `lockscreenVisibility`.
+
+- **a (default, in effect — implemented in W5):** classes and tasks channels set
+  `AndroidNotificationVisibility.SECRET`: the notification still buzzes and can be opened, its text is
+  hidden until unlock.
+- **b:** leave the platform default; the user's system setting decides.
+- **c:** a Settings toggle ("Show reminder text on the lock screen"), default off.
+
+**Recommendation: (a)** — safe default with zero new UI; (c) is one small toggle away if wanted later.
+
+## D5 — What happens when a write fails or stored data is corrupt
+
+The code audit (H1–H3) found three silent-loss shapes: a failed write left the optimistic UI in place
+with only a 2.6 s toast; an unparseable JSON column loaded as `[]` and the next save committed that
+loss; an unparseable setting key silently fell back to its default.
+
+- **a (default, in effect in W1):** failed writes are recorded in the Problems log (Diagnostics) next
+  to the toast; corrupt row-level values are skipped **from the UI** at load (never written back), the
+  raw bytes stay untouched in the database, and each occurrence is listed in Diagnostics. The UI does
+  not roll back optimistic state on its own.
+- **b:** additionally revert the optimistic write by re-reading the affected row (audit H1's stronger
+  option) — the visible state snaps back to what is actually on disk.
+- **c:** refuse to boot when any row fails to parse (loudest, but one bad byte hides the whole app).
+
+**Recommendation: (a)** — C1 (serialised writes) removes the failure that was reachable from normal
+use; (b) can follow once a real write failure has been observed in the field. (c) trades one corrupt
+row for a bricked app, which C2's fix exists precisely to avoid.
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._

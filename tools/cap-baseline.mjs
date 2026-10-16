@@ -3,7 +3,7 @@
  *   node tools/cap-baseline.mjs [--url http://localhost:8099] [--out .shots/baseline]
  *
  * Output: onboarding-1..5.png, today/week/tasks/grades/stats.png, focus.png (+focus-running.png when
- * a start control is found), add-sheet.png, settings.png. Prints console errors per context.
+ * a start control is found), task-sheet.png, settings.png. Prints console errors per context.
  *
  * React Native Web answers Pressability on POINTERDOWN — taps here go through mouse.down/up, never
  * `click()` (same reason tools/cap.mjs uses its own `tap`).
@@ -32,9 +32,27 @@ async function open() {
   return { ctx, p, errs };
 }
 const tap = async (p, sel) => {
-  const box = await p.locator(sel).first().boundingBox().catch(() => null);
-  if (!box) return false;
-  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  /* The Book navigator keeps every screen mounted, so a `testID` can match up to six elements —
+     hidden screens have no layout box, and tall pages put controls below the fold. Pick the first
+     match with a real box, prefer one already inside the viewport, scroll it in, and never click
+     into the void. */
+  const loc = p.locator(sel);
+  await loc.first().waitFor({ state: 'attached', timeout: 8000 }).catch(() => {});
+  const n = await loc.count();
+  let inView = null, any = null;
+  for (let i = 0; i < n; i++) {
+    const l = loc.nth(i);
+    const b = await l.boundingBox().catch(() => null);
+    if (!b || b.width === 0 || b.height === 0) continue;
+    if (b.y + b.height > 0 && b.y < H && b.x + b.width > 0 && b.x < W) { inView = l; break; }
+    if (!any) any = l;
+  }
+  const target = inView ?? any;
+  if (!target) return false;
+  await target.scrollIntoViewIfNeeded().catch(() => {});
+  const b = await target.boundingBox().catch(() => null);
+  if (!b || b.y + b.height <= 0 || b.y >= H) return false;
+  await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await p.mouse.down();
   await p.waitForTimeout(80);
   await p.mouse.up();
@@ -70,16 +88,22 @@ const tap = async (p, sel) => {
   await p.waitForTimeout(2600);
   await p.screenshot({ path: `${OUT}/focus.png` });
   console.log('focus open ->', of);
-  const started = (await tap(p, 'text=Start focus')) || (await tap(p, 'text=Start'));
+  const started = await tap(p, '[aria-label="Start"]');
   if (started) { await p.waitForTimeout(3200); await p.screenshot({ path: `${OUT}/focus-running.png` }); }
   console.log('focus start ->', started);
-  await tap(p, '[data-testid="tab-today"]');
-  await p.waitForTimeout(1200);
-  console.log('fab ->', await tap(p, '[data-testid="fab-add"]'));
+  // Focus hides the nav bar, so tab-today never resolves there; leave through the screen's own back.
+  const exited = await tap(p, '[aria-label="Back to Today"]');
+  await p.waitForTimeout(1400);
+  console.log('focus exit ->', exited);
+  // The global + FAB is native-only by design (src/ui/Overlay.tsx: web renders no Fab), so the
+  // capture walks the reachable per-page "+" instead: Tasks → New task opens the task sheet.
+  await tap(p, '[data-testid="tab-tasks"]');
+  await p.waitForTimeout(1600);
+  console.log('new-task ->', await tap(p, '[aria-label="New task"]'));
   await p.waitForTimeout(2000);
-  await p.screenshot({ path: `${OUT}/add-sheet.png` });
+  await p.screenshot({ path: `${OUT}/task-sheet.png` });
   await tap(p, '[data-testid="sheet-close"]');
-  await p.waitForTimeout(800);
+  await p.waitForTimeout(900);
   console.log('settings ->', await tap(p, '[data-testid="open-settings"]'));
   await p.waitForTimeout(2200);
   await p.screenshot({ path: `${OUT}/settings.png` });

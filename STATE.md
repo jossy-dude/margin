@@ -1,6 +1,6 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-16 (Phase 0 complete, Phase 1 audits in flight)_
+_Updated: 2026-10-16 (Phase 1: code audit in, triage done, W1 building; UX audit + vision review in flight)_
 
 ## Git
 
@@ -54,9 +54,14 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 0.3 | Model roster + 6 project agents created (V2 `.opencode/agents/*.md`) | orchestrator | `.opencode/agents/` |
 | 0.4 | Dirty-tree snapshot + `v2-improvements` branch | orchestrator | commit `7fb440e` |
 | 0.5 | Baseline capture script + run (onboarding 1–5, six routes, focus, sheets) | orchestrator | `tools/cap-baseline.mjs`, `.shots/baseline/**` |
+| 0.6 | Capture-harness fixes: multi-mounted-screen tap helper, Focus exit path, web "+" entry points; re-capture (focus-running added, settings fixed) | orchestrator | `/tmp/opencode/logs/cap-baseline2.log` |
 | 1.1 | Code audit (read-only) | `senior-dev-auditor` (`opencode/deepseek-v4.1-flash-free`) | `reports/audit-code.md` — in flight |
 | 1.2 | UX audit on Expo web 412×915 | `user-tester` (`opencode/mimo-v2.6-flash-free`) | `reports/audit-ux.md` — in flight |
-| 1.3 | Baseline visual review | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | pending baseline capture |
+| 1.3a | Baseline visual review — attempt 1 | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | **errored**: provider timeout, no output |
+| 1.3b | Baseline visual review — retry on fixed `.shots/baseline/` | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | in flight |
+| 1.4 | **Code-audit triage** (2 critical, 4 high, 8 medium, 4 low): C1/C2→W1 A/B; H1–H3+L1→W1 C; per-screen boundary→W1 D; M2/M4/M5/M6→W1 E; H4→W5 (DECISIONS D4); M1/M3/M8/L3/L4→fast-worker batch after W1; M7/L2→W9; H1-revert→D5(a) | orchestrator | `briefs/W1-foundation.md`, `DECISIONS.md` D4/D5 |
+| 1.5 | Housekeeping commit (D3–D5, harness fixes, W1 brief, audit report; `.shots/` ignored) | orchestrator | commit `PENDING` |
+| 2.1 | W1 builder dispatched (data safety + error plumbing + perf hygiene) | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W1-foundation.md` — in flight |
 
 ## Deviations & notes
 
@@ -65,6 +70,23 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 2. The **qa/prelaunch snapshot commit** (above) — his in-flight cleanup is preserved, not judged.
 3. Web build runs the in-memory `MemoryRepository` (existing, documented product decision) — refresh
    resets data; all web e2e runs in a single session, and persistence is judged on the native adapter.
+4. **Web has no global "+" FAB** — `src/ui/Overlay.tsx` deliberately renders `Fab` only when
+   `Platform.OS !== 'web'` (the comment references a desktop-margin "+" that exists only in the
+   `UI_desgin` prototype, not this app). The `{ t: 'add' }` chooser sheet is therefore unreachable on
+   web; captures and e2e use the per-page "+" entries instead (Tasks → "New task", Grades → "Add
+   subject"/"Mark", Week → "Class", settings → "Add class/subject"). AddSheet itself → device checklist.
+5. **Book navigator keeps all six screens mounted.** A `testID` can match up to 5–6 elements at once;
+   hidden screens have no layout box, and page controls can sit below the fold (Tasks' "New task" is
+   at y≈1771 on a 915 px viewport). Playwright taps MUST pick the first match with a real box that is
+   inside the viewport (see `tools/cap-baseline.mjs` `tap()`), never `.first()` blindly. Any DOM
+   assertion (W3 dial, W4 label, W7 stats) must scope to the visible screen too.
+6. **Focus hides the nav bar** — leave via `[aria-label="Back to Today"]`; `tab-today` never resolves
+   there.
+7. Baseline capture round 2 (`.shots/baseline2/` → copied into `.shots/baseline/`): `focus-running.png`
+   added; `settings.png` fixed; `task-sheet.png` replaces the never-valid `add-sheet.png` (stale
+   duplicate of Focus, deleted). Log: `/tmp/opencode/logs/cap-baseline2.log`.
+8. Vision-critic baseline session `ses_ebca00122ffeYDLZPpyjTzBAQk` **errored** ("Timed out waiting for
+   response headers" — provider side, before any image read). Re-dispatched after the capture fix.
 
 ## Next
 
