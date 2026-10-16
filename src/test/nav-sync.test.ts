@@ -19,8 +19,12 @@ function commit(route: RouteName, cur: RouteName, prev: Pair): Pair {
   if (cur !== prev.cur) { const s = toStore(route, cur); if (s) store = s; }
   return { store, cur: nav };
 }
-/** `act.go(t)` writes the store; the store→navigator effect then moves the navigator on the next commit. */
-const tapTab = (p: Pair, to: RouteName): Pair => (to === p.store ? p : commit(to, p.cur, p));
+/** A tab tap writes the store and moves the navigator in the SAME event (Book.tsx `onPressIn`), so React
+ *  batches both into one render: the model's tap needs no `commit` at all — no sync effect runs for it. */
+const tapTab = (p: Pair, to: RouteName): Pair => (to === p.store ? p : { store: to, cur: to });
+/** A store-only navigation — the focus entry, a notification opening a route — still crosses the
+ *  forward sync, so it is modelled as before: `act.go` writes, the `[route]` effect moves the navigator. */
+const storeOnlyHop = (p: Pair, to: RouteName): Pair => (to === p.store ? p : commit(to, p.cur, p));
 /** Android BACK: `TabRouter`'s default `backBehavior` is `'firstRoute'`, so it pops to Today. */
 const hardwareBack = (p: Pair): Pair => (p.cur === 'Today' ? p : commit(p.store, 'Today', p));
 /** Any later commit, e.g. the store write the reverse sync made landing. */
@@ -71,6 +75,12 @@ describe('book nav: the store and the navigator cannot disagree (BUG-021)', () =
     }
   });
 
+  it('a store-only navigation (focus entry, notification) still crosses the forward sync', () => {
+    const onFocus = settled(storeOnlyHop(settled({ store: 'Today', cur: 'Today' }), 'Focus'));
+    expect(onFocus).toEqual({ store: 'Focus', cur: 'Focus' });
+    expect(settled(hardwareBack(onFocus))).toEqual({ store: 'Today', cur: 'Today' });
+  });
+
   it('the Focus route hides the nav and BACK brings it back, in both routes', () => {
     const onFocus = settled(tapTab({ store: 'Today', cur: 'Today' }, 'Focus'));
     expect(onFocus).toEqual({ store: 'Focus', cur: 'Focus' });
@@ -88,12 +98,37 @@ describe('Book.tsx wiring — the model above cannot see the file', () => {
     expect(src).not.toContain('route === t.name');
     expect(lineWith('hideNav')).toContain('cur ===');
   });
-  it('both syncs are effects keyed on their own side', () => {
-    expect(lineWith('toNavigator(')).toContain('useEffect(');
-    expect(lineWith('toStore(')).toContain('useEffect(');
+  it('both syncs are keyed on their own side, and run before the paint', () => {
+    // Keyed: forward on `[route]`, reverse on `[cur]` — that keying is what suppressions.test (BUG-017)
+    // audits, and it is unchanged. LAYOUT effects, not passive ones: for the navigation a tap no longer
+    // performs itself (store-only entries forward, Android BACK reverse) a passive effect waits for the
+    // frame to be painted and for the JS thread to go idle, so the store and the navigator disagreed
+    // across a whole painted frame. A layout effect flushes its own setState before paint.
+    expect(lineWith('toNavigator(')).toContain('useLayoutEffect(');
+    expect(lineWith('toStore(')).toContain('useLayoutEffect(');
     expect(lineWith('toStore(')).toContain('}, [cur])');
+    expect(src).not.toContain('useEffect('); // nothing in the navigator waits for paint any more
   });
-  it('every visited page is still kept mounted by the mount window', () => {
-    expect(src).toContain('inMountWindow(visited, counter.current, r.name)');
+  it('a tab tap writes the store and moves the navigator in one event, so one render sees both', () => {
+    // Both calls sit in the same `onPressIn` handler: React batches them, so the single render they
+    // produce already has `route === cur` — no sync effect runs, no second round-trip before the pass
+    // that moves the page and arms the placement. Two separate statements (effect-driven navigate) is
+    // the two-pass flow this replaced. `onPressIn` rather than `onPress` is the same-file reason in
+    // `Book.tsx`: `onPress` fires on LIFT, so the whole chain sat behind the user's own hold time.
+    const line = lineWith('act.go(t.name)');
+    expect(line).toContain('navigation.navigate(');
+    expect(line).toContain('onPressIn=');
+    expect(src).not.toContain('onPress={() => { act.go');
+    expect(src).not.toMatch(/onPress=\{\(\) => act\.go/);
+  });
+  it('the page a tap lands on is already mounted, so that one render is also the whole cost', () => {
+    // The window and its render-phase visit stamps are deleted: every route mounts on BookView's first
+    // render, so the batched tap render never pays a cold mount — the mount cost moved to the splash.
+    // This file used to assert the stamp's render-phase update here; the property it was protecting
+    // (mount and placement armed in the navigator's own commit) is now unconditional rather than
+    // bookkept, and `nav-window.test.ts` asserts the mount-all side.
+    expect(src).not.toContain('setVisited');
+    expect(src).not.toContain('inMountWindow');
+    expect(src).toContain('state.routes.map((r, i) => (<Placed key={r.key}');
   });
 });

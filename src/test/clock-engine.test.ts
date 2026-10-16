@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ART, ART_R, BALANCE, ESC_DEG, ESC_TEETH, FACES, MESHES, SKELETON, TONE, dialPal, engrave, escapementAngle, handAngles,
-  escapementTurn, hair, meshPhase, spinLayers, staticSvg, sw, handSvg, type FaceId, type FaceSpec,
+  ART, ART_R, BALANCE, FACES, MESHES, SKELETON, TONE, dialPal, engrave, handAngles,
+  hair, meshPhase, spinLayers, staticSvg, sw, handSvg, type FaceId, type FaceSpec,
 } from '../ui/clock/faces';
 import { palettes, PENS, SECOND, type Colors } from '../tokens/theme';
 
@@ -148,52 +148,36 @@ describe('B. every centre artifact has its own velocity', () => {
   });
 
   it('the centre artifact is sized so the Focus capsule cannot cover it', () => {
-    // Focus draws the face at FACE=196 over a 200-unit viewBox, and its readout capsule claims 22 units of the
+    // Focus draws the face at FACE=236 over a 200-unit viewBox, and its readout capsule claims 22 units of the
     // 282-unit dial. This is the invariant behind "make the centre artifact fully visible": without it the old
-    // 104-unit disc claimed 57 units and hid every artifact on every face.
-    const k = 196 / 200, CAP_R = 22;
+    // 104-unit disc claimed 57 units and hid every artifact on every face. (The dial redesign took the face
+    // from 196 to 236 — the face IS the dial now — and this invariant is exactly what let it grow.)
+    const k = 236 / 200, CAP_R = 22;
     expect(ART_R * k).toBeGreaterThan(CAP_R + 12);
     // and the artifact is on every face that has one, so no face can ship with a centre the readout swallows
-    for (const id of ['g', 'rb'] as FaceId[]) expect(spinLayers(id, palOf(FACES[0]!, 'refined', 'light'), 196).map((l) => l.R * k).every((r) => r > CAP_R)).toBe(true);
+    for (const id of ['g', 'rb'] as FaceId[]) expect(spinLayers(id, palOf(FACES[0]!, 'refined', 'light'), 236).map((l) => l.R * k).every((r) => r > CAP_R)).toBe(true);
   });
 });
 
-describe('C. the countdown is a mechanism, not a pulse', () => {
-  it('one tooth per second: the turn is derived, continuous and monotonic', () => {
-    expect(ESC_TEETH).toBe(30);
-    expect(ESC_DEG).toBe(12);
-    expect(escapementTurn(0)).toBe(0);
-    expect(escapementTurn(1)).toBe(12);            // exactly one tooth per elapsed second
-    expect(escapementTurn(30)).toBe(360);          // and one full turn per half minute
-    expect(escapementTurn(25 * 60)).toBe(18_000);  // a 25-minute round turns it fifty times
-    let prev = -1;
-    for (let s = 0; s <= 600; s += 0.37) { const v = escapementTurn(s); expect(v).toBeGreaterThan(prev); prev = v; }
-    // derived, not stepped: any sub-second remainder lands between two whole seconds
-    expect(escapementTurn(10.5)).toBeCloseTo(126, 6);
-  });
-
-  it('the release is discrete, asymmetric, and bounded — it must not read as a breath', () => {
-    // the shape the sequence runs: 0 → 1 in 38 ms, back through rest to −0.42 in 62 ms, then to 0 in 90 ms
-    const at = (kick: number) => escapementAngle(10, kick);
-    expect(at(0)).toBe(-120);
-    expect(at(1)).toBe(-118.3);        // impulse: 1.7° forward against the turn
-    expect(at(-0.42)).toBeCloseTo(-120.714, 6);   // overshoot PAST rest, which is what a sprung lever does
-    expect(at(0)).toBe(-120);
-    // asymmetric: it spends longer coming back than it takes to leave, and it overshoots, so the two halves of the
-    // cycle are different shapes — the opposite of a scale pulse
-    expect(at(1) - at(0)).toBeCloseTo(1.7, 6);
-    expect(at(0) - at(-0.42)).toBeCloseTo(0.714, 6);
-    expect(0.714).toBeLessThan(1.7);
-  });
-
+/* C. The countdown used to carry its own arithmetic: an escape wheel turned from elapsed time, released once a
+   second with an asymmetric kick, pinned here tooth by tooth. The owner's dial redesign removed the escapement
+   (the teeth read as red dots) along with the knurled bed and the four outer numerals, so those pins left with
+   it — deliberately, and this note is what says so. What remains is the part of the contract that outlived the
+   mechanism: the number itself never moves, and no frame is burned while nothing is counting. */
+describe('C. the countdown still never pulses, and never burns frames it does not need', () => {
   it('the numeral never moves: nothing in the Focus dial scales the readout', () => {
     const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
     // the old countdown was `scale: 1 + tick.value * 0.045` on the readout; that shape is gone for good
     expect(focus).not.toMatch(/scale:\s*1\s*\+\s*tick\.value/);
     // and the readout's type and size are untouched
     expect(focus).toContain('<Txt f="type" s={27}');
-    // the only transform on the escapement is a rotation
-    expect(focus.match(/escapementAngle\(elapsed\.value, kick\.value\)/g)!.length).toBe(1);
+    // the escapement it replaced is gone for good too — no wheel, no index, no release kick — named by its
+    // identifiers so the prose comments that document the redesign cannot false-positive this
+    expect(focus).not.toMatch(/escapementAngle|ESC_TEETH|ESC_DEG|ESC_PATH|ESC_INDEX|escBox|escS\b/);
+    // and the dial's edge is what carries the countdown now: a feather veil over the face's clip, and a rim
+    // ring driven by the same elapsed fraction the invisible hatch sector used to be
+    expect(focus).toContain('fill={`url(#${hid})`}');
+    expect(focus).toContain('strokeDasharray={`${PROG_C * prog} ${PROG_C}`}');
   });
 
   it('the frame loops are gated: a hidden or still dial runs no frames', () => {
@@ -203,14 +187,16 @@ describe('C. the countdown is a mechanism, not a pulse', () => {
     expect(clock).toContain('frame.setActive(ticking)');
     // and the static path never builds a frame loop at all
     expect(clock).toContain('if (!live && !hands && !fixed)');
-
+    // the Focus dial itself owns no frame loop any more: the escapement that needed one left with the redesign,
+    // and the jolt it kept is a 1 Hz effect on values, not a frame callback
     const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
-    // the escapement turns only while a round is counting, and never under reduce-motion
-    expect(focus).toContain('spin.setActive(running && !reduce)');
-    expect(focus).toContain('if (!running || reduce) { kick.value = 0; return; }');
-    // both hosts pass the screen they are on, so an off-screen clock is not ticking either
-    for (const [host, prop] of [['Today', "live={st.route === 'Today'}"], ['Focus', 'live={route === \'Focus\'}']] as const)
-      expect({ host, ok: readFileSync(join(__dirname, `../screens/${host}.tsx`), 'utf8').includes(prop) }).toEqual({ host, ok: true });
+    expect(focus).not.toContain('useFrameCallback');
+    // the host takes "am I on screen" from the navigator's focus context, never from a store-route
+    // subscription: every page stays mounted, so watching `s.route` would re-render them on every tap
+    for (const host of ['Today', 'Focus']) {
+      const src = readFileSync(join(__dirname, `../screens/${host}.tsx`), 'utf8');
+      expect({ host, focused: src.includes('const focused = useScreenLive();'), routeSub: src.includes('useStore((s) => s.route)') }).toEqual({ host, focused: true, routeSub: false });
+    }
   });
 });
 

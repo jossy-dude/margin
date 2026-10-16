@@ -10,7 +10,7 @@ import { HBAND, type Ctx, type InstrumentId, type Shape } from '../ui/instrument
 import { palettes } from '../tokens/theme';
 
 /**
- * The twenty-two instruments: registration, geometry, and the two things that are easy to get
+ * The sixteen instruments: registration, geometry, and the two things that are easy to get
  * backwards and impossible to see in a passing assertion — what `p` MEANS at each end, and whether
  * any two copies of a bar can fight over an SVG id.
  *
@@ -60,45 +60,45 @@ const yRange = (ss: Shape[]): [number, number] => {
   return [Math.min(...ys), Math.max(...ys)];
 };
 
-describe('the catalogue: twenty-two instruments in six groups', () => {
-  it('registers exactly 22, in the reference\'s order, in the reference\'s six groups', () => {
-    expect(INSTRUMENTS.length).toBe(22);
+describe('the catalogue: sixteen instruments in six groups', () => {
+  it('registers exactly 16, in the reference\'s order, in the reference\'s six groups', () => {
+    expect(INSTRUMENTS.length).toBe(16);
     expect(INSTRUMENT_IDS).toEqual([
-      'odometer', 'gauge', 'leader', 'cassette', 'graduated', 'spiral', 'ladder',
+      'cassette', 'graduated', 'spiral',
       'tape', 'surplus', 'compound',
-      'lattice', 'sieve', 'sets',
-      'scope', 'spectrum', 'blocks',
+      'sieve', 'sets',
+      'scope', 'spectrum',
       'stack', 'commits', 'heap',
       'btree', 'join', 'log',
     ]);
     expect(GROUPS.map((g) => g.id)).toEqual(['any', 'econ', 'discrete', 'tech', 'prog', 'db']);
-    // 7 universal, then three takes each for five subjects — the same split the reference groups them in
-    expect(GROUPS.map((g) => INSTRUMENTS.filter((i) => i.g === g.id).length)).toEqual([7, 3, 3, 3, 3, 3]);
+    // 3 universal, then econ ×3, discrete ×2, tech ×2, prog ×3, db ×3
+    expect(GROUPS.map((g) => INSTRUMENTS.filter((i) => i.g === g.id).length)).toEqual([3, 3, 2, 2, 3, 3]);
   });
 
   it('the InstrumentId union in types.ts IS the catalogue, so a new instrument cannot be half-added', () => {
-    // 22 names, written out as a union in types.ts because a saved setting stores one forever
+    // 16 names, written out as a union in types.ts because a saved setting stores one forever
     const declared = (readFileSync(join(__dirname, '../ui/instruments/types.ts'), 'utf8').match(/export type InstrumentId =([\s\S]*?);/)?.[1] ?? '')
       .split('|').map((s) => s.trim().replace(/'/g, '')).filter(Boolean);
     expect(declared.sort()).toEqual([...INSTRUMENT_IDS].sort());
-    expect(declared.length).toBe(22);
+    expect(declared.length).toBe(16);
   });
 
   it('ids and names are unique — the picker cannot show two "Ticker"s or lose one setting to a clash', () => {
-    expect(new Set(INSTRUMENT_IDS).size).toBe(22);
-    expect(new Set(INSTRUMENTS.map((i) => i.n)).size).toBe(22);
+    expect(new Set(INSTRUMENT_IDS).size).toBe(16);
+    expect(new Set(INSTRUMENTS.map((i) => i.n)).size).toBe(16);
   });
 
-  it('none of the 22 collides with the app\'s own four kinds, by id OR by name', () => {
-    // The four existing kinds are KEPT. Three of their names also exist in the reference catalogue
-    // (Sight glass / Trace / Ticker), so the instruments were named after the MACHINE instead:
-    // `graduated` = Gauge glass, `scope` = Oscilloscope, `tape` = Market tape. Nothing is renamed
-    // or removed on the app's side to achieve this.
+  it('none of the 16 collides with the app\'s own day bar, by id OR by name', () => {
+    // The one remaining kind (Sight glass) is KEPT. The removed names (Bookshelf / Trace / Ticker)
+    // no longer need the machine-naming dodge, but nothing is renamed back: the instruments still
+    // answer to the MACHINE name (`graduated` = Gauge glass, `scope` = Oscilloscope, `tape` = Market
+    // tape), because a saved setting stores an id forever.
     const own = BAR_KINDS.map((b) => b.id);
     for (const i of INSTRUMENTS) expect(own).not.toContain(i.id);
     for (const b of BAR_KINDS) expect(INSTRUMENTS.map((i) => i.n)).not.toContain(b.n);
-    // and the picker therefore offers 26 kinds, never 22
-    expect(BAR_KINDS.length + INSTRUMENTS.length).toBe(26);
+    // and the picker therefore offers 17 kinds, never 16
+    expect(BAR_KINDS.length + INSTRUMENTS.length).toBe(17);
   });
 
   it('every instrument carries a description and a builder', () => {
@@ -230,9 +230,8 @@ describe('every instrument reads true at both ends', () => {
   });
 
   it('at p=0 no lit AREA survives, on any instrument', () => {
-    // odometer prints 00:00 (which IS the remaining time) and its two drum separators are hardware;
     // the transport still has threaded tape and two reels on it. Every other lit shape at p=0 is a bug.
-    const STRUCTURAL: Record<string, string[]> = { odometer: ['x', 'c'], cassette: ['p', 'c'] };
+    const STRUCTURAL: Record<string, string[]> = { cassette: ['p', 'c'] };
     for (const it of INSTRUMENTS) for (const w of WIDTHS) {
       for (const s of flat(it.build(ctx(0, w)))) {
         if (s.t === 'g' || s.ink === 'rest') continue;
@@ -264,31 +263,13 @@ describe('every instrument reads true at both ends', () => {
     }
   });
 
-  it('the four that only read correctly while counting down, verified at p=1 and p=0', () => {
+  it('the two that only read correctly while counting down, verified at p=1 and p=0', () => {
     const w = 351, at = (id: InstrumentId, p: number) => instrument(id)!.build(ctx(p, w));
-    const digits = (id: InstrumentId, p: number) => flat(at(id, p)).filter((s) => s.t === 'x' && s.ink === 'signal').map((s) => (s as { s: string }).s).join('');
-    // odometer prints the REAL remaining time: 50:00 at the start, 25:00 at the half, 00:00 at the end
-    expect(digits('odometer', 1)).toBe('5000');
-    expect(digits('odometer', 0.5)).toBe('2500');
-    expect(digits('odometer', 0)).toBe('0000');
-    expect(digits('odometer', 0.25)).toBe('1230'); // 12:30 left of 50:00
     // a 45-MINUTE class prints its own time: this is the exact bug the hardcoded 3000s would cause
-    const M45 = 45 * 60_000, short = (p: number) => instrument('odometer')!.build({ p, w, total: M45, left: p * M45, late: false });
-    expect(flat(short(1)).filter((s) => s.t === 'x' && s.ink === 'signal').map((s) => (s as { s: string }).s).join('')).toBe('4500');
-    // …and the dial and the gauge glass label their scales in the real period too
-    expect(flat(instrument('gauge')!.build({ p: 1, w, total: M45, left: M45, late: false })).filter((s) => s.t === 'x').map((s) => (s as { s: string }).s)).toContain('45');
+    const M45 = 45 * 60_000;
     expect(flat(instrument('graduated')!.build({ p: 1, w, total: M45, left: M45, late: false })).filter((s) => s.t === 'x').map((s) => (s as { s: string }).s)).toContain('45');
-    expect(flat(at('gauge', 1)).filter((s) => s.t === 'x').map((s) => (s as { s: string }).s)).not.toContain('45');
     const r = (id: InstrumentId, p: number, f: (s: Shape) => boolean) => flat(at(id, p)).filter(f);
     const radii = (id: InstrumentId, p: number) => r(id, p, (s) => s.t === 'c' && s.f === true).map((s) => (s as { r: number }).r);
-    // leader counts 8 down, then the run-out
-    // the number counts 8 down and disappears below 2 — the last eighth is a run-out, not a digit
-    const leaderNum = (p: number) => flat(at('leader', p)).filter((s) => s.t === 'x' && s.ink === 'live').map((s) => (s as { s: string }).s);
-    expect(leaderNum(1)).toEqual(['8']);
-    expect(leaderNum(0.5)).toEqual(['4']);
-    expect(leaderNum(0.2)).toEqual(['2']);
-    expect(leaderNum(0.1)).toEqual([]);   // ceil(0.8) = 1
-    expect(leaderNum(0)).toEqual([]);
     // transport: supply reel is the FULL one at p=1 and the empty one at p=0
     const sup = (p: number) => r('cassette', p, (s) => s.t === 'c' && s.f === true && s.ink === 'live')[0]!;
     expect((sup(1) as { r: number }).r).toBeCloseTo(10, 3);
@@ -418,15 +399,15 @@ describe('two copies of a bar in one tree cannot fight over an id', () => {
 
   it('and DayBar itself has no hardcoded SVG id left either — the two Patterns are gone', () => {
     // `hat` and `liq` were the two colliding ids: the cancelled-class hatch and the glass tube's
-    // liquid. Both are drawn as geometry now (instruments/hatch.ts, and a solid fill), which also
-    // removes the one `patternTransform` use in the bar that qa/EXPO_GO_AUDIT.md B2 records as
+    // liquid. Both are drawn as geometry (instruments/hatch.ts, and a solid fill) — and DayBar no
+    // longer draws the hatch at all, since the Bookshelf renderer went with the bar delete, which
+    // also removes the one `patternTransform` use in the bar that qa/EXPO_GO_AUDIT.md B2 records as
     // never reached on a device.
     const src = readFileSync(join(__dirname, '../ui/DayBar.tsx'), 'utf8');
     expect(src).not.toContain('url(#');
     expect(src).not.toMatch(/<Pattern/);
     expect(src).not.toMatch(/<Defs/);
     expect(src).not.toContain('patternTransform');
-    expect(src).toContain("from './instruments/hatch'");
   });
 
   it('the cancelled hatch still covers its rect, and the clipper is exact', () => {
@@ -460,7 +441,7 @@ expect(s).not.toMatch(/ d=""/);
   it('every path is M / L / Z only — no arc, quadratic or cubic flags anywhere', () => {
     // Arc, Q, T and C flags have uneven support in react-native-svg's Android path parser and there
     // is no device in this project to verify them against (qa/STATE.md — pattern lock). Every curve
-    // in these 22 is a sampled polyline instead, so the renderer only has to handle line commands.
+    // in these sixteen is a sampled polyline instead, so the renderer only has to handle line commands.
     for (const it of INSTRUMENTS) for (const w of WIDTHS) for (const p of PS) {
       const s = svgDoc(it.build(ctx(p, w)), { w, inks: inksFor('refined', 'dark'), p });
       // anything that is not M, L, Z, a digit, a sign or a separator is a command we did not audit
@@ -494,7 +475,7 @@ expect(s).not.toMatch(/ d=""/);
   it('every instrument fills at least 60% of the band, at every width and every p', () => {
     // a bar that draws a 12px strip in the middle of its 44px band is not using the space it was
     // given; a bar that spills past 44 is clipped on the phone. 27 of 44 is the floor: the analyser
-    // is the tightest of the twenty-two and it still covers three fifths of the band at zero.
+    // is the tightest of the sixteen and it still covers three fifths of the band at zero.
     for (const it of INSTRUMENTS) for (const w of WIDTHS) for (const p of PS) {
       const [lo, hi] = yRange(it.build(ctx(p, w)));
       expect({ id: it.id, w, p, used: +(hi - lo).toFixed(1) }).toEqual({ id: it.id, w, p, used: Math.max(+(hi - lo).toFixed(1), 27) });
@@ -504,30 +485,35 @@ expect(s).not.toMatch(/ d=""/);
   });
 });
 
-describe('the app\'s own four day bars are kept, not replaced', () => {
-  it('all four survive with their ids and their names', () => {
-    expect(BAR_KINDS.map((b) => b.id)).toEqual(['spines', 'glass', 'trace', 'ticker']);
-    expect(BAR_KINDS.map((b) => b.n)).toEqual(['Bookshelf', 'Sight glass', 'Trace', 'Ticker']);
+describe('the app\'s own day bar is kept, not replaced', () => {
+  it('Sight glass survives with its id and its name; the removed three are gone', () => {
+    expect(BAR_KINDS.map((b) => b.id)).toEqual(['glass']);
+    expect(BAR_KINDS.map((b) => b.n)).toEqual(['Sight glass']);
     for (const b of BAR_KINDS) expect(isBarKind(b.id)).toBe(true);
+    expect(isBarKind('spines')).toBe(false);
     expect(isBarKind('gauge')).toBe(false);
   });
 
-  it('DayBar still dispatches all four, and the Ticker still keys its digit row by role', () => {
-    // BUG-016: the digit boxes must key off the helper, not the character's index, or a box is
-    // silently re-purposed at the hour boundary. src/test/ticker-keys.test.ts asserts this against
-    // this file's source; this asserts the dispatch itself survived.
+  it('DayBar sends every non-instrument id to Sight glass, and the removed renderers are gone', () => {
     const src = readFileSync(join(__dirname, '../ui/DayBar.tsx'), 'utf8');
-    // the Ticker is dispatched by name; the other three fall through to Bookshelf or are matched
-    expect(src).toContain("kind === 'ticker'");
-    expect(src).toContain("kind === 'trace'");
-    expect(src).toContain("kind === 'glass'");
-    expect(src).toContain('return <Spines');
-    expect(src).toContain('clockCells(txt)');
-    expect(src).toContain('key={c.key}');
-    expect(src).not.toMatch(/txt\.split\(''\)/);
-    // and the four kinds are still re-exported from here, so Today.tsx and Settings.tsx still resolve
+    expect(src).toContain('return <Glass');
+    expect(src).not.toContain("kind === 'ticker'");
+    expect(src).not.toContain("kind === 'trace'");
+    expect(src).not.toContain('return <Spines');
     expect(src).toContain('export { BAR_KINDS }');
     expect(src).toContain('export type { BarKind }');
+  });
+
+  it('nothing in the bar animates while its screen is off-screen (prompt.md V17, A1 PERF #7)', () => {
+    // Today stays mounted behind the page you went to, and every one of these re-keyed on the screen's
+    // 30 s `now` — so off-screen they used to re-fire forever: a 900 ms day tween, up to seven 800 ms
+    // fill retargets, and a 1 Hz instrument tick, on a JS thread that is also mounting the page you
+    // tapped. All three are gated on `live` (Today passes `st.route === 'Today'`), and `live` has to
+    // reach the dispatcher as well as the leaf, or the gate is dead code.
+    const src = readFileSync(join(__dirname, '../ui/DayBar.tsx'), 'utf8');
+    expect(src).toContain('if (!live || reduce) { dayP.set(day); return; }'); // assign, do not tween
+    expect(src).toContain('useNow(live ? 1000 : 60_000)');                    // the instrument tick
+    expect(src).toContain('live={live} />');                                  // passed through the dispatcher
   });
 });
 
@@ -545,7 +531,7 @@ describe('the Settings picker preview path', () => {
     expect(previewSvg('not-an-instrument', { ...k, p: 0.5, w })).toBe('');
   });
 
-  it('and it needs no id, so mounting 26 of them in one sheet is safe', () => {
+  it('and it needs no id, so mounting 17 of them in one sheet is safe', () => {
     const k = { ink: '#F2EAD8', slab: '#1F1B16', acc: '#E0A47A', warn: '#E3B04B' };
     for (const it of INSTRUMENTS) expect(previewSvg(it.id, { ...k, p: 0.5, w: 280 })).not.toContain('id=');
   });
@@ -558,6 +544,6 @@ describe('offline visual dump — the PNGs the report points at', () => {
     for (const it of INSTRUMENTS) for (const w of WIDTHS) for (const p of [0, 0.5, 1]) {
       writeFileSync(`/tmp/instruments/${it.id}-${w}-${String(p).replace('.', '_')}.svg`, svgDoc(it.build(ctx(p, w)), { w, inks: k, p }));
     }
-    expect(INSTRUMENTS.length * WIDTHS.length * 3).toBe(330);
+    expect(INSTRUMENTS.length * WIDTHS.length * 3).toBe(240);
   });
 });

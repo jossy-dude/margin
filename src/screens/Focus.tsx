@@ -1,19 +1,19 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useFrameCallback, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, Line, Path, Pattern } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { HandBox, Icon, Tape, Txt } from '../ui/kit';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
-import { act, toast, useStore } from '../store/store';
+import { useScreenLive } from '../ui/live';
+import { act, getState, toast, useStore } from '../store/store';
 import { canBreak, view, MIN_BREAK_AFTER_MS, FLOW_OVER_CAP_MS } from '../domain/timer';
 import { fmtClock, fmtDur } from '../domain/time';
 import { fx } from '../services/fx';
 import { handPath } from '../ui/hand';
-import { escapementAngle, ESC_DEG, ESC_TEETH } from '../ui/clock/faces';
 import { hexA } from '../tokens/theme';
 
 const PAGE = require('../../assets/images/journal-page.jpg');
@@ -31,123 +31,86 @@ const D = 282, C0 = 141;
  *  on show right up to the number. Nothing about the number itself changed: same face, same size. */
 const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2, CAP_BOX = CAP_W + 4;
 const CAP_RAD = { h: [CAP_R, CAP_R, CAP_R, CAP_R], v: [CAP_R, CAP_R, CAP_R, CAP_R] } as const;
-/** the clock face is drawn a little larger than the knurled bed's inner step so its center artifact has room */
-const FACE = 196, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
-const P = (r: number, deg: number): [number, number] => { const a = (deg * Math.PI) / 180; return [C0 + r * Math.sin(a), C0 - r * Math.cos(a)]; };
-const sector = (r0: number, r1: number, deg: number) => {
-  if (deg <= 0.2) return ''; if (deg >= 359.8) return `M${C0 + r1} ${C0}A${r1} ${r1} 0 1 1 ${C0 - r1} ${C0}A${r1} ${r1} 0 1 1 ${C0 + r1} ${C0}ZM${C0 + r0} ${C0}A${r0} ${r0} 0 1 0 ${C0 - r0} ${C0}A${r0} ${r0} 0 1 0 ${C0 + r0} ${C0}Z`;
-  const [ax, ay] = P(r1, 0), [bx, by] = P(r1, deg), [cx, cy] = P(r0, deg), [dx, dy] = P(r0, 0), big = deg > 180 ? 1 : 0;
-  return `M${ax} ${ay}A${r1} ${r1} 0 ${big} 1 ${bx} ${by}L${cx} ${cy}A${r0} ${r0} 0 ${big} 0 ${dx} ${dy}Z`;
-};
-/** the knurled bed never changes, so its path is built once instead of 4x/second */
-const BED_RING = `M${C0 + 139} ${C0}A139 139 0 1 1 ${C0 - 139} ${C0}A139 139 0 1 1 ${C0 + 139} ${C0}ZM${C0 + 114} ${C0}A114 114 0 1 0 ${C0 - 114} ${C0}A114 114 0 1 0 ${C0 + 114} ${C0}Z`;
+/** the clock face IS the dial: it fills the pan, so nothing decorative sits between the artwork and the
+ *  dial's edge. What used to be a knurled bed ring + four outer numerals + a hatch sector is gone (the
+ *  owner read the escapement's teeth as red dots and the ring as clutter); the edge is now a feather — a
+ *  halo-coloured radial veil over the last few units of artwork — and progress rides the rim as a slim
+ *  accent ring, which is legible where the sector inside the face never was. */
+const FACE = 236, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
+/** the veil reaches 4 units past the clip (FACE_R + 2 ≈ 119.5) so full halo covers the seam itself */
+const FEATHER_R = 122;
+const PROG_R = 135, PROG_W = 6, PROG_C = 2 * Math.PI * PROG_R;
 const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
 
-/* ── the escapement: the countdown as a mechanism ──────────────────────────────────────────────────────────────
-   Three real invariants decide this, and they are why it is not a scale pulse any more.
-   1. A mechanism's motion is *continuous and derived*, so the escape wheel's angle comes from the clock — one
-      tooth per elapsed second, on the frame callback — and not from the 1 Hz React tick that renders the digits.
-   2. The *tick is discrete*: the wheel is locked and released once a second, so its timing tooth snaps across a
-      fixed index on the chapter ring. That snap is asymmetric — impulse out, overshoot back through rest,
-      settle — because a sprung pallet lever does exactly that. Expanding and shrinking by the same amount in
-      both directions is a breath, and it is what this replaced.
-   3. Nothing that carries meaning moves. The numeral is the thing being read, so it does not scale, pulse or
-      bounce; the motion is carried by a bezel outside the center artifact, the index it passes, and a single
-      low-contrast lift on the paper that repeats the audible tick rather than replacing it.
-   The bezel sits in the gap between the face's center artifact (48 units, scaled by FACE/200) and its chapter
-   ring, so it reads as part of the mechanism and never lands on the engraving or on the number. */
-const ESC_R0 = 46.8, ESC_R1 = 55.2, ESC_MARK = 56.4, ESC_R = 57.6;
-/** one tooth = one second. tooth 0 is the timing tooth: longer and heavier, so the release is visible. */
-const ESC_TOOTH = (i: number) => {
-  const a = (i * ESC_DEG * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a), mark = i === 0;
-  const r1 = mark ? ESC_MARK : ESC_R1, w = mark ? 4.8 : 3.4, pt = (r: number, o: number) => `${(C0 + r * ca - o * sa).toFixed(1)} ${(C0 + r * sa + o * ca).toFixed(1)}`;
-  return `M${pt(ESC_R0, w / 2)}L${pt(r1, w / 2)}L${pt(r1, -w / 2)}L${pt(ESC_R0, -w / 2)}Z`;
-};
-const ESC_PATH = Array.from({ length: ESC_TEETH }, (_, i) => ESC_TOOTH(i)).join('');
-/** the fixed index the timing tooth is released past: a radial bar at 12 o'clock, on the chapter ring */
-const ESC_INDEX = `M${C0 - 2} ${C0 - 58.2}H${C0 + 2}V${C0 - 55.2}H${C0 - 2}Z`;
+/* ── what carries the countdown now ────────────────────────────────────────────────────────────────────────
+   The escapement (rotating toothed wheel, its index bar, the per-second release kick) and the knurled bed
+   with its 60 ticks and four outer numerals were dropped with the dial redesign: the owner read the teeth
+   as red dots and the ring as clutter, and asked for the face itself to be the dial — integrated, feathered
+   at its edge, not a photograph pasted inside a mechanism. Motion stays where it still says something: the
+   pointer's per-second jolt, the capsule's tick wash, the last-ten-seconds warn ring, and the rim ring that
+   shows elapsed time where a sector inside the face never could be read. Nothing on the face scales — the
+   numeral is the thing being read. */
 
 function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readout, tick, wash }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean; readout: string; tick: SharedValue<number>; wash: SharedValue<number> }) {
-  const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), route = useStore((s) => s.route), reduce = useReduceMotion();
-  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), knob = useSharedValue(0), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0), warnSV = useSharedValue(0);
+  const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), focused = useScreenLive(), reduce = useReduceMotion();
+  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0), warnSV = useSharedValue(0);
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
   const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
-  const totalMs = min * 60_000, wholeSec = Math.floor(leftMs / 1000);
-  /** elapsed whole seconds, plus a live sub-second remainder so the wheel is smooth between the 1 Hz digit updates */
-  const stamp = useSharedValue(0), elapsed = useSharedValue(0), kick = useSharedValue(0);
+  const wholeSec = Math.floor(leftMs / 1000);
   useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
   useEffect(() => { if (drag.value) return; hand.value = reduce || live ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
   useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [wholeSec, running, flowing, jolt]);
-  /* The escape wheel is derived from elapsed time, so it needs a frame source and not the 1 Hz render tick:
-     the wheel turns continuously while the release that indexes it happens once a second. It runs only while a
-     round is actually counting on this screen — a paused, set, off-screen or reduce-motion dial holds still. */
-  useEffect(() => { stamp.value = Date.now(); elapsed.value = Math.max(0, (totalMs - leftMs) / 1000); }, [leftMs, totalMs, stamp, elapsed]);
-  const spin = useFrameCallback(() => { elapsed.value = Math.max(0, (totalMs - leftMs) / 1000 + (Date.now() - stamp.value) / 1000); }, running && !reduce);
-  useEffect(() => { spin.setActive(running && !reduce); }, [running, reduce, spin]);
-  /* the release: impulse out, overshoot back through rest, settle. 190 ms total, because it repeats every second
-     for half an hour and anything longer accumulates into a shimmer. */
-  useEffect(() => {
-    if (!running || reduce) { kick.value = 0; return; }
-    kick.value = withSequence(withTiming(1, { duration: 38, easing: Easing.out(Easing.quad) }), withTiming(-0.42, { duration: 62, easing: Easing.out(Easing.cubic) }), withTiming(0, { duration: 90, easing: Easing.inOut(Easing.quad) }));
-  }, [wholeSec, running, reduce, kick]);
   const warnOn = running && leftMs > 0 && leftMs <= 10_000; // the last 10 seconds are announced by a red ring, not only by a blip
   useEffect(() => { if (warnOn && !reduce) warnSV.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 300 })); }, [warnOn, reduce, warnSV]);
   const pan = Gesture.Pan().enabled(editable).minDistance(0)
     .onBegin((e) => { drag.value = 1; last.value = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; })
     .onUpdate((e) => {
       const a = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; let d = a - last.value; if (d > 180) d -= 360; if (d < -180) d += 360; last.value = a;
-      const before = raw.value; raw.value = Math.max(5, Math.min(240, raw.value + d / 6)); knob.value += d; hand.value = (raw.value % 60 || 60) * 6;
+      const before = raw.value; raw.value = Math.max(5, Math.min(240, raw.value + d / 6)); hand.value = (raw.value % 60 || 60) * 6;
       const snap = Math.round(raw.value / 5) * 5;
       if (snap !== cur.value) { cur.value = snap; runOnJS(onChange)(snap, Math.abs(e.velocityX) + Math.abs(e.velocityY)); } else if ((raw.value === 5 || raw.value === 240) && before !== raw.value) runOnJS(onChange)(snap, -1);
     })
     .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
-  const gripS = useAnimatedStyle(() => ({ transform: [{ rotate: `${knob.value}deg` }] })), handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
-  /** one tooth per second, plus the release kick on the wheel's own rotation — never on the numeral, and never as a
-   *  scale: a bezel that grows and shrinks by the same amount in both directions reads as breathing, not as a clock.
-   *  Under reduce-motion `kick` stays 0 and the frame loop is off, so the wheel simply holds its whole-second angle. */
-  const escS = useAnimatedStyle(() => ({ transform: [{ rotate: `${escapementAngle(elapsed.value, kick.value)}deg` }] }));
+  const handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
   /** the one lift that is not on the bezel: a 13 % wash on the paper, riding the audible tick so the two agree.
    *  Collapsed under reduce-motion, like every other thing here. */
   const tickS = useAnimatedStyle(() => ({ opacity: reduce ? 0 : tick.value * 0.13 }));
   /** the flow-overtime wash: the accent floods the capsule and drains, once, when a round runs past its cap */
   const washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 }));
   const warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
-  /** The bed is cut *into* the page in both themes, so the depth reads the same way round: deeper than the paper in
-   *  light, deeper than the desk in dark. Reading from `desk` in light and `card` in dark made the ring switch from
-   *  a recess to a raised plate, which is why the dark dial never looked like a design and only a filter. */
-  const bed = dark ? c.slab : c.desk, ink = c.ink;
   /** labels sit on the torn photograph, so their halo has to be the colour of what is actually behind them — the
-   *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing. */
-  const halo = dark ? c.desk : c.paper;
-  const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360;
-  const grip = useMemo(() => <Svg width={D} height={D}>
-    <Path d={BED_RING} fill={bed} fillRule="evenodd" /><Path d={BED_RING} fill={hexA(ink, 0.13)} fillRule="evenodd" />
-    {Array.from({ length: 60 }, (_, i) => { const a = (i * 6 * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a); return <Line key={i} x1={C0 + 131 * ca} y1={C0 + 131 * sa} x2={C0 + 138 * ca} y2={C0 + 138 * sa} stroke={hexA(ink, 0.5)} strokeWidth={1.7} />; })}
-    <Circle cx={C0} cy={C0} r={139} fill="none" stroke={ink} strokeWidth={1.6} /><Circle cx={C0} cy={C0} r={113.5} fill="none" stroke={ink} strokeWidth={1.2} strokeOpacity={0.7} />
-  </Svg>, [bed, ink]);
+   *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing.
+   *  The feather veil is painted in the same halo for the same reason: it is what lets the face's circular clip
+   *  edge dissolve into the page in both themes instead of reading as a pasted photograph. */
+  const halo = dark ? c.desk : c.paper, ink = c.ink;
+  const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360, prog = progDeg / 360;
   /** Per-instance, and sanitised. `useId()` is the right source of uniqueness — it is what `PaperBg` and
    *  `HStrip` already use — but React's ids can contain characters that are not legal in an XML name, and this
    *  markup is parsed as XML. `prompt.md` R11 names a bare element id resolving another element's `url(#…)` as
-   *  exactly this failure; `hatch` was the last hardcoded one left in a screen. */
+   *  exactly this failure; this veil's gradient is the last one left in a screen. */
   const hid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const hatch = useMemo(() => <Defs><Pattern id={hid} width={5.5} height={5.5} patternUnits="userSpaceOnUse" patternTransform="rotate(135)"><Line x1={0} y1={0} x2={0} y2={5.5} stroke={ink} strokeWidth={1.6} /></Pattern></Defs>, [ink, hid]);
-  const marks = useMemo(() => [['60', 141, 18], ['15', 264, 141], ['30', 141, 264], ['45', 18, 141]].map(([t, x, y]) => <Txt key={t as string} f="type" s={10} pointerEvents="none" style={{ position: 'absolute', left: (x as number) - 10, top: (y as number) - 6, width: 20, textAlign: 'center', textShadowColor: halo, textShadowRadius: dark ? 6 : 4 }}>{t}</Txt>), [halo, dark]);
+  const feather = useMemo(() => <Defs><RadialGradient id={hid}>
+    <Stop offset="0.934" stopColor={halo} stopOpacity="0" />
+    <Stop offset="0.967" stopColor={halo} stopOpacity="1" />
+    <Stop offset="1" stopColor={halo} stopOpacity="1" />
+  </RadialGradient></Defs>, [halo, hid]);
   const hub = useMemo(() => handPath(CAP_W, CAP_H, CAP_RAD, 7717, 1.6), []);
   const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
-  const escBox = { left: C0 - ESC_R, top: C0 - ESC_R, width: ESC_R * 2, height: ESC_R * 2 };
   return (
     <GestureDetector gesture={pan}>
       <View collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: `${live ? Math.ceil(leftMs / 60_000) + ' minutes left' : min + ' minutes'}` }}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
-        <View style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', borderWidth: 1.5, borderColor: hexA(ink, 0.34) }}><ClockFace id={face} size={FACE} hands={false} live={route === 'Focus'} /></View>
-        {/* the escapement sits over the dial and under the pointer: the pointer is the hand, so it passes in front */}
-        <Animated.View pointerEvents="none" style={[escBox, escS]}><Svg width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_PATH} fill={c.acc} /></Svg></Animated.View>
-        <Svg pointerEvents="none" style={escBox} width={ESC_R * 2} height={ESC_R * 2} viewBox={`${C0 - ESC_R} ${C0 - ESC_R} ${ESC_R * 2} ${ESC_R * 2}`}><Path d={ESC_INDEX} fill={ink} /></Svg>
-        <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">{hatch}<Path d={sector(95, 112, progDeg)} fill={`url(#${hid})`} /></Svg>
+        <View style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden' }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
+        {/* the veil feathers the face's clip edge into the page; the rim ring shows elapsed time where the old
+            hatch sector inside the face could never be read. Both sit under the pointer and the capsule. */}
+        <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">
+          {feather}
+          <Circle cx={C0} cy={C0} r={FEATHER_R} fill={`url(#${hid})`} />
+          <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={hexA(ink, 0.16)} strokeWidth={PROG_W} />
+          {prog > 0 && <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={c.acc} strokeWidth={PROG_W} strokeLinecap="round" strokeDasharray={`${PROG_C * prog} ${PROG_C}`} transform={`rotate(-90 ${C0} ${C0})`} />}
+        </Svg>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
-        <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, gripS]}>{grip}</Animated.View>
-        {marks}
         {/* the timer reads inside its own dial: a round paper hub on the dial's centre, so the face, the cliff photo and the pointer all stay readable */}
         <View pointerEvents="none" style={{ position: 'absolute', left: (D - CAP_W) / 2, top: (D - CAP_H) / 2, width: CAP_W, height: CAP_H, alignItems: 'center', justifyContent: 'center' }}>
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -195,21 +158,42 @@ function BreakSticker({ leftMs, totalMs, falling, onGone, onBack, nudge }: { lef
   );
 }
 
-export function FocusScreen() {
-  const route = useStore((s) => s.route), sheet = useStore((s) => s.sheet), timer = useStore((s) => s.timer), fev = useStore((s) => s.fev), settings = useStore((s) => s.settings), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses);
-  const st = { route, sheet, timer, fev, settings, tasks, courses };
-  const { c, dark } = useTheme(), { width } = useWindowDimensions(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), now = useNow(st.route === 'Focus' || st.timer.running ? 1000 : 30_000), s = width / 440, t = st.timer, v = view(t, now), g = v.state;
+export function FocusScreen({ fit }: { fit?: number } = {}) {
+  /* Focus is the one screen whose "am I live" does double duty: the tick cadence, keep-awake, the
+     BACK handler and the tik/tok gate all keyed off `route === 'Focus'` — a store subscription that,
+     with every page kept mounted, would re-render the whole focus screen on every tap anywhere. The
+     navigator context carries the same truth for a tap's cost of a boolean flip. */
+  /* Settings are read field by field, and `sheet` is not subscribed at all: the one place it is read is the
+     back-handler below, which takes it from `getState()` at press time. A whole-`settings` selector here
+     cost this screen a re-render per sheet open/close and per write anywhere in Settings
+     (lag-diagnosis-2026-10-14, RC-1); the dial keeps its own `settings.clock` leaf. */
+  const timer = useStore((s) => s.timer), fev = useStore((s) => s.fev), tickOn = useStore((s) => s.settings.tickOn), soundOn = useStore((s) => s.settings.soundOn), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses);
+  const st = { timer, fev, tasks, courses };
+  const focused = useScreenLive();
+  /* `focused` is the only cadence gate: a hidden Focus owns no 1 Hz commit even while a round runs —
+     the timer's own state lives in the store and keeps counting, and coming back re-aligns `now`
+     immediately (see `useNow`), so nothing on screen can be stale. */
+  const { c, dark } = useTheme(), { width, height } = useWindowDimensions(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), now = useNow(focused ? 1000 : 30_000), s = fit ?? Math.min(width / 440, height / 1001), t = st.timer, v = view(t, now), g = v.state;
   const task = st.tasks.find((x) => x.id === t.taskId), course = st.courses.find((x) => x.id === t.courseId), topOff = ins.top / s;
   const stamp = useSharedValue(0), [stampN, setStampN] = useState(1), [ghost, setGhost] = useState<null | { total: number }>(null), prev = useRef(t.phase), lastSec = useRef(0), [nudge, setNudge] = useState(0), [live, setLive] = useState(''), tickSV = useSharedValue(0), wash = useSharedValue(0);
   const editable = t.phase === 'set';
   /** flow overtime is capped: past the cap the clock is frozen, so the page must stop pretending to count */
   const frozen = t.running && t.phase === 'focus' && v.leftMs === 0 && v.overMs >= FLOW_OVER_CAP_MS;
   useEffect(() => { act.timerPump(now); }, [now]);
-  useEffect(() => { if (st.route !== 'Focus') return; if (t.running) void activateKeepAwakeAsync('focus'); else void deactivateKeepAwake('focus'); return () => { void deactivateKeepAwake('focus'); }; }, [t.running, st.route]);
-  useEffect(() => { const h = BackHandler.addEventListener('hardwareBackPress', () => { if (st.route === 'Focus' && !st.sheet) { act.go('Today'); return true; } return false; }); return () => h.remove(); }, [st.route, st.sheet]);
+  /* `expo-keep-awake` rejects on the web — the Screen Wake Lock API is permission-gated and the browser
+     answers "not activated yet" — and an unhandled rejection there takes the whole screen down with it.
+     `.catch(() => undefined)` because a browser that will not hold the screen awake is not a failure
+     this screen should report; the timer keeps its own state either way. */
+  useEffect(() => {
+    if (!focused) return;
+    if (t.running) void activateKeepAwakeAsync('focus').catch(() => undefined);
+    else void Promise.resolve(deactivateKeepAwake('focus')).catch(() => undefined);
+    return () => { void Promise.resolve(deactivateKeepAwake('focus')).catch(() => undefined); };
+  }, [t.running, focused]);
+  useEffect(() => { const h = BackHandler.addEventListener('hardwareBackPress', () => { if (focused && !getState().sheet) { act.go('Today'); return true; } return false; }); return () => h.remove(); }, [focused]);
   useEffect(() => { // old-clock tik / tok each second while a round is running (never while the clock is frozen)
-    if (st.route !== 'Focus' || !t.running || t.phase !== 'focus' || !st.settings.tickOn || frozen) return; const sec = Math.floor(now / 1000); if (sec !== lastSec.current) { lastSec.current = sec; fx.tick(sec % 2 === 0); tickSV.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 160 })); }
-  }, [now, t.running, t.phase, st.settings.tickOn, st.route, tickSV, frozen]);
+    if (!focused || !t.running || t.phase !== 'focus' || !tickOn || frozen) return; const sec = Math.floor(now / 1000); if (sec !== lastSec.current) { lastSec.current = sec; fx.tick(sec % 2 === 0); tickSV.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 160 })); }
+  }, [now, t.running, t.phase, tickOn, focused, tickSV, frozen]);
   /* eslint-disable react-hooks/set-state-in-effect -- timer events and phase transitions are discrete events, not derived state */
   useEffect(() => { // events from the timer drive the stamp, the nudge wiggle/wash, the sticker falling and the spoken announcements
     const e = st.fev; if (!e || Date.now() - e.at > 1500) return;
@@ -233,8 +217,9 @@ export function FocusScreen() {
         <View style={{ width: 440, height: 1001, transformOrigin: '0% 0%', transform: [{ scale: s }] }}>
           <Image source={PAGE} style={{ position: 'absolute', width: 440, height: 1001 }} />
           {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
-              luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos, the knurl and the bed all had
-              nothing to sit against and the page read as the light one with the brightness pulled down. Two layers
+              luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos and the dial's feather veil
+              (both painted in `desk` in dark) had nothing to match and the page read as the light one with the
+              brightness pulled down. Two layers
               off the theme's own desk do the work instead: a deep scrim that takes the page to a ground ink can be
               read on, then a thin lift of the theme's paper so the photograph's own relief survives as a plate
               rather than disappearing into a brown. */}
@@ -245,7 +230,7 @@ export function FocusScreen() {
           </Box>
           <Pressable onPress={() => act.open({ t: 'settings' })} accessibilityRole="button" accessibilityLabel="Settings" style={{ position: 'absolute', right: 118, top: 8 + topOff }}><Box seed="set" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="gear" size={22} color={c.ink} /></Box></Pressable>
           <Pressable onPress={() => act.go('Today')} accessibilityRole="button" accessibilityLabel="Back to Today" style={{ position: 'absolute', right: 66, top: 8 + topOff }}><Box seed="back" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="back" size={22} color={c.ink} /></Box></Pressable>
-          <Pressable onPress={() => { act.setSettings({ soundOn: !st.settings.soundOn }); }} accessibilityRole="switch" accessibilityState={{ checked: st.settings.soundOn }} accessibilityLabel="Sounds" style={{ position: 'absolute', right: 14, top: 8 + topOff }}><Box seed="snd" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="sound" size={22} color={st.settings.soundOn ? c.ink : c.mut} /></Box></Pressable>
+          <Pressable onPress={() => { act.setSettings({ soundOn: !soundOn }); }} accessibilityRole="switch" accessibilityState={{ checked: soundOn }} accessibilityLabel="Sounds" style={{ position: 'absolute', right: 14, top: 8 + topOff }}><Box seed="snd" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="sound" size={22} color={soundOn ? c.ink : c.mut} /></Box></Pressable>
           <Box seed="task" style={{ position: 'absolute', left: 32, top: 259, width: 386, paddingHorizontal: 15, paddingTop: 11, paddingBottom: 10, transform: [{ rotate: '-1deg' }] }}>
             <Tape w={46} rot={-24} style={{ left: -11, top: -6 }} />
             <Txt f="serifB" s={17} style={{ alignSelf: 'flex-start', borderBottomWidth: 1.5, borderBottomColor: c.ink, paddingBottom: 1 }}>{course?.name ?? 'Personal'}</Txt>

@@ -155,7 +155,21 @@ export default function App() {
   }, [fontTry]);
   useEffect(() => {
     let alive = true;
-    (async () => { try { const repo = await openRepository(); await hydrate(repo); await configureNotifications(); await initAudio(); preloadAudio(); wireLifecycle(); } catch (e) { recordCrash(e, 'boot'); set({ error: String((e as Error)?.message ?? e), ready: true }); } finally { if (alive) setBooted(true); } })();
+    (async () => {
+      try {
+        /* `expo-sqlite`, `expo-notifications` and `expo-audio` are native modules with no web
+           implementation, so a browser build that called them would throw during boot and never
+           reach a screen. `wireLifecycle()` still runs: it is what pumps the timer and keeps `now`
+           fresh, and neither is native. */
+        const repo = await openRepository();
+        await hydrate(repo);
+        await configureNotifications();
+        initAudio();
+        preloadAudio();
+        wireLifecycle();
+      } catch (e) { recordCrash(e, 'boot'); set({ error: String((e as Error)?.message ?? e), ready: true }); }
+      finally { if (alive) setBooted(true); }
+    })();
     return () => { alive = false; };
   }, []);
   const route = () => { try { return getState().route; } catch { return 'unknown'; } };

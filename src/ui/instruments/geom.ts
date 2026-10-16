@@ -66,13 +66,6 @@ export const cubicPts = (p0: P2, p1: P2, p2: P2, p3: P2, n = 18): P2[] =>
     ];
   });
 
-/** A quadratic segment as points — the sine and parabola marks on the chain, and the ticks. */
-export const quadPts = (p0: P2, p1: P2, p2: P2, n = 12): P2[] =>
-  sample(n, (t) => {
-    const u = 1 - t;
-    return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
-  });
-
 /** Bisect `f(a) === 0` on [lo,hi]. Used to FIND the equilibrium instead of assuming it, so the
  *  surplus region is drawn where the two curves actually meet at any band height. */
 export const solve = (f: (t: number) => number, lo = 0, hi = 1, n = 24) => {

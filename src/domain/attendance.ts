@@ -5,6 +5,19 @@ export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late ·
 export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
 export const occKey = (date: string, m: Pick<Meeting, 'start' | 'courseId'>) => `${date}|${m.start}|${m.courseId}`;
 
+/** The moment a class occurrence actually ends, as absolute ms.
+ *
+ *  A class stored 23:30–00:30 has BOTH ends stamped on the day it occurs, by `atTime`, so `end <= start`
+ *  means it crosses midnight and finishes the NEXT day. Every consumer that compares the end against
+ *  `now`, or builds a busy interval from it, has to ask this helper rather than re-deriving the
+ *  stamp: `periodsOn` used to normalise it locally while `effective()` and the reminder planner still
+ *  treated the same class as already over at 00:30 — i.e. before it had even started, so the class was
+ *  marked "Here" a day early and the "just ended" notification fired 23½ hours before the lecture. */
+export const occEnd = (dayMs: number, m: Pick<Meeting, 'start' | 'end'>) => {
+  const start = atTime(dayMs, m.start), end = atTime(dayMs, m.end);
+  return end > start ? end : end + DAY_MS;
+};
+
 export interface Eff { status: AttStatus | null; inferred: boolean; explicit: boolean }
 /** One status model for every class occurrence: explicit record > whole-day mark > inferred "here" once the class ended > nothing (future). */
 export function effective(date: Date, m: Meeting, att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()): Eff {
@@ -12,8 +25,7 @@ export function effective(date: Date, m: Meeting, att: Record<string, AttRecord>
   if (r) return { status: r.status, inferred: false, explicit: true };
   const dm = days[d];
   if (dm) return { status: dm.status, inferred: false, explicit: true };
-  const end = atTime(date.getTime(), m.end);
-  return end <= now ? { status: 'p', inferred: true, explicit: false } : { status: null, inferred: false, explicit: false };
+  return occEnd(date.getTime(), m) <= now ? { status: 'p', inferred: true, explicit: false } : { status: null, inferred: false, explicit: false };
 }
 export const isCancelled = (e: Eff) => e.status === 'c' || e.status === 't';
 
@@ -34,15 +46,12 @@ export function occurrencesOn(date: Date, meetings: Meeting[]): Occurrence[] {
 export interface Period { start: number; end: number; label: string; cancelled: boolean }
 export function periodsOn(occ: Occurrence[], courses: Course[], att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()): Period[] {
   return occ.map(({ date, meeting }) => {
-    const start = atTime(date.getTime(), meeting.start), end = atTime(date.getTime(), meeting.end);
+    const start = atTime(date.getTime(), meeting.start);
     return {
       start,
-      /* A class stored 23:30–00:30 has BOTH ends stamped on the day it occurs, by `atTime`, so it comes out
-       * with `end <= start` — and every consumer assumes `start < end`: `dayBlock`'s `cur`/`next` can never
-       * match it, `activePeriod` filters it out of the card and of all twenty-six instruments, and Week
-       * clamps it to a 20 dp stub. An overnight class ends on the NEXT day; say so here, once, at the only
-       * place a Period is built, rather than patching it in every view that reads one. */
-      end: end > start ? end : end + DAY_MS,
+      /* The overnight rule (23:30 → 00:30 ends the next day) lives in `occEnd`, once, at the only
+         place a Period is built — every consumer assumes `start < end`. */
+      end: occEnd(date.getTime(), meeting),
       label: courses.find((c) => c.id === meeting.courseId)?.name ?? '?',
       cancelled: isCancelled(effective(date, meeting, att, days, now)),
     };

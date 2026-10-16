@@ -23,15 +23,6 @@ export const fmtClock = (sec: number) => {
   const s = Math.max(0, Math.round(sec)), h = Math.floor(s / 3600);
   return (h ? `${h}:${pad(Math.floor(s / 60) % 60)}` : pad(Math.floor(s / 60))) + ':' + pad(s % 60);
 };
-/** One box per character of a clock string, for the Ticker's digit row.
- *
- *  `key` is the character's **distance from the right**, not its index. That matters because
- *  `fmtClock` is not a fixed width: it is `MM:SS` under an hour and `H:MM:SS` over it, so an
- *  index key re-purposes the seconds-tens box as the minute-ones box the moment a round passes an
- *  hour. Keying from the right keeps every shared slot on the same key across that boundary and
- *  gives the two newly-appeared slots (the leading `H:`) keys nothing else had. */
-export interface ClockCell { key: string; ch: string; colon: boolean }
-export const clockCells = (txt: string): ClockCell[] => [...txt].map((ch, i) => ({ key: `${ch === ':' ? 'c' : 'd'}${txt.length - 1 - i}`, ch, colon: ch === ':' }));
 export const fmtDur = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}` : `${min}m`);
 /** `1 day` / `2 days`. Takes the singular unit and derives the plural, so the caller picks one word
  *  and the helper picks which of the two to print. Irregulars pass their own plural explicitly.

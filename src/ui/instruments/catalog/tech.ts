@@ -1,7 +1,7 @@
-import { F, poly, polyLen, quadPts, sample, tri } from '../geom';
+import { poly, polyLen, sample, tri } from '../geom';
 import type { Build, Shape } from '../types';
 
-/** Group 2 — emerging technology: three takes. */
+/** Group 2 — emerging technology: two takes. */
 
 /** An oscilloscope: graticule, a damped burst, and a trigger block. The lit trace is the part of the
  *  signal already recorded. */
@@ -47,33 +47,7 @@ const spectrum: Build = (c) => {
   return o;
 };
 
-/** Source, filter, amplifier, output — and a pulse still sitting in the chain. The lit blocks are
- *  the stages the signal has already passed. Each block carries its own mark, scaled about its own
- *  centre, so a block is never a plain rectangle: a rectangle can only ever be a stripe. */
-const blocks: Build = (c) => {
-  const y = 12, h = 21, n = 4, gap = 13, x0 = 10, span = c.w - 20, o: Shape[] = [];
-  const bw = (span - gap * (n - 1)) / n, px = x0 + span * c.p, cy = y + h / 2;
-  // source (a sine), filter (a parabola), amplifier (a triangle), output (a trapezoid)
-  const GLYPH = [
-    poly([...quadPts([0, 4], [3.5, -3], [7, 4], 10), ...quadPts([7, 4], [10.5, 11], [14, 4], 10)]),
-    poly(quadPts([0, 5], [7, -6], [14, 5], 14)),
-    'M0 6L7 0L14 6Z',
-    'M0 6L4 0L10 0L14 6Z',
-  ];
-  for (let i = 0; i < n; i++) {
-    const x = x0 + i * (bw + gap), on = x + bw / 2 < px, k = on ? 'live' : 'rest';
-    o.push({ t: 'r', x, y, w: bw, h, rx: 2, ink: k, sw: on ? 1.5 : 1.4 });
-    const sc = Math.min(20, bw - 16) / 14, gx = x + (bw - 14 * sc) / 2, gy = cy - 3.2 * sc;
-    o.push({ t: 'g', tf: `translate(${F(gx)} ${F(gy)}) scale(${+sc.toFixed(3)})`, ch: [{ t: 'p', d: GLYPH[i]!, ink: k, sw: 1.2, f: i >= 2 }] });
-    if (i < n - 1) o.push({ t: 'l', x1: x + bw, y1: cy, x2: x + bw + gap, y2: cy, ink: x + bw < px ? 'live' : 'rest', sw: 1.2 });
-  }
-  o.push({ t: 'c', cx: px, cy, r: 3.6, ink: 'signal', f: true });
-  o.push({ t: 'l', x1: px, y1: cy - 9, x2: px, y2: cy - 13, ink: 'signal', sw: 1.2 }, { t: 'l', x1: px, y1: cy + 9, x2: px, y2: cy + 13, ink: 'signal', sw: 1.2 });
-  return o;
-};
-
 export const TECH: { id: string; n: string; d: string; build: Build }[] = [
   { id: 'scope', n: 'Oscilloscope', d: 'Graticule, a damped burst and a trigger block. The lit trace is the signal already recorded.', build: scope },
   { id: 'spectrum', n: 'Analyzer', d: 'Forty-six channels under a peak-hold ceiling that falls as the period drains.', build: spectrum },
-  { id: 'blocks', n: 'Chain', d: 'Source, filter, amplifier, output, and a pulse still sitting in the chain.', build: blocks },
 ];

@@ -31,7 +31,7 @@ const PAIRS: Reach[] = [
   ['ok', 'card', 'a Here/Sick chip and the Done swatch'],
   ['warn', 'card', 'a late due-time, the Tight mark on a task card'],
   ['bad', 'card', 'an absent cell, an overdue task card'],
-  ['ink', 'desk', 'the Focus dial bed: rings, knurl, numerals, escapement'],
+  ['ink', 'desk', "the Focus page's margin note over the desk-scrimmed photograph (dark); the dial's bed ring and escapement left with the redesign"],
   ['slabInk', 'slab', 'the Focus dial hub and the Settings bar-picker slab title'],
   ['slabMut', 'slab', 'the Settings bar-picker slab caption'],
   ['onAcc', 'acc', 'a primary button, a selected chip, the + button'],

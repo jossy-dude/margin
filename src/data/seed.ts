@@ -38,9 +38,9 @@ export function seedSnapshot(now = Date.now()): Snapshot {
     tasks.push({ id: `demo-task-${i}`, title, courseId: c, kind: 'assignment', dueAt: atTime(d, `${String(dueH).padStart(2, '0')}:00`), startAt: null, estimateMin: 60, priority: 0, notes: '', status: 2, createdAt: addDays(d, -3), completedAt: atTime(d, `${String(doneH).padStart(2, '0')}:10`), reminders: [], subtasks: [], demo: true });
   });
   const notices: Notice[] = [
-    { id: 'seed-note-0', courseId: 'D', text: 'Lab groups rotate this week — check the door list before you come in.', dueAt: new Date(2026, 9, 2).getTime(), read: false, priority: 0 },
-    { id: 'seed-note-1', courseId: 'E', text: 'Bring the sources binder on Thursday, essay workshop starts.', dueAt: new Date(2026, 9, 1).getTime(), read: false, priority: 2 },
-    { id: 'seed-note-2', courseId: 'T', text: 'Midterm topic list is on the class page. Skim it before Monday.', dueAt: new Date(2026, 9, 4).getTime(), read: false, priority: 3 },
+    { id: 'seed-note-0', courseId: 'D', text: 'Lab groups rotate this week — check the door list before you come in.', dueAt: new Date(2026, 9, 2).getTime(), priority: 0 },
+    { id: 'seed-note-1', courseId: 'E', text: 'Bring the sources binder on Thursday, essay workshop starts.', dueAt: new Date(2026, 9, 1).getTime(), priority: 2 },
+    { id: 'seed-note-2', courseId: 'T', text: 'Midterm topic list is on the class page. Skim it before Monday.', dueAt: new Date(2026, 9, 4).getTime(), priority: 3 },
   ];
   const sc: Record<string, (number | null)[]> = { E: [80, 90, 72, null], D: [70, 85, null, null], C: [95, 88, 91, null], T: [null, null, null, null], B: [null, null, null, null] };
   const marks: Mark[] = courses.flatMap((c) => ['Quiz', 'Assign', 'Mid', 'Final'].map((name, i): Mark => ({ id: `seed-mark-${c.id}-${i}`, courseId: c.id, name, score: sc[c.id]?.[i] ?? null, weight: [10, 10, 40, 40][i] ?? 10, on: true, sort: i })));

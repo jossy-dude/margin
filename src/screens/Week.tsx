@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, w
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BEAT, Btn, EASE, HandBox, Icon, Row, Txt } from '../ui/kit';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
+import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Page, Section } from './common';
 import { DW, MO, addDays, atTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
@@ -15,7 +16,7 @@ import { fx } from '../services/fx';
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks);
   const st = { meetings, courses, attendance, dayMarks, tasks };
-  const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useNow(30_000), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
+  const { c } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 60_000), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
   const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 0.95, H = (end - start) * PX;
   const gw = width - 32, tw = 30, cw = (gw - tw) / 7, hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start / 60 + i);
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
@@ -28,7 +29,8 @@ export function WeekScreen() {
    * grid: 26 dp, 90 ms out and a 210 ms settle, direction taken from which way `off` moved, so "next"
    * enters from the right and "previous" from the left.
    *
-   * One value, retargeted, never reset — `useNow(30_000)` re-renders this screen twice a minute and the
+   * One value, retargeted, never reset — `useNow(live ? 30_000 : 60_000)` re-renders this screen twice
+   * a minute under your finger (once a minute while another page is up) and the
    * `last` guard is what stops that from re-flicking the grid; and three fast taps leave one continuous
    * movement rather than three. Transform only: the grid is the densest thing in the app, so opacity
    * here would re-rasterise every rule, block and label in it for 240 ms. */

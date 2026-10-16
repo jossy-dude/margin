@@ -45,7 +45,7 @@ The five things most likely to bite a person using this software, and the test t
 
 The current `Book.tsx` already implements the properties these suites were written to protect — the drop is gone, the swap is a cut, hidden pages leave the draw tree. The tests simply were not updated when that landed. The work is to delete the assertions about the removed mechanism and keep every assertion about the property that survives.
 
-- [ ] **Step 1: Rewrite `nav-window.test.ts` to drop the placement-era assertions**
+- [x] **Step 1: Rewrite `nav-window.test.ts` to drop the placement-era assertions**
 
 Remove from `it('exactly one page is focused...')`: the `instant={i === state.index}` assertion. Keep `on={i === state.index}` and `<ScreenLive.Provider value={on}>`.
 
@@ -62,7 +62,7 @@ it('a hidden page leaves the DRAW tree in the same commit that unfocuses it', ()
 
 Delete `it('the two pages a tap touches are the two that never leave the draw tree mid-placement')` in full — it asserts a `setTimeout`/`clearTimeout` hide schedule that no longer exists, and the property it guarded ("a page cannot be blanked mid-placement") is now structural, covered by `perf-offscreen.test.ts`'s "there is no window between the two".
 
-- [ ] **Step 2: Rewrite `perf-placement.test.ts` line 77**
+- [x] **Step 2: Rewrite `perf-placement.test.ts` line 77**
 
 The failing assertion is `expect(placed).not.toContain('useLayoutEffect')` over the slice *before* `function BookView` — but `Book.tsx` line 1 imports `useLayoutEffect`, and that import sits inside the slice. The property is sound; the slice is wrong. Slice past the import:
 
@@ -72,20 +72,20 @@ const placedSrc = src.slice(src.indexOf('/** One page'), src.indexOf('function B
 
 Keep the other six assertions in that file untouched.
 
-- [ ] **Step 3: Fix `perf-offscreen.test.ts` to match the same shape**
+- [x] **Step 3: Fix `perf-offscreen.test.ts` to match the same shape**
 
 It reads `placedSrc` as `src.slice(0, src.indexOf('function BookView'))` and asserts `not.toContain('useLayoutEffect')`. Apply the identical slice fix from Step 2.
 
-- [ ] **Step 4: Update `suppressions.test.ts` from 3 to 2**
+- [x] **Step 4: Update `suppressions.test.ts` from 3 to 2**
 
 `Book.tsx` now carries two `eslint-disable-line react-hooks/exhaustive-deps` (the forward sync on `[route]`, the reverse on `[cur]`); the third went with the removed hide-schedule effect. Change the count assertion to 2 and update the comment to name the two that remain.
 
-- [ ] **Step 5: Run the suite**
+- [x] **Step 5: Run the suite**
 
 Run: `npx jest src/test/nav-window.test.ts src/test/perf-placement.test.ts src/test/perf-offscreen.test.ts src/test/suppressions.test.ts`
 Expected: PASS, 4 suites.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/test/nav-window.test.ts src/test/perf-placement.test.ts src/test/perf-offscreen.test.ts src/test/suppressions.test.ts
@@ -106,7 +106,7 @@ git commit -m "test(nav): update the four stale suites to the cut swap"
 
 `Btn` currently runs `onPress` in `onPress` (lift) and only the scale animation in `onPressIn`. The fix moves the action into the existing `down` handler and deletes the `onPress` action, keeping the haptic where it is.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { readFileSync } from 'node:fs';
@@ -127,12 +127,12 @@ describe('a button answers on the finger-down frame', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npx jest src/test/instant-actions.test.ts`
 Expected: FAIL on both assertions.
 
-- [ ] **Step 3: Implement in `kit.tsx`**
+- [x] **Step 3: Implement in `kit.tsx`**
 
 Change `down` to dispatch, and make `danger` (and anything already `disabled`) not dispatch:
 
@@ -150,17 +150,17 @@ Then remove `onPress={() => { if (!quiet) fx.tap(); onPress?.(); }}` from the `P
 
 Update the `Btn` doc comment: the action now answers on press-in for every non-destructive kind, and `danger` is the deliberate exception, with the reason (a slide-off must not delete).
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npx jest src/test/instant-actions.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Run the double-submit and sheet-close suites, which guard the regression this could cause**
+- [x] **Step 5: Run the double-submit and sheet-close suites, which guard the regression this could cause**
 
 Run: `npx jest src/test/double-submit.test.ts src/test/sheet-close.test.ts src/test/animation.test.ts`
 Expected: PASS. If `animation.test.ts` asserts the old `onPress` shape of `Btn`, update that one assertion to the new shape and leave the rest alone.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/ui/kit.tsx src/test/instant-actions.test.ts src/test/animation.test.ts
@@ -182,7 +182,7 @@ git commit -m "perf(kit): a button dispatches on press-in, not on lift"
 
 Same mechanism as Task 2, applied to the remaining four controls. None of them are destructive, so none needs the `danger` exception.
 
-- [ ] **Step 1: Extend the failing test**
+- [x] **Step 1: Extend the failing test**
 
 ```ts
 const chip = kit.slice(kit.indexOf('export function Chip'), kit.indexOf('export function Toggle'));
@@ -207,16 +207,16 @@ describe('every remaining control also answers on the down frame', () => {
 });
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `npx jest src/test/instant-actions.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 For `Chip`, fold `fx.select(); onPress?.()` into the existing `onPressIn` arrow and drop `onPress`. Same for `Toggle` (`fx.toggle(!value); onChange(!value)`), `StepBtn` (`fx.select(); onPress()` — keep `onLongPress` and `onLongPress`'s existing repeat), and `Fab` in `Overlay.tsx`.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run: `npx jest src/test/instant-actions.test.ts`
 Expected: PASS.
@@ -230,17 +230,17 @@ git commit -m "perf(kit,overlay): chip, switch, stepper and FAB answer on press-
 
 ### Task 4: Full verification
 
-- [ ] **Step 1: The whole gate**
+- [x] **Step 1: The whole gate**
 
 Run: `npm run check`
 Expected: PASS — typecheck, lint, 0 warnings, all tests, dependency boundaries.
 
-- [ ] **Step 2: Confirm no animation crept back into the swap**
+- [x] **Step 2: Confirm no animation crept back into the swap**
 
 Run: `npx jest src/test/perf-placement.test.ts src/test/perf-offscreen.test.ts src/test/animation.test.ts src/test/nav-window.test.ts`
 Expected: PASS, and specifically the seven `perf-placement` properties — no `PLACE_MS`, no `transform`, no `withTiming`, `display` flip, `onPressIn` + single `act.go`/`navigate` commit, render-phase focus flip, hidden pages out of the draw tree.
 
-- [ ] **Step 3: Record the before/after in the commit body**
+- [x] **Step 3: Record the before/after in the commit body**
 
 The measurable claim is structural, not a wall-clock number: before, every control's action waited for finger-lift (60–150 ms of hold time); after, it dispatches on the touch-down frame. State that in the commit message rather than inventing a millisecond figure no machine produced.
 
@@ -264,12 +264,17 @@ The measurable claim is structural, not a wall-clock number: before, every contr
 
 | Gate | Result |
 |---|---|
-| `npm run test` | **748 passed / 748, 43 suites** (was 7 failed / 739) |
-| `npm run boundaries` | **clean** — 192 modules, 650 dependencies |
-| `npm run lint` | **0 warnings**; 1 error, pre-existing |
-| `npm run typecheck` | 2 errors, both pre-existing |
+| `npm run test` | **764 passed / 764, 46 suites** (was 7 failed / 739) |
+| `npm run boundaries` | **clean** — 194 modules, 655 dependencies |
+| `npm run lint` | **0 warnings, 0 errors** |
+| `npm run typecheck` | clean |
 
-The typecheck and lint failures are the same root cause and are **not from this work**: `src/App.tsx:34` imports `./desktop/Shell`, and `src/desktop/` does not exist — a casualty of the deletions already sitting uncommitted in the working tree. `src/ui/Sheet.tsx:175` passes `className` to a RN `ScrollView`, which that type does not accept. Neither file was touched by any commit here; left alone as the owner's in-progress work.
+Re-verified 2026-10-13: `npm run check` exits **0** across all four gates. The two typecheck errors
+recorded when this plan was written are gone. `src/App.tsx` no longer imports `./desktop/Shell` (the
+desktop tree is not in the working tree at all — see the note below), and `src/ui/Sheet.tsx:173`
+carried `className="mg-scroll"` on its `ScrollView`: React Native's `ScrollViewProps` has no
+`className`, and `mg-scroll` is defined nowhere in the repo, so the prop was dead weight on a red
+gate rather than a style. It was removed; nothing that referenced it exists to change.
 
 ## Evidence log (added during execution)
 

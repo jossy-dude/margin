@@ -18,15 +18,16 @@ export function useReduceMotion(): boolean {
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setOs).catch(() => undefined); const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setOs); return () => sub.remove(); }, []);
   return pref === 'on' ? true : pref === 'off' ? false : os;
 }
-/** Re-render every `ms` (default 1 s), aligned to the wall clock: the first fire lands on the next
- * multiple of `ms` since the epoch, so minute-granular text flips the moment the clock does instead
- * of drifting up to `ms` behind an interval that started at mount time. */
+/** Re-render every `ms` (default 1 s), aligned to the wall clock. The first fire is immediate on mount
+ * and whenever `ms` changes — so a Focus screen coming back to the foreground with a round running
+ * shows true time at once instead of up to `ms` of stale time — and every fire after that lands on the
+ * next multiple of `ms` since the epoch, so minute-granular text flips the moment the clock does. */
 export function useNow(ms = 1000) {
   const [n, setN] = useState(() => Date.now());
   useEffect(() => {
     let i: ReturnType<typeof setTimeout>;
     const tick = () => { setN(Date.now()); i = setTimeout(tick, ms - (Date.now() % ms)); };
-    i = setTimeout(tick, ms - (Date.now() % ms));
+    i = setTimeout(tick, 0); // async, so the re-align is not a setState *in* the effect (lint) nor a cascade
     return () => clearTimeout(i);
   }, [ms]);
   return n;

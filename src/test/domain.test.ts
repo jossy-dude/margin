@@ -1,11 +1,12 @@
 import { planReminders, blockedReason, workload, latestStart, freeMinutes } from '../domain/reminders';
-import { DEFAULT_NOTIF } from '../domain/defaults';
+import { DEFAULT_NOTIF, withDefaults } from '../domain/defaults';
+import { applyAction, resolveAction, type NotifEffects } from '../domain/notifActions';
 import { advance, canBreak, endBreak, finish, initTimer, nudgeStep, startBreak, toggle, view, FLOW_OVER_CAP_MS, NUDGE_MS } from '../domain/timer';
 import { needed, total } from '../domain/grades';
 import { effective, nextStatus, occKey } from '../domain/attendance';
 import { doneByHour, level, onTimeStats, streak } from '../domain/analytics';
 import { seedSnapshot } from '../data/seed';
-import type { Task } from '../domain/types';
+import type { Meeting, NotifSettings, Task } from '../domain/types';
 
 const at = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
 const NOW = at(2026, 10, 5, 8, 0); // Monday 5 Oct 2026, 08:00
@@ -47,11 +48,32 @@ describe('reminder planner', () => {
   it('cancelled classes produce no reminders and completed tasks neither', () => {
     const att = { [occKey('2026-10-05', { start: '08:30', courseId: 'E' })]: { key: 'k', status: 'c' as const, at: 1, reason: '' } };
     const p = planReminders({ ...base, attendance: att, tasks: [task({ id: 'd', status: 2, dueAt: at(2026, 10, 6, 12), reminders: [{ id: 'r', mode: 'before', minutes: 60, label: '' }] })] });
-    expect(p.items.some((x) => x.entityId.includes('2026-10-0508:30E'))).toBe(false);
+    expect(p.items.some((x) => x.entityId.includes('2026-10-05|08:30|E'))).toBe(false);
     expect(p.items.some((x) => x.kind === 'task')).toBe(false);
   });
   it('caps the queue and reports how many are deferred', () => {
     const p = planReminders({ ...base, tasks: snap.tasks, cap: 5 }); expect(p.items).toHaveLength(5); expect(p.deferred).toBeGreaterThan(0);
+  });
+  /* A class stored 23:30–00:30 has BOTH ends stamped on the day it occurs, so its raw end is 23½ h
+     BEFORE its own start. `occEnd` (domain/attendance.ts) is the one helper that knows this, and its
+     contract names exactly these two consumers: a busy interval, and the "just ended" prompt. Both
+     were still reading `meeting.end`, so the prompt fired a day early and the hours after midnight
+     read as free time for a start-by nudge. */
+  it('an overnight class runs into the next day: it blocks after midnight and "ended" rings at its real end', () => {
+    const night: Meeting = { id: 'm-night', courseId: 'E', weekday: 0, start: '23:30', end: '00:30' };
+    /* Active hours widened across the whole clock so nothing but the class itself can move a
+       reminder — 00:30 is otherwise "before active hours" and the shift would hide the bug. */
+    const s: NotifSettings = { ...DEFAULT_NOTIF, activeFrom: '00:00', activeTo: '23:59', quietEnabled: false, duringClass: 'defer' };
+    const overnight = { ...base, meetings: [night], settings: s };
+    const ended = planReminders({ ...overnight, tasks: [] }).items.find((x) => x.kind === 'ended')!;
+    expect(ended.at).toBe(at(2026, 10, 6, 0, 30));
+    expect(ended.shiftedFrom).toBeUndefined();
+    /* 00:10 is inside the class, so the due-time reminder is deferred to the bell. The 2h-away due
+       date matters: a reminder that may not ring after its deadline would be pulled EARLIER instead,
+       out past the start of the class, and this would not be testing the interval at all. */
+    const t = task({ id: 'n', dueAt: at(2026, 10, 6, 2, 0), reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 6, 0, 10), label: '' }] });
+    const p = planReminders({ ...overnight, tasks: [t] }).items.find((x) => x.kind === 'task')!;
+    expect(p.at).toBe(at(2026, 10, 6, 0, 31)); expect(p.why).toBe('during class');
   });
   it('workload: a 3h task due in 2h of free time is flagged tight, with a start-by before the due date', () => {
     const t = task({ dueAt: at(2026, 10, 5, 12, 0), estimateMin: 180 });
@@ -63,6 +85,55 @@ describe('reminder planner', () => {
     expect(freeMinutes(at(2026, 10, 5, 6, 0), at(2026, 10, 5, 8, 0), ctx)).toBe(60); // only 07:00-08:00 is awake
     expect(latestStart(at(2026, 10, 5, 9, 0), 120, ctx)).toBe(at(2026, 10, 5, 7, 0));
     expect(blockedReason(at(2026, 10, 5, 3, 0), ctx)?.why).toBe('before active hours');
+  });
+
+  /* The queue only holds what the OS could still deliver: a fire time that has effectively arrived
+     cannot be scheduled, and a time already gone must not be queued as if it were still ahead. */
+  it('a reminder due within five seconds is not queued, while one a minute later is', () => {
+    const near = task({ id: 's', dueAt: NOW + 600_000, reminders: [{ id: 'r', mode: 'abs', at: NOW + 2000, label: 'x' }] });
+    const later = task({ id: 'k', dueAt: NOW + 900_000, reminders: [{ id: 'r', mode: 'abs', at: NOW + 60_000, label: 'x' }] });
+    const p = planReminders({ ...base, tasks: [near, later] });
+    expect(p.items.some((x) => x.entityId === 's')).toBe(false);
+    expect(p.items.some((x) => x.entityId === 'k')).toBe(true);
+  });
+
+  it('a reminder time that is already past is never planned', () => {
+    const t = task({ id: 'p', dueAt: NOW + 3_600_000, reminders: [{ id: 'r', mode: 'abs', at: NOW - 60_000, label: 'x' }] });
+    const p = planReminders({ ...base, tasks: [t] });
+    expect(p.items.some((x) => x.kind === 'task')).toBe(false); // the class reminders are still there
+    expect(p.items.some((x) => x.kind === 'class')).toBe(true);
+  });
+
+  it('with no active days at all the queue is empty and says what it dropped', () => {
+    const off = [false, false, false, false, false, false, false];
+    const p = planReminders({ ...base, tasks: snap.tasks, settings: { ...DEFAULT_NOTIF, activeDays: off } });
+    expect(p.items).toHaveLength(0);
+    expect(p.dropped.length).toBeGreaterThan(0);
+  });
+
+  it('a settings row that only wrote part of the reminder block still gets the rest of it', () => {
+    // The merge runs on every cold start, so an older build's partial `notif` is the live case.
+    const legacy = withDefaults({ notif: { enabled: false } as NotifSettings });
+    expect(legacy.notif).toEqual({ ...DEFAULT_NOTIF, enabled: false });
+    expect(withDefaults({}).notif).toEqual(DEFAULT_NOTIF);
+  });
+
+  /* The contract between the planner and the buttons: `entityId` is the occurrence key, so the
+     Here/Late/Absent action can split it and write the record the timetable grids read back. */
+  it('a class reminder\'s entity id is the key its own buttons write (F-04.2)', () => {
+    const cls = planReminders({ ...base, tasks: [] }).items.find((x) => x.kind === 'class');
+    expect(cls).toBeDefined();
+    expect(cls!.entityId).toBe(occKey('2026-10-05', { start: '08:30', courseId: 'E' }));
+    const a = resolveAction('att.here', { kind: cls!.kind, entityId: cls!.entityId });
+    expect(a).toEqual({ kind: 'att', status: 'p', key: cls!.entityId });
+    const written: [string, string][] = [];
+    const fx: NotifEffects = {
+      tasks: [], meetings: [{ start: '08:30', courseId: 'E' }],
+      setAtt: (k, st) => written.push([k, st]), toggleTask: () => undefined,
+      toast: () => undefined, go: () => undefined, log: () => undefined,
+    };
+    expect(applyAction(a!, fx)).toBe(true);
+    expect(written).toEqual([['2026-10-05|08:30|E', 'p']]);
   });
 });
 

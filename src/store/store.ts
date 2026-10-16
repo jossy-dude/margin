@@ -69,7 +69,10 @@ const notifAccent = (s: Settings) => makeTheme(s, typeof Appearance?.getColorSch
  *  halves swallow: the `try` for the synchronous throw `R()` raises, the `catch` for the rejected write. */
 function logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
   if (!id) return;
-  try { void R().logNotif(id, kind, dueAt, event, at).catch(() => undefined); } catch { /* repository not open yet */ }
+  // The log page is the only place this write is read, and it can already be on screen (a tapped
+  // notification brings the app up), so it is re-read once the write has landed rather than at the
+  // next resync — otherwise Delivery status keeps calling an opened reminder "queued".
+  try { void R().logNotif(id, kind, dueAt, event, at).catch(() => undefined).then(() => refreshNotifLog()); } catch { /* repository not open yet */ }
 }
 function schedNotif(id: string, kind: string, dueAt: number) {
   if (!id) return;
@@ -135,6 +138,20 @@ export const snapshotOf = (s: State = state): Snapshot => ({ courses: s.courses,
 export const act = {
   go(route: RouteName) { if (route === state.route) return; set({ prevRoute: state.route, route }); fx.page(); },
   open(sheet: SheetSpec) { fx.tap(); set({ sheet }); },
+  /** Open the Settings sheet and land on a page inside it in ONE write, with ONE haptic.
+   *
+   *  The Settings tree is a stack, so a deep entry has always been expressible as two calls —
+   *  `open({ t: 'settings' })` then `settingsPush('clock')` — but each is its own `set()`, and a
+   *  `set()` is a synchronous broadcast to every `useStore` subscriber in the app plus its own sound.
+   *  Two chained calls therefore cost two full broadcasts and two haptics on one tap: the clock face
+   *  on Today does exactly this to reach Clock face, which is the press the owner reports as "very
+   *  slow and low response" between the finger-down and the sheet appearing.
+   *
+   *  React batches the *renders* these two writes cause, so the visible symptom was never a wrong
+   *  screen — it was the delay before any frame: the store work in the same tick the press has to
+   *  answer. One write does the same job with half the work, and the page it lands on is already the
+   *  one the user tapped for, so there is no second hop to watch. */
+  openSettingsAt(page: string) { fx.tap(); set({ sheet: { t: 'settings' }, settingsPath: ['appearance', page] }); },
   close() { set({ sheet: null }); },
   settingsPush(p: string) { fx.select(); set((s) => ({ settingsPath: [...s.settingsPath, p] })); },
   settingsPop() { set((s) => ({ settingsPath: s.settingsPath.slice(0, -1) })); },
@@ -150,10 +167,6 @@ export const act = {
     const exists = state.tasks.some((x) => x.id === t.id);
     set((s) => ({ tasks: exists ? s.tasks.map((x) => (x.id === t.id ? t : x)) : [...s.tasks, t] })); void persist(R().upsert('task', t)); resync();
   },
-  newTask(p: Partial<Task> & { title: string }): Task {
-    const now = Date.now(), t: Task = { id: uid('t'), courseId: null, kind: 'assignment', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: now, completedAt: null, reminders: [], subtasks: [], demo: false, ...p };
-    act.saveTask(t); return t;
-  },
   toggleTask(id: string) {
     const t = state.tasks.find((x) => x.id === id); if (!t) return;
     const done = t.status !== 2, n: Task = { ...t, status: done ? 2 : 0, completedAt: done ? Date.now() : null, subtasks: done ? t.subtasks.map((x) => ({ ...x, done: true })) : t.subtasks };
@@ -168,7 +181,7 @@ export const act = {
 
   setAtt(key: string, status: AttStatus, reason = '') { const prev = state.attendance[key] ?? null; const r: AttRecord = { key, status, at: Date.now(), reason }; set((s) => ({ attendance: { ...s.attendance, [key]: r } })); void persist(R().upsert('attendance', r)); fx.stamp(status); resync(); toast(`Marked ${ST[status]}`, () => { set((s) => { const a = { ...s.attendance }; if (prev) a[key] = prev; else delete a[key]; return { attendance: a }; }); void persist(prev ? R().upsert('attendance', prev) : R().remove('attendance', key)); resync(); }); },
   clearAtt(key: string) { const prev = state.attendance[key]; if (!prev) return; set((s) => { const a = { ...s.attendance }; delete a[key]; return { attendance: a }; }); void persist(R().remove('attendance', key)); resync(); toast('Back to automatic', () => { set((s) => ({ attendance: { ...s.attendance, [key]: prev } })); void persist(R().restore('attendance', key)); resync(); }); },
-  setDay(date: string, status: DayStatus, reason = '') { const r: DayMark = { date, status, at: Date.now(), reason }; set((s) => ({ dayMarks: { ...s.dayMarks, [date]: r } })); void persist(R().upsert('dayMark', r)); fx.stamp(status); resync(); },
+  setDay(date: string, status: DayStatus, reason = '') { const prev = state.dayMarks[date] ?? null; const r: DayMark = { date, status, at: Date.now(), reason }; set((s) => ({ dayMarks: { ...s.dayMarks, [date]: r } })); void persist(R().upsert('dayMark', r)); fx.stamp(status); resync(); toast(`Marked ${ST[status]}`, () => { set((s) => { const a = { ...s.dayMarks }; if (prev) a[date] = prev; else delete a[date]; return { dayMarks: a }; }); void persist(prev ? R().upsert('dayMark', prev) : R().remove('dayMark', date)); resync(); }); },
   clearDay(date: string) { const prev = state.dayMarks[date]; if (!prev) return; set((s) => { const a = { ...s.dayMarks }; delete a[date]; return { dayMarks: a }; }); void persist(R().remove('dayMark', date)); resync(); toast('Day mark cleared', () => { set((s) => ({ dayMarks: { ...s.dayMarks, [date]: prev } })); void persist(R().restore('dayMark', date)); resync(); }); },
 
   saveCourse(c: Course) { const ex = state.courses.some((x) => x.id === c.id); set((s) => ({ courses: ex ? s.courses.map((x) => (x.id === c.id ? c : x)) : [...s.courses, c] })); void persist(R().upsert('course', c)); resync(); },
@@ -221,7 +234,6 @@ export const act = {
       await persist(r.reset()); await persist(r.seed(seedSnapshot())); const snap = await r.load(); applySnapshot(snap); configureFx(state.settings); set({ ready: true, error: null }); toast('Everything is back to the demo set'); resync(300);
     } catch (e) { set({ error: `Couldn't reset: ${String((e as Error)?.message ?? e).slice(0, 80)}` }); }
   },
-  chime() { fx.chime(); },
   /** swap the task shown on the Focus page (only while the dial is still being set) */
   timerSwap() {
     const open = state.tasks.filter((t) => t.status !== 2).sort((a, b) => (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15)); if (!open.length || state.timer.phase !== 'set') return;

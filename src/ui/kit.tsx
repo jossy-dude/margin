@@ -106,9 +106,9 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
   const { c } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
   const d = useMemo(() => handPath(sz.w, sz.h, corners, sd, amp), [sz.w, sz.h, corners, sd, amp]);
   return (
-    <View style={style} onLayout={(e) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); }}>
+    <View style={[{ position: 'relative', zIndex: 0 }, style]} onLayout={(e) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); }}>
       {d !== '' && (
-        <Svg width={sz.w + 4} height={sz.h + 4} style={StyleSheet.absoluteFill} pointerEvents="none" viewBox={`-1 -1 ${sz.w + 4} ${sz.h + 4}`}>
+        <Svg width={sz.w + 4} height={sz.h + 4} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" viewBox={`-1 -1 ${sz.w + 4} ${sz.h + 4}`}>
           {shadow && <Path d={d} transform="translate(2.4 2.8)" fill={hexA(c.shadow, 0.16)} />}
           <Path d={d} fill={fill ?? c.card} stroke={stroke ?? c.ink} strokeWidth={sw} strokeLinejoin="round" strokeDasharray={dashed ? '5 4' : undefined} />
         </Svg>

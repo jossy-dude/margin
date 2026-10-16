@@ -18,7 +18,7 @@ export interface Task {
   createdAt: number; completedAt: number | null;
   reminders: ReminderSpec[]; subtasks: Subtask[]; demo: boolean;
 }
-export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; read: boolean; priority: 0 | 1 | 2 | 3 }
+export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3 }
 export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number }
 export interface Adjust { courseId: string; adj: number }
 export interface FocusSession {

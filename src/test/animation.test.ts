@@ -123,18 +123,26 @@ function stepper(value: number, reduce = false) {
   };
 }
 
-/** The chart leaves: enters once, then travels. `live` is the off-screen gate. */
+/** The chart leaves: it enters once — on FIRST FOCUS, not on mount, because every page now mounts on
+ *  the navigator's first render — and then travels. `live` is the off-screen gate (`show`/`hide` flip
+ *  it the way the navigator's focus context does); while hidden the value is assigned the correct
+ *  picture and no tween ever starts (prompt.md V17). Mirrors `useEnter`/`Ring` in `charts.tsx`. */
 function chart(target: number, live: boolean, reduce: boolean) {
   const v = new Shared(reduce || !live ? target : 0);
-  let first = true;
+  let on = live, entered = false;
+  const paint = () => {
+    if (!on) { v.set(target); return; } // hidden: the picture, no motion, no entrance
+    if (entered || reduce) { entered = true; if (reduce) v.set(target); else retarget(v, target); return; }
+    entered = true;
+    v.set(0); // first focus: grow from zero, under the drop
+    retarget(v, target);
+  };
   return {
     v,
     render() { return v.get(); },
-    drive(next: number) {
-      if (first) { first = false; if (reduce || !live) { v.set(next); return; } retarget(v, next); return; }
-      if (reduce || !live) { v.set(next); return; } // retarget from wherever it already is — never a reset
-      retarget(v, next);
-    },
+    drive(next: number) { target = next; paint(); },
+    show() { on = true; paint(); },
+    hide() { on = false; paint(); },
   };
 }
 
@@ -278,8 +286,9 @@ describe('reduce-motion collapses every new animation', () => {
       expect({ name, gated: /useReduceMotion\(\)/.test(body.slice(0, 700)) }).toEqual({ name, gated: true });
     }
     // The reduction must be an assignment or a 1 ms tween — never `duration: 0`, which some Reanimated
-    // paths treat as "use the default".
-    expect(sheet).toContain('if (reduce) finish();');
+    // paths treat as "use the default". The sheet gates the whole close (both the tap timing and the
+    // flick spring) behind one reduce branch, so there is no tween left to be wrong.
+    expect(sheet).toContain('if (reduce) { finish(); return; }');
     expect(kit).toMatch(/reduce \? 1 : with/);
   });
 });
@@ -292,19 +301,42 @@ describe('nothing animates while off-screen', () => {
     expect(c.v.tweenFrom).toBe(null);
   });
 
-  it('coming back to the page shows the right numbers, with nothing replayed', () => {
-    const c = chart(0.5, false, false);
+  it('hidden writes land as the picture, and the entrance waits for the first focus', () => {
+    const c = chart(0.5, false, false); // mounted hidden — every page mounts on the navigator's first render
     c.drive(0.9);
     c.drive(0.2); // another write while still hidden
     expect(c.render()).toBe(0.2);
-    expect(c.v.tweenFrom).toBe(null);
+    expect(c.v.tweenFrom).toBe(null); // no tween ever started for nobody
+    c.show(); // the navigator focuses the page
+    expect(c.v.tweenFrom).toBe(0); // the entrance: it grows from zero, under the placement
+    settle(c.v);
+    expect(c.render()).toBe(0.2);
+    c.hide(); c.show(); // leave and come back
+    expect(c.v.tweenFrom).toBe(0.2); // travels from where it already is — nothing replays
+    settle(c.v);
+    expect(c.render()).toBe(0.2);
   });
 
-  it('and the gate is the store route, read once per container and passed down', () => {
-    // A subscription per bar would be 69 subscriptions re-rendering on every tab tap.
-    expect(charts).toContain("function useLive() { return useStore((s) => s.route) === 'Stats'; }");
+  it('and the gate is the navigator focus context, read once per container and passed down', () => {
+    // A subscription per bar would be 69 subscriptions re-rendering on every tab tap — and with every
+    // page now kept mounted, a `s.route` subscription would re-render all four containers on every tap
+    // too, which is the latency this whole file's sibling fix exists to remove.
+    expect(charts).toContain('function useLive() { return useScreenLive(); }');
     expect(charts).toContain('live = useLive()');
     expect((charts.match(/useLive\(\)/g) ?? []).length).toBe(5); // 1 definition + 4 containers, not per leaf
+    expect(charts).not.toContain('useStore((s) => s.route)');
+  });
+
+  it('the entrance is armed from a layout effect, because mounting no longer means visible', () => {
+    // Every route mounts at boot, so "the mount effect ran" stopped meaning "the page appeared": the
+    // reset-to-zero has to land in the same pre-paint commit that focuses the page, or the first frame
+    // of the entrance paints with nowhere to grow from.
+    expect(charts).toContain('if (!live) { v.set(target); return; }');
+    expect(charts).toContain('entered.current = true;');
+    expect(charts).toMatch(/entered\.current = true;\s*v\.set\(0\);/);
+    const enter = charts.slice(charts.indexOf('function useEnter('), charts.indexOf('return v;', charts.indexOf('function useEnter(')));
+    expect(enter).toContain('useLayoutEffect(');
+    expect(enter).not.toContain('useEffect(');
   });
 
   it('a chart never replays its entrance on a data change — it travels', () => {
@@ -451,6 +483,17 @@ describe('re-entrancy retargets rather than snaps', () => {
     expect(code).not.toMatch(/url\(#pp\)/);
     expect((paperBg.match(/<Pattern id=\{id\}/g) ?? []).length).toBe(3);
   });
+
+  it('the settled background mounts only the texture the setting names', () => {
+    // With the default `texture: 'grain'`, holding the photograph mounted forever cost every one of
+    // the six always-mounted pages a full-screen tiled bitmap under a blend mode that no frame shows.
+    // Both layers exist for the cross-fade's 220 ms and no longer.
+    expect(paperBg).toContain("{(tex === 'grain' || cross) &&");
+    expect(paperBg).toContain("{(tex === 'photo' || cross) &&");
+    expect(paperBg).toContain('setTimeout(() => setCross(false), PAPER_MS)');
+    // …and the fade itself still starts from the settings, so the first frame after a change is correct
+    expect(paperBg).toContain("useSharedValue(tex === 'grain' ? 1 : 0)");
+  });
 });
 
 describe('the sheet reveal is held for its own exit', () => {
@@ -462,24 +505,24 @@ describe('the sheet reveal is held for its own exit', () => {
   });
 });
 
-describe('the 26-bar picker renders every kind, and nothing it renders can collide', () => {
+describe('the 17-bar picker renders every kind, and nothing it renders can collide', () => {
   it('the catalogue is what A2 says it is', () => {
-    expect(INSTRUMENTS).toHaveLength(22);
-    expect(INSTRUMENT_IDS).toHaveLength(22);
-    expect(BAR_KINDS).toHaveLength(4);
-    expect(new Set(INSTRUMENT_IDS).size).toBe(22);
+    expect(INSTRUMENTS).toHaveLength(16);
+    expect(INSTRUMENT_IDS).toHaveLength(16);
+    expect(BAR_KINDS).toHaveLength(1);
+    expect(new Set(INSTRUMENT_IDS).size).toBe(16);
     // "Works in any subject" first, then one group per subject — the reference's own grouping.
     expect(GROUPS[0]!.n).toBe('Works in any subject');
     expect(GROUPS.map((g) => g.n)).toEqual(['Works in any subject', 'Intro to Economics', 'Discrete Mathematics', 'Emerging Technology', 'Computer Programming', 'Database Systems']);
   });
 
-  it('all 26 ids are expressible, and distinct', () => {
+  it('all 17 ids are expressible, and distinct', () => {
     const all = [...BAR_KINDS.map((b) => b.id), ...INSTRUMENT_IDS];
-    expect(all).toHaveLength(26);
-    expect(new Set(all).size).toBe(26);
+    expect(all).toHaveLength(17);
+    expect(new Set(all).size).toBe(17);
   });
 
-  it('no instrument emits an SVG id at all, so 22 in one tree cannot collide (prompt.md R11)', () => {
+  it('no instrument emits an SVG id at all, so 16 in one tree cannot collide (prompt.md R11)', () => {
     const inks = { ink: '#FAF4E6', slab: '#2F2920', acc: '#8A4B27', warn: '#8F5A00' };
     const ids = new Set<string>();
     for (const id of INSTRUMENT_IDS) {
@@ -496,18 +539,18 @@ describe('the 26-bar picker renders every kind, and nothing it renders can colli
     expect(settings).toContain('p: DEMO_P');
   });
 
-  it('only the selected kind and the four day-wide kinds go live; the other 21 are static markup', () => {
-    // 26 live previews is ~800 SVG nodes and 26 worklet subscriptions in one bottom sheet. `previewSvg`
-    // is the instrument module, so the four originals have to take the live path — it returns `''` for
-    // them and they would render nothing at all.
+  it('only the selected kind and the one day-wide kind go live; the other 16 are static markup', () => {
+    // 17 live previews is ~800 SVG nodes and 17 worklet subscriptions in one bottom sheet. `previewSvg`
+    // is the instrument module, so the one original has to take the live path — it returns `''` for
+    // it and it would render nothing at all.
     expect(settings).toContain('{on || isBarKind(id)');
     expect(settings).toContain('<SvgXml xml={previewSvg(id,');
   });
 
-  it('the defaults are Dial, so the picker has something selected on a fresh install', () => {
+  it('the defaults are Sight glass, so the picker has something selected on a fresh install', () => {
     const defs = readFileSync(join(SRC, 'domain', 'defaults.ts'), 'utf8');
-    expect(defs).toMatch(/bar: '(gauge|spines)'/);
-    expect(INSTRUMENT_IDS).toContain(/bar: 'gauge'/.exec(defs)?.[1] ?? 'gauge');
+    expect(defs).toMatch(/bar: 'glass'/);
+    expect(BAR_KINDS.map((b) => b.id)).toContain('glass');
   });
 });
 
@@ -609,11 +652,11 @@ function leaves(node: unknown): string[] {
 
 afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); });
 
-describe('the picker page renders all 26 kinds at once', () => {
+describe('the picker page renders all 17 kinds at once', () => {
   it('and labels every one of them for TalkBack', async () => {
     const s = await mount(['appearance', 'bar']);
     const labels = s.radios();
-    expect(labels).toHaveLength(26);
+    expect(labels).toHaveLength(17);
     for (const name of BAR_KINDS.map((b) => b.n)) expect(labels.some((l) => l.startsWith(name))).toBe(true);
     for (const inst of INSTRUMENTS) expect(labels.some((l) => l.startsWith(inst.n))).toBe(true);
   });

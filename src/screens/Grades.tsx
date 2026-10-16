@@ -11,8 +11,8 @@ import { DW, parseYmd, startOfDay, ymd, fmtDay } from '../domain/time';
 import type { Course } from '../domain/types';
 
 function AttendanceGrid({ course }: { course: Course }) {
-  const settings = useStore((s) => s.settings), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
-  const { c } = useTheme(), now = useNow(60_000), locked = settings.lockAttendance, sem = parseYmd(settings.semesterStart).getTime();
+  const locked = useStore((s) => s.settings.lockAttendance), semesterStart = useStore((s) => s.settings.semesterStart), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
+  const { c } = useTheme(), now = useNow(60_000), sem = parseYmd(semesterStart).getTime();
   const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id)), [sem, now, meetings, course.id]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).
@@ -40,8 +40,8 @@ function AttendanceGrid({ course }: { course: Course }) {
   );
 }
 export function GradesScreen() {
-  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings);
-  const st = { courses, marks, adjusts, settings };
+  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), semesterStart = useStore((s) => s.settings.semesterStart);
+  const st = { courses, marks, adjusts };
   const { c } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
@@ -67,7 +67,7 @@ export function GradesScreen() {
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}
-      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance counts from {st.settings.semesterStart}. Change it in Settings → Attendance.</Txt></Row></Section>}
+      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance counts from {semesterStart}. Change it in Settings → Attendance.</Txt></Row></Section>}
     </Page>
   );
 }

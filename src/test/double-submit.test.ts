@@ -18,10 +18,10 @@ const task = (id: string): Task => ({ id, title: 'Problem set 6', courseId: null
 const course = (id: string): Course => ({ id, name: 'Organic Chemistry', room: 'B-12', teacher: 'Hale', goal: null, sort: 0 });
 const meeting = (id: string): Meeting => ({ id, courseId: 'E', weekday: 0, start: '09:00', end: '09:50' });
 const mark = (id: string): Mark => ({ id, courseId: 'E', name: 'Quiz 3', score: 70, weight: 10, on: true, sort: 0 });
-const notice = (id: string): Notice => ({ id, courseId: null, text: 'Bring the sources', dueAt: NOW, read: false, priority: 0 });
+const notice = (id: string): Notice => ({ id, courseId: null, text: 'Bring the sources', dueAt: NOW, priority: 0 });
 
 /** One case per create-form, driven the way a fast double-tap drives it: the same record saved twice,
- *  before the sheet's 210 ms close animation has finished. */
+ *  before the sheet's ~200 ms close animation has finished. */
 function formCase<R>(name: string, prefix: string, key: keyof Snapshot, row: (id: string) => R, save: (r: R) => void, count: (s: State) => number, of: (s: State, id: string) => number) {
   it(`${name}: the id the form minted once is what makes the repeat a re-save`, async () => {
     const repo = new MemoryRepository(() => NOW); await hydrate(repo);

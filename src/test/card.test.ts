@@ -503,8 +503,9 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     const s = src();
     // the three lines the clock row is made of, in order. The clock now lives inside the
     // `periods.length > 0` branch and is taped to the deck's corner, so the slice runs to the
-    // card it is taped to.
-    const clock = s.slice(s.indexOf('<ClockFace id={st.settings.clock}'), s.indexOf('<ActiveCard'));
+    // card it is taped to. Its tag is the subscribing `HeaderClock` leaf (lag-diagnosis-2026-10-14,
+    // F2), which is what keeps a clock-face write from re-rendering this page at all.
+    const clock = s.slice(s.indexOf('<HeaderClock size={CLOCK}'), s.indexOf('<ActiveCard'));
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
     // the time line is the one that survives: a wall clock, which the deck's duration is not
     expect(clock).toContain('until ${fmtTime(cur.end)}');

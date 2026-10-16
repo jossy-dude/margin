@@ -1,29 +1,7 @@
 import { F, caret, lensPts, poly } from '../geom';
 import type { Build, Shape } from '../types';
 
-/** Group 1 — discrete mathematics: three takes. */
-
-/** Nodes and diagonals filling column by column, the way a proof walks a grid. Edge by edge, never
- *  node by node — and the node on the front is the only thing that carries the accent. */
-const lattice: Build = (c) => {
-  const cols = 11, rows = 4, x0 = 13, x1 = c.w - 13, y0 = 9, y1 = 35;
-  const dx = (x1 - x0) / (cols - 1), dy = (y1 - y0) / (rows - 1), f = c.p * (cols - 1), o: Shape[] = [];
-  const front = Math.min(cols - 1, Math.max(0, Math.round(f)));
-  for (let j = 0; j < rows; j++) {
-    for (let i = 0; i < cols; i++) {
-      const X = x0 + i * dx, Y = y0 + j * dy, lit = i < f;
-      if (i < cols - 1) {
-        o.push({ t: 'l', x1: X, y1: Y, x2: X + dx, y2: Y, ink: lit ? 'live' : 'rest', sw: 1 });
-        if (j < rows - 1) o.push({ t: 'l', x1: X, y1: Y, x2: X + dx, y2: Y + dy, ink: lit ? 'live' : 'rest', sw: 1 });
-      }
-      // at p=0 nothing at all may be lit: the column front is still 0, and a lit column 0 would
-      // read "some of the period is left" when none is
-      const node = f > 1e-6 && i <= f + 1e-6;
-      o.push({ t: 'c', cx: X, cy: Y, r: node ? 2.6 : 2, ink: node && i === front ? 'signal' : node ? 'live' : 'rest', f: true });
-    }
-  }
-  return o;
-};
+/** Group 1 — discrete mathematics: two takes. */
 
 /** The integers in order with the composites struck out as the pass reaches them. What is still lit
  *  is exactly what is still prime. The strike is part of the RESTING draw on purpose: it is already
@@ -72,7 +50,6 @@ const sets: Build = (c) => {
 };
 
 export const DISCRETE: { id: string; n: string; d: string; build: Build }[] = [
-  { id: 'lattice', n: 'Lattice', d: 'Nodes and diagonals filling column by column, the way a proof walks a grid.', build: lattice },
   { id: 'sieve', n: 'Sieve', d: 'The integers in order with the composites struck as the pass reaches them.', build: sieve },
   { id: 'sets', n: 'Sets', d: 'Three overlapping circles, the two intersections filling in turn, pips for the elements.', build: sets },
 ];

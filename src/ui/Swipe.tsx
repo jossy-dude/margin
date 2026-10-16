@@ -42,8 +42,12 @@ export function SwipeCard({ children, onComplete, onDelete, onOpen, doneLabel = 
     .onUpdate((e) => {
       if (crumpled.get()) return; // the card is already on its way off; the finger no longer owns it
       x.set(e.translationX);
-      if (Math.abs(e.translationX) > 70 && !buzzed.get()) { buzzed.set(1); runOnJS(rustle)(); }
-      if (Math.abs(e.translationX) < 40) buzzed.set(0);
+      /* The rustle is a hysteresis gate at a FRACTION of the card, not at a fixed 70/40 dp: the commit
+         points below are fractions too, so on a 320 dp screen the fixed numbers sat *past* the complete
+         threshold and a card could commit without ever rustling. 0.2 of the width is ~76 dp on the
+         reference device — the number that was there — and it stays ahead of the commit at every width. */
+      if (Math.abs(e.translationX) > w.get() * 0.2 && !buzzed.get()) { buzzed.set(1); runOnJS(rustle)(); }
+      if (Math.abs(e.translationX) < w.get() * 0.1) buzzed.set(0);
     })
     .onEnd((e) => {
       buzzed.set(0);
@@ -58,7 +62,11 @@ export function SwipeCard({ children, onComplete, onDelete, onOpen, doneLabel = 
     return { transform: [{ translateX: k > 0 ? interpolate(k, [0, 0.5], [x.get(), -w.get() * 0.28], 'clamp') : x.get() }, { translateY: fall }, { rotate: `${rot}deg` }, { scaleX: sq }, { scaleY: sy }], opacity: interpolate(k, [0.9, 1], [1, 0], 'clamp') };
   });
   const creases = useAnimatedStyle(() => ({ opacity: interpolate(p.get(), [0.06, 0.3], [0, 0.9], 'clamp') }));
-  const bgR = useAnimatedStyle(() => ({ opacity: interpolate(x.get(), [0, 90], [0, 1], 'clamp') })), bgL = useAnimatedStyle(() => ({ opacity: interpolate(x.get(), [-90, 0], [1, 0], 'clamp') }));
+  /* Each hint reaches full ink exactly at its own commit distance — 0.28 right, 0.30 left, deliberately
+     a little harder to throw away than to finish. Before, both fades finished at a flat 90 dp: on the
+     left that left a 3–13 dp dead zone where "Crumple" was already at full strength and a release still
+     sprang the card back, which is the exact feel of a control that lies about its own threshold. */
+  const bgR = useAnimatedStyle(() => ({ opacity: interpolate(x.get(), [0, w.get() * 0.28], [0, 1], 'clamp') })), bgL = useAnimatedStyle(() => ({ opacity: interpolate(x.get(), [-w.get() * 0.3, 0], [1, 0], 'clamp') }));
   const onA11y = (e: AccessibilityActionEvent) => { const n = e.nativeEvent.actionName; if (n === 'complete') onComplete(); else if (n === 'delete') onDelete(); else if (n === 'activate') onOpen?.(); };
   return (
     <View onLayout={(e) => { w.set(e.nativeEvent.layout.width); }} accessible={false}>

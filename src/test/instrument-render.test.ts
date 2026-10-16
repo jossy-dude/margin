@@ -43,7 +43,7 @@ describe('instruments — offline visual dump', () => {
         }
       }
     }
-    expect(INSTRUMENTS.length).toBe(22);
+    expect(INSTRUMENTS.length).toBe(16);
   });
 
   it('writes the contact sheets to look at, at TRUE width so nothing is scaled by the harness', () => {

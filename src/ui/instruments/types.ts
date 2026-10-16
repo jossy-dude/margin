@@ -50,14 +50,14 @@ export interface Ctx {
 
 export type Build = (c: Ctx) => Shape[];
 
-/** The 22 keys, written out. A saved setting stores one of these as a string forever, so the union
+/** The 16 keys, written out. A saved setting stores one of these as a string forever, so the union
  *  is the contract; `bars.test.ts` asserts the catalogue and this list are the same set, so adding
  *  an instrument without adding it here is a failing test rather than a silent hole. */
 export type InstrumentId =
-  | 'odometer' | 'gauge' | 'leader' | 'cassette' | 'graduated' | 'spiral' | 'ladder'
+  | 'cassette' | 'graduated' | 'spiral'
   | 'tape' | 'surplus' | 'compound'
-  | 'lattice' | 'sieve' | 'sets'
-  | 'scope' | 'spectrum' | 'blocks'
+  | 'sieve' | 'sets'
+  | 'scope' | 'spectrum'
   | 'stack' | 'commits' | 'heap'
   | 'btree' | 'join' | 'log';
 

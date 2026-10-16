@@ -177,32 +177,15 @@ export const ART = {
 /** shared outline of both rosette lattices, so a layer's viewBox is sized from the figure and not guessed */
 export const ART_R = 48;
 
-/* ── the Focus dial's escapement ────────────────────────────────────────────────────────────────────────────
-   A countdown has three invariants, and they are why it is a mechanism and not a pulse: a mechanism's motion is
-   *continuous and derived* (so the wheel's angle comes from the clock, not from a render), *the tick is discrete*
-   (so the wheel is locked and released once a second), and *an expansion that is the same shape in both directions
-   is a breath* (so nothing scales). These two functions are the whole of that arithmetic, kept pure so the numbers
-   the screen runs on every frame can be asserted without a renderer. */
-export const ESC_TEETH = 30, ESC_DEG = 360 / ESC_TEETH;
-/** degrees the wheel has turned after `elapsedSec`, one tooth per second: continuous, derived, monotonic.
- *
- *  **The `'worklet'` directives on these three are load-bearing, not decoration.** `Focus.tsx`'s escapement
- *  style and `ClockFace`'s frame callback both run on the UI runtime, and a plain JS function captured in a
- *  worklet closure is serialised as a *remote* function — calling it from the UI thread then throws
- *  `[Worklets] Tried to synchronously call a Remote Function`. That is not a warning; it took the whole app
- *  down on the first frame of the live clock, and `handAngles` was introduced by `eac2a65` ("DST clock")
- *  with the same mistake, so neither had ever run on a phone. `src/test/worklet-hosts.test.ts` asserts the
- *  directive is present on everything a worklet closes over, and reads it from the real Metro bundle when
- *  one is reachable, because `tsc` and `jest` both pass straight over this. */
-export const escapementTurn = (elapsedSec: number) => {
-  'worklet';
-  return elapsedSec * ESC_DEG;
-};
-/** the rendered angle: the turn, wound back by the release. `kick` runs 0 → 1 → −0.42 → 0 over 190 ms. */
-export const escapementAngle = (elapsedSec: number, kick = 0) => {
-  'worklet';
-  return -escapementTurn(elapsedSec) + kick * 1.7;
-};
+/* ── handAngles' `'worklet'` directive is load-bearing, not decoration ───────────────────────────────────────
+   `ClockFace`'s frame callback runs on the UI runtime, and a plain JS function captured in a worklet closure
+   is serialised as a *remote* function — calling it from the UI thread then throws
+   `[Worklets] Tried to synchronously call a Remote Function`. That is not a warning; it took the whole app
+   down on the first frame of the live clock, and `handAngles` was introduced by `eac2a65` ("DST clock") with
+   the same mistake, so it had never run on a phone. `src/test/worklet-hosts.test.ts` asserts the directive is
+   present on everything a worklet closes over, and reads it from the real Metro bundle when one is reachable,
+   because `tsc` and `jest` both pass straight over this. (The Focus dial's escapement pair that used to live
+   here — `escapementTurn` / `escapementAngle` — went with the dial redesign; the invariant did not.) */
 
 /* ── Onyx Rosette (dial 07) — the candidate under review in design/preview-03-07 ─────────────────────────────
    The centre figure is three parts, all of which the page turns: 16 petals in two passes (a 12% wash and a 28%

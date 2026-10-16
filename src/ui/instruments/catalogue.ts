@@ -7,20 +7,20 @@ import { TECH } from './catalog/tech';
 import type { GroupDef, GroupId, InstrumentDef } from './types';
 
 /**
- * The catalogue: twenty-two instruments in the six groups the reference groups them in, in the
+ * The catalogue: sixteen instruments in the six groups the reference groups them in, in the
  * reference's order. Group order is the order here — `Works in any subject`, then economics,
  * discrete mathematics, emerging technology, computer programming, database systems — because the
  * picker renders this array flat and the group headings fall out of the id changes.
  *
- * `INSTRUMENTS` is 22. The app's four ORIGINAL kinds (spines / glass / trace / ticker) are a
- * different system answering day-wide questions, so they are exported separately by `DayBar` and the
- * picker shows them as their own group ABOVE this. 26 kinds in Settings; 22 instruments here.
+ * `INSTRUMENTS` is 16. The app's ONE original kind (glass) is a different system answering a
+ * day-wide question, so it is exported separately by `DayBar` and the picker shows it as its own
+ * group ABOVE this. 17 kinds in Settings; 16 instruments here.
  */
 export const GROUPS: GroupDef[] = [
-  { id: 'any', n: 'Works in any subject', hint: 'Seven that read the clock' },
+  { id: 'any', n: 'Works in any subject', hint: 'Three that read the clock' },
   { id: 'econ', n: 'Intro to Economics', hint: 'Three takes' },
-  { id: 'discrete', n: 'Discrete Mathematics', hint: 'Three takes' },
-  { id: 'tech', n: 'Emerging Technology', hint: 'Three takes' },
+  { id: 'discrete', n: 'Discrete Mathematics', hint: 'Two takes' },
+  { id: 'tech', n: 'Emerging Technology', hint: 'Two takes' },
   { id: 'prog', n: 'Computer Programming', hint: 'Three takes' },
   { id: 'db', n: 'Database Systems', hint: 'Three takes' },
 ];

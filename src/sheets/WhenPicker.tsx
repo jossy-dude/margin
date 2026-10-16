@@ -14,8 +14,8 @@ export function presetsFor(now: number, homeAt: string): { label: string; at: nu
   return out.filter((p, i, a) => p.at > now && a.findIndex((x) => x.at === p.at) === i);
 }
 /** Due/start picker built for a thumb: presets first, then a day strip and two steppers. No system dialogs. */
-export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceholder = 'Not set', min }: { value: number | null; onChange: (v: number | null) => void; now: number; homeAt: string; optional?: boolean; nonePlaceholder?: string; min?: number }) {
-  const { c } = useTheme(), [open, setOpen] = useState(false), pre = useMemo(() => presetsFor(now, homeAt).filter((p) => !min || p.at > min), [now, homeAt, min]);
+export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceholder = 'Not set' }: { value: number | null; onChange: (v: number | null) => void; now: number; homeAt: string; optional?: boolean; nonePlaceholder?: string }) {
+  const { c } = useTheme(), [open, setOpen] = useState(false), pre = useMemo(() => presetsFor(now, homeAt), [now, homeAt]);
   const base = value ?? r5(now + 3_600_000), days = useMemo(() => Array.from({ length: 35 }, (_, i) => addDays(startOfDay(now), i)), [now]);
   const minutes = hm(fromMin(new Date(base).getHours() * 60 + new Date(base).getMinutes())), setDay = (d: number) => { fx.select(); onChange(atTime(d, fromMin(minutes))); }, setMin = (m: number) => onChange(atTime(startOfDay(base), fromMin(m)));
   return (

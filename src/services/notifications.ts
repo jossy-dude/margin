@@ -12,19 +12,28 @@ export const TEST_ACTION_ID = 'action-test';
 const RESERVED = new Set(['focus-end', TEST, TEST_ACTION_ID]);
 
 let configured = false;
+/** Each step is guarded on its own. One try/catch used to cover all of them, so an Expo Go build
+ *  that refused a category registration silently skipped the channels as well — and on Android a
+ *  notification with no channel is dropped, with nothing anywhere to say so. */
 export async function configureNotifications() {
   if (configured) return; configured = true;
   try {
     N.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+  } catch { /* Expo Go can lack parts of the module; local scheduling is probed separately */ }
+  try {
     // Action buttons only exist as notification categories, and the category carries the button titles —
     // there is no per-notification action list, which is why the *target* has to travel in `data`.
     for (const cat of NOTIF_CATEGORIES) await N.setNotificationCategoryAsync(cat.identifier, cat.actions);
-    if (Platform.OS === 'android') {
-      await N.setNotificationChannelAsync(CH.classes, { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true });
-      await N.setNotificationChannelAsync(CH.tasks, { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true });
-      await N.setNotificationChannelAsync(CH.focus, { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120] });
-    }
-  } catch { /* Expo Go can lack parts of the module; local scheduling is probed separately */ }
+  } catch { /* a refused category costs the buttons on that kind, not the delivery of the reminder */ }
+  /** One channel this phone refuses must not cost the others, and must not escape either. */
+  const chan = async (id: string, cfg: Parameters<typeof N.setNotificationChannelAsync>[1]) => {
+    try { await N.setNotificationChannelAsync(id, cfg); } catch { /* this phone said no to that one */ }
+  };
+  if (Platform.OS === 'android') {
+    await chan(CH.classes, { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true });
+    await chan(CH.tasks, { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true });
+    await chan(CH.focus, { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120] });
+  }
 }
 export async function ensurePermission(ask = true): Promise<NotifStatus['permission']> {
   try {

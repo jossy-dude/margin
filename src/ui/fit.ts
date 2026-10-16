@@ -98,3 +98,32 @@ export function heatRow(avail: number, days: number): HeatRow {
  *  the cap starts costing real accessibility rather than buying anything. `Btn` and `Chip` are deliberately
  *  NOT capped: their height is a `minHeight`, so they grow with the text instead of clipping it. */
 export const FS = 1.4;
+
+/** Where a bottom sheet sits while the soft keyboard is up.
+ *
+ *  `Sheet` used to derive everything from `useWindowDimensions().height`, on the assumption that the
+ *  window's JS height is what shrinks for the keyboard. On the SM-A516N (`adjustResize` +
+ *  edge-to-edge) it is not: the root view shrinks — measured, the nav's bottom stroke at y1485 against
+ *  the keyboard top at y1521 — while the JS window height stays full. So `lift` came out 0, `bottom`
+ *  became a full keyboard height on top of a container that had already shrunk by one, and the sheet
+ *  was thrown a keyboard-height too high: title, grab handle and close button clipped off the top of
+ *  the screen with the page's dead space visible under the footer (see the QA shots
+ *  `d1_06_task_form_kbup.png` / `d1_07_task_form_nokb.png`).
+ *
+ *  Every term is therefore measured from `boxH` — the sheet host's own laid-out height, fed by
+ *  `onLayout` — not from the window:
+ *  - `lift` is how much the container gave away (`restH` is the tallest height seen with the keyboard
+ *    down, so `restH - boxH` is the OS's own lift);
+ *  - `bottom` is what the sheet must add *on top of* that lift. Subtracting `lift` back off is what
+ *    stops the shrink being counted twice, and flooring at 0 covers both the container-shrinks-and-no-
+ *    -event case (web, or a missed keyboard-show event) and the case where the container shrank but the
+ *    window height did too — the sheet never sinks below the container's bottom edge;
+ *  - `cap` is the space actually above the keyboard inside the container, not a share of the window. */
+export function sheetFit(input: { H: number; boxH: number; restH: number; kb: number; maxH: number; insTop: number }) {
+  const { H, boxH, restH, kb, maxH, insTop } = input;
+  const lift = Math.max(0, restH - boxH);
+  const kbH = kb > 0 ? Math.max(lift, kb) : 0;
+  const bottom = Math.max(0, kbH - lift);
+  const cap = Math.min(H * maxH, Math.max(0, boxH - bottom - insTop));
+  return { lift, bottom, cap };
+}

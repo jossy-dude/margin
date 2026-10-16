@@ -2,7 +2,7 @@ import React, { memo, useEffect, useId, useMemo } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, type SharedValue } from 'react-native-reanimated';
-import { compositeSvg, dialPal, faceById, handAngles, handSvg, spinLayers, staticSvg, type SpinLayer } from './faces';
+import { compositeSvg, dialPal, faceById, handAngles, handSvg, plateSvg, spinLayers, staticSvg, type SpinLayer } from './faces';
 import { FONT } from '../../tokens/theme';
 import { useTheme, useReduceMotion } from '../theme-context';
 
@@ -56,7 +56,13 @@ export const ClockFace = memo(function ClockFace({ id, size, live = true, hands 
   }, ticking);
   useEffect(() => { frame.setActive(ticking); }, [ticking, frame]);
   useEffect(() => { if (time) { ha.value = (time.h % 12) * 30 + time.m * 0.5; ma.value = time.m * 6 + time.s * 0.1; sa.value = time.s * 6; } }, [time, ha, ma, sa]);
-  if (!live && !hands && !fixed) return <View style={{ width: size, height: size }}><SvgXml xml={compositeSvg(face, pal, FONT.serifB, { h: 10, m: 10, s: 30 }, 0, size, uid)} width={size} height={size} /></View>;
+  /** `hands={false}` on a still dial means *no hands*, and `plateSvg` is the only document that honours it.
+   *  This branch is reachable only when `hands` is already false (`!live && !hands && !fixed`), so it used to
+   *  call `compositeSvg` — which always appends hour, minute and second hands at a fixed 10:10:30 — and the
+   *  prop was a no-op on the one path that exists precisely to take it. `Focus.tsx`'s dial hides this by
+   *  passing `live={route === 'Focus'}`, so only the tour's dial ever showed it: three extra hands lying
+   *  across its own pointer and its readout hub. See `plateSvg` and `src/test/faces.test.ts`. */
+  if (!live && !hands && !fixed) return <View style={{ width: size, height: size }}><SvgXml xml={plateSvg(face, pal, FONT.serifB, size, uid)} width={size} height={size} /></View>;
   return (
     <View style={{ width: size, height: size }} accessible accessibilityRole="image" accessibilityLabel={`${face.n} clock face`}>
       <SvgXml xml={base} width={size} height={size} />

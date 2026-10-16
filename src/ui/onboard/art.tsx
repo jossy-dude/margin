@@ -312,7 +312,15 @@ export function AttendanceArt({ c, reduce }: ArtProps) {
   const tapStyle = useAnimatedStyle(() => ({ transform: [{ scale: tap.get() }] }));
   const ringStyle = useAnimatedStyle(() => ({ opacity: ring.get(), transform: [{ scale: interpolate(ring.get(), [0, 1], [1.35, 1]) }] }));
   const sheetStyle = useAnimatedStyle(() => ({ opacity: rise.get(), transform: [{ translateY: interpolate(rise.get(), [0, 1], [90, 0]) }] }));
-  const halo = (style: object) => <View pointerEvents="none" style={[{ position: 'absolute', left: -6, top: -6, width: 40, height: 40, borderRadius: 12, borderWidth: 2.5, borderColor: c.acc, transform: [{ rotate: '-5deg' }] }, style]} />;
+  /** `Animated.View`, not `View`. A `useAnimatedStyle` handle is only meaningful to Reanimated: hand it to a
+   *  plain host view and nothing strips it, so the native side receives the handle's own three bookkeeping
+   *  keys (`viewDescriptors`, `initial`, `styleUpdaterContainer`) as if they were style props and the pulse
+   *  never happens at all. It is worse than dead, too — React Fabric deep-freezes every style prop in `__DEV__`
+   *  (`deepFreezeAndThrowOnMutationInDev`), which arms a throwing setter on the handle's
+   *  `styleUpdaterContainer.current`, and the very next line of `useAnimatedStyle`'s mount effect assigns
+   *  through it. The red box then reads "set the key `current` … has been frozen" and the whole attendance
+   *  screen is unreachable. `src/test/animated-style-host.test.ts` keeps the two apart everywhere. */
+  const halo = (style: object) => <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -6, top: -6, width: 40, height: 40, borderRadius: 12, borderWidth: 2.5, borderColor: c.acc, transform: [{ rotate: '-5deg' }] }, style as never]} />;
   const row = (marked: boolean, ringIt: boolean) => (
     <View style={{ flexDirection: 'row', gap: TASK_GAP }}>
       {Array.from({ length: N_CELLS }, (_, i) => {

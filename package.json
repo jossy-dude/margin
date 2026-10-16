@@ -20,6 +20,7 @@
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo-google-fonts/permanent-marker": "^0.4.0",
     "@expo-google-fonts/special-elite": "^0.4.1",
+    "@expo/metro-runtime": "~57.0.16",
     "@react-navigation/native": "^7.5.0",
     "expo": "^57.0.26",
     "expo-asset": "~57.0.18",
@@ -43,6 +44,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "^15.15.4",
+    "react-native-web": "^0.21.2",
     "react-native-worklets": "^0.10.1"
   },
   "devDependencies": {
@@ -55,6 +57,7 @@
     "eslint-config-expo": "^57.0.2",
     "jest": "~29.7",
     "jest-expo": "~57.0.5",
+    "playwright": "^1.64.0",
     "typescript": "~5.9"
   },
   "private": true,

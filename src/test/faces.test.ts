@@ -1,4 +1,4 @@
-import { FACES, SKELETON, MESHES, meshFractions, gearGeometry, compositeSvg, dialPal, spinLayers, staticSvg, handSvg, engrave, type FaceId } from '../ui/clock/faces';
+import { FACES, SKELETON, MESHES, meshFractions, gearGeometry, compositeSvg, dialPal, spinLayers, staticSvg, handSvg, engrave, plateSvg, type FaceId } from '../ui/clock/faces';
 import { palettes, ONYX, DIAL } from '../tokens/theme';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -127,5 +127,32 @@ describe('the one element id the dial engine emits is per-instance', () => {
     const focus = readFileSync(join(__dirname, '..', 'screens', 'Focus.tsx'), 'utf8');
     expect(focus).toMatch(/useId\(\)\.replace\(\/\[\^a-zA-Z0-9_-\]\/g, ''\)/);
     expect(focus).toContain('fill={`url(#${hid})`}');
+  });
+});
+
+/** `hands={false}` was a no-op on the still-face path — found on the onboarding tour's dial, which showed a
+ *  second hour hand, a second minute hand and a red second hand lying across its own pointer at a fixed
+ *  10:10:30. `Focus.tsx` never saw it because it hides behind `live={route === 'Focus'}`, so the tour dial
+ *  was the only place the prop could be exercised. `compositeSvg` is right for a picker thumbnail and wrong
+ *  for a dial that draws its own hands, which is what `plateSvg` is for. */
+describe('hands={false} means no hands', () => {
+  const handCount = (s: string) => (s.match(/<g transform="rotate\([\d.-]+\)"><path/g) ?? []).length;
+  it.each(FACES.map((f) => f.id))('%s: the plate carries no hand, the thumbnail carries all three', (id) => {
+    const f = FACES.find((x) => x.id === id)!;
+    const pal = dialPal(f, palettes.refined.light, false);
+    const plate = plateSvg(f, pal, 'Newsreader', 400, 'uid');
+    const withHands = compositeSvg(f, pal, 'Newsreader', { h: 10, m: 10, s: 30 }, 0, 400, 'uid');
+    expect(handCount(plate)).toBe(0);
+    // …and the plate is not simply "a composite with the hands chopped off": it still has the dial on it
+    expect(plate.length).toBeGreaterThan(staticSvg(f, pal, 'Newsreader', 400, 'uid').length - 400);
+    expect(handCount(withHands)).toBe(f.nosec ? 2 : 3);
+    // every hand that compositeSvg drew is exactly what plateSvg is missing
+    expect(withHands.startsWith(plate.replace(/<\/svg>$/, ''))).toBe(true);
+  });
+  it('ClockFace routes the hands-free branch to plateSvg, not compositeSvg', () => {
+    const code = readFileSync(join(__dirname, '..', 'ui', 'clock', 'ClockFace.tsx'), 'utf8');
+    const branch = code.slice(code.indexOf('if (!live && !hands && !fixed)'));
+    expect(branch.slice(0, 200)).toContain('plateSvg(');
+    expect(branch.slice(0, 200)).not.toContain('compositeSvg(');
   });
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect, Text as SText } from 'react-native-svg';
 import Animated, { useAnimatedProps, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
@@ -6,7 +6,7 @@ import { useReduceMotion, useTheme } from './theme-context';
 import { EASE, Txt } from './kit';
 import { FONT, hexA } from '../tokens/theme';
 import { level } from '../domain/analytics';
-import { useStore } from '../store/store';
+import { useScreenLive } from './live';
 
 const AR = Animated.createAnimatedComponent(Rect), AC = Animated.createAnimatedComponent(Circle), AP = Animated.createAnimatedComponent(Path);
 
@@ -45,23 +45,32 @@ const BAR_STEP = 45;
 /** Is the screen that owns these charts the one on top? prompt.md V17: "Hidden screens must not tick
  *  fast" and `COORDINATION.md` §5 restates it as a project rule. Stats stays mounted behind whichever
  *  page you went to, so without this a task you finish on To-do re-animates 69 props for nobody.
- *  Read once per container and passed down — one subscription per `HBars`/`Hist24`, not per bar. */
-function useLive() { return useStore((s) => s.route) === 'Stats'; }
+ *  Read once per container and passed down — one subscription per `HBars`/`Hist24`, not per bar.
+ *  The flag is the navigator's context (`ui/live.ts`), not `s.route`: every page stays mounted, and a
+ *  store subscription here would re-render all four containers on every tap in the app. */
+function useLive() { return useScreenLive(); }
 
 /**
- * One animated number that enters once and then *travels*.
+ * One animated number that enters once — on the page's FIRST FOCUS — and then *travels*.
  *
  * The structural fix is one line: `withTiming` retargets from wherever the value already is, so the
- * effect never assigns a fresh start. `first` exists only to give the very first run its stagger —
- * after that, a data change moves the mark to its new place instead of replaying the entrance. Under
- * reduce-motion, and while the page is off-screen, the value is assigned: the correct picture, no motion.
+ * effect never assigns a fresh start. Because every route now mounts on the first render, mounting is
+ * no longer "the page became visible": the entrance is armed from a LAYOUT effect that first turns
+ * `live` true, so the reset-to-zero lands in the same pre-paint commit that focuses the page and the
+ * growth plays under the placement exactly as the old cold mount did. While the page is hidden the
+ * value is assigned the correct picture with no motion (prompt.md V17), and a later focus does not
+ * replay what already played — `entered` is consumed once, ever, the way `first` used to be consumed
+ * by the mount. Under reduce-motion the value is assigned everywhere: the correct picture, no motion.
  */
 function useEnter(target: number, delay: number, ms: number, live: boolean, reduce: boolean) {
-  const settle = reduce || !live, v = useSharedValue(settle ? target : 0), first = useRef(true);
-  useEffect(() => {
-    if (first.current) { first.current = false; v.set(settle ? target : withDelay(delay, withTiming(target, { duration: ms, easing: EASE }))); return; }
-    v.set(settle ? target : withTiming(target, { duration: ms, easing: EASE }));
-  }, [target, delay, ms, settle, v]);
+  const v = useSharedValue(reduce || !live ? target : 0), entered = useRef(false);
+  useLayoutEffect(() => {
+    if (!live) { v.set(target); return; } // hidden: the picture, no motion, no entrance
+    if (entered.current || reduce) { entered.current = true; v.set(reduce ? target : withTiming(target, { duration: ms, easing: EASE })); return; }
+    entered.current = true;
+    v.set(0); // first focus: grow from zero, under the drop — what the cold mount used to do
+    v.set(withDelay(delay, withTiming(target, { duration: ms, easing: EASE })));
+  }, [target, delay, ms, live, reduce, v]);
   return v;
 }
 
@@ -106,8 +115,12 @@ function Bar({ x, y, w, h, color, delay, reduce, live }: { x: number; y: number;
 /** 24 vertical bars: hour of day */
 export function Hist24({ values, w, h = 90, accent }: { values: number[]; w: number; h?: number; accent?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), live = useLive(), max = Math.max(1, ...values), bw = (w - 8) / 24;
+  /* An all-zero series has no busiest hour, but `indexOf(0)` would still have announced "busiest hour
+     0:00" — a claim about the student's day that nothing supports. The screen shows the honest sub-line;
+     this is the same honesty for the screen reader. */
+  const peak = values.some((v) => v > 0) ? `Activity by hour, busiest hour ${values.indexOf(Math.max(...values))}:00` : 'Activity by hour, no activity yet';
   return (
-    <Svg width={w} height={h + 20} accessibilityRole="image" accessibilityLabel={`Activity by hour, busiest hour ${values.indexOf(Math.max(...values))}:00`}>
+    <Svg width={w} height={h + 20} accessibilityRole="image" accessibilityLabel={peak}>
       <Line x1={0} x2={w} y1={h} y2={h} stroke={c.ink} strokeWidth={1.4} />
       {values.map((v, i) => <VBar key={i} x={4 + i * bw + 1} base={h} w={bw - 2} hh={(v / max) * (h - 8)} color={accent ?? c.acc} delay={ENTER_AT + i * HIST_STEP} reduce={reduce} live={live} />)}
       {[0, 6, 12, 18, 23].map((hr) => <SText key={hr} x={4 + hr * bw + bw / 2} y={h + 15} fontSize={12} fontFamily={FONT.type} fill={c.mut} textAnchor="middle">{hr}</SText>)}
@@ -154,17 +167,25 @@ export function Line2({ values, labels, w, h = 100, goal, max = 100 }: { values:
  * This was the worst replay in the app: the effect was keyed on `v`, so ticking one task — which moves
  * "On time" from 0.71 to 0.73 — re-drew the arc from empty over 900 ms. Four of them, on the screen you
  * are looking at. So `from` holds the value the arc is travelling *from*, frozen at wherever the previous
- * tween had got to, and `p` is the progress of the journey. The first run still sweeps from zero, which
- * is the one entrance prompt.md V13 asks for ("charts animate once on first view").
+ * tween had got to, and `p` is the progress of the journey. The FIRST FOCUS sweeps from zero — the one
+ * entrance prompt.md V13 asks for ("charts animate once on first view") — armed from a layout effect so
+ * the reset-to-zero lands pre-paint on the commit that focuses the page; later focuses and data changes
+ * travel instead of replaying, and a hidden ring holds the correct picture with no motion (V17).
  */
 export function Ring({ value, size = 76, label, sub }: { value: number | null; size?: number; label: string; sub?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), live = useLive(), r = size / 2 - 7, circ = 2 * Math.PI * r, v = value ?? 0;
-  const from = useSharedValue(0), p = useSharedValue(reduce || !live ? 1 : 0), first = useRef(true);
-  useEffect(() => {
-    if (first.current) { first.current = false; from.set(0); p.set(reduce || !live ? 1 : withDelay(ENTER_AT, withTiming(1, { duration: ARC_MS, easing: EASE }))); return; }
-    from.set(from.get() + (v - from.get()) * p.get()); // freeze wherever the last tween had reached
-    p.set(reduce || !live ? 1 : 0);
-    p.set(reduce || !live ? 1 : withTiming(1, { duration: ARC_MS, easing: EASE }));
+  const from = useSharedValue(0), p = useSharedValue(reduce || !live ? 1 : 0), entered = useRef(false);
+  useLayoutEffect(() => {
+    if (!live) { p.set(1); from.set(v); return; } // hidden: the settled picture, where the data is
+    if (entered.current || reduce) { // already seen (or reduce-motion): travel, never restart
+      entered.current = true;
+      from.set(from.get() + (v - from.get()) * p.get()); // freeze wherever the last tween had reached
+      p.set(reduce ? 1 : withTiming(1, { duration: ARC_MS, easing: EASE }));
+      return;
+    }
+    entered.current = true; // first focus: the sweep from zero
+    from.set(0);
+    p.set(reduce ? 1 : withDelay(ENTER_AT, withTiming(1, { duration: ARC_MS, easing: EASE })));
   }, [v, reduce, live, p, from]);
   const ap = useAnimatedProps(() => ({ strokeDashoffset: circ * (1 - (from.get() + (v - from.get()) * p.get())) }));
   return (

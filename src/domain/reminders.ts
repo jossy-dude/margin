@@ -1,6 +1,6 @@
 import type { AttRecord, Course, DayMark, Meeting, NotifSettings, Task } from './types';
 import { addDays, atTime, fmtDur, fmtTime, hm, startOfDay, weekdayOf, ymd, DAY_MS } from './time';
-import { effective, isCancelled, occurrencesBetween } from './attendance';
+import { effective, isCancelled, occEnd, occKey, occurrencesBetween } from './attendance';
 
 export type PlannedKind = 'class' | 'ended' | 'task' | 'start' | 'exam';
 export interface Planned {
@@ -23,7 +23,9 @@ function busyIntervals(i: PlanInput, from: number, to: number): [number, number]
   const out: [number, number][] = [];
   for (const o of occurrencesBetween(from, to, i.meetings)) {
     if (isCancelled(effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now))) continue;
-    out.push([atTime(o.date.getTime(), o.meeting.start), atTime(o.date.getTime(), o.meeting.end)]);
+    // `occEnd`, not `meeting.end`: a class stored 23:30–00:30 ends the NEXT day, and a raw end would
+    // build an inverted interval that blocks nothing — the hours after midnight would read free.
+    out.push([atTime(o.date.getTime(), o.meeting.start), occEnd(o.date.getTime(), o.meeting)]);
   }
   out.sort((a, b) => a[0] - b[0]);
   const m: [number, number][] = [];
@@ -179,10 +181,12 @@ export function planReminders(i: PlanInput): Plan {
   for (const o of occurrencesBetween(startOfDay(i.now), horizon, i.meetings)) {
     const e = effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now);
     if (isCancelled(e)) continue;
-    const course = cn(o.meeting.courseId), name = course?.name ?? 'Class', start = atTime(o.date.getTime(), o.meeting.start), end = atTime(o.date.getTime(), o.meeting.end);
-    const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = `${ymd(o.date)}${o.meeting.start}${o.meeting.courseId}`;
+    const course = cn(o.meeting.courseId), name = course?.name ?? 'Class', start = atTime(o.date.getTime(), o.meeting.start), end = occEnd(o.date.getTime(), o.meeting);
+    // `key` is both the attendance record key and the notification's `entityId`: the Here/Late/Absent
+    // button splits it on `|` and writes under it, so any other spelling marks nothing the grid reads.
+    const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = occKey(ymd(o.date), o.meeting);
     if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${course?.room ?? ''}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
-    if (s.classEnded && !i.attendance[`${ymd(o.date)}|${o.meeting.start}|${o.meeting.courseId}`]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
+    if (s.classEnded && !i.attendance[key]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
   }
   // tasks
   for (const t of i.tasks) {
