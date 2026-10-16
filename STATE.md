@@ -1,6 +1,6 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-16 (Phase 1: code audit in, triage done, W1 building; UX audit + vision review in flight)_
+_Updated: 2026-10-16 (Phase 2: W1 committed `46c056b`, gate green; W2 + fast-worker batch in flight)_
 
 ## Git
 
@@ -61,7 +61,10 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 1.3b | Baseline visual review — retry on fixed `.shots/baseline/` | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | in flight |
 | 1.4 | **Code-audit triage** (2 critical, 4 high, 8 medium, 4 low): C1/C2→W1 A/B; H1–H3+L1→W1 C; per-screen boundary→W1 D; M2/M4/M5/M6→W1 E; H4→W5 (DECISIONS D4); M1/M3/M8/L3/L4→fast-worker batch after W1; M7/L2→W9; H1-revert→D5(a) | orchestrator | `briefs/W1-foundation.md`, `DECISIONS.md` D4/D5 |
 | 1.5 | Housekeeping commit (D3–D5, harness fixes, W1 brief, audit report; `.shots/` ignored) | orchestrator | commit `4f4b865` |
-| 2.1 | W1 builder dispatched (data safety + error plumbing + perf hygiene) | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W1-foundation.md` — in flight |
+| 2.1 | W1 builder (data safety + error plumbing + perf hygiene) — delivered 5/5 items A–E | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W1-foundation.md`, log `/tmp/opencode/logs/w1-check.log` (49 suites / 784 tests) |
+| 2.2 | **W1 gate PASS**: orchestrator re-ran `npm run check` green (49/784, boundaries ✓), spot-checked A–E + boot order (`openRepository` → `init()` → `load()` before the repo is ever exposed; nothing can race the unqueued `init`) | orchestrator | `/tmp/opencode/logs/w1-recheck.log`, commit `46c056b` (27 files, +800/−83) |
+| 2.3 | W2 builder dispatched (native grain tiling + status-bar band + `DEVICE_CHECKLIST`) — runs in parallel with 2.4 on disjoint files | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W2-native-visuals.md` — in flight |
+| 2.4 | Fast-worker batch dispatched (M1 type holes, M3 export cache leak, M8 nudge.wav promotion, L3 seed parity, L4 curl opt-in) | `fast-worker` (`opencode/cat-jam-free`) | findings `reports/audit-code.md` — in flight |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -89,9 +92,25 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
    duplicate of Focus, deleted). Log: `/tmp/opencode/logs/cap-baseline2.log`.
 8. Vision-critic baseline session `ses_ebca00122ffeYDLZPpyjTzBAQk` **errored** ("Timed out waiting for
    response headers" — provider side, before any image read). Re-dispatched after the capture fix.
+9. **W1 accepted deviations** (deliberate, documented in code): snake_case columns for `trip`/`alarm`
+   (the adapter's spec table derives column names — camelCase DDL would silently mismatch every read/
+   write); both new tables carry the housekeeping columns (`updated_at/deleted_at/rev`) because every
+   mutation writes them; `mode`/`completed` are `ALTER TABLE` columns, not SPECS fields, until W5/W6
+   read them; ScreenBoundary derives its message from thrown state (`componentDidCatch` commits after
+   the fallback renders); `guarded()` sets `displayName` for DevTools.
+10. **W1 open items for later workstreams**: `sqlite.ts` now imports `ui/crashlog` (a data→ui import;
+    boundaries stay green — fold into a cleanup if a later workstream touches it); `pendingOutbox(200)`
+    reads the oldest 200 rows while the M4 prune caps the table at 500 — agree the direction when sync
+    lands (likely W6); the export path still has no import counterpart (pre-existing).
 
 ## Next
 
-- Await baseline captures → dispatch vision-critic baseline pass.
-- Await audits → triage (critical/high + obvious fix = auto; product forks → DECISIONS.md).
-- Then build order W1 → … → W9, gate per workstream.
+- W1 ✓ committed (`46c056b`). In flight: W2 (native visuals) + fast-worker batch (disjoint files);
+  user-tester UX audit + baseline vision review.
+- Gate per workstream: builder → orchestrator re-check + diffstat → vision loop (UI workstreams,
+  max 4) → user-tester regression → commit.
+- Then W3 (focus dial: see-through face + taped label below dial) → W4 (Today countdown/time ranges)
+  → W5 (D4 lock-screen toggle + alarms) → W6 (transport log) → W7 (stats) → W8 (onboarding incl. the
+  D4 ask) → W9 (production readiness, absorbs M7/L2).
+- Standing: remind Jossy about the profile-note disputed-claims test (`test-due` 2026-10-15 passed;
+  no real outcome recorded yet).
