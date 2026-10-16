@@ -128,6 +128,33 @@ describe('the focus finish row (W3/D2)', () => {
     at(60_000 + getState().timer.planMin * 60_000); act.timerFinish();
     expect(getState().focus.at(-1)).toMatchObject({ taskId: a.id, courseId: a.courseId, completed: true });
   });
+
+  /* UX-2. `finish` refuses a session under a minute so that no row claims study that never happened
+     (D2), and the refusal used to be silent: the audit ended a session twelve seconds in and got no
+     toast, no ring movement and no Stats change, so the one-minute floor was invisible to the student
+     standing in front of it. The floor itself is untouched — these two tests are the two halves of it. */
+  it('a session under a minute writes nothing at all, and now says why (UX-2)', async () => {
+    const repo = await seeded();
+    at(0); act.focusOpen(firstTask().id); act.timerToggle();
+    at(12_000); // the audit's own repro: a dozen seconds of a 25-minute plan
+    const before = getState().focus.length;
+    act.timerFinish();
+
+    expect(getState().focus).toHaveLength(before);          // nothing in state…
+    expect((await repo.load()).focus).toHaveLength(before); // …and nothing in the database behind it
+    expect(getState().toast?.text).toBe('Under a minute, so nothing was saved');
+    expect(getState().toast?.undo).toBeUndefined();         // there is nothing to undo
+    expect(getState().timer.phase).toBe('set');             // and the dial is back for the next round
+  });
+
+  it('a session past the minute keeps the saved toast it always had (the path UX-2 did not touch)', async () => {
+    await seeded();
+    at(0); act.focusOpen(firstTask().id); act.timerToggle();
+    at(3 * 60_000); act.timerFinish();
+
+    expect(getState().focus.at(-1)).toMatchObject({ focusSec: 180 });
+    expect(getState().toast?.text).toBe('Saved 3 min of focus');
+  });
 });
 
 describe('boot recovery', () => {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Pressable, View, useWindowDimensions, type View as RNView } from 'react-native';
+import { BackHandler, Image, Platform, Pressable, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -82,6 +82,28 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
   const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
   const wholeSec = Math.floor(leftMs / 1000);
+  /* The dial has always been `accessibilityRole="adjustable"` with an `accessibilityValue` and
+     increment/decrement actions, and TalkBack has always read it. The web build did not: React Native Web
+     0.21 maps the four `aria-*` value props (and the flat `accessibilityValueNow`-style ones) and reads
+     nothing at all out of the RN-shaped `accessibilityValue` *object*, so the audit's probe found
+     `role=slider` with no value in the DOM and arrows that did nothing (audit UX-5).
+     These two objects are web-only on purpose. On native the RN-shaped `accessibilityValue` below is
+     untouched, so Android announces exactly what it announced before: the same role, the same label and
+     the same value text. Adding `aria-valuemin`/`max` there instead would have been the *alias* path —
+     `View.js` folds them back into `accessibilityValue` — and would have handed Android a RangeInfo the
+     dial has never had. The fix the audit asked for is a web one and stays one. */
+  const dialMin = 5, dialMax = 240, dialNow = live ? Math.ceil(leftMs / 60_000) : min;
+  const dialValue = `${live ? dialNow + ' minutes left' : min + ' minutes'}`;
+  const webValue: { 'aria-valuemin'?: number; 'aria-valuemax'?: number; 'aria-valuenow'?: number; 'aria-valuetext'?: string } =
+    Platform.OS === 'web' ? { 'aria-valuemin': dialMin, 'aria-valuemax': dialMax, 'aria-valuenow': dialNow, 'aria-valuetext': dialValue } : {};
+  /** Web only, and only while the dial is editable: RNW forwards `onKeyDown` on a `View` and honours
+     `tabIndex`, so the slider answers the arrow keys every other slider on the platform answers. The step
+     is the ±5 the accessibility actions already move by. `tabIndex` is deliberately not set on native,
+     where it would add an input-focus stop this control has never had. */
+  const webKeys: { tabIndex?: 0; onKeyDown?: (e: { key?: string; preventDefault?: () => void }) => void } =
+    Platform.OS === 'web' && editable
+      ? { tabIndex: 0, onKeyDown: (e) => { const d = e.key === 'ArrowUp' ? 5 : e.key === 'ArrowDown' ? -5 : 0; if (!d) return; e.preventDefault?.(); onChange(Math.max(dialMin, Math.min(dialMax, min + d)), 300); } }
+      : {};
   useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
   useEffect(() => { if (drag.value) return; hand.value = reduce || live ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
   useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [wholeSec, running, flowing, jolt]);
@@ -114,7 +136,8 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
   const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
   return (
     <GestureDetector gesture={pan}>
-      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: `${live ? Math.ceil(leftMs / 60_000) + ' minutes left' : min + ' minutes'}` }}
+      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: dialValue }}
+        {...webValue} {...webKeys}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
         {/* the one lift off full opacity on the dial: the artwork is what the owner asked to see, and the paper

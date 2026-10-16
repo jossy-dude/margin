@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BEAT, Btn, EASE, HandBox, Icon, Txt, usePressIn } from './kit';
@@ -51,15 +51,22 @@ export function Overlay() {
     // on the sheet itself only does anything on iOS (V14). App.tsx hides the navigator behind this view at the
     // same time, so while a sheet is open nothing behind it can be reached or read out.
     <View pointerEvents="box-none" importantForAccessibility={sheet ? 'yes' : 'auto'} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 2000 }}>
-      {/* The desktop surface puts its own `+` at the foot of the margin — in the place the FAB occupies on
-          a phone, so the gesture the student already knows lands in the same corner of the same idea. Two
-          buttons to add the same thing, one of them floating over an inspector panel, is one too many.
+      {/* The + is the app's one way in, on every surface. The tour says so in words ("the + adds
+          anything… it is the only way in"), Today's empty state repeats it, and the audit's walkthrough
+          found the web build had no `+` at all: `t: 'add'` was opened from exactly one place in the repo,
+          the line below, and it was suppressed on web — so a web student was stranded until they happened
+          to open Week or To-do and find a button the tour never mentions (audit UX-1).
 
-          The gate is here rather than folded into `showFab` on purpose: `showFab` is about *when* the
-          phone's floating chrome must get out of the way of the keyboard (BUG-028), and that reason is
-          unchanged by which surface we are on. A platform check folded into the boolean would have made
-          this file's keyboard test pin a different string to say the same thing. */}
-      {showFab && (Platform.OS === 'web' ? null : <Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
+          The reason this gate gave for suppressing it — "the desktop surface puts its own `+` at the foot
+          of the margin" — described something that was never built. `git log -S "Platform.OS === 'web'"
+          -- src/ui/Overlay.tsx` names one commit, cdb26e0d ("+ answers on press-in"), whose whole diff is
+          this file and kit.tsx's press timing; it added `import Platform` and this gate in passing and no
+          second caller has ever existed (`git log --all -S "t: 'add'"` returns only the v1 baseline, the
+          pre-v2 snapshot and a docs commit). "Foot of the margin" appears nowhere else in the repo.
+
+          `showFab` is the only gate, and it is untouched: it is about *when* the floating chrome must get
+          out of the way (a sheet is open, the route is Focus, the keyboard is up — BUG-028). */}
+      {showFab && (<Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
       {sheet && (
         sheet.t === 'add' ? <AddSheet /> : sheet.t === 'task' ? <TaskSheet key={sheet.id ?? sheet.kind ?? 'new'} id={sheet.id} kind={sheet.kind} courseId={sheet.courseId} />
         : sheet.t === 'status' ? <StatusSheet key={sheet.key} spec={sheet} /> : sheet.t === 'settings' ? <SettingsSheet />

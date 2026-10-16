@@ -233,7 +233,14 @@ export const act = {
   timerBackNow() { const now = Date.now(), t = endBreak(state.timer, now); set({ timer: t }); fx.peel(); setTimeout(() => fx.fall(), 350); if (t.running) void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · done.`); },
   timerFinish(save = true) {
     const now = Date.now(), sum = save ? finish(state.timer, now) : null; void notifs.cancelFocusEnd();
+    /* `finish` refuses a session with less than a minute of focus, and the refusal is the whole point: the
+       row would say a study session happened when nothing did, and it would land in the export and the
+       heatmap (D2). What the refusal also did was say nothing at all — the audit pressed "end session"
+       a few seconds in and got no toast, no ring movement and no Stats change, so the one-minute rule was
+       invisible (audit UX-2). It now states itself. `save === false` is the discard path, where silence is
+       the intent, so it stays silent. */
     if (sum) { act.addSession(sum); toast(`Saved ${Math.round(sum.focusSec / 60)} min of focus`); }
+    else if (save) toast('Under a minute, so nothing was saved');
     const st = state.settings; set({ timer: initTimer({ planMin: st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId: state.timer.taskId, courseId: state.timer.courseId, title: state.timer.title }) });
     return sum;
   },

@@ -31,6 +31,22 @@ const GUARD = (n: SoundName) => (n.startsWith('detent') ? 26 : n === 'tick' || n
 
 const VOICES = 4;
 let ready = false, master = true, vols: Record<SoundGroup, number> | null = null;
+/* A browser refuses `play()` before the document has been activated, and Expo's web player drops that
+   promise inside itself — `AudioPlayer.web.js` calls `this.media.play()` and never catches — so the refusal
+   arrives as an *uncaught* page error instead of a `false` from here. The audit caught exactly that on every
+   fresh load, before any tap (audit UX-7); it is `Onboarding`'s mount effect playing the placement sound on
+   a document no finger has touched yet. There is nothing to catch at our own call sites: `pl.play()` is
+   typed `void` and the promise is created and dropped one frame down. So the ask is not made. Nothing
+   audible is lost — an unactivated document was never going to play it — and the flag is set from the
+   *capture* phase of the first real gesture, i.e. before the handler whose own sound that gesture runs, so
+   the first tap still answers. Where there is no `document` (native, and jest) the gate is open from the
+   start: that platform has no autoplay policy and behaves exactly as it did. */
+let activated = typeof document === 'undefined';
+if (!activated) {
+  const mark = () => { activated = true; };
+  document.addEventListener('pointerdown', mark, { capture: true, once: true });
+  document.addEventListener('keydown', mark, { capture: true, once: true });
+}
 const pools = new Map<SoundName, AudioPlayer[]>();
 type Voice = { end: number; prio: number; pl: AudioPlayer };
 let active: Voice[] = [];
@@ -78,7 +94,7 @@ function start(pl: AudioPlayer, g: number) {
 }
 
 export function play(n: SoundName, gain = 1): boolean {
-  if (!master || !vols) return false;
+  if (!master || !vols || !activated) return false;
   const g = vols[GROUP(n)] * gain; if (g <= 0.01) return false;
   const now = Date.now();
   if (now - (lastAt.get(n) ?? -1e9) < GUARD(n)) return false;
