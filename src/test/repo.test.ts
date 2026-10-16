@@ -82,6 +82,19 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     expect((await r.notifLog())[0]).toMatchObject({ id: 'n1', shownAt: NOW, openedAt: NOW + 5 });
     await r.reset(); expect((await r.load()).tasks).toHaveLength(0);
   });
+  it('seeds attendance, day marks and adjustments (audit L3)', async () => {
+    const r = await make();
+    const s = seedSnapshot(NOW);
+    s.attendance = { '2026-10-05|08:30|E': { key: '2026-10-05|08:30|E', status: 'l', at: NOW, reason: 'bus' } };
+    s.dayMarks = { '2026-10-06': { date: '2026-10-06', status: 's', at: NOW, reason: '' } };
+    s.adjusts = { E: 2.5 };
+    await r.seed(s);
+    const l = await r.load();
+    expect(l.attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'l', reason: 'bus' });
+    expect(l.dayMarks['2026-10-06']?.status).toBe('s');
+    expect(l.adjusts.E).toBe(2.5);
+  });
+
   it('a scheduled reminder is logged as queued, with neither timestamp invented', async () => {
     const r = await make();
     await r.schedNotif('n2', 'ended', NOW);

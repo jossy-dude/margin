@@ -171,7 +171,7 @@ const LIVE = join(__dirname, '../../assets/sounds');
 const CAND = join(__dirname, '../../assets/sounds-candidates');
 /** Every sound src/services/fx.ts can ask for. nudge is new: the off-track warning had been
     borrowing tick.wav, so muting the clock also silenced the warning. */
-const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1', 'detent-2', 'detent-3', 'detent-4', 'done', 'flutter', 'notify', 'nudge', 'place', 'round-done', 'shuffle', 'stamp-absent', 'stamp-cancel', 'stamp-here', 'stamp-late', 'stamp-sick', 'tape-peel', 'thud', 'thunk', 'tick', 'tock', 'toggle-off', 'toggle-on'];
+const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1', 'detent-2', 'detent-3', 'detent-4', 'done', 'flutter', 'notify', 'place', 'round-done', 'shuffle', 'stamp-absent', 'stamp-cancel', 'stamp-here', 'stamp-late', 'stamp-sick', 'tape-peel', 'thud', 'thunk', 'tick', 'tock', 'toggle-off', 'toggle-on'];
 /** Fired faster than the eye can follow, so these must stay inside the 30-120 ms window. */
 const RAPID = ['tick', 'tock', 'toggle-on', 'toggle-off', 'clack', 'detent-1', 'detent-2', 'detent-3', 'detent-4'];
 
@@ -196,7 +196,7 @@ describe('candidate palette (audition set, not yet wired into the app)', () => {
   const files = readdirSync(CAND).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
   it('covers exactly the sounds fx.ts asks for, no gaps and no strays', () => {
     expect(files).toEqual(EXPECTED);
-    expect(files).toHaveLength(28);
+    expect(files).toHaveLength(27);
   });
   const all = new Map(files.map((n) => { const w = readWav(join(CAND, `${n}.wav`)); return [n, stats(w.x, w.rate)] as const; }));
   it('the spectral metric is trustworthy (a 1 kHz tone must measure as 1 kHz, not as leakage)', () => {

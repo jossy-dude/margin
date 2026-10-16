@@ -10,3 +10,6 @@ ios/Pods
 ios/build
 qa/shots/*.tmp
 .shots/
+
+# sound scratch directory (audit M8)
+assets/sounds-candidates/

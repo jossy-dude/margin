@@ -124,6 +124,9 @@ export class SqliteRepository implements Repository {
       for (const f of s.focus) await this.put('focus', f);
       for (const t of s.trips) await this.put('trip', t);
       for (const a of s.alarms) await this.put('alarm', a);
+      for (const a of Object.values(s.attendance)) await this.put('attendance', a);
+      for (const d of Object.values(s.dayMarks)) await this.put('dayMark', d);
+      for (const [courseId, adj] of Object.entries(s.adjusts)) await this.put('adjust', { courseId, adj });
       for (const [k, v] of Object.entries(s.settings)) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
     }));
   }

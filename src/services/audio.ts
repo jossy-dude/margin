@@ -11,7 +11,7 @@ const SRC = {
   bump: require('../../assets/sounds/bump.wav'), thunk: require('../../assets/sounds/thunk.wav'), clack: require('../../assets/sounds/clack.wav'), blip: require('../../assets/sounds/blip.wav'), 'round-done': require('../../assets/sounds/round-done.wav'),
   'break-start': require('../../assets/sounds/break-start.wav'), 'tape-peel': require('../../assets/sounds/tape-peel.wav'),
   /* Its own file, so muting the clock tick can never mute the off-track warning. Moved to assets/sounds/ when the candidate set is promoted. */
-  nudge: require('../../assets/sounds-candidates/nudge.wav'),
+  nudge: require('../../assets/sounds/nudge.wav'),
 } as const;
 export type SoundName = keyof typeof SRC;
 /* Durations of the files actually loaded above. Regenerate from manifest.json when the set is promoted. */

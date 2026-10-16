@@ -26,6 +26,9 @@ export class MemoryRepository implements Repository {
     for (const c of s.courses) await this.upsert('course', c); for (const m of s.meetings) await this.upsert('meeting', m); for (const t of s.tasks) await this.upsert('task', t);
     for (const n of s.notices) await this.upsert('notice', n); for (const m of s.marks) await this.upsert('mark', m); for (const f of s.focus) await this.upsert('focus', f);
     for (const t of s.trips) await this.upsert('trip', t); for (const a of s.alarms) await this.upsert('alarm', a);
+    for (const a of Object.values(s.attendance)) await this.upsert('attendance', a);
+    for (const d of Object.values(s.dayMarks)) await this.upsert('dayMark', d);
+    for (const [courseId, adj] of Object.entries(s.adjusts)) await this.upsert('adjust', { courseId, adj });
     await this.putSettings(s.settings);
   }
   async purgeDemo() { for (const e of ['task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }

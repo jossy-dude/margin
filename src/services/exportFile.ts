@@ -21,7 +21,11 @@ export async function runExport(format: ExportFormat, target: ExportTarget, s: S
     return { ok: true, where: file.uri, name };
   }
   const file = new File(Paths.cache, name); if (file.exists) file.delete(); file.create(); file.write(data);
-  if (!(await Sharing.isAvailableAsync())) return { ok: false, where: file.uri, name };
-  await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle: name, UTI: format === 'json' ? 'public.json' : undefined });
-  return { ok: true, where: file.uri, name };
+  try {
+    if (!(await Sharing.isAvailableAsync())) return { ok: false, where: file.uri, name };
+    await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle: name, UTI: format === 'json' ? 'public.json' : undefined });
+    return { ok: true, where: file.uri, name };
+  } finally {
+    try { file.delete(); } catch { /* swallow; the cache entry may already be gone */ }
+  }
 }

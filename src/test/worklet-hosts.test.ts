@@ -154,11 +154,17 @@ describe('the real bundle, when one is being served', () => {
   /** Babel's output is the only proof that matters here: the directive is a comment, and a comment the plugin
    *  does not recognise is worth nothing. Fetched from Metro on 8081 when it is up, and when it is not the check
    *  says so in the log rather than passing quietly. */
-  const port = process.env.BUNDLE_PORT ?? '8081';
+  const port = process.env.BUNDLE_PORT;
+  const bundleUrl = process.env.BUNDLE_URL;
   let bundle: string | null = null;
   beforeAll(() => {
+    const url = bundleUrl ?? (port ? `http://127.0.0.1:${port}/index.bundle?platform=android&dev=true&minify=false` : null);
+    if (!url) {
+      console.warn('no BUNDLE_PORT/BUNDLE_URL set — bundle check skipped');
+      return;
+    }
     try {
-      const res = execFileSync('curl', ['-s', '--max-time', '40', `http://127.0.0.1:${port}/index.bundle?platform=android&dev=true&minify=false`],
+      const res = execFileSync('curl', ['-s', '--max-time', '40', url],
         { maxBuffer: 512 * 1024 * 1024, encoding: 'utf8' });
       bundle = res.startsWith('<') || res.length < 100_000 ? null : res;
     } catch { bundle = null; }
@@ -166,7 +172,8 @@ describe('the real bundle, when one is being served', () => {
 
   it('the dial helper is emitted as a worklet factory, not a plain function', () => {
     if (!bundle) {
-      console.warn(`no Metro bundle on :${port} — the source rule above still ran; this check did not`);
+      if (!port && !bundleUrl) console.warn('no BUNDLE_PORT/BUNDLE_URL set — bundle check skipped');
+      else console.warn(`no Metro bundle on :${port ?? bundleUrl} — the source rule above still ran; this check did not`);
       return;
     }
     // A workletised declaration is rewritten to `var f = function <name>Factory(_refN) { var _worklet_<hash>_init_data = …`.
