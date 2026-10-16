@@ -58,13 +58,14 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 1.1 | Code audit (read-only) | `senior-dev-auditor` (`opencode/deepseek-v4.1-flash-free`) | `reports/audit-code.md` — in flight |
 | 1.2 | UX audit on Expo web 412×915 | `user-tester` (`opencode/mimo-v2.6-flash-free`) | `reports/audit-ux.md` — in flight |
 | 1.3a | Baseline visual review — attempt 1 | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | **errored**: provider timeout, no output |
-| 1.3b | Baseline visual review — retry on fixed `.shots/baseline/` | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | in flight |
+| 1.3b | Baseline visual review on fixed `.shots/baseline/` | `vision-critic` (`opencode/mimo-v2.6-flash-free`) | delivered: `reports/vision-baseline.md` (attempt 1 provider timeout; 1.3a retried) |
 | 1.4 | **Code-audit triage** (2 critical, 4 high, 8 medium, 4 low): C1/C2→W1 A/B; H1–H3+L1→W1 C; per-screen boundary→W1 D; M2/M4/M5/M6→W1 E; H4→W5 (DECISIONS D4); M1/M3/M8/L3/L4→fast-worker batch after W1; M7/L2→W9; H1-revert→D5(a) | orchestrator | `briefs/W1-foundation.md`, `DECISIONS.md` D4/D5 |
 | 1.5 | Housekeeping commit (D3–D5, harness fixes, W1 brief, audit report; `.shots/` ignored) | orchestrator | commit `4f4b865` |
 | 2.1 | W1 builder (data safety + error plumbing + perf hygiene) — delivered 5/5 items A–E | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W1-foundation.md`, log `/tmp/opencode/logs/w1-check.log` (49 suites / 784 tests) |
 | 2.2 | **W1 gate PASS**: orchestrator re-ran `npm run check` green (49/784, boundaries ✓), spot-checked A–E + boot order (`openRepository` → `init()` → `load()` before the repo is ever exposed; nothing can race the unqueued `init`) | orchestrator | `/tmp/opencode/logs/w1-recheck.log`, commit `46c056b` (27 files, +800/−83) |
 | 2.3 | W2 builder dispatched (native grain tiling + status-bar band + `DEVICE_CHECKLIST`) — runs in parallel with 2.4 on disjoint files | `builder` (`opencode/deepseek-v4.1-flash-free`) | brief `briefs/W2-native-visuals.md` — in flight |
-| 2.4 | Fast-worker batch dispatched (M1 type holes, M3 export cache leak, M8 nudge.wav promotion, L3 seed parity, L4 curl opt-in) | `fast-worker` (`opencode/cat-jam-free`) | findings `reports/audit-code.md` — in flight |
+| 2.4 | Fast-worker batch dispatched (M1 type holes, M3 export cache leak, M8 nudge.wav promotion, L3 seed parity, L4 curl opt-in) | `fast-worker` (`opencode/cat-jam-free`) | delivered — see 2.5 |
+| 2.5 | **Fast-worker batch landed**: M3 (export cache cleanup), M8 (`nudge.wav` promotion + `.gitignore` + count test), L3 (seed parity + round-trip test), L4 (curl opt-in). **M1 skipped per scope rule** (needs call-site edits for dynamic colours) → moved to W9. Gate: orchestrator re-check green (49 suites / 786 tests) | `fast-worker` (`opencode/cat-jam-free`) + orchestrator | log `/tmp/opencode/logs/batch1-recheck.log`, commit `fbdc51a` (9 files) |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -111,6 +112,7 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
   max 4) → user-tester regression → commit.
 - Then W3 (focus dial: see-through face + taped label below dial) → W4 (Today countdown/time ranges)
   → W5 (D4 lock-screen toggle + alarms) → W6 (transport log) → W7 (stats) → W8 (onboarding incl. the
-  D4 ask) → W9 (production readiness, absorbs M7/L2).
+  D4 ask) → W9 (production readiness, absorbs M7/L2 **and M1** — the type holes M1 needs call-site
+  edits, so it rides with W9's strict-TS pass).
 - Standing: remind Jossy about the profile-note disputed-claims test (`test-due` 2026-10-15 passed;
   no real outcome recorded yet).

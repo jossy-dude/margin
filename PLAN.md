@@ -87,7 +87,9 @@ Gate for every workstream: builder implements → I re-run `npm run check` + rea
   reminder-text question (default ON) and writes it to settings.
 - **W9** — mechanical cleanup via fast-worker with pass/fail proof; strict TS, ESLint, `npx expo-doctor`
   clean, minimal Android permissions, `ARCHITECTURE.md`; perf measured where web allows (React Profiler,
-  bundle size via `npm run bundle`, query timing), device perf UNVERIFIED-ON-DEVICE.
+  bundle size via `npm run bundle`, query timing), device perf UNVERIFIED-ON-DEVICE. **Absorbs M1**:
+  constraining `TxtProps.c` to `keyof Colors` and spec `Field.p` to real entity properties (fast-worker
+  skipped it — call sites pass dynamic colour values, so the strict-TS pass fixes them together).
 
 ## Risk register
 
