@@ -111,6 +111,40 @@ complete medallion, and "if glanceability is the worry, fix it inside (a), not b
 
 **Answer:** _(awaiting Jossy — "D6: a" keeps what is shipped; "D6: b" is a small swap)_
 
+## D7 — The tour teaches an attendance gesture that only works on one screen
+
+The audit (UX-3) walked the tutorial's "attendance is one tap and then a hold": it holds on the By-subject
+(Grades) grid — tap cycles the mark, hold opens the chooser — but not on Today, where a tap opens the
+chooser and a long-press opens **Edit class**. A student repeating the taught gesture on Today lands on
+the edit screen instead of a mark.
+
+- **a (the fix W8 will make):** the tour states the screen it means ("on the By-subject screen"), so the
+  copy is true; Today's gestures stay as they are (its rows are a different job).
+- **b:** (a) + an "Edit class" row inside Today's status chooser, so editing stops hiding behind a
+  long-press nobody is taught.
+- **c:** unify the gestures: Today's long-press opens the status chooser like Grades, and editing moves
+  into the chooser.
+
+**Recommendation: (a) + (b).** (c) is the tidiest gesture story but it deletes Today's one-tap path to
+editing, which the flows have used since v1 — not a change to make inside a polish pass.
+
+**Answer:** _(awaiting Jossy — "D7: a" / "D7: b" / "D7: c")_
+
+## D8 — 12/24h times: an in-app toggle vs following the device's own preference
+
+The brief asked for a "12/24h device setting". Two honest readings, and they cannot both be v1:
+
+- **a (default, being implemented in W4):** a Settings toggle — "24-hour clock", **default ON** (exactly
+  today's look until changed). Works identically on every phone and is provable in the web build.
+- **b:** follow the *device's* 12/24h preference automatically (reads the OS/locale; needs
+  `expo-localization` or an `Intl` probe — Hermes' Intl support is version-dependent and cannot be
+  verified in this environment, and a wrong answer would silently lie about times).
+
+**Recommendation: (a) now; (b) as a follow-up if you want it** — the toggle is the part that cannot be
+wrong; the device probe is the part we can't check from here.
+
+**Answer:** _(awaiting Jossy — "D8: a" keeps what is shipped; "D8: b" switches to follow-device later)_
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._

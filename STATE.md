@@ -71,6 +71,9 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 2.8 | W3 builder round 1 + **vision round 1** (4/4 PASS; three tightening flags — tape/rim graze = worst problem seen) → **builder tightening round** (slip 618/H 38, tape 40/−12, cluster 22; assertions 4–5 measure tape→rim 12.3 and tape→glyph 16.6 canvas units) | `builder` + `vision-critic` (`opencode/mimo-v2.6-flash-free`) | `reports/vision-w3.md` |
 | 2.9 | **Vision round 2: all PASS, no new problems.** W3 gate PASS and **committed `31d08d3`** (15 files; check green 50 suites / 802 tests; w3-assert 5/5) | orchestrator | logs `/tmp/opencode/logs/w3-{check2,recheck2,assert}.log` |
 | 2.10 | D6 added (dial default vs alternative, both screenshot sets) — awaiting Jossy's number | orchestrator | `DECISIONS.md` D6 |
+| 2.11 | **UX audit delivered** (`reports/audit-ux.md` + 84 shots + 21 scripts) — web gate FAIL on UX-1; all findings re-verified at HEAD before routing (triage below) | `user-tester` (`opencode/mimo-v2.6-flash-free`) | `reports/audit-ux.md` |
+| 2.12 | **Batch 2** — four verified fixes: FAB returns to web (UX-1; pickaxe: the "desktop surface" was never built), sub-minute toast (UX-2; D2 rule kept), web slider aria+arrows (UX-5), audio first-gesture gate (UX-7). Gate PASS, **committed `20f3d02`** (check green 50/804; uxfix-assert ALL PASS) | `builder` + orchestrator | logs `batch2-{check,recheck,assert}.log`, `tools/uxfix-assert.mjs` |
+| 2.13 | D7 added (tour attendance gesture); W4 brief written (`briefs/W4-today-time.md`) — countdown legibility, ranges, 12/24h (D8), midnight tests, UX-4 verify | orchestrator | `DECISIONS.md` D7, `briefs/W4-today-time.md` |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -81,11 +84,11 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 2. The **qa/prelaunch snapshot commit** (above) — his in-flight cleanup is preserved, not judged.
 3. Web build runs the in-memory `MemoryRepository` (existing, documented product decision) — refresh
    resets data; all web e2e runs in a single session, and persistence is judged on the native adapter.
-4. **Web has no global "+" FAB** — `src/ui/Overlay.tsx` deliberately renders `Fab` only when
-   `Platform.OS !== 'web'` (the comment references a desktop-margin "+" that exists only in the
-   `UI_desgin` prototype, not this app). The `{ t: 'add' }` chooser sheet is therefore unreachable on
-   web; captures and e2e use the per-page "+" entries instead (Tasks → "New task", Grades → "Add
-   subject"/"Mark", Week → "Class", settings → "Add class/subject"). AddSheet itself → device checklist.
+4. ~~Web has no global "+" FAB~~ — **fixed in batch 2 `20f3d02`** (audit UX-1): the suppression's
+   claimed reason ("a desktop-margin +") exists only in the `UI_desgin` prototype, never in this app
+   (pickaxe: the gate was born in a press-timing commit, cdb26e0d). The FAB now renders on every
+   surface; the `showFab` gates (sheet open / Focus route / keyboard) are untouched. AddSheet itself
+   still → device checklist.
 5. **Book navigator keeps all six screens mounted.** A `testID` can match up to 5–6 elements at once;
    hidden screens have no layout box, and page controls can sit below the fold (Tasks' "New task" is
    at y≈1771 on a 915 px viewport). Playwright taps MUST pick the first match with a real box that is
@@ -109,15 +112,31 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
     reads the oldest 200 rows while the M4 prune caps the table at 500 — agree the direction when sync
     lands (likely W6); the export path still has no import counterpart (pre-existing).
 
+## UX audit triage (2026-10-16 — report `reports/audit-ux.md`)
+
+Every finding re-verified against current HEAD before routing (the audit ran while W1→W3 landed).
+
+| ID | Sev | Re-verified | Routed to |
+|---|---|---|---|
+| UX-1 | High | CONFIRMED — no add surface on any web viewport; the "desktop +" was never built | **batch 2 fixed** `20f3d02` |
+| UX-2 | Med | CONFIRMED — `store.ts` silent null-sum finish | **batch 2 fixed** (D2 data rule kept; 2 tests) |
+| UX-3 | Med | CONFIRMED — tour copy describes the Grades gesture; on Today long-press opens Edit class | W8 (copy) + **D7** |
+| UX-4 | Low | CONFIRMED shape — last row under the bar; `pageBottomPad` may already cover it at scroll-end | W4 (verify first; fix only if real) |
+| UX-5 | Low | PARTIAL — RNW never maps the RN `accessibilityValue` object (empty attrs, dead arrows) | **batch 2 fixed** (web-only spreads) |
+| UX-6 | Low | CONFIRMED but design — horizontal wheel scrolls; plain-wheel/drag doesn't (chip-strip convention) | REPORT note; no code |
+| UX-7 | Low | CONFIRMED — expo-audio drops the promise below our call sites, so no call-site catch | **batch 2 fixed** (first-gesture gate) |
+| UX-8 | Low | CONFIRMED dev-only upstream warning (RNW SVG) | REPORT note |
+| env | — | "live is not defined" / "unknown colour token #FFFBF1" do NOT reproduce at HEAD (moving-tree artifacts; the token text came from audit-code's M1 proposal) | closed |
+
 ## Next
 
-- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`. **W4 (Today countdown / time ranges)
-  is next** — brief + dispatch in this session; then W5 (D4 lock-screen toggle + alarms) → W6 (transport
-  log) → W7 (stats) → W8 (onboarding incl. the D4 ask) → W9 (production readiness, absorbs M7/L2 and M1).
-- The UX audit is still running (through Stats as of 12:56 — its last tab); every finding gets
-  re-verified against current HEAD at triage before it becomes work.
+- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`. **W4 (Today time
+  truth) next** — brief delivered; then W5 (D4 lock-screen toggle + alarms) → W6 (transport log) → W7
+  (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production readiness, absorbs M7/L2/M1).
+- The UX audit is delivered and triaged above; its two environmental one-offs are closed as
+  non-reproducing. W8 carries the tour copy (D7).
 - Gate per workstream: builder → orchestrator re-check + diffstat → vision loop (UI workstreams,
-  max 4) → user-tester regression → commit. W2's vision loop is waived (native-only delta) — recorded
-  in the task log.
+  max 4) → commit. W2's vision loop is waived (native-only delta) — recorded in the task log.
+- W4's vision round also re-judges the baseline's #4 (countdown numerals) and the clock/card overlap.
 - Standing: remind Jossy about the profile-note disputed-claims test (`test-due` 2026-10-15 passed;
   no real outcome recorded yet).
