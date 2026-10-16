@@ -21,9 +21,15 @@ export interface Task {
 export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3 }
 export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number }
 export interface Adjust { courseId: string; adj: number }
+/** A saved study session. `mode`/`completed` are the two columns DECISIONS D2 added to `focus_session`
+ *  instead of forking a `study_sessions` table (W1's migration 2). Like `Alarm.kind` below, `mode` is a free
+ *  string: the only value anything writes today is `'focus'` (the column's own default), and whether a later
+ *  workstream adds others is its decision, not a guess made here — a `TEXT NOT NULL DEFAULT 'focus'` column
+ *  carries a new one without a migration. `completed` is the finish path's honest reading of the timer, not a
+ *  user choice: see `finish()` in `domain/timer.ts`. */
 export interface FocusSession {
   id: string; taskId: string | null; courseId: string | null; startedAt: number; endedAt: number;
-  focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; demo: boolean;
+  focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; mode: string; completed: boolean; demo: boolean;
 }
 /** A commute/route log entry (W5). Stored and exported from W1; nothing writes one yet, so the shape
  *  stays at the columns the brief named rather than guessing what the tracker will need. */

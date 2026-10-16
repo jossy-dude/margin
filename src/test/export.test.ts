@@ -35,6 +35,18 @@ describe('export', () => {
     expect(j.raw.trips[0].route).toBe('To campus'); // …and in the raw snapshot the JSON export already carried
     expect(j.raw.alarms[0].kind).toBe('leave');
   });
+  it('the focus sheet and the JSON carry mode and completed (W3/D2)', () => {
+    // The two columns D2 added reached the file for the first time in W3: the row's shape (order included)
+    // and the JSON's key names are what a spreadsheet formula or a script reads, so pin both, not just the values.
+    const f = Object.fromEntries(buildTables(snap, NOW).map((x) => [x.name, x]))['Focus sessions']!;
+    expect(f.header.slice(-3)).toEqual(['planned min', 'mode', 'completed']);
+    const mi = f.header.indexOf('mode'), ci = f.header.indexOf('completed');
+    expect(f.rows.every((r) => r[mi] === 'focus')).toBe(true);
+    expect(f.rows.every((r) => r[ci] === true)).toBe(true); // every seeded session ran a full round
+    const j = JSON.parse(toJson(snap, NOW));
+    expect(j['Focus sessions'][0]).toMatchObject({ mode: 'focus', completed: true });
+    expect(j.raw.focus[0]).toMatchObject({ mode: 'focus', completed: true });
+  });
   it('sheet names are unique, ≤31 chars, without forbidden characters', () => {
     const used = new Set<string>(); const a = sheetName('A/B:C*D?[E]'.padEnd(40, 'x'), used), b = sheetName('a/b:c*d?[e]'.padEnd(40, 'x'), used);
     expect(a.length).toBeLessThanOrEqual(31); expect(b.length).toBeLessThanOrEqual(31); expect(a.toLowerCase()).not.toBe(b.toLowerCase()); expect(/[\[\]:*?/\\]/.test(a + b)).toBe(false);

@@ -201,6 +201,29 @@ describe('focus timer', () => {
     expect(finish(s, 99 * 60_000)!.focusSec).toBe(600);
     expect(finish(toggle(initTimer(), 0).state, 30_000)).toBeNull();
   });
+  /**
+   * W3/D2. `mode` and `completed` are the two columns migration 2 added to `focus_session`; these pin what the
+   * timer is allowed to claim about a saved row. `completed` is read off the timer's own counter (`rounds`
+   * moves only where the focus clock reached zero), so an early end can never be saved as a finished round.
+   */
+  it('a saved row says what actually happened: mode focus, and completed only for a round that ran out', () => {
+    const full = finish(toggle(initTimer({ planMin: 25 }), 0).state, 25 * 60_000)!;
+    expect(full.rounds).toBe(1);
+    expect(full).toMatchObject({ mode: 'focus', completed: true });
+
+    const early = finish(toggle(initTimer({ planMin: 25 }), 0).state, 10 * 60_000)!;
+    expect(early.rounds).toBe(0);
+    expect(early).toMatchObject({ mode: 'focus', completed: false });
+
+    // flow overtime is still a completed round, not a second one
+    const flowed = finish(toggle(initTimer({ planMin: 25, flow: true }), 0).state, 30 * 60_000)!;
+    expect(flowed).toMatchObject({ mode: 'focus', completed: true }); expect(flowed.rounds).toBe(1);
+
+    // one full round and then an early end is still a completed session
+    let s = toggle(initTimer({ planMin: 25, flow: false }), 0).state; s = toggle(s, 25 * 60_000).state;
+    expect(s.focusLeftMs).toBe(25 * 60_000); // "Next round" re-arms the clock and keeps the count
+    expect(finish(s, 40 * 60_000)).toMatchObject({ rounds: 1, completed: true, focusSec: 900 });
+  });
   it('flow overtime stops at the cap instead of billing focus that never happened', () => {
     expect(FLOW_OVER_CAP_MS).toBe(15 * 60_000);
     const s = toggle(initTimer({ planMin: 25 }), 0).state;

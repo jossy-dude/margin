@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
+import { BackHandler, Image, Pressable, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,15 +22,40 @@ function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { childre
   return <HandBox seed={seed} fill={fill ?? c.card} sw={sw} amp={1.5} shadow={shadow} style={style}>{children}</HandBox>;
 }
 const D = 282, C0 = 141;
-/** the readout is a hand-cut paper capsule concentric with the dial (was a rectangle pasted over the face).
+/** The readout is a hand-cut slip of paper taped below the dial. It used to ride a capsule concentric with
+ *  the face (before that, a disc pasted over it), and any shape at the centre hides the one thing the face is
+ *  for: the guilloché and the two rosette lattices the owner asked to see. Off the face and onto the page, the
+ *  number costs the artwork nothing. Nothing about the number itself changed: same face, same size. */
+const SLIP_W = 152, SLIP_H = 38, SLIP_SEED = 6421;
+/** The slot the slip takes is measured, not eyeballed. The face is 236 wide and centred in the 282-unit dial
+ *  box at (left 76, top 350), so its drawn edge is canvas y ≈ 609 and its **feather** — the visible torn rim —
+ *  is the halo veil out to r ≈ 122 from the dial centre (217, 491). A first pass put the slip's top at 612,
+ *  which left the tape's rotated corner at y ≈ 610.4, x ≈ 192.4: 121.9 from the dial centre, i.e. *inside* the
+ *  fade the owner reads as the rim (vision review W3, "adjacent to the rim"). The corner now sits at ≈ 617.0,
+ *  **134.3** from the centre — 12.3 clear of the feather radius, against the 3 the review asked for (both
+ *  numbers measured in the browser by `tools/w3-assert.mjs`, assertion 4).
  *
- *  A disc has to be as wide as the numeral *and* as tall again, so the old 104-unit disc claimed 57 units of
- *  dial radius and hid the entire centre of the selected clock face — which is where the guilloché and the two
- *  rosette lattices live, and the thing the owner asked to see. A capsule is the concentric-correct shape for a
- *  six-character lockup (outer radius = inner radius + padding) and it only claims 22, so the centre artifact is
- *  on show right up to the number. Nothing about the number itself changed: same face, same size. */
-const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2, CAP_BOX = CAP_W + 4;
-const CAP_RAD = { h: [CAP_R, CAP_R, CAP_R, CAP_R], v: [CAP_R, CAP_R, CAP_R, CAP_R] } as const;
+ *  The room for that comes from two places, in this order: `SLIP_H` drops 42 → 38 (the readout's own line box
+ *  is 32, so it keeps 3 units either side), and `CLUSTER_DROP` takes the cluster 22 — inside the 26 the review
+ *  allowed. `subText` is therefore at 662 and the slip's bottom at 656, so the slip→status gap is the same 6 it
+ *  was: the review's one "do not tighten this" instruction, held exactly. Everything below `subText` moves 2,
+ *  and the lowest control still ends at canvas y 867 with 134 units of page under it (measured on the device
+ *  checklist's build path). */
+const SLIP_TOP = 618, SLIP_LEFT = 217 - SLIP_W / 2, CLUSTER_DROP = 22;
+/** Four different corner radii, like every other cut sheet on the page — a slip cut by hand is not a rectangle. */
+const SLIP_RAD = { h: [9, 6, 11, 7], v: [7, 11, 6, 9] } as const;
+/** The tape moved out of the readout's way rather than the readout out of the tape's: at 46 wide from `left: 8`
+ *  its rotated box reached slip-local x ≈ 55.6, while the countdown ("25 min", measured 83.2 wide) is centred
+ *  on the paper and so starts at 34.4 — the two overlapped, and the first glyph sat on the tape's right end
+ *  (vision review W3). Narrower, and overhanging the paper's left edge the way every other tape on the page
+ *  does (`BreakSticker` −14, the task card −11), it now ends at ≈ 29.6 while `SLIP_PAD_LEFT` moves the number's
+ *  centre to 76 → 46.2: a **16.6**-unit gap where the standard asked for 8 (measured, assertion 5), with the
+ *  number's right edge still 22 units inside the torn edge. */
+const TAPE_W = 40, TAPE_LEFT = -12, SLIP_PAD_LEFT = 24;
+/** The face is see-through now: the page's own paper and grain read through the artwork, which is the whole
+ *  reason the readout left it. Only the face — the feather veil, the progress rim and the pointer stay at full
+ *  opacity, because they are what dissolve the face's circular clip edge into the page in both themes. */
+const FACE_OP = 0.86;
 /** the clock face IS the dial: it fills the pan, so nothing decorative sits between the artwork and the
  *  dial's edge. What used to be a knurled bed ring + four outer numerals + a hatch sector is gone (the
  *  owner read the escapement's teeth as red dots and the ring as clutter); the edge is now a feather — a
@@ -47,21 +72,19 @@ const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
    with its 60 ticks and four outer numerals were dropped with the dial redesign: the owner read the teeth
    as red dots and the ring as clutter, and asked for the face itself to be the dial — integrated, feathered
    at its edge, not a photograph pasted inside a mechanism. Motion stays where it still says something: the
-   pointer's per-second jolt, the capsule's tick wash, the last-ten-seconds warn ring, and the rim ring that
-   shows elapsed time where a sector inside the face never could be read. Nothing on the face scales — the
-   numeral is the thing being read. */
+   pointer's per-second jolt, the slip's tick wash, the last-ten-seconds red pen border round that slip, and
+   the rim ring that shows elapsed time where a sector inside the face never could be read. Nothing on the face
+   scales — the numeral is the thing being read. */
 
-function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readout, tick, wash }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean; readout: string; tick: SharedValue<number>; wash: SharedValue<number> }) {
+function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean }) {
   const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), focused = useScreenLive(), reduce = useReduceMotion();
-  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0), warnSV = useSharedValue(0);
+  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0);
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
   const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
   const wholeSec = Math.floor(leftMs / 1000);
   useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
   useEffect(() => { if (drag.value) return; hand.value = reduce || live ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
   useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [wholeSec, running, flowing, jolt]);
-  const warnOn = running && leftMs > 0 && leftMs <= 10_000; // the last 10 seconds are announced by a red ring, not only by a blip
-  useEffect(() => { if (warnOn && !reduce) warnSV.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 300 })); }, [warnOn, reduce, warnSV]);
   const pan = Gesture.Pan().enabled(editable).minDistance(0)
     .onBegin((e) => { drag.value = 1; last.value = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; })
     .onUpdate((e) => {
@@ -72,12 +95,6 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
     })
     .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
   const handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
-  /** the one lift that is not on the bezel: a 13 % wash on the paper, riding the audible tick so the two agree.
-   *  Collapsed under reduce-motion, like every other thing here. */
-  const tickS = useAnimatedStyle(() => ({ opacity: reduce ? 0 : tick.value * 0.13 }));
-  /** the flow-overtime wash: the accent floods the capsule and drains, once, when a round runs past its cap */
-  const washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 }));
-  const warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
   /** labels sit on the torn photograph, so their halo has to be the colour of what is actually behind them — the
    *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing.
    *  The feather veil is painted in the same halo for the same reason: it is what lets the face's circular clip
@@ -94,16 +111,18 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
     <Stop offset="0.967" stopColor={halo} stopOpacity="1" />
     <Stop offset="1" stopColor={halo} stopOpacity="1" />
   </RadialGradient></Defs>, [halo, hid]);
-  const hub = useMemo(() => handPath(CAP_W, CAP_H, CAP_RAD, 7717, 1.6), []);
   const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
   return (
     <GestureDetector gesture={pan}>
-      <View collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: `${live ? Math.ceil(leftMs / 60_000) + ' minutes left' : min + ' minutes'}` }}
+      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: `${live ? Math.ceil(leftMs / 60_000) + ' minutes left' : min + ' minutes'}` }}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
-        <View style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden' }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
+        {/* the one lift off full opacity on the dial: the artwork is what the owner asked to see, and the paper
+            and grain of the page read through it. The veil, the rim ring and the pointer below are NOT faded —
+            they are what feathers the face's clip edge into the page in both themes. */}
+        <View testID="focus-dial-face" style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', opacity: FACE_OP }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
         {/* the veil feathers the face's clip edge into the page; the rim ring shows elapsed time where the old
-            hatch sector inside the face could never be read. Both sit under the pointer and the capsule. */}
+            hatch sector inside the face could never be read. Both sit under the pointer and the slip below. */}
         <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">
           {feather}
           <Circle cx={C0} cy={C0} r={FEATHER_R} fill={`url(#${hid})`} />
@@ -111,20 +130,50 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing, readou
           {prog > 0 && <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={c.acc} strokeWidth={PROG_W} strokeLinecap="round" strokeDasharray={`${PROG_C * prog} ${PROG_C}`} transform={`rotate(-90 ${C0} ${C0})`} />}
         </Svg>
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
-        {/* the timer reads inside its own dial: a round paper hub on the dial's centre, so the face, the cliff photo and the pointer all stay readable */}
-        <View pointerEvents="none" style={{ position: 'absolute', left: (D - CAP_W) / 2, top: (D - CAP_H) / 2, width: CAP_W, height: CAP_H, alignItems: 'center', justifyContent: 'center' }}>
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <Svg width={CAP_BOX} height={CAP_BOX} style={{ position: 'absolute', left: -2, top: -2 }} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}>
-              <Path d={hub} transform="translate(2.6 3)" fill={hexA(c.shadow, 0.2)} /><Path d={hub} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
-            </Svg>
-            <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -2, top: -2 }, tickS]}><Svg width={CAP_BOX} height={CAP_BOX} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}><Path d={hub} fill={c.hl} stroke="none" /></Svg></Animated.View>
-            {warnOn && <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -2, top: -2 }, warnS]}><Svg width={CAP_BOX} height={CAP_BOX} viewBox={`-2 -2 ${CAP_BOX} ${CAP_BOX}`}><Path d={hub} fill="none" stroke={c.bad} strokeWidth={2.6} /></Svg></Animated.View>}
-          </View>
-          <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 4, top: 4, right: 4, bottom: 4, borderRadius: CAP_R - 4, backgroundColor: c.acc }, washS]} />
-          <Txt f="type" s={27} style={{ letterSpacing: -0.8 }} accessibilityLiveRegion="none">{readout}</Txt>
-        </View>
       </View>
     </GestureDetector>
+  );
+}
+
+/** The time, on a slip of paper taped below the dial — the readout now, so it inherits every motion the old
+ *  capsule on the face carried, one home each, and each collapsed under reduce-motion exactly as its old form
+ *  was:
+ *
+ *   · the per-tick wash (`tick`): the slip's paper flashes `hl` with the audible tick, the same 13 % lift it
+ *     had on the face, dead at 0 under reduce-motion;
+ *   · the last ten seconds (`warnOn`): a red pen border drawn round the slip, mounted only while the warning
+ *     holds, so the last 10 s are announced by a border as they were by the red ring;
+ *   · the flow-overtime flood (`wash`): the accent fills the slip and drains, once, when a round runs past its
+ *     cap — the same 42 % flood the capsule carried.
+ *
+ *  The paper is a hand-cut outline from the same `handPath` primitive `HandBox` and `BreakSticker` are drawn
+ *  with, because the three overlays must share the paper's exact edge — a rounded View laid over a wobbled
+ *  outline shows its own corners the moment the paper flashes. */
+function TimeLabel({ readout, warnOn, tick, wash }: { readout: string; warnOn: boolean; tick: SharedValue<number>; wash: SharedValue<number> }) {
+  const { c } = useTheme(), reduce = useReduceMotion(), warnSV = useSharedValue(0);
+  useEffect(() => { if (warnOn && !reduce) warnSV.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 300 })); }, [warnOn, reduce, warnSV]);
+  const d = useMemo(() => handPath(SLIP_W, SLIP_H, SLIP_RAD, SLIP_SEED, 1.5), []);
+  /* one shape, four inks: the paper, the tick flash, the overtime flood and the warn border must be the same
+     outline or the hand-cut edge shows through the overlays. `sheet` is the 2-unit bleed the stroke needs. */
+  const sheet = { position: 'absolute', left: -2, top: -2, width: SLIP_W + 4, height: SLIP_H + 4 } as const;
+  const inked = (p: React.ComponentProps<typeof Path>) => <Svg width={SLIP_W + 4} height={SLIP_H + 4} viewBox={`-2 -2 ${SLIP_W + 4} ${SLIP_H + 4}`}><Path d={d} {...p} /></Svg>;
+  const tickS = useAnimatedStyle(() => ({ opacity: reduce ? 0 : tick.value * 0.13 }));
+  const washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 }));
+  const warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
+  return (
+    <View testID="focus-time" pointerEvents="none" style={{ position: 'absolute', left: SLIP_LEFT, top: SLIP_TOP, width: SLIP_W, height: SLIP_H, paddingLeft: SLIP_PAD_LEFT, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={SLIP_W + 4} height={SLIP_H + 4} style={sheet} viewBox={`-2 -2 ${SLIP_W + 4} ${SLIP_H + 4}`}>
+        <Path d={d} transform="translate(2.2 2.8)" fill={hexA(c.shadow, 0.2)} />
+        <Path d={d} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
+      </Svg>
+      <Animated.View style={[sheet, tickS]}>{inked({ fill: c.hl })}</Animated.View>
+      <Animated.View style={[sheet, washS]}>{inked({ fill: c.acc })}</Animated.View>
+      {warnOn && <Animated.View style={[sheet, warnS]}>{inked({ fill: 'none', stroke: c.bad, strokeWidth: 2.6 })}</Animated.View>}
+      {/* one strip of tape, over the slip's top-left corner and out past its edge, rotated the way a hand tears
+          it — sat low enough that its rotated corner clears the face's feathered rim by a measured margin */}
+      <Tape testID="focus-tape" w={TAPE_W} rot={-12} style={{ left: TAPE_LEFT, top: 3 }} />
+      <Txt f="type" s={27} testID="focus-time-text" style={{ letterSpacing: -0.8 }} accessibilityLiveRegion="none">{readout}</Txt>
+    </View>
   );
 }
 
@@ -179,6 +228,9 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
   const editable = t.phase === 'set';
   /** flow overtime is capped: past the cap the clock is frozen, so the page must stop pretending to count */
   const frozen = t.running && t.phase === 'focus' && v.leftMs === 0 && v.overMs >= FLOW_OVER_CAP_MS;
+  /** the last ten seconds are announced by a red pen border round the time, not only by a blip — read off the
+   *  advanced state (`g`), not the store, or the warning would never fire while the round runs */
+  const warnOn = t.running && t.phase === 'focus' && g.focusLeftMs > 0 && g.focusLeftMs <= 10_000;
   useEffect(() => { act.timerPump(now); }, [now]);
   /* `expo-keep-awake` rejects on the web — the Screen Wake Lock API is permission-gated and the browser
      answers "not activated yet" — and an unhandled rejection there takes the whole screen down with it.
@@ -241,11 +293,13 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
               is the right number in both phases and the dial never restarts behind the break sticker.
               It comes from the advanced state, not the store: the store only commits on events, so the
               ring, the pointer hand and the last-10-seconds ring all froze if they read `t`. */}
-          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing} readout={bigText} tick={tickSV} wash={wash}
+          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing}
             onChange={(m, vel) => { if (vel < 0) { fx.bump(); return; } if (m !== t.planMin) { act.timerSetMin(m); fx.detent(vel); } }} />
-          <Txt f="serifB" s={12.5} c="mut" pointerEvents="none" style={{ position: 'absolute', left: 60, top: 640, width: 320, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{subText}</Txt>
+          {/* the readout, off the face and onto the page: a slip below the dial's edge, clear of the face circle */}
+          <TimeLabel readout={bigText} warnOn={warnOn} tick={tickSV} wash={wash} />
+          <Txt f="serifB" s={12.5} c="mut" pointerEvents="none" style={{ position: 'absolute', left: 60, top: 640 + CLUSTER_DROP, width: 320, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{subText}</Txt>
           <Txt f="hand" s={15} pointerEvents="none" style={{ position: 'absolute', left: 360, top: 352, transform: [{ rotate: '6deg' }], textShadowColor: c.paper, textShadowRadius: 4, width: 90 }}>{'focus doesn\'t\nhappen by\naccident'}</Txt>
-          <View style={{ position: 'absolute', left: 56, top: 672, width: 360, flexDirection: 'row', gap: 7, alignItems: 'stretch' }}>
+          <View style={{ position: 'absolute', left: 56, top: 672 + CLUSTER_DROP, width: 360, flexDirection: 'row', gap: 7, alignItems: 'stretch' }}>
             {[25, 45, 50, 90].map((m) => { const on = t.planMin === m; return (
               <Pressable key={m} disabled={!editable} onPress={() => { act.timerSetMin(m); fx.detent(500); act.setSettings({ focusPresetMin: m }); }} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !editable }} accessibilityLabel={`${m} minutes`} style={{ flex: 1, minWidth: 44, opacity: editable ? 1 : 0.55 }}>
                 <Box seed={`op${m}`} fill={on ? c.ink : c.card} shadow={on} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Txt f="bold" s={20} c={on ? 'card' : 'ink'}>{m}</Txt><Txt f="hand" s={11} c={on ? 'card' : 'mut'} style={{ marginTop: -2 }}>min</Txt></Box>
@@ -254,13 +308,13 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
               <Box seed="flow" fill={t.flow ? c.ink : c.card} shadow={t.flow} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}><View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: t.flow ? c.card : 'transparent', borderWidth: 1.6, borderColor: t.flow ? c.card : c.ink }} /><Txt f="bold" s={17} c={t.flow ? 'card' : 'ink'}>{t.flow ? 'Flow on' : 'Flow off'}</Txt></Box>
             </Pressable>
           </View>
-          <Pressable onPress={onGo} accessibilityRole="button" accessibilityLabel={goLabel} style={{ position: 'absolute', left: 138, top: 736, width: 196, transform: [{ rotate: '-0.6deg' }] }}>
+          <Pressable onPress={onGo} accessibilityRole="button" accessibilityLabel={goLabel} style={{ position: 'absolute', left: 138, top: 736 + CLUSTER_DROP, width: 196, transform: [{ rotate: '-0.6deg' }] }}>
             <Box seed="go" fill={t.phase === 'break' ? c.card : c.ink} style={{ minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 }}><Icon name={t.running && t.phase === 'focus' ? 'pause' : 'play'} size={24} color={t.phase === 'break' ? c.ink : c.card} sw={2.4} /><Txt f="bold" s={27} c={t.phase === 'break' ? 'ink' : 'card'}>{goLabel}</Txt></Box>
           </Pressable>
-          <Pressable onPress={() => { if (t.phase === 'set') { act.go('Today'); return; } act.timerFinish(true); fx.clack(); }} accessibilityRole="button" accessibilityLabel={t.phase === 'set' ? 'Leave focus' : 'End session and save'} style={{ position: 'absolute', left: 181, top: 800, transform: [{ rotate: '1deg' }] }}>
+          <Pressable onPress={() => { if (t.phase === 'set') { act.go('Today'); return; } act.timerFinish(true); fx.clack(); }} accessibilityRole="button" accessibilityLabel={t.phase === 'set' ? 'Leave focus' : 'End session and save'} style={{ position: 'absolute', left: 181, top: 800 + CLUSTER_DROP, transform: [{ rotate: '1deg' }] }}>
             <Box seed="end" fill="transparent" shadow={false} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}><Txt f="bold" s={19}>{t.phase === 'set' ? 'leave' : 'end session'}</Txt></Box>
           </Pressable>
-          <Pressable onPress={() => { if (canBreak(g)) act.timerBreak(); else { fx.denied(); toast(breakGate); } }} accessibilityRole="button" accessibilityState={{ disabled: !canBreak(g) }} accessibilityLabel={`Take a break, ${Math.max(0, t.breaksAllowed - g.breaksUsed)} left. ${breakGate}`} style={{ position: 'absolute', left: 52, top: 806, transform: [{ rotate: '-1.5deg' }] }}>
+          <Pressable onPress={() => { if (canBreak(g)) act.timerBreak(); else { fx.denied(); toast(breakGate); } }} accessibilityRole="button" accessibilityState={{ disabled: !canBreak(g) }} accessibilityLabel={`Take a break, ${Math.max(0, t.breaksAllowed - g.breaksUsed)} left. ${breakGate}`} style={{ position: 'absolute', left: 52, top: 806 + CLUSTER_DROP, transform: [{ rotate: '-1.5deg' }] }}>
             <Box seed="brk" fill={c.card} shadow={false} sw={2} style={{ minHeight: 38, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: canBreak(g) ? 1 : 0.55 }}><Icon name="coffee" size={17} color={c.ink} /><Txt f="bold" s={16}>break · {fmtDur(Math.round(t.breakMs / 60_000))}</Txt></Box>
           </Pressable>
           {(t.phase === 'break' || ghost) && <BreakSticker leftMs={ghost ? 0 : v.breakLeftMs} totalMs={ghost ? ghost.total : t.breakTotalMs} falling={!!ghost} nudge={nudge} onGone={() => setGhost(null)} onBack={() => act.timerBackNow()} />}

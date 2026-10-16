@@ -101,9 +101,21 @@ export function endBreak(s0: TimerState, now: number): TimerState {
   const { state: s } = advance(s0, now);
   return s.phase !== 'break' ? s : { ...s, phase: 'focus', running: true, checkpoint: now, breakLeftMs: 0 };
 }
-export interface Summary { startedAt: number; endedAt: number; focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; taskId: string | null; courseId: string | null }
+export interface Summary { startedAt: number; endedAt: number; focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; mode: string; completed: boolean; taskId: string | null; courseId: string | null }
+/** The row a finished session writes, or null when there is nothing honest to save.
+ *
+ *  `null` covers both "no round was ever started" and "less than a minute of focus happened": a session
+ *  abandoned inside the first minute is not a study session, and saving it would put a row in the export and
+ *  the heatmap that nothing actually did. Because that guard requires real focus time, every row that IS
+ *  saved happened while the focus clock was running — so `mode` is always `'focus'` and a break's minutes ride
+ *  in `breakSec` on the same row rather than as a session of their own.
+ *
+ *  `completed` is the timer's own counter, not a guess: `rounds` is incremented only where the focus clock
+ *  actually reached zero (see `advance`), so a round ended early lands `false` and a round that ran out —
+ *  flow overtime included — lands `true`. A session that ran one full round and then ended early in the next
+ *  is `true`: a completed round is in it. */
 export function finish(s0: TimerState, now: number): Summary | null {
   const s = advance(s0, now).state;
   if (s.startedAt === null || s.focusElapsedMs < 60_000) return null;
-  return { startedAt: s.startedAt, endedAt: now, focusSec: Math.round(s.focusElapsedMs / 1000), breakSec: Math.round(s.breakDoneMs / 1000), overSec: Math.round(s.overMs / 1000), rounds: s.rounds, planMin: s.planMin, taskId: s.taskId, courseId: s.courseId };
+  return { startedAt: s.startedAt, endedAt: now, focusSec: Math.round(s.focusElapsedMs / 1000), breakSec: Math.round(s.breakDoneMs / 1000), overSec: Math.round(s.overMs / 1000), rounds: s.rounds, planMin: s.planMin, mode: 'focus', completed: s.rounds > 0, taskId: s.taskId, courseId: s.courseId };
 }

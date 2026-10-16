@@ -1,5 +1,6 @@
 import { SqliteRepository, type SqlDb } from '../data/sqlite';
 import { MemoryRepository } from '../data/memory';
+import { seedSnapshot } from '../data/seed';
 import { act, getState, hydrate } from '../store/store';
 
 const NOW = new Date(2026, 9, 5, 8).getTime();
@@ -44,6 +45,88 @@ describe('store undo', () => {
     const repo = new MemoryRepository(() => NOW); await hydrate(repo);
     act.setAtt(KEY, 'p'); getState().toast!.undo!();
     expect((await repo.pendingOutbox()).map((o) => `${o.entity}:${o.id}:${o.op}`)).toEqual([`attendance:${KEY}:put`, `attendance:${KEY}:del`]);
+  });
+});
+
+describe('the focus finish row (W3/D2)', () => {
+  /** The screen's own source for the task box: `Focus.tsx` looks the open task up by `timer.taskId`. */
+  const boxTask = () => { const id = getState().timer.taskId; return getState().tasks.find((t) => t.id === id) ?? null; };
+  const at = (ms: number) => jest.setSystemTime(NOW + ms);
+  /** The demo set, so `focusOpen` has real tasks with real subjects behind them. */
+  const seeded = async () => { const repo = new MemoryRepository(() => NOW); await repo.seed(seedSnapshot(NOW)); await hydrate(repo); return repo; };
+  const firstTask = () => getState().tasks.find((t) => t.status !== 2)!;
+
+  it('a round that runs out is saved as mode focus, completed, and names the task the box was showing', async () => {
+    const repo = await seeded();
+    const task = firstTask();
+    at(0); act.focusOpen(task.id);
+    expect(boxTask()?.id).toBe(task.id); // what the task box renders, before the round starts
+    const plan = getState().timer.planMin;
+
+    act.timerToggle(); // Start
+    at(plan * 60_000);
+    act.timerFinish();
+
+    const row = getState().focus.at(-1)!;
+    expect(row).toMatchObject({ mode: 'focus', completed: true, taskId: task.id, courseId: task.courseId, planMin: plan, focusSec: plan * 60, rounds: 1, demo: false });
+    expect(boxTask()?.id).toBe(task.id); // …and the box still showed that task when it was saved
+    expect((await repo.load()).focus.at(-1)).toMatchObject({ mode: 'focus', completed: true, taskId: task.id });
+  });
+
+  it('a round ended early is saved as mode focus, NOT completed, and still names the task', async () => {
+    const repo = await seeded();
+    const task = firstTask();
+    at(0); act.focusOpen(task.id); act.timerToggle();
+    at(5 * 60_000); act.timerToggle(); // pause — the paused state is what carries the elapsed focus
+    at(10 * 60_000);                   // …and five minutes later the student ends the session early
+    act.timerFinish();
+
+    expect(getState().focus.at(-1)).toMatchObject({ mode: 'focus', completed: false, rounds: 0, focusSec: 300, taskId: task.id, courseId: task.courseId });
+    expect((await repo.load()).focus.at(-1)).toMatchObject({ completed: false, taskId: task.id });
+  });
+
+  it('a break is not a session of its own: its minutes ride in breakSec on the one row', async () => {
+    await seeded();
+    const task = firstTask();
+    at(0); act.focusOpen(task.id); act.timerToggle();
+    at(10 * 60_000);
+    act.timerBreak();
+    expect(getState().timer.phase).toBe('break');
+    const before = getState().focus.length;
+    at(11 * 60_000);
+    act.timerFinish();
+
+    expect(getState().focus).toHaveLength(before + 1); // one row, not one for the break too
+    expect(getState().focus.at(-1)).toMatchObject({ mode: 'focus', completed: false, breakSec: 60, taskId: task.id });
+  });
+
+  it('swap task re-points the round, so the row names the task the box now shows', async () => {
+    await seeded();
+    const open = getState().tasks.filter((t) => t.status !== 2);
+    expect(open.length).toBeGreaterThan(1);
+    at(0); act.focusOpen(open[0]!.id);
+    act.timerSwap();
+    const swapped = boxTask()!;
+    expect(swapped.id).not.toBe(open[0]!.id);
+    expect(getState().timer.courseId).toBe(swapped.courseId);
+
+    act.timerToggle(); at(getState().timer.planMin * 60_000); act.timerFinish();
+    expect(getState().focus.at(-1)).toMatchObject({ taskId: swapped.id, courseId: swapped.courseId, completed: true });
+  });
+
+  it('a round already running keeps its own task, and the row still names what the box showed', async () => {
+    // "Focus on this" (a long-press on a task) while a round is live must NOT re-point the running round: the
+    // guard in `focusOpen` is what the box and the row both keep agreeing with. Pinned, not changed.
+    await seeded();
+    const open = getState().tasks.filter((t) => t.status !== 2);
+    const [a, b] = [open[0]!, open.find((t) => t.id !== open[0]!.id)!];
+    at(0); act.focusOpen(a.id); act.timerToggle();
+    at(60_000); act.focusOpen(b.id);
+
+    expect(getState().timer.taskId).toBe(a.id);
+    expect(boxTask()?.id).toBe(a.id);
+    at(60_000 + getState().timer.planMin * 60_000); act.timerFinish();
+    expect(getState().focus.at(-1)).toMatchObject({ taskId: a.id, courseId: a.courseId, completed: true });
   });
 });
 

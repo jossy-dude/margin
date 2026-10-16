@@ -47,7 +47,9 @@ export function seedSnapshot(now = Date.now()): Snapshot {
   const focus: FocusSession[] = [];
   for (let i = 0; i < 20; i++) {
     const ago = (i * 7 + 3) % 33, d = addDays(day, -ago), h = [9, 10, 14, 16, 19, 20, 21][i % 7] ?? 10, c = COURSES[i % 5]?.[0] ?? 'E', min = [25, 45, 50, 25, 90][i % 5] ?? 25;
-    focus.push({ id: `demo-focus-${i}`, taskId: null, courseId: c, startedAt: atTime(d, `${String(h).padStart(2, '0')}:05`), endedAt: atTime(d, `${String(h).padStart(2, '0')}:05`) + min * 60_000, focusSec: min * 60, breakSec: min >= 45 ? 300 : 0, overSec: 0, rounds: 1, planMin: min, demo: true });
+    /* Every sample session is a completed round — `rounds: 1`, no overtime — so the two columns D2 added
+       say the same thing about the demo history they say about a real one. */
+    focus.push({ id: `demo-focus-${i}`, taskId: null, courseId: c, startedAt: atTime(d, `${String(h).padStart(2, '0')}:05`), endedAt: atTime(d, `${String(h).padStart(2, '0')}:05`) + min * 60_000, focusSec: min * 60, breakSec: min >= 45 ? 300 : 0, overSec: 0, rounds: 1, planMin: min, mode: 'focus', completed: true, demo: true });
   }
   return { courses, meetings, attendance: {}, dayMarks: {}, tasks, notices, marks, adjusts: {}, focus, trips: [], alarms: [], settings: { ...DEFAULT_SETTINGS, seededAt: now } };
 }

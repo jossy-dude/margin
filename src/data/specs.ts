@@ -17,11 +17,14 @@ export const SPECS: Record<EntityName, Spec> = {
   notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int')] },
   mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int')] },
   adjust: { table: 'adjust', pk: 'course_id', pkProp: 'courseId', fields: [f('courseId', 'text'), f('adj', 'real')] },
-  focus: { table: 'focus_session', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('taskId', 'text', true), f('courseId', 'text', true), f('startedAt', 'int'), f('endedAt', 'int'), f('focusSec', 'int'), f('breakSec', 'int'), f('overSec', 'int'), f('rounds', 'int'), f('planMin', 'int'), f('demo', 'bool')] },
+  /* `mode`/`completed` are bound here from W3 on: migration 2 (W1) added the columns, and until the finish
+     path wrote them they were dead weight — a row loaded with the schema's own defaults and was exported
+     without them. Both are non-null with SQL defaults, so a row written before this work still loads as
+     `mode: 'focus'`, `completed: false` and re-exports with that meaning intact. */
+  focus: { table: 'focus_session', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('taskId', 'text', true), f('courseId', 'text', true), f('startedAt', 'int'), f('endedAt', 'int'), f('focusSec', 'int'), f('breakSec', 'int'), f('overSec', 'int'), f('rounds', 'int'), f('planMin', 'int'), f('mode', 'text'), f('completed', 'bool'), f('demo', 'bool')] },
   /* W5/W6's entities, wired at the data layer only: nothing reads or writes them from the UI yet, so
      the shapes below are deliberately minimal — a later migration can add fields rather than this
-     one guessing them. `mode`/`completed` for focus sessions are columns on `focus_session` (DECISIONS
-     D2), not bound here: the SPECS row is the shape the timer already writes. */
+     one guessing them. */
   trip: { table: 'trip', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('startedAt', 'int'), f('endedAt', 'int', true), f('route', 'text'), f('note', 'text')] },
   alarm: { table: 'alarm', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('at', 'int'), f('label', 'text'), f('enabled', 'bool'), f('kind', 'text'), f('taskId', 'text', true)] },
 };

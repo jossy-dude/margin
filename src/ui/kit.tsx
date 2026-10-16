@@ -420,8 +420,8 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
     </View>
   );
 }
-export function Tape({ w = 62, rot = -4, style }: { w?: number; rot?: number; style?: StyleProp<ViewStyle> }) {
+export function Tape({ w = 62, rot = -4, style, testID }: { w?: number; rot?: number; style?: StyleProp<ViewStyle>; testID?: string }) {
   const { dark } = useTheme();
-  return <View pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? TAPE.dark.fill : TAPE.light.fill, borderColor: dark ? TAPE.dark.edge : TAPE.light.edge, borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;
+  return <View testID={testID} pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? TAPE.dark.fill : TAPE.light.fill, borderColor: dark ? TAPE.dark.edge : TAPE.light.edge, borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;
 }
 export const Hair = () => { const { c } = useTheme(); return <View style={{ height: 1.4, backgroundColor: c.rule, marginVertical: 8 }} />; };

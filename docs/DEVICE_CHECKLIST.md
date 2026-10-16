@@ -160,6 +160,93 @@ names the colour itself: `backgroundColor={c.paper}`.
 
 ---
 
+## W3 — the Focus dial: a see-through face, the time taped below it
+
+Changed: `src/screens/Focus.tsx` and an optional `testID` on the `Tape` primitive in `src/ui/kit.tsx`
+(the readout left the face's centre for a paper slip below the dial; the face artwork is now drawn at 0.86
+opacity; `subText` and the controls moved down 22 canvas units to clear the slip, so the slip sits lower
+and its tape's torn corner stands clear of the dial's feathered rim). No native file moved, so any build
+of the current `android/` project contains this work.
+
+**Look at:** Today → tap the focus card (`open-focus`) → the Focus page.
+
+### W3.1 — the face is see-through
+
+- **W3.1a** Light theme: the clock face at the dial's centre shows the page's own paper and grain through
+  its guilloché and the two rosette lattices — the artwork is still legible, but it is clearly the page
+  underneath it, not a pasted opaque photograph.
+  **PASS / FAIL: ______**
+- **W3.1b** Dark theme (Settings → Look & feel): the same, on the darkened page. Judge whether the face
+  is *legible* in dark specifically — the page under it is much darker, so this is the reading that could
+  fail even if light looks right. Name the failing part in words.
+  **PASS / FAIL: ______**
+- **W3.1c** The face's circular edge feathers into the page in both themes — no hard rim, no visible
+  circular clip line, and the progress ring and pointer hand are still fully solid over it (they were
+  deliberately NOT faded).
+  **PASS / FAIL: ______**
+
+### W3.2 — the label: position and legibility
+
+- **W3.2a** The time sits on a hand-cut paper slip **below** the dial, taped at its top-left, and the
+  slip is entirely clear of the face circle — no part of the paper or the tape crosses the face's edge.
+  Look specifically at the tape's raised (upper-right) corner against the dial's feathered rim: it must sit
+  **clear of the fade**, i.e. you must see bare paper between the corner and the rim, not the corner's edge
+  landing inside the soft halo (this was the vision review's worst finding and the reason the slip moved
+  down). The countdown's first glyph must also stand clear of the tape's right end.
+  **PASS / FAIL: ______**
+- **W3.2b** Nothing collides: the slip does not touch the subtitle line beneath it, and the subtitle,
+  the preset row (25/45/50/90 + Flow), **Start**, **end session** and **break** all keep their spacing —
+  no overlap, no crowding, nothing pushed off the page.
+  **PASS / FAIL: ______**
+- **W3.2c** At the **largest font size you use** (Settings → text size / the OS font scale), the time on
+  the slip is still fully inside the slip's paper and the slip still clears the face circle — the number
+  must not overflow the torn edge. (The slip's type does not scale; judge whether that reads as
+  deliberate or as broken.)
+  **PASS / FAIL: ______**
+- **W3.2d** The subtitle line under the slip is still readable at its own size in both themes (it keeps
+  its halo).
+  **PASS / FAIL: ______**
+
+### W3.3 — the three motion effects have moved, and still behave
+
+- **W3.3a** Start a round with sounds on: each second, the **slip's paper flashes** with the tick — the
+  flash is on the paper, not on the face centre.
+  **PASS / FAIL: ______**
+- **W3.3b** In the last ten seconds of a round, a **red pen border** is drawn round the slip, pulsing.
+  It appears on the slip, disappears when the round ends, and never appears while paused.
+  **PASS / FAIL: ______**
+- **W3.3c** With Flow on, let a round run past its cap into overtime: the **accent colour floods the
+  slip** once and drains.
+  **PASS / FAIL: ______**
+- **W3.3d** Turn on the OS "Remove animations" switch (Android Settings → Accessibility) and repeat
+  W3.3a–c: the tick flash is gone, the warn border holds steady without pulsing, and the flood no longer
+  animates. Same as the old capsule did — nothing new animates under reduce-motion.
+  **PASS / FAIL: ______**
+
+### W3.4 — the drag still sets the minutes
+
+- **W3.4a** In the `set` phase, drag a circle on the dial: the minutes change with the finger, the
+  detent tick sounds, and the slip's number follows. Nothing about the gesture's feel changed.
+  **PASS / FAIL: ______**
+
+### W3.5 — a finished round is saved, and names the right task
+
+**Look at:** Tasks → long-press (or open) a task → **Focus on this**; confirm the task box on the Focus
+page shows that task, then Start, let the round run out (or `end session` after at least a minute), and
+open Stats → the session appears under that subject.
+
+- **W3.5a** A round that ran out shows up in the export/Stats as a **completed** session under the task's
+  subject. (Settings → Export → JSON: the `Focus sessions` rows now carry `mode` and `completed`.)
+  **PASS / FAIL: ______**
+- **W3.5b** A round you end early (after ≥1 min) shows up as **not completed** — and if you end it inside
+  the first minute, nothing at all is written.
+  **PASS / FAIL: ______**
+- **W3.5c** The saved row names the task the box was showing (swap the task mid-round first — the row
+  must follow the swap, not the task you started from).
+  **PASS / FAIL: ______**
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

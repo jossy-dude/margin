@@ -95,6 +95,19 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     expect(l.adjusts.E).toBe(2.5);
   });
 
+  it('a focus session round-trips the mode and completed columns the finish path writes (W3/D2)', async () => {
+    // Until W3 the two columns were unbound: a put dropped them and a load invented them, so a session
+    // saved as "not completed" came back looking the same as one that ran out. This pins both directions.
+    const r = await make();
+    const row = { id: 'f9', taskId: 't9', courseId: 'E', startedAt: NOW, endedAt: NOW + 600_000, focusSec: 600, breakSec: 60, overSec: 0, rounds: 1, planMin: 25, mode: 'focus', completed: true, demo: false };
+    await r.upsert('focus', row);
+    expect((await r.load()).focus.find((f) => f.id === 'f9')).toEqual(row);
+
+    await r.upsert('focus', { ...row, rounds: 0, completed: false });
+    // `false` has to come back as `false` — not the column's `0`, not a missing key (the bug the old
+    // `rounds: 1` demo rows hid: a half-run session was indistinguishable from a finished one).
+    expect((await r.load()).focus.find((f) => f.id === 'f9')).toMatchObject({ mode: 'focus', completed: false, rounds: 0 });
+  });
   it('a scheduled reminder is logged as queued, with neither timestamp invented', async () => {
     const r = await make();
     await r.schedNotif('n2', 'ended', NOW);
@@ -184,7 +197,7 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 2 }]); // …and neither throw
     const l = await r.load();
     expect(l.tasks.map((t) => t.id)).toEqual(['t1']); // the old row survived the ALTER
-    expect(l.focus[0]).toMatchObject({ id: 'f1', focusSec: 600, planMin: 25 });
+    expect(l.focus[0]).toMatchObject({ id: 'f1', focusSec: 600, planMin: 25, mode: 'focus', completed: false });
     // the new columns carry their defaults for rows written before they existed (brief B: "focus rows load with the defaults")
     expect(raw.all('SELECT mode, completed FROM focus_session')).toEqual([{ mode: 'focus', completed: 0 }]);
   });

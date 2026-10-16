@@ -76,7 +76,7 @@ describe('the Stats empty-state hint actually fires (BUG-024)', () => {
     const days = lastDays(105, NOW);
     const yearAgo = NOW - 200 * DAY;
     expect(days.includes(new Date(yearAgo).toISOString().slice(0, 10))).toBe(false); // outside the window
-    const stale = focusMinutesByDay([{ id: 'f', taskId: null, courseId: null, startedAt: yearAgo, endedAt: yearAgo, focusSec: 1800, breakSec: 0, overSec: 0, rounds: 1, planMin: 30, demo: false }], days)
+    const stale = focusMinutesByDay([{ id: 'f', taskId: null, courseId: null, startedAt: yearAgo, endedAt: yearAgo, focusSec: 1800, breakSec: 0, overSec: 0, rounds: 1, planMin: 30, mode: 'focus', completed: true, demo: false }], days)
       .reduce((a, b) => a + b, 0);
     expect(stale).toBe(0); // …so the page holds one session and still cannot draw a single focus cell
     expect(statsEmptyHint({ focusMinutes: stale, finished: 0 })).toBe('Finish a task or a focus session and the charts fill in.');
