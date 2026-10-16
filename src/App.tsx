@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
@@ -155,10 +154,27 @@ const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Itali
 
 /** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
  *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default
- *  and pin the icon brightness. The background is what the band under the status bar shows, edge-to-edge (V19). */
+ *  and pin the icon brightness. The background is what the band under the status bar shows, edge-to-edge (V19).
+ *
+ *  **The status bar names its own background colour, and that is the fix for the black band.** It used to mount
+ *  `expo-status-bar`'s wrapper, which forwards only `animated`, `hidden`, `barStyle` and `showHideTransition` and
+ *  never `backgroundColor` (`expo-status-bar/src/NativeStatusBarWrapper.tsx:26-32`), so React Native filled the
+ *  missing `backgroundColor` from its own default — and that default is the native `DEFAULT_BACKGROUND_COLOR`, i.e.
+ *  `window.statusBarColor` printed as `#%06X` with the alpha dropped
+ *  (`react-native/.../modules/statusbar/StatusBarModule.kt:70-73`, consumed at `Libraries/Components/StatusBar/StatusBar.js:235-241`).
+ *  `android/app/src/main/res/values/styles.xml` declares that colour as `@android:color/transparent` (#00000000),
+ *  which prints as `#000000` — so RN pushed `setColor(black)` on every mount (`StatusBar.js:475-488`). Edge-to-edge
+ *  would ignore that, but React Native only turns edge-to-edge on for a device running Android 15+
+ *  (`util/AndroidVersion.kt:42-44` gates on `Build.VERSION.SDK_INT`, read at `views/view/WindowUtil.kt:45-68`),
+ *  so on Android 13/14 the window is not edge-to-edge, the system status bar is real and `setColor` is honoured
+ *  (`StatusBarModule.kt:91-97` ignores it only under edge-to-edge). Naming `c.paper` fixes those devices; on
+ *  Android 15+ the platform ignores the colour and the strip is this View's own paper. `app.json` cannot do it:
+ *  `androidStatusBar` is deprecated and has no effect (`@expo/config-plugins/.../android/SystemBars.js:46`), the
+ *  `expo-status-bar` plugin takes only `hidden`/`style` (`expo-status-bar/plugin/build/withStatusBar.d.ts:3-8`),
+ *  and under a non-edge-to-edge window no app view is drawn there at all. */
 function Themed({ children }: { children: React.ReactNode }) {
   const { c, dark } = useTheme();
-  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar style={dark ? 'light' : 'dark'} />{children}</View>;
+  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={c.paper} />{children}</View>;
 }
 
 export default function App() {

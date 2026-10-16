@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Image, Platform, StyleSheet, useWindowDimensions, View, type ImageStyle } from 'react-native';
 import { Asset } from 'expo-asset';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, Pattern, Rect } from 'react-native-svg';
@@ -58,11 +58,67 @@ const PAPER_MS = 220;
  *  at the asset's own dimensions means the tile edge IS the image edge — no resampling, and a seam
  *  that can only be where the photograph actually ends.
  *
- *  Native does not come through here at all: it is `resizeMode="repeat"` on an `Image`, which tiles at
- *  the bitmap's own size already. */
+ *  Native does not come through here at all: it tiles with the explicit grid in `Tiles`, at the same
+ *  `px` these constants give the web — see the note above `Tiles` for why it is not a `resizeMode`. */
 const GRAIN_PX = 256, PHOTO_PX = 520;
 const WEB = Platform.OS === 'web';
 const tiled = (uri?: string, px = GRAIN_PX) => ({ backgroundImage: uri ? `url("${uri}")` : undefined, backgroundRepeat: 'repeat', backgroundSize: `${px}px ${px}px` } as never);
+
+/** The texture layer is window-sized whatever container it sits in, so it clips itself to its paper —
+ *  without this a `PaperBg` inside a smaller sheet would paint its tiles over the paper around it. */
+const CLIP = { overflow: 'hidden' } as const;
+
+const tileStyle = (col: number, row: number, px: number): ImageStyle => ({ position: 'absolute', left: col * px, top: row * px, width: px, height: px });
+
+/**
+ * The native texture: an explicit grid of `Image`s, one per tile.
+ *
+ * The comment this replaced claimed native already tiled "at the bitmap's own size" through
+ * `resizeMode="repeat"`, and that only the web needed a CSS background. The owner's phone said
+ * otherwise on 2026-10-16: the grain arrived as one dense block in the top-left corner with bare paper
+ * everywhere else.
+ *
+ * `resizeMode="repeat"` is not a layout on Android. `ImageResizeMode` maps it to `Shader.TileMode.REPEAT`
+ * plus `ScaleTypeStartInside` (`ReactAndroid/.../views/image/ImageResizeMode.kt:46,71`), and the tiling
+ * itself is done by a Fresco postprocessor, `ReactImageView.TilePostprocessor`, which bakes ONE bitmap
+ * `Rect(0, 0, width, height)` — the View's own size — and draws the shader into it
+ * (`ReactImageView.kt:609-630`). That baked bitmap is then drawn through the same `ScaleTypeStartInside`,
+ * which never scales up and is anchored top-left (`ScaleTypeStartInside.kt:27-31`). The bake is driven by
+ * `onSizeChanged` / `onAfterUpdateTransaction` (`ReactImageView.kt:544-550`, `ReactImageManager.kt:245-248`)
+ * and the only guard before it is "not yet laid out", i.e. `width <= 0 || height <= 0`
+ * (`ReactImageView.kt:407-410`) — so the postprocessor may run at whatever `width`/`height` the View holds
+ * when the image *arrives*, which is asynchronous. Whenever that is not the View's final size, the output
+ * is a bitmap from that earlier moment, drawn at scale 1 in the corner: one dense block, bare paper
+ * everywhere else, which is the reported shape. None of that is reachable from JavaScript, so the tiling
+ * moves to the one thing that is: layout. iOS's `repeat` is a tiled `UIImage`
+ * (`resizableImageWithCapInsets:resizingMode:UIImageResizingModeTile`), the same "the platform decides the
+ * size" family, and this grid is right on both.
+ *
+ * Tiles are laid out by Yoga, edge to edge, the way the web's `background-repeat` does it — and a tile is
+ * `px` dp wide, exactly the number the web hands to `backgroundSize`, so all three platforms tile at one
+ * size. On a portrait phone that is at most a 2×4 grid for grain (2×`GRAIN_PX` is wider than the screen,
+ * 4 rows cover it) and a single column of the photograph (`PHOTO_PX` outruns the screen width), so every
+ * interior tile edge sits at a computed `n × px`, which is the same device pixel on both sides of it —
+ * the tiles abut instead of leaving a hairline.
+ *
+ * The grid is sized from `useWindowDimensions()`, and on Android that is exactly the area the app draws
+ * in — the whole window under edge-to-edge, the window minus the system bars otherwise
+ * (`modules/deviceinfo/DeviceInfoModule.kt:41-67` branches on the same edge-to-edge flag). Every
+ * `PaperBg` lives in a container that is that size or smaller, so the grid always covers its paper, and
+ * anything past the paper's own edge is cut by `CLIP`.
+ */
+function Tiles({ src, px }: { src: number; px: number }) {
+  const { width, height } = useWindowDimensions();
+  const cols = Math.ceil(width / px), rows = Math.ceil(height / px);
+  return (
+    <>
+      {Array.from({ length: cols * rows }, (_, i) => {
+        const col = i % cols;
+        return <Image key={i} source={src} resizeMode="stretch" style={tileStyle(col, (i - col) / cols, px)} />;
+      })}
+    </>
+  );
+}
 
 export function PaperBg({ card = false }: { card?: boolean }) {
   const { c, dark } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), tex = useStore((s) => s.settings.texture);
@@ -120,12 +176,13 @@ export function PaperBg({ card = false }: { card?: boolean }) {
            rather than to `absoluteFill`, so the grain arrives as one dense tile in the top-left corner
            and clean paper everywhere else. The texture looked like a rendering fault rather than like
            paper. A CSS background on a genuinely full-bleed layer is the only thing that actually
-           repeats, so the web takes that path and native keeps the `Image` it has always used. */
+           repeats, so the web takes that path and native takes the explicit grid of `Image` tiles in
+           `Tiles`. */
         ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle, tiled(GRAIN_WEB)]} />
-        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle]}><Image source={GRAIN_SRC} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>)}
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, grainStyle]}><Tiles src={GRAIN_SRC} px={GRAIN_PX} /></Animated.View>)}
       {(tex === 'photo' || cross) && (WEB
         ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tiled(PHOTO_WEB, PHOTO_PX), { mixBlendMode: dark ? 'screen' : 'multiply' } as never, photoStyle]} />
-        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { mixBlendMode: dark ? 'screen' : 'multiply' }, photoStyle]}><Image source={PHOTO_SRC} resizeMode="repeat" style={StyleSheet.absoluteFill} /></Animated.View>)}
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, { mixBlendMode: dark ? 'screen' : 'multiply' }, photoStyle]}><Tiles src={PHOTO_SRC} px={PHOTO_PX} /></Animated.View>)}
     </View>
   );
 }
