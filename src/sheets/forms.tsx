@@ -90,7 +90,7 @@ export function AddSheet() {
 /* ───── Task / exam / reading / project form ───── */
 const OFFS = [{ m: 0, l: 'At due time' }, { m: 30, l: '30 min before' }, { m: 60, l: '1 h before' }, { m: 120, l: '2 h before' }, { m: 1440, l: '1 day before' }];
 export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind; courseId?: string | null }) {
-  const tasks = useStore((s) => s.tasks), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), nset = useStore((s) => s.settings.notif);
+  const tasks = useStore((s) => s.tasks), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), nset = useStore((s) => s.settings.notif), hour12 = useStore((s) => s.settings.hour12);
   const st = { tasks, meetings, attendance, dayMarks };
   const existing = id ? st.tasks.find((t) => t.id === id) : undefined, [now] = useState(() => Date.now());
   const [title, setTitle] = useState(existing?.title ?? ''), [k, setK] = useState<TaskKind>(existing?.kind ?? kind ?? 'assignment'), [cid, setCid] = useState<string | null>(existing ? existing.courseId : courseId ?? null);
@@ -108,7 +108,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
    *  second, unrecoverable one. */
   const save = () => submit(() => {
     const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : [] };
-    act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now)}` : ''}`); close();
+    act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`); close();
   });
   return (
     <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93} closeRef={closeRef}
@@ -116,18 +116,18 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
       <Field label="What is it?" placeholder="e.g. Problem set 6" value={title} onChangeText={setTitle} autoFocus={!existing} returnKeyType="done" />
       <HStrip gap={8} bg={c.card}>{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</HStrip>
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
-      <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" />
-      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" /></Reveal>}
+      <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" h12={hour12} />
+      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
       <Label>How long will it take?</Label>
       <Stepper label="effort" value={est} min={0} max={720} step={15} fmt={(v) => (v ? fmtDur(v) : 'unknown')} onChange={setEst} />
-      {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now)} />}
+      {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now, hour12)} />}
       {due ? <>
         <Label>Remind me</Label>
         <Row>{OFFS.map((o) => <Chip key={o.m} label={o.l} on={has(o.m)} onPress={() => toggleOff(o.m)} small />)}
           {home && home < due && <Chip label="When I get home" icon="bell" on={hasHome} small onPress={() => setRem((r) => (hasHome ? r.filter((x) => !(x.mode === 'abs' && x.label === 'When I get home')) : [...r, { id: uid('r'), mode: 'abs', at: home, label: 'When I get home' }]))} />}
-          {rem.filter((r) => (r.mode === 'before' && !OFFS.some((o) => o.m === r.minutes)) || (r.mode === 'abs' && r.label !== 'When I get home')).map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}</Row>
+          {rem.filter((r) => (r.mode === 'before' && !OFFS.some((o) => o.m === r.minutes)) || (r.mode === 'abs' && r.label !== 'When I get home')).map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now, hour12) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}</Row>
         <Row><Stepper label="custom lead" value={custom} min={5} max={10080} step={5} fmt={fmtDur} onChange={setCustom} /><Btn small kind="ghost" label="+ add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); }} /><Btn small kind="ghost" label="+ at a time" onPress={() => setAddAt(!addAt)} /></Row>
-        {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
+        {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" h12={hour12} /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
       </> : <Txt f="serif" s={15} c="mut">Set a due date to choose reminders.</Txt>}
       <Label>Priority</Label><Row>{PRI.map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
       <Label>Steps</Label>

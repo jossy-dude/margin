@@ -7,14 +7,14 @@ import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Page, Section } from './common';
-import { DW, MO, addDays, atTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
-import { effective, isCancelled, occKey, occurrencesOn } from '../domain/attendance';
+import { DW, MO, addDays, atTime, fmtTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
+import { effective, isCancelled, occEnd, occKey, occurrencesOn } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
 
 export function WeekScreen() {
-  const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks);
+  const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
   const st = { meetings, courses, attendance, dayMarks, tasks };
   const { c } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
   const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 0.95, H = (end - start) * PX;
@@ -60,7 +60,11 @@ export function WeekScreen() {
             {off === 0 && nowY > 0 && nowY < H && <Line x1={tw - 4} x2={gw} y1={nowY} y2={nowY} stroke={c.acc} strokeWidth={2} />}
             {off === 0 && nowY > 0 && nowY < H && <Rect x={tw - 8} y={nowY - 3} width={6} height={6} rx={3} fill={c.acc} />}
           </Svg>
-          <View style={{ width: tw }}>{hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: hourTop(i, H, PX), right: 4 }}>{h}</Txt>)}</View>
+          <View style={{ width: tw }}>
+            {/* The axis label follows the clock: 12-hour prints the compact form `8a … 12p … 4p`
+                (the gutter is 30 px wide with `right: 4`, and `12p` measures ~20 px at s=11.5, so it fits); 24-hour stays bare. */}
+            {hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: hourTop(i, H, PX), right: 4 }}>{hour12 ? String(h % 12 === 0 ? 12 : h % 12) + (h < 12 ? 'a' : 'p') : h}</Txt>)}
+          </View>
           {DW.map((_, i) => {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
             return (
@@ -71,7 +75,7 @@ export function WeekScreen() {
               // the top of the column — see `periodsOn`, which applies the same rule to a `Period`.
               const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, mins = hm(meeting.end) - hm(meeting.start), h = (mins > 0 ? mins : mins + 24 * 60) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
                   return (
-                    <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${meeting.start} to ${meeting.end}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
+                    <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
                       style={{ position: 'absolute', left: 2, right: 2, top, height: Math.max(20, h - 2) }}>
                       <HandBox seed={key} fill={x ? c.paper : hexA(c.acc, 0.2)} stroke={x ? c.mut : c.acc} shadow={false} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
@@ -87,7 +91,7 @@ export function WeekScreen() {
       </Animated.View>
       <Row style={{ justifyContent: 'space-between' }}><Txt f="serif" s={15} c="mut">Tap a block to mark attendance · long-press to edit</Txt><Btn small kind="ghost" icon="plus" label="Class" onPress={() => act.open({ t: 'meeting' })} /></Row>
       <Section title="Due this week">
-        {due.length === 0 ? <Txt f="serif" s={17} c="mut">Nothing due this week.</Txt> : [...due].sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).map((t) => <Pressable key={t.id} testID={`week-due-${t.id}`} accessibilityRole="button" accessibilityLabel={`${t.title}, due ${DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} ${new Date(t.dueAt as number).toTimeString().slice(0, 5)}`} accessibilityHint="Opens the task" onPress={() => act.open({ t: 'task', id: t.id })}><Row style={{ flexWrap: 'nowrap' }}><Icon name="flag" size={16} color={c.bad} /><Txt f="bold" s={19} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt><Txt f="serif" s={15} c="mut">{DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} {atTime(startOfDay(t.dueAt as number), '00:00') && new Date(t.dueAt as number).toTimeString().slice(0, 5)}</Txt></Row></Pressable>)}
+        {due.length === 0 ? <Txt f="serif" s={17} c="mut">Nothing due this week.</Txt> : [...due].sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).map((t) => <Pressable key={t.id} testID={`week-due-${t.id}`} accessibilityRole="button" accessibilityLabel={`${t.title}, due ${DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} ${fmtTime(t.dueAt as number, hour12)}`} accessibilityHint="Opens the task" onPress={() => act.open({ t: 'task', id: t.id })}>{/* The floating `+` button (`fab-add`) occupies x 332–394, y 763–825 at 412×915 and covers the right end of every row in that band, so the due time's tail sat under it in both clocks. This inset stops the time at ~328 px, clear of the FAB's left edge 332; the taps it removes are the ones the FAB already eats. */}<Row style={{ flexWrap: 'nowrap', paddingRight: 68 }}><Icon name="flag" size={16} color={c.bad} /><Txt f="bold" s={19} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt><Txt f="serif" s={15} c="mut">{DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} {fmtTime(t.dueAt as number, hour12)}</Txt></Row></Pressable>)}
       </Section>
     </Page>
   );

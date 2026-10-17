@@ -9,7 +9,7 @@ import { useStore } from '../store/store';
 import { Empty, Page, Section } from './common';
 import { HEAT_CELL_H, HEAT_GAP, heatRow } from '../ui/fit';
 import * as A from '../domain/analytics';
-import { fmtDur, parseYmd, plural, startOfDay, weekdayOf } from '../domain/time';
+import { fmtDur, fmtHM, parseYmd, plural, startOfDay, weekdayOf } from '../domain/time';
 import { ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
@@ -17,7 +17,7 @@ const Card = ({ title, sub, children, seed }: { title: string; sub?: string; chi
   <HandBox seed={seed} style={{ padding: 14, gap: 8 }}><View><Txt f="bold" s={22} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={14.5} c="mut">{sub}</Txt> : null}</View>{children}</HandBox>
 );
 export function StatsScreen() {
-  const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan);
+  const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
   const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions();
   /* Frozen while this page is not the one on screen (audit M5): the tick re-derives nothing that is
      visible, and a hidden page re-rendering every minute is what the always-mounted window costs. */
@@ -49,6 +49,9 @@ export function StatsScreen() {
   const week = focusD.slice(-7).reduce((a, b) => a + b, 0), prev = focusD.slice(-14, -7).reduce((a, b) => a + b, 0), totalMin = focusD.reduce((a, b) => a + b, 0), totalDone = doneD.reduce((a, b) => a + b, 0);
   const hint = A.statsEmptyHint({ focusMinutes: totalMin, finished: totalDone });
   const bestH = (h: number[]) => { const m = Math.max(...h); return m ? `${String(h.indexOf(m)).padStart(2, '0')}:00` : null; };
+  /* `bestH` stays the pure, clock-agnostic finder (the peak hour as `'HH:00'`); the printing happens here
+     so those sentences read in the app's own clock — `10:00 PM`, not a bare `22:00`. */
+  const bestFmt = (h: number[]) => { const s = bestH(h); return s ? fmtHM(s, hour12) : null; };
   const lateWeeks = useMemo(() => tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length, [tasks]);
   return (
     <Page title="Stats" sub="Everything the app tracks, in one place">
@@ -70,8 +73,8 @@ export function StatsScreen() {
       </Card>
       <Card seed="fheat" title="Focus heatmap" sub={`${fmtDur(totalMin)} in the last 15 weeks`}><Heatmap values={focusD} w={iw} startWd={start} unit=" min" /></Card>
       <Card seed="dheat" title="Tasks finished" sub={`${totalDone} in the last 15 weeks · streak ${plural(ds.current, 'day')}`}><Heatmap values={doneD} w={iw} startWd={start} unit=" tasks" /></Card>
-      <Card seed="hh" title="When you work best" sub={bestH(fh) ? `Focus peaks around ${bestH(fh)}` : 'Start a focus session to see this'}><Hist24 values={fh} w={iw} /></Card>
-      <Card seed="th" title="When you tick things off" sub={bestH(hours) ? `Most tasks are finished around ${bestH(hours)}` : 'Finish a task to see this'}><Hist24 values={hours} w={iw} accent={c.ok} /></Card>
+      <Card seed="hh" title="When you work best" sub={bestFmt(fh) ? `Focus peaks around ${bestFmt(fh)}` : 'Start a focus session to see this'}><Hist24 values={fh} w={iw} /></Card>
+      <Card seed="th" title="When you tick things off" sub={bestFmt(hours) ? `Most tasks are finished around ${bestFmt(hours)}` : 'Finish a task to see this'}><Hist24 values={hours} w={iw} accent={c.ok} /></Card>
       {bySub.length > 0 && <Card seed="sub" title="Focus by subject"><HBars items={bySub.slice(0, 6).map((s) => ({ label: s.name, value: s.min }))} w={iw} fmt={fmtDur} /></Card>}
       <Card seed="att" title="Attendance by subject" sub="Last 60 days">
         {attRows.length === 0 ? <Txt f="serif" s={16} c="mut">No classes yet.</Txt> : <HBars items={attRows.map((r) => ({ label: r.course.name, value: Math.round((r.rate ?? 0) * 100) }))} w={iw} fmt={(v) => `${v}%`} max={100} />}

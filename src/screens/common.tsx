@@ -58,10 +58,20 @@ export function spokenStatus(e: { status: AttStatus | null; inferred: boolean })
   return e.inferred ? `${ST[e.status]}, not marked yet` : ST[e.status];
 }
 
-export function relDue(ms: number, now: number) {
+export function relDue(ms: number, now: number, h12 = false) {
   const d = ms - now, a = Math.abs(d), m = Math.round(a / 60_000);
   if (d < 0) return m < 60 ? `${m} min late` : m < 1440 ? `${Math.round(m / 60)} h late` : `${Math.round(m / 1440)} d late`;
-  return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : startOfDay(ms) - startOfDay(now) === DAY_MS ? `tomorrow ${fmtTime(ms)}` : `in ${Math.round(m / 1440)} d`;
+  return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : startOfDay(ms) - startOfDay(now) === DAY_MS ? `tomorrow ${fmtTime(ms, h12)}` : `in ${Math.round(m / 1440)} d`;
+}
+/** Today's masthead "when" line: the next class, as a wall clock plus how far off it is.
+ *
+ *  `relDue`'s "tomorrow" form already prints the clock time, so joining it to a bare `at HH:MM` said the
+ *  same time twice — the header read `at 08:30 · tomorrow 08:30` for any class on the next day. The
+ *  wall clock is prefixed only when the relative phrase does not itself carry one, which keeps a single
+ *  source of the time (`fmtTime`) and of the tomorrow wording (`relDue`). */
+export function nextWhen(start: number, now: number, h12 = false) {
+  const rel = relDue(start, now, h12), at = fmtTime(start, h12);
+  return rel.includes(at) ? rel : `at ${at} · ${rel}`;
 }
 const KIND_ICON: Record<Task['kind'], string> = { assignment: 'tasks', exam: 'exam', reading: 'book', project: 'flag', lab: 'lab', deadline: 'flag', other: 'pencil' };
 /** Memoized: a card only re-renders when its task object changes or the minute boundary flips (its text is
@@ -76,7 +86,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
      a 28 dp box, the same reason `StepBtn` uses 0.95. */
   const face = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
   const box = useAnimatedStyle(() => ({ transform: [{ scale: check.get() }] }));
-  const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), notif = useStore((s) => s.settings.notif);
+  const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), notif = useStore((s) => s.settings.notif), h12 = useStore((s) => s.settings.hour12);
   const open = () => act.open({ t: 'task', id: t.id });
   const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && t.dueAt !== null && t.dueAt < now, soon = !done && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
@@ -84,7 +94,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
     <SwipeCard onComplete={() => act.toggleTask(t.id)} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
       <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
-        accessibilityRole="button" accessibilityLabel={`${t.title}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
+        accessibilityRole="button" accessibilityLabel={`${t.title}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
         <Animated.View style={face}>
           <HandBox seed={t.id} fill={done ? c.paper : c.card} stroke={late ? c.bad : c.ink} style={{ paddingLeft: 52, paddingRight: 12, paddingVertical: 11, minHeight: 66, opacity: done ? 0.78 : 1 }}>
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={`Mark ${t.title} ${done ? 'not done' : 'done'}`} onPress={() => act.toggleTask(t.id)} hitSlop={6} style={{ position: 'absolute', left: 4, top: 0, bottom: 0, width: 46, alignItems: 'center', justifyContent: 'center' }}
@@ -94,7 +104,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
             <Txt f="bold" s={22} style={done ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{t.title}</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 2 }}>
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}><Icon name={KIND_ICON[t.kind]} size={15} color={c.mut} /><Txt f="serif" s={15} c="mut">{course?.name ?? 'Personal'}</Txt></View>
-              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? `done ${relDue(t.completedAt, now)}`.replace('in ', '') : relDue(t.dueAt, now)}</Txt>}
+              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? `done ${relDue(t.completedAt, now, h12)}`.replace('in ', '') : relDue(t.dueAt, now, h12)}</Txt>}
               {t.estimateMin ? <Txt f="serif" s={15} c="mut">~{fmtDur(t.estimateMin)}</Txt> : null}
               {/* The step count is a control, not a label: it used to be the one chip on the card that
                   could not be tapped, so ticking a step meant opening the sheet. Tap ticks the next

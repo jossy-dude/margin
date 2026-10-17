@@ -247,6 +247,101 @@ open Stats → the session appears under that subject.
 
 ---
 
+## W4 — Today's time truth: the countdown, the ranges, the 12/24-hour clock
+
+Changed: `src/screens/Today.tsx`, `src/screens/common.tsx`, `src/screens/Week.tsx`,
+`src/screens/Grades.tsx`, `src/sheets/Settings.tsx`, `src/sheets/WhenPicker.tsx`,
+`src/sheets/forms.tsx`, `src/domain/time.ts`, `src/domain/types.ts`, `src/domain/defaults.ts` — JS only,
+no native file moved, so any build of the current `android/` project contains this work. The non-today
+card now prints the class **window** (`09:00–09:50`) instead of a countdown; the countdown is set one
+fixed advance per glyph; the header's next-class line prints the time once; and Settings → Look & feel
+gained a **24-hour clock** switch.
+
+Already proven headless by `tools/w4-assert.mjs` (web, 412×915): the 26 px digit / 15 px colon advances
+hold across real digit changes with the row width unchanged, the picked-day window fits the card with
+166 px of air to spare, the 12-hour strings appear on Today and Week and revert, and Today's content
+clears the tab bar at scroll-end. This section is only what the phone alone can say.
+
+**Look at:** Today.
+
+### W4.1 — the countdown, at 1×
+
+- **W4.1a** With a class live (the card ticks), read the countdown from arm's length without zooming:
+  every digit is unambiguous — the 2s and 3s cannot be confused — and the glyphs do not crowd each
+  other (the old −1.7 tracking is gone). Judge at the font size you actually use.
+  **PASS / FAIL: ______**
+- **W4.1b** Watch a minute boundary (…:59 → …:58): the readout does not shuffle sideways — digits and
+  colon keep their places, no per-second jitter. (Web ran at 26 px/15 px; on the phone judge the
+  behaviour, not the number.)
+  **PASS / FAIL: ______**
+- **W4.1c** In the week strip, tap a day that is not today but has classes: the card prints a window
+  (`09:00–09:50`), the pill reads **First class**, the unit **first bell**, and the header line above
+  the strip still speaks about now. Tap back to today: the live countdown returns.
+  **PASS / FAIL: ______**
+- **W4.1d** A weekday evening, after the last class (after 14:05): the card shows the finished day —
+  **Rest day**, **Free day**, `--:--`, **nothing on** — and the header reads **All done for today**;
+  no stale countdown of the class that ended.
+  **PASS / FAIL: ______**
+
+### W4.2 — the 24-hour clock switch, on-device
+
+**Look at:** Settings → Look & feel → **24-hour clock** (it ships **ON**; the hint reads *Off prints
+8:30 AM instead of 08:30*).
+
+- **W4.2a** Turn it **OFF**: every time the setting reaches prints 12-hour — the Today header and card,
+  the day-list rows, the Week page's class blocks and due rows, and the task sheet's due picker and its
+  reminder lines. Form: a space and no leading zero (`8:30 AM`, never `8:30AM`).
+  **PASS / FAIL: ______**
+- **W4.2b** Turn it back **ON**: the same surfaces return to `08:30`; nothing is left half-converted
+  (re-check Week and the task sheet).
+  **PASS / FAIL: ______**
+- **W4.2c** With the clock OFF, force-stop and relaunch
+  (`adb shell am force-stop app.marginalia.planner`): the setting is still OFF and times still print
+  12-hour.
+  **PASS / FAIL: ______**
+- **W4.2d** Confirm one real reminder with the clock **OFF**: notification bodies were deliberately not
+  wired in this slice (`reminders.ts`, `notifActions.ts` and export timestamps still print 24-hour under
+  either setting — W5/W6 own those bodies), so the notification showing 24-hour is **expected**, not a
+  bug. Record what you saw.
+  **PASS / FAIL: ______**
+
+### W4.3 — the day-list range column
+
+**Look at:** Today's day list, then the same list with the 24-hour clock **OFF**.
+
+- **W4.3a** The range column (`08:30–09:20`, bold, one line) holds its column: no clipping of the
+  longest range, no crowding of the course name or the status box beside it, in both clock formats
+  (the 12-hour strings are wider, e.g. `10:55 AM–11:45 AM`). The en dash joins the two ends as one
+  range.
+  **PASS / FAIL: ______**
+
+### W4.4 — scroll-end clears the tab bar
+
+- **W4.4a** Scroll Today to the very bottom: the last content sits fully **above** the tab bar — no row
+  half-hidden under it, no tap target competing with the tabs. Repeat on Week.
+  **PASS / FAIL: ______**
+
+### W4.5 — midnight, watched live
+
+**Do:** put the phone's clock at **23:57 on a Friday** (switch automatic time off), open Marginalia on
+Today, and watch across 00:00.
+
+- **W4.5a** Just before midnight the card shows Friday's finished day (Rest day / `--:--` /
+  nothing on; see W4.1d). Just after 00:00 the card is **gone** — the clock stands alone, the header
+  reads **No classes today**, and the strip and day section have moved to Saturday. No stale countdown,
+  no half-updated heading.
+  **PASS / FAIL: ______**
+- **W4.5b** The other direction, if you get a Sunday evening: at midnight the clock **gains** the
+  **Next up** card counting down to Monday's first class, and the header prints the time exactly once —
+  `at 08:30 · in 8 h 29m`, never `at 08:30 · tomorrow 08:30`.
+  **PASS / FAIL: ______**
+
+The flips' own math (a 23:50–00:10 overnight window, `fmtDay` at the boundary, `selectedDay` carry,
+`nextWhen`'s one-time line) is pinned by `src/test/time-format.test.ts` and `src/test/card.test.ts`;
+the steps above are only the phone watching it happen live.
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

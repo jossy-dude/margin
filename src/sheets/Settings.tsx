@@ -15,7 +15,7 @@ import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
-import { DW, fmtDur, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
+import { DW, fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
 import { nudgeWord } from '../domain/timer';
 import { logState, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
@@ -84,13 +84,13 @@ const MinStep = ({ label, value, onChange }: { label: string; value: string; onC
  *  planner, and the two failure states a phone can be in — blocked, and unable to be asked — are named
  *  separately because only one of them can still be fixed from here. The wording itself lives in
  *  `domain/notifActions.ts`, next to the log rules it has to agree with, and is tested there. */
-const LogRow = ({ r, now }: { r: NotifLogRow; now: number }) => {
+const LogRow = ({ r, now, h12 }: { r: NotifLogRow; now: number; h12: boolean }) => {
   const { c } = useTheme();
   return (
     <HandBox seed={r.id} shadow={false} fill={c.card} style={{ padding: 10, gap: 2 }}>
       <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
         <Txt f="bold" s={19} style={{ flex: 1, minWidth: 0 }} numberOfLines={1}>{r.id === notifs.TEST_ACTION_ID ? 'test · ' : ''}{KIND_WORD[r.kind] ?? r.kind}</Txt>
-        <Txt f="serif" s={15} c="mut">{r.dueAt ? fmtWhen(r.dueAt, now) : 'time unknown'}</Txt>
+        <Txt f="serif" s={15} c="mut">{r.dueAt ? fmtWhen(r.dueAt, now, h12) : 'time unknown'}</Txt>
       </Row>
       <Txt f="serif" s={14.5} c="mut">{logState(r, now)}</Txt>
     </HandBox>
@@ -148,7 +148,7 @@ export function SettingsSheet() {
         that name forever. Blank is allowed: Today drops the name and just says "Good morning". */}
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette} · ${FACES.find((f) => f.id === s.clock)?.n}`} to="appearance" />
-    <Nav icon="bell" label="Reminders" hint={n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? n.quietFrom + '–' + n.quietTo : 'off'}` : 'Off'} to="notifications" />
+    <Nav icon="bell" label="Reminders" hint={n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'} to="notifications" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester from ${s.semesterStart} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
@@ -159,6 +159,10 @@ export function SettingsSheet() {
   </>);
   if (page === 'appearance') body = (<>
     <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
+    {/* The clock format lives here with the other display choices, and the switch is stated as the
+        24-hour clock because that is what is true out of the box: it ships ON, so the app a new user
+        opens is the app as built. Turning it off is the 12-hour reading — see `fmtTime`. */}
+    <Toggle label="24-hour clock" hint="Off prints 8:30 AM instead of 08:30" value={!s.hour12} onChange={(v) => { set({ hour12: !v }); fx.toggle(v); }} />
   </>);
   if (page === 'theme') body = (<>
     <Label>Theme</Label><Seg value={s.theme} opts={[['light', 'Cream'], ['dark', 'Dark'], ['auto', 'Follow phone']]} onChange={(v) => set({ theme: v })} />
@@ -199,7 +203,7 @@ export function SettingsSheet() {
     <Toggle label="Reminders" hint="The master switch for every notification" value={n.enabled} onChange={(v) => act.setNotif({ enabled: v })} />
     <Nav icon="week" label="Classes" hint={`${n.classSoon ? n.classLeadMin + ' min before' : 'no heads-up'} · ${n.classEnded ? 'ask when it ends' : 'no end prompt'}`} to="ncls" />
     <Nav icon="tasks" label="Tasks & exams" hint={`${n.taskReminders ? 'on' : 'off'} · start-by ${n.startBy ? 'on' : 'off'}`} to="ntask" />
-    <Nav icon="clock" label="Hours & quiet time" hint={`${n.activeFrom}–${n.activeTo} · quiet ${n.quietEnabled ? n.quietFrom + '–' + n.quietTo : 'off'} · weekends ${n.weekend}`} to="nhours" />
+    <Nav icon="clock" label="Hours & quiet time" hint={`${fmtHM(n.activeFrom, s.hour12)}–${fmtHM(n.activeTo, s.hour12)} · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'} · weekends ${n.weekend}`} to="nhours" />
     <Nav icon="grad" label="Per-subject lead time" hint="Warn earlier for the classes you tend to be late to" to="ncourse" />
     <Nav icon="bell" label="Delivery status" hint={statusHint(st.notifStatus)} to="nstatus" />
   </>);
@@ -236,7 +240,7 @@ export function SettingsSheet() {
       {ns && ns.permission === 'denied' && !ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone has stopped asking. Only its own settings screen can turn this back on — the button below opens it.</Txt> : null}
       {ns && ns.permission === 'denied' && ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone will still ask once, so the button below is worth a tap.</Txt> : null}
       <Txt f="bold" s={20}>{!ns ? 'Counting what is queued…' : !ns.queueRead ? 'This phone would not say what it has queued, so nothing here can be counted.' : ns.permission === 'granted' ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : `${ns.scheduled} still queued from before, but nothing new can be queued until it is allowed.`}</Txt>
-      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">Next one rings {fmtWhen(ns.next, now)} — {relFire(ns.next, now)}.</Txt> : null}
+      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">Next one rings {fmtWhen(ns.next, now, s.hour12)} — {relFire(ns.next, now)}.</Txt> : null}
       {ns?.queueRead && ns.scheduled > 0 && ns.next === null ? <Txt f="serif" s={16} c="mut">Queued, but the phone will not report when any of them fires.</Txt> : null}
       {ns?.queueRead && ns.scheduled === 0 && pl && pl.count > 0 && ns.permission === 'granted' ? <Txt f="serif" s={16} c="mut">The planner has {pl.count} ready, and the phone&rsquo;s queue is empty. A battery saver that stops alarms, or a phone that dropped them on reboot, is the usual reason.</Txt> : null}
       {ns?.queueRead && ns.scheduled === 0 && pl && pl.count === 0 ? <Txt f="serif" s={16} c="mut">{n.enabled ? `Nothing to send in the next 14 days${pl.dropped.length ? `: ${pl.dropped.length} blocked by your hours` : ' inside your active hours'}.` : 'Reminders are switched off above.'}</Txt> : null}
@@ -265,12 +269,12 @@ export function SettingsSheet() {
     <Section title="The next 14 days">
       {pl ? <>
         <Txt f="serif" s={15.5} c="mut">{pl.count} reminder{pl.count === 1 ? '' : 's'} planned · {pl.shifted} moved out of the way · {pl.deferred} waiting for room in the queue{pl.dropped.length ? ` · ${pl.dropped.length} dropped` : ''}.</Txt>
-        {pl.moved.map((m, i) => <Txt key={`${m.at}${i}`} f="serif" s={15} c="mut">“{m.title}” moved from {fmtTime(m.was)} to {fmtTime(m.at)} — {m.why}.</Txt>)}
+        {pl.moved.map((m, i) => <Txt key={`${m.at}${i}`} f="serif" s={15} c="mut">“{m.title}” moved from {fmtTime(m.was, s.hour12)} to {fmtTime(m.at, s.hour12)} — {m.why}.</Txt>)}
         {pl.dropped.map((d, i) => <Txt key={`${d.id}${i}`} f="serif" s={15} c="mut">Dropped: {d.why}.</Txt>)}
       </> : <Txt f="serif" s={15.5} c="mut">The plan has not been worked out yet.</Txt>}
     </Section>
     <Section title="What actually arrived">
-      {log.length === 0 ? <Empty icon="bell" text="Nothing has been queued on this phone yet, or the app has not been open since one was." /> : <View style={{ gap: 8 }}>{log.map((r) => <LogRow key={r.id} r={r} now={now} />)}</View>}
+      {log.length === 0 ? <Empty icon="bell" text="Nothing has been queued on this phone yet, or the app has not been open since one was." /> : <View style={{ gap: 8 }}>{log.map((r) => <LogRow key={r.id} r={r} now={now} h12={s.hour12} />)}</View>}
       <Txt f="serif" s={14} c="mut">A reminder that rings while the app is closed is recorded as opened but never rang in the app — nothing was running to see it happen. The app will not invent a time it never witnessed.</Txt>
     </Section>
     <Hair />

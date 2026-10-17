@@ -8,11 +8,11 @@ import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
 import { total, needed, letter } from '../domain/grades';
 import { effective, nextStatus, occKey, occurrencesBetween, attendanceRate } from '../domain/attendance';
-import { DW, parseYmd, startOfDay, ymd, fmtDay } from '../domain/time';
+import { DW, atTime, parseYmd, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
 import type { Course } from '../domain/types';
 
 function AttendanceGrid({ course }: { course: Course }) {
-  const locked = useStore((s) => s.settings.lockAttendance), semesterStart = useStore((s) => s.settings.semesterStart), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
+  const locked = useStore((s) => s.settings.lockAttendance), semesterStart = useStore((s) => s.settings.semesterStart), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
   /* The grid's own clock, frozen while this page is not the one on screen (audit M5) — an inferred
      "Here" only appears once a class has ended, so the tick is only useful under the finger. */
   const live = useScreenLive();
@@ -34,7 +34,7 @@ function AttendanceGrid({ course }: { course: Course }) {
       {occ.length === 0 ? <Txt f="serif" s={16} c="mut">No classes scheduled yet.</Txt> : (
         <HStrip ref={gridRef} gap={3} bg={c.card} contentStyle={{ paddingVertical: 6 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
           {occ.map(({ date, meeting }) => {
-            const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${meeting.start}, ${spokenStatus(e)}`;
+            const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${fmtTime(atTime(date.getTime(), meeting.start), hour12)}, ${spokenStatus(e)}`;
             return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
               onTap={() => act.setAtt(key, e.status && e.inferred ? nextStatus(e.status) : 'p')} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}

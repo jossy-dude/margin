@@ -42,8 +42,11 @@ const COURSES: Course[] = [
 
 /* ── the model of `deckOf` in src/screens/Today.tsx ───────────────────────────
    `Period.end` arrives already normalised from `periodsOn` (the domain owns the overnight rule now), so
-   `deckOf` indexes `periods` one-for-one and does no re-opening of its own. */
-function deckOf(periods: Period[], t: number, isToday: boolean) {
+   `deckOf` indexes `periods` one-for-one and does no re-opening of its own.
+   `h12` mirrors the shipped 4th parameter: on a day that is not today the card prints the class WINDOW
+   (`start–end`, en dash) rather than the bare start time, in whichever clock the user chose, and `--:--`
+   when there is no period at all — both changed in W4, so the model changes with them. */
+function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false) {
   const ps = periods.map((p, i) => ({ p, i })).filter((x) => !x.p.cancelled);
   const cur = isToday ? ps.find((x) => t >= x.p.start && t < x.p.end) : undefined;
   const next = isToday ? ps.find((x) => x.p.start > t) : ps[0];
@@ -55,7 +58,7 @@ function deckOf(periods: Period[], t: number, isToday: boolean) {
   return {
     state, period, at, total: ps.length,
     word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : 'Rest day',
-    countdown: target === null ? '--:--' : isToday ? fmtClock((target - t) / 1000) : fmtTime(target),
+    countdown: target === null || !period ? '--:--' : isToday ? fmtClock((target - t) / 1000) : `${fmtTime(period.start, h12)}–${fmtTime(period.end, h12)}`,
     unit: cur ? 'min left' : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
       : state === 'soon' ? `${ps.length - at} of ${ps.length} left` : `Period ${at + 1} of ${ps.length}`,
@@ -225,11 +228,14 @@ describe('the card has the reference\'s four states, and each says a different t
     expect(d.position).toBe('2 of 3 left');
   });
 
-  it('first: on a day that is not today it names the first class and prints its start time', () => {
+  it('first: on a day that is not today it names the first class and prints its window, not just its start', () => {
     const d = deckOf(TUE_CLASSES, at('09:24'), false);
-    expect(d).toMatchObject({ state: 'first', word: 'First class', unit: 'first bell', countdown: '09:00', at: 0 });
+    // W4: a day you are only looking at has no "now" to count down to, so the slot prints `start–end`.
+    expect(d).toMatchObject({ state: 'first', word: 'First class', unit: 'first bell', countdown: '09:00–09:50', at: 0 });
     expect(d.period?.label).toBe('Computer Programming');
     expect(d.position).toBe('Period 1 of 3');
+    // …and the same window in the user's 12-hour clock, unpadded with AM/PM.
+    expect(deckOf(TUE_CLASSES, at('09:24'), false, true).countdown).toBe('9:00 AM–9:50 AM');
   });
 
   it('rest: a day that is over says so, and does not borrow a unit from a state that is not happening', () => {
@@ -341,9 +347,14 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('as AnyBarKind');
   });
 
-  it('the digits cannot shuffle their neighbours as they count, and the tracking is the reference\'s', () => {
+  it('the digits cannot shuffle their neighbours as they count, and the tracking is gone', () => {
+    // W4 replaced the reference's `letter-spacing: -.04em` (resolved to −1.7) with one fixed advance per
+    // glyph: Special Elite carries no `tnum` feature, so `tabular-nums` alone did not stop "9:59" and
+    // "10:00" differing in width (measured in the built page — see `COUNT_DIGIT_W` in Today.tsx).
     expect(src).toContain("fontVariant: ['tabular-nums']");
-    expect(src).toContain('letterSpacing: -1.7'); // the reference's -.04em, resolved at 42px
+    expect(src).not.toContain('letterSpacing: -1.7');
+    expect(src).toContain('const COUNT_DIGIT_W = 26');
+    expect(src).toContain('const COUNT_COLON_W = 15');
   });
 
   it('the slab texture is the reference\'s hatch, at the pitch it actually reads at', () => {
@@ -507,9 +518,12 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     // F2), which is what keeps a clock-face write from re-rendering this page at all.
     const clock = s.slice(s.indexOf('<HeaderClock size={CLOCK}'), s.indexOf('<ActiveCard'));
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
-    // the time line is the one that survives: a wall clock, which the deck's duration is not
-    expect(clock).toContain('until ${fmtTime(cur.end)}');
-    expect(clock).toContain('at ${fmtTime(next!.start)} · ${relDue(next!.start, now)}');
+    // the time line is the one that survives: a wall clock, which the deck's duration is not. W4 threads
+    // the user's clock into it and, for the next class, routes through `nextWhen` so a class that is
+    // tomorrow reads `tomorrow 08:30` once instead of the old `at 08:30 · tomorrow 08:30`.
+    expect(clock).toContain('until ${fmtTime(cur.end, hour12)}');
+    expect(clock).toContain('nextWhen(next!.start, now, hour12)');
+    expect(clock).not.toContain('fmtTime(next!.start)');
     // and nothing in it prints a subject name
     expect(clock).not.toMatch(/cur\?\.label|next\?\.label/);
   });
@@ -532,6 +546,8 @@ describe('the class name is stated once, not twice ~120px apart', () => {
        carries the overlap. The property is unchanged: classes present, card mounted. */
     expect(s).toContain('{periods.length > 0 ? (');
     expect(s).toContain('<ActiveCard periods={periods}');
-    expect(s).toContain('headPad={CLOCK + 14 - DECK_PAD_X}');
+    // bearing 8, trimmed from 14: the header's widest state (`First class · Period 1 of 4 · B-12`)
+    // was over budget by ~20 px and every candidate for them is defended in `src/screens/Today.tsx`.
+    expect(s).toContain('headPad={CLOCK + 8 - DECK_PAD_X}');
   });
 });

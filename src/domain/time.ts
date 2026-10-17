@@ -29,13 +29,33 @@ export const fmtDur = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}h${m
  *  The app had this inlined in a dozen places and Stats' streak line was the one that got it wrong
  *  ("streak 1 days"); zero takes the plural, which is what English does. */
 export const plural = (n: number, unit: string, many = `${unit}s`) => `${n} ${Math.abs(n) === 1 ? unit : many}`;
-export const fmtTime = (ms: number) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/** A wall-clock time of day. `h12` prints it on a 12-hour clock, unpadded with an AM/PM suffix
+ *  ("8:30 AM", "12:05 AM"); the default prints the app's own 24-hour "08:30".
+ *
+ *  The flag is an ARGUMENT, not a module global: `settings.hour12` is the one owner of the choice
+ *  (`domain/` imports no store), and every call site that prints a time for the user passes it in.
+ *  Domain-internal bodies the user does not read back (reminder notification text) keep the default
+ *  until W5/W6 thread the setting out to the OS — see the note in `docs/DEVICE_CHECKLIST.md` §W4. */
+export const fmtTime = (ms: number, h12 = false) => {
+  const d = new Date(ms), m = pad(d.getMinutes());
+  if (!h12) return `${pad(d.getHours())}:${m}`;
+  const h = d.getHours();
+  return `${h % 12 || 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+};
+/** A fixed, deterministic anchor day for `fmtHM`. `atTime` only ever reads the anchor's DAY and sets the
+ *  time from the string, so the output is a pure function of the string — `Date.now()` here would make it
+ *  depend on when it happened to run. */
+const HM_ANCHOR = new Date(2000, 0, 1).getTime();
+/** An `'HH:MM'` string — the format the notification settings store uses (`activeFrom`, `quietFrom`, …) —
+ *  printed in the app's clock format by way of `fmtTime`. `h12` is the caller's `settings.hour12`, passed
+ *  in like every other print of a wall clock (see `fmtTime`). */
+export const fmtHM = (v: string, h12 = false) => fmtTime(atTime(HM_ANCHOR, v), h12);
 export const fmtDay = (ms: number, now = Date.now()) => {
   const d = startOfDay(ms), t = startOfDay(now), diff = Math.round((d - t) / DAY_MS);
   if (diff === 0) return 'Today'; if (diff === 1) return 'Tomorrow'; if (diff === -1) return 'Yesterday';
   const x = new Date(ms); return `${DW[weekdayOf(x)]} ${x.getDate()} ${MO[x.getMonth()]?.slice(0, 3)}`;
 };
-export const fmtWhen = (ms: number, now = Date.now()) => `${fmtDay(ms, now)} · ${fmtTime(ms)}`;
+export const fmtWhen = (ms: number, now = Date.now(), h12 = false) => `${fmtDay(ms, now)} · ${fmtTime(ms, h12)}`;
 /** How long until `at`, in words someone would say. Honest about a time that has already gone by: the
  *  OS queue can still hold an alarm the phone never fired, and reporting it as "in -3 min" or quietly
  *  as "next up" would be a lie about what the phone is going to do. */

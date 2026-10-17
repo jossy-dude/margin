@@ -54,6 +54,11 @@ export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
   pen: 'warm' | 'graphite' | 'red' | 'blue'; palette: 'refined' | 'original'; texture: 'grain' | 'photo' | 'none';
   clock: string; bar: string; semesterStart: string;
+  /** Print every time-of-day as 12-hour ("8:30 AM") instead of 24-hour ("08:30"). Off by default, so
+   *  the shipped look is unchanged. It is a plain boolean on `Settings` because that is the one place
+   *  the app already keeps per-user display choices; `fmtTime`/`fmtWhen` take it as an argument rather
+   *  than reading it, so `domain/` still imports no store. */
+  hour12: boolean;
   soundOn: boolean; soundVol: Record<SoundGroup, number>; hapticsOn: boolean; tickOn: boolean;
   lockAttendance: boolean; reduceMotion: 'system' | 'on' | 'off';
   taskFilter: 'all' | 'open' | 'done'; taskSort: 'due' | 'priority' | 'created'; seededAt: number;

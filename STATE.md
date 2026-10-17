@@ -1,6 +1,7 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-16 (Phase 2: W1 committed `46c056b`, gate green; W2 + fast-worker batch in flight)_
+_Updated: 2026-10-17 (W1–W3 + batch 2 committed; **W4 "Today time truth" closed** — gate, assert (7d–7j)
+and both vision rounds green; W5 (D4 lock-screen toggle + alarms) next)_
 
 ## Git
 
@@ -22,17 +23,20 @@ _Updated: 2026-10-16 (Phase 2: W1 committed `46c056b`, gate green; W2 + fast-wor
 | test-writer | `opencode/deepseek-v4.1-flash-free` | `.opencode/agents/test-writer.md` |
 | vision-critic | `opencode/mimo-v2.6-flash-free` | `.opencode/agents/vision-critic.md` |
 | user-tester | `opencode/mimo-v2.6-flash-free` | `.opencode/agents/user-tester.md` |
-| fast-worker | `opencode/cat-jam-free` | `.opencode/agents/fast-worker.md` |
+| fast-worker | `opencode/deepseek-v4.1-flash-free` (fallback — see below) | `.opencode/agents/fast-worker.md` |
 
 Fallback chain (logged here when used): text → `openrouter/deepseek/deepseek-v4.1-flash`; vision →
 `openrouter/xiaomi/mimo-v2.6-flash`; fast-worker → DeepSeek builder.
 Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and their `-free` aliases).
 
-**Fallbacks used so far: none.**
+**Fallbacks used:** `opencode/cat-jam-free` no longer resolves in the model list and
+`openrouter/deepseek/deepseek-v4.1-flash` answers `-1017`, so W4's fix slice ran on
+`opencode/deepseek-v4.1-flash-free` — the builder model — instead. Vision stayed on MiMo as planned.
 
 ## Environment facts
 
-- Web dev server: `expo start --web --port 8099` (session-owned, background, log `/tmp/opencode/logs/expo-web-8099.log`).
+- Web dev server: **`http://localhost:8098`** (session-owned, background). The original plan said 8099;
+  the live server and every tool/assert default to 8098.
 - A **stale Metro on 8081** from an earlier session exists — deliberately left running/untouched.
 - No ADB device attached in this environment; Android/Expo Go behaves unverifiable here by design.
 - Evidence logs under `/tmp/opencode/logs/`; screenshots under `.shots/`; reports under `reports/`.
@@ -74,6 +78,11 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 2.11 | **UX audit delivered** (`reports/audit-ux.md` + 84 shots + 21 scripts) — web gate FAIL on UX-1; all findings re-verified at HEAD before routing (triage below) | `user-tester` (`opencode/mimo-v2.6-flash-free`) | `reports/audit-ux.md` |
 | 2.12 | **Batch 2** — four verified fixes: FAB returns to web (UX-1; pickaxe: the "desktop surface" was never built), sub-minute toast (UX-2; D2 rule kept), web slider aria+arrows (UX-5), audio first-gesture gate (UX-7). Gate PASS, **committed `20f3d02`** (check green 50/804; uxfix-assert ALL PASS) | `builder` + orchestrator | logs `batch2-{check,recheck,assert}.log`, `tools/uxfix-assert.mjs` |
 | 2.13 | D7 added (tour attendance gesture); W4 brief written (`briefs/W4-today-time.md`) — countdown legibility, ranges, 12/24h (D8), midnight tests, UX-4 verify | orchestrator | `DECISIONS.md` D7, `briefs/W4-today-time.md` |
+| 2.14 | W4 builder round (one slice, 8 fixes): Today deck — fixed-advance countdown cells, non-today class WINDOW, header through `nextWhen` + h12; Week — axis labels + row clearance; WhenPicker — h12 presets/stepper; `fmtHM` in `time.ts`; Stats `hour12` + `bestFmt`; Settings hints through `fmtHM`; tests `time-format.test.ts` + `when-picker.test.ts` | `builder` (`opencode/deepseek-v4.1-flash-free` — fallback) | `briefs/W4-today-time.md`, `/tmp/opencode/logs/w4-check.log` (52 suites / 829 tests green) |
+| 2.15 | **W4 vision round 1** (6 frames): 4 flags — deck-header subtitle clipped (`Period 1 o…`), 12h day-list truncation, Week due rows under the FAB, bare/stale Week axis. Confirmed deliberate, not defects: taped-clock corner overlap; an empty day rendering no deck card | `vision-critic` (session `ses_eb63da1dcffegvwKf9XsQ7eJ9d`) | `reports/vision-w4.md` |
+| 2.16 | **Measured before believing the flag**: the pinned live probe (412 px, settle-time inventory) showed the header row had ZERO free space — the suggested `flex: 1` remedy alone was inert (nothing to absorb). The real fix is five pixel trims — clock bearing 14→8, pill-to-subtitle gap 8→6, subtitle 15→14 pt, R-badge padding 6→4 — verified live at 73 px text in a 72.8 px box (DSF 2, unclipped). The budget is written into the `Today.tsx` comments | orchestrator | `/tmp/opencode/logs/w4-probe-{f,h}.log`, `src/screens/Today.tsx` |
+| 2.17 | **W4 vision round 2** (10 re-shot frames): all four round-1 flags PASS; one NEW surface failed — the 12h when-picker's lone flipping `AM` chip read as a label, not a control. Fixed in-pass into the sheet's own choice-chip pair (`AM` filled, `PM` outlined) + a source pin; the assert grew `[7h]` (walks into the Settings sub-page for the quiet-hours hint) and `[7j]` (widest header state, `Period 1 of 4`) | `vision-critic` + orchestrator | `reports/vision-w4.md`, `tools/w4-assert.mjs` |
+| 2.18 | **W4 gate + vision PASS, committed**: `tools/w4-assert.mjs` ALL PASS (`[7j]`: `Period 1 of 4` 73 px needed / 72.8 px box, unclipped; `[7h]`: `7:00 AM–10:00 PM · quiet 10:00 PM–7:00 AM · weekends normal`); `npm run check` green (52 suites / 830 tests, boundaries clean); vision round 2b re-check of the fixed picker PASS. Committed as the single W4 feat commit this pass | orchestrator | `/tmp/opencode/logs/w4-{recheck6,assert3}.log` |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -111,6 +120,26 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
     boundaries stay green — fold into a cleanup if a later workstream touches it); `pendingOutbox(200)`
     reads the oldest 200 rows while the M4 prune caps the table at 500 — agree the direction when sync
     lands (likely W6); the export path still has no import counterpart (pre-existing).
+11. **W4 header budget — the real story** (replacing the first guess): the deck header row has *zero*
+    free space at 412 px, so the `flex: 1` on the group (kept — it absorbs if a larger font or screen
+    ever gives any) was inert on its own; the fix is the five measured trims in 2.16. `headPad`'s
+    bearing comment in `Today.tsx` records the budget and `card.test.ts` pins the new bearing string, so
+    it cannot drift silently. Final live measure: `Period 1 of 4`, fs 14, 73 px text in a 72.8 px box.
+12. **12-hour reach, deliberately excluded from W4**: `src/services/export.ts` (the exported text keeps
+    the 24-hour clock — W6 owns the export path); reminder/alarm copy in `src/services/reminders.ts` and
+    `notifActions.ts`'s `testTarget` (W5's brief covers them — lock-screen text); the Settings minute-edit
+    fields keep `HH:MM` as the *typing* format (v1 exclusion — `fmtHM` applies to read-outs, not inputs).
+13. **No live frame for Today's `Next up` header line** (`nextWhen` — e.g. `at 9:30 AM · in 5 min`): all
+    three capture contexts land in `In class`, picked-day-window, or `No classes` states. Reachable with
+    a fourth Date shim between classes (Mon 09:25) if a later pass wants the frame; until then its 12h
+    formatting rests on `time-format.test.ts` § 3 (model + source pin).
+14. **Vision round 2 findings logged, not fixed (pre-existing, byte-identical in `HEAD`)**: the
+    when-picker day-strip cards print the weekday twice on non-first cards (`Tue 20 Tue`) — the top
+    slot's month anchor only fires on the first card / the 1st; the rectangular ring seen on the
+    `✓ Done` chip is the browser's default focus outline (app-wide focus styling, kept — removing it
+    would hurt keyboard use). Both are candidates for a later polish decision.
+15. **W4 dispatch stalled on provider quotas** (2026-10-16, 402/429) and was resumed the next day; the
+    roster fallbacks above were applied on resume.
 
 ## UX audit triage (2026-10-16 — report `reports/audit-ux.md`)
 
@@ -121,7 +150,7 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 | UX-1 | High | CONFIRMED — no add surface on any web viewport; the "desktop +" was never built | **batch 2 fixed** `20f3d02` |
 | UX-2 | Med | CONFIRMED — `store.ts` silent null-sum finish | **batch 2 fixed** (D2 data rule kept; 2 tests) |
 | UX-3 | Med | CONFIRMED — tour copy describes the Grades gesture; on Today long-press opens Edit class | W8 (copy) + **D7** |
-| UX-4 | Low | CONFIRMED shape — last row under the bar; `pageBottomPad` may already cover it at scroll-end | W4 (verify first; fix only if real) |
+| UX-4 | Low | **VERIFIED NOT REAL at scroll-end** — the last row sits 113 px above the nav bar (the at-rest "under the bar" position is simply where the scroll starts; `pageBottomPad` covers the end) | **W4 verified; no fix needed** (assert `[5]`) |
 | UX-5 | Low | PARTIAL — RNW never maps the RN `accessibilityValue` object (empty attrs, dead arrows) | **batch 2 fixed** (web-only spreads) |
 | UX-6 | Low | CONFIRMED but design — horizontal wheel scrolls; plain-wheel/drag doesn't (chip-strip convention) | REPORT note; no code |
 | UX-7 | Low | CONFIRMED — expo-audio drops the promise below our call sites, so no call-site catch | **batch 2 fixed** (first-gesture gate) |
@@ -130,13 +159,16 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 
 ## Next
 
-- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`. **W4 (Today time
-  truth) next** — brief delivered; then W5 (D4 lock-screen toggle + alarms) → W6 (transport log) → W7
-  (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production readiness, absorbs M7/L2/M1).
+- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`, **W4 committed this
+  pass** (single feat commit — the git log is the hash source; a commit cannot know its own). **W5 (D4
+  lock-screen toggle + alarms) next** — brief committed (`briefs/W5-alarms.md`, `5ed8331`); then W6
+  (transport log) → W7 (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production
+  readiness, absorbs M7/L2/M1).
 - The UX audit is delivered and triaged above; its two environmental one-offs are closed as
-  non-reproducing. W8 carries the tour copy (D7).
+  non-reproducing, and UX-4 is verified not real. W8 carries the tour copy (D7).
 - Gate per workstream: builder → orchestrator re-check + diffstat → vision loop (UI workstreams,
   max 4) → commit. W2's vision loop is waived (native-only delta) — recorded in the task log.
-- W4's vision round also re-judges the baseline's #4 (countdown numerals) and the clock/card overlap.
+- W4's vision rounds re-judged the baseline's #4 (countdown numerals — PASS: cells keep their widths
+  across digit changes) and the clock/card overlap (deliberate, kept).
 - Standing: remind Jossy about the profile-note disputed-claims test (`test-due` 2026-10-15 passed;
   no real outcome recorded yet).
