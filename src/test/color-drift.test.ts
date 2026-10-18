@@ -67,16 +67,19 @@ describe('no colour literals outside the token file', () => {
 /**
  * The second half of the same guard: the palette is not the only place contrast is decided. A palette can
  * hold a token pair that fails 4.5:1 and still be *correct* — `COORDINATION.md` §4 forbids re-valuing a
- * palette — and the obligation then falls on whoever paints text on that surface. Three such pairs are live
- * and all three were missed until `qa/FINDINGS-UNSTATED.md` F-06 measured them:
+ * palette — and the obligation then falls on whoever paints text on that surface. Two such pairs are live
+ * and both were missed until `qa/FINDINGS-UNSTATED.md` F-06 measured them:
  *
  *   mut  on hl   4.02 in original.dark   — an important note's subject line  (screens/Today.tsx)
  *   warn on hl   4.40 in original.light  — the Task sheet's "Tight" box      (sheets/forms.tsx)
- *   mut  on desk 4.03 in original.light  — the Focus dial bed's numerals     (ui/onboard/art.tsx)
  *
- * So this asserts the rule at the use site, which is the only place it can be asserted without editing a
- * palette: **a surface that fails for `mut` takes `ink`.** It reads the three sources rather than the token
- * file, in the same spirit as `card.test.ts`, so the table in `ui.test.ts` and the code cannot drift apart.
+ * A third one was the tour's dial bed (`ui/onboard/art.tsx`), which went when the illustrated tour did:
+ * the tour now runs the real dial, and the real dial paints no numerals on `desk` at all, so there is no
+ * surface left here to re-assert the rule against. The rule itself is unchanged and the two live
+ * instances below still hold it at the use site, which is the only place it can be asserted without
+ * editing a palette: **a surface that fails for `mut` takes `ink`.** They read their sources rather
+ * than the token file, in the same spirit as `card.test.ts`, so the table in `ui.test.ts` and the code
+ * cannot drift apart.
  */
 describe('a surface whose muted pair fails is painted with ink, not muted', () => {
   const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
@@ -96,16 +99,6 @@ describe('a surface whose muted pair fails is painted with ink, not muted', () =
     // the words are ink; `warn` must not appear as the text colour inside that card
     expect(tight.slice(0, 220)).not.toMatch(/c="warn"/);
     expect(tight.slice(0, 220)).toMatch(/<Txt f="bold" s=\{19\}>/);
-  });
-
-  it('the dial bed numerals are ink, because mut on desk is 4.03 in original.light', () => {
-    const src = read('ui/onboard/art.tsx');
-    // anchor on the bed fill the numerals sit inside: the knurled ring painted with `bed` (= `c.desk`)
-    const start = src.indexOf('<Path d={BED_RING} fill={bed}');
-    expect(start).toBeGreaterThan(-1);
-    const bed = src.slice(start, src.indexOf('</Svg>', start));
-    expect(bed).toMatch(/SText[^>]*fill=\{c\.ink\}/);
-    expect(bed).not.toMatch(/SText[^>]*fill=\{c\.mut\}/);
   });
 });
 

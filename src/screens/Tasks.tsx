@@ -35,7 +35,7 @@ export function TasksScreen() {
       <Row>{(['all', 'open', 'done'] as const).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={taskFilter === f} onPress={() => act.setSettings({ taskFilter: f })} small />)}<View style={{ width: 8 }} />{(['due', 'priority', 'created'] as const).map((f) => <Chip key={f} label={f === 'due' ? 'By date' : f === 'priority' ? 'By priority' : 'Newest'} on={taskSort === f} icon={undefined} onPress={() => act.setSettings({ taskSort: f })} small />)}</Row>
       <HStrip gap={8}><Chip label="Every subject" on={cid === 'all'} onPress={() => setCid('all')} small /><Chip label="Personal" on={cid === null} onPress={() => setCid(null)} small />{st.courses.map((c) => <Chip key={c.id} label={c.name} on={cid === c.id} onPress={() => setCid(c.id)} small />)}</HStrip>
       {list.length === 0 ? <Empty icon="tasks" text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add an assignment, exam or reading.'} /> : groups.map((g) => (
-        <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.items.length}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</View>))}
+        <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.items.length}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} tour="task-row" />)}</View>))}
       <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />
     </Page>
   );

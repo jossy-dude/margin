@@ -1,35 +1,34 @@
 /**
- * The onboarding tour: the gating logic, the wiring contract, and the five screens rendered for real.
+ * The tour: the gate it hangs off, the step machine, the cut-out, and the ten steps rendered for real.
  *
- * Rendering is the point of most of this file. The claims worth defending are all claims about what a
- * reader or a screen-reader user actually gets — five screens, each with a heading, a Next button that
- * names its destination, a Skip on every screen, and a Back that is a *button* rather than only a
- * swipe. None of those can be checked by reading the source, and the tour's whole job is to be read.
+ * Rendering is the point of most of this file. The claims worth defending are claims about what a
+ * reader or a screen-reader user actually gets — ten steps, each with a heading, a Next button that
+ * names its destination, a Skip on every step, a Back that is a *button* rather than only a gesture,
+ * and a scrim that is exactly as blocking as it looks. None of those can be checked by reading the
+ * source, and a tour's whole job is to be read.
+ *
+ * What this file does NOT do is check that the tour looks right on a phone: `docs/DEVICE_CHECKLIST.md`
+ * W6 holds the things only a device can settle, and they are deliberately left unticked here.
  *
  * `jest.mock` is hoisted above the imports, so each factory re-requires what it needs.
  */
 import React from 'react';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { BackHandler } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, stopResync } from '../store/store';
-import { TOUR_VERSION, toured, withDefaults } from '../domain/defaults';
-import { SCREENS, TOUR_LEN } from '../ui/onboard/screens';
-import { Onboarding, type OnboardFinish } from '../screens/Onboarding';
+import { seedSnapshot } from '../data/seed';
+import { getState, hydrate, set, stopResync, act as storeAct } from '../store/store';
+import { DEFAULT_SETTINGS, TOUR_VERSION, toured, withDefaults } from '../domain/defaults';
+import { STEPS, TOUR_LEN } from '../ui/onboard/screens';
+import { Coach, type OnboardFinish } from '../ui/onboard/Coach';
+import { cardTop, cutRects, hasRealRows, holeBox } from '../ui/onboard/coach';
 import { ThemeProvider } from '../ui/theme-context';
 
+jest.mock('expo-haptics', () => ({ NotificationFeedbackType: { Success: 'Success' }, Haptics: { notificationAsync: () => Promise.resolve(), selectionAsync: () => Promise.resolve() } }), { virtual: true });
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
-jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
-jest.mock('expo-constants', () => ({ default: { expoConfig: { version: '1.0.0', sdkVersion: '57.0.0' } } }));
-jest.mock('../services/notifications', () => ({
-  ensurePermission: async () => 'granted', sync: async () => ({ added: 0, removed: 0, planned: [] }),
-  cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {},
-  sendTest: async () => true, sendActionTest: async () => true, TEST_ACTION_ID: 'action-test',
-  status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, platform: 'test' }),
-  onOpened: () => {}, onReceived: () => {},
-}));
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const Provider = ({ children }: { children: unknown }) => R.createElement(R.Fragment, null, children as React.ReactNode);
@@ -43,6 +42,10 @@ jest.mock('react-native-reanimated', () => {
   const api = {
     __esModule: true, View: mk(), Text: mk(), ScrollView: mk(), Image: mk(),
     createAnimatedComponent: (c: unknown) => c,
+    /* `get`/`set` alongside `.value`: the app writes shared values through the compiler-safe forms
+       (`app.json` has `reactCompiler: true`, and `navigation/Book.tsx` documents why). These doubles
+       predate that; `set` is a no-op so a render reads the value it was constructed with, which is
+       exactly what a smoke render wants. */
     useSharedValue: (v: number) => ({ value: v, get: () => v, set: () => {} }),
     useAnimatedStyle: (fn: () => object) => fn(),
     useAnimatedProps: (fn: () => object) => fn(),
@@ -53,470 +56,440 @@ jest.mock('react-native-reanimated', () => {
     setGestureState: () => {}, isSharedValue: () => false, makeShareable: (v: unknown) => v,
     startMapper: () => {}, stopMapper: () => {}, makeMutable: (v: number) => ({ value: v }),
     Easing: { out: (f: unknown) => f, in: (f: unknown) => f, inOut: (f: unknown) => f, quad: 2, cubic: 3, bezier: () => (t: number) => t, back: () => (t: number) => t },
-    interpolate: (_v: number, i: number[], o: number[]) => (typeof i[0] === 'number' ? (i[0] >= i[1]! ? o[0]! : o[o.length - 1]!) : o[0] ?? 0),
+    interpolate: (_v: number, i: number[], o: number[]) => o[0] ?? 0,
+    interpolateColor: (_v: number, _i: number[], o: string[]) => o[0] ?? '',
     Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: {}, FadeOut: {}, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    /* Layout-animation builders are called as `FadeOut.duration(n)` in production. */
+    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
   };
   return { ...api, default: api };
 });
 
-const NOW = new Date(2026, 9, 5, 8).getTime();
-
-/** Every string in the rendered tree, in order — the page as a reader gets it. `toJSON` splits each
- *  interpolated value into its own node, so joining the leaves puts a sentence back together. */
-function leaves(node: unknown): string[] {
-  if (typeof node === 'string') return [node];
-  if (Array.isArray(node)) return node.flatMap(leaves);
-  const kids = (node as { children?: unknown[] } | null)?.children;
-  return kids ? leaves(kids) : [];
-}
-
+const NOW = new Date(2026, 9, 5, 8).getTime(); // a Monday, so the sample week's first block exists
 let live: TestRenderer.ReactTestRenderer | undefined;
 
-const mount = async (opts: { reduce?: boolean; from?: number } = {}) => {
+/** Android's hardware back, captured from the handler the tour registers. In jest the platform
+ *  resolves to iOS, where `BackHandler` is a no-op object — so the spy is what makes the "back walks
+ *  the tour" contract testable at all rather than a claim about code nobody ran. */
+const backs: ((e: unknown) => boolean | void)[] = [];
+beforeAll(() => {
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation(((_e: string, h: (e: unknown) => boolean | void) => {
+    backs.push(h);
+    return { remove: () => { const i = backs.indexOf(h); if (i >= 0) backs.splice(i, 1); } };
+  }) as never);
+});
+afterAll(() => { jest.restoreAllMocks(); });
+
+type Screen = { root: TestRenderer.ReactTestRenderer['root']; done: OnboardFinish[]; text: () => string; labelled: () => string[]; press: (a11y: string) => Promise<void>; unmount: () => Promise<void> };
+
+const mount = async (opts: { from?: number; firstRun?: boolean; seed?: boolean; reduce?: boolean } = {}): Promise<Screen> => {
   await act(async () => { live?.unmount(); });
   live = undefined;
-  await hydrate(new MemoryRepository(() => NOW));
+  backs.length = 0;
+  const repo = new MemoryRepository(() => NOW);
+  if (opts.seed !== false) await repo.seed(seedSnapshot(NOW)); // the sample semester a first launch starts with
+  await hydrate(repo);
+  set({ route: 'Today', sheet: null, toast: null, settingsPath: [], settings: { ...getState().settings, reduceMotion: opts.reduce ? 'on' : 'off' } });
   const done: OnboardFinish[] = [];
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => {
-    // `createElement` rather than JSX: `testMatch` is `src/**/*.test.ts`, and babel parses those
-    // without the JSX plugin. `settings-render.test.ts` mounts its subject the same way.
     r = TestRenderer.create(React.createElement(ThemeProvider, null,
-      React.createElement(Onboarding, { onFinish: (how: OnboardFinish) => done.push(how), reduce: opts.reduce ?? false, from: opts.from ?? 0 })));
+      React.createElement(Coach, { onFinish: (how: OnboardFinish) => done.push(how), firstRun: opts.firstRun ?? true, from: opts.from ?? 0 })));
   });
   live = r;
+  const root = r.root;
+  const labelled = () => root.findAll((n) => typeof n.props.accessibilityLabel === 'string').map((n) => n.props.accessibilityLabel as string);
+  /* Host `Text` nodes, not the composite: in this renderer a composite's `children` is the element it
+     rendered, and the strings a reader sees live one layer further in. */
+  const text = () => root.findAll((n) => String(n.type) === 'Text').map((n) => String(n.children[0] ?? '')).join(' ');
   return {
-    r, done,
-    text: () => leaves(r.toJSON()).join(''),
-    json: () => JSON.stringify(r.toJSON()),
-    /** Every pressable with a label, which is what a screen reader can reach. */
-    labelled: () => r.root.findAll((n) => typeof n.type !== 'string' && typeof (n.props as { accessibilityLabel?: unknown }).accessibilityLabel === 'string')
-      .map((n) => (n.props as { accessibilityLabel: string }).accessibilityLabel),
-    roles: () => r.root.findAll((n) => typeof n.type !== 'string' && typeof (n.props as { accessibilityRole?: unknown }).accessibilityRole === 'string')
-      .map((n) => (n.props as { accessibilityRole: string; accessibilityLabel?: string }).accessibilityRole),
-    press: async (label: string) => {
-      const n = r.root.findAll((x) => typeof x.type !== 'string' && (x.props as { accessibilityLabel?: string }).accessibilityLabel === label)[0];
-      if (!n) throw new Error(`nothing labelled "${label}"`);
-      await act(async () => { (n.props as { onPress?: () => void }).onPress?.(); });
+    root, done, labelled,
+    text,
+    press: async (a11y: string) => {
+      const n = root.findAll((x) => x.props.accessibilityLabel === a11y)[0];
+      if (!n) throw new Error(`no control labelled ${a11y}`);
+      /* A real tap: press-in is the frame most of this app's controls act on (`Btn` documents why),
+         and release is the frame `danger` acts on and TalkBack uses. Both, in one act. */
+      await act(async () => { n.props.onPressIn?.(); n.props.onPress?.(); await new Promise((res) => setTimeout(res, 0)); });
     },
+    unmount: async () => { await act(async () => { r.unmount(); }); live = undefined; },
   };
 };
 afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); });
 
+/* The overlay's own layers, reached through the renderer's nesting: a `<View>` is a composite that
+   renders a host, so `children[0]` is the host and *its* children are the elements the JSX passed
+   down. Both of the tests below are about what those elements do to a touch, which is the one thing
+   about this overlay a reader cannot tell by looking at it. */
+const coachOf = (s: Screen) => s.root.findAll((n) => typeof n.type === 'string' && n.props.testID === 'coach')[0]!;
+const scrimOf = (s: Screen) => coachOf(s).children[0] as TestRenderer.ReactTestInstance;
+const cardOf = (s: Screen) => coachOf(s).children[1] as TestRenderer.ReactTestInstance;
+const rectsOf = (s: Screen) => (scrimOf(s).children[0] as TestRenderer.ReactTestInstance).children as TestRenderer.ReactTestInstance[];
+
 /* ───── the gate ───── */
 
-/** `toured` is the whole gate. The order of these cases matters: a fresh install has no `onboarded`
- *  key at all, which is the first thing that has to be right. */
-describe('the tour shows itself on a first launch and stays away afterwards', () => {
-  it('a phone that has never seen it is shown the tour', () => {
-    expect(toured(undefined)).toBe(false);   // a fresh install, and every row written before the tour existed
-    expect(toured(0)).toBe(false);           // "shown again" from Settings
-    expect(toured(TOUR_VERSION - 1)).toBe(false);
+describe('the gate: one number, and therefore not two', () => {
+  it('toured() is false for undefined, 0 and any earlier build', () => {
+    for (const v of [undefined, 0, TOUR_VERSION - 1]) expect(toured(v)).toBe(false);
+    for (const v of [TOUR_VERSION, TOUR_VERSION + 1]) expect(toured(v)).toBe(true);
   });
 
-  it('a phone that finished this build of it is not', () => {
-    expect(toured(TOUR_VERSION)).toBe(true);
-    expect(toured(TOUR_VERSION + 1)).toBe(true); // a future build's stamp does not re-show an older tour
-  });
-
-  it('skipping counts as finishing, because the point is not to show it twice', async () => {
+  it('Skip finishes, and a double press still finishes once', async () => {
     const s = await mount();
-    await s.press('Skip the tour');
-    expect(s.done).toEqual(['skipped']);
-  });
-
-  it('a double tap on Skip finishes once, not twice', async () => {
-    const s = await mount();
+    expect(s.text()).toContain('Everything lives on this phone.');
     await s.press('Skip the tour');
     await s.press('Skip the tour');
     expect(s.done).toEqual(['skipped']);
   });
 
-  it('replay is a second write of 0, with no extra state anywhere', async () => {
-    // There is no `onboardingVisible`, no route and no module flag to reset: the gate reads one number.
-    expect(toured(0)).toBe(false);
-    const s = await mount({ from: 0 });
-    expect(s.text()).toContain('1 / ' + TOUR_LEN);
+  it('App.tsx persists it with the same expression it always has, and covers the app with the tour', () => {
+    const app = readFileSync(join(__dirname, '..', 'App.tsx'), 'utf8');
+    expect(app).toContain('act.setSettings({ onboarded: TOUR_VERSION })');
+    expect(app).toContain('toured(onboarded)');
+    // The tour is mounted OVER the shell, not instead of it: the control it points at is the real one.
+    expect(app).toContain('<Shell />');
+    expect(app).toContain('<Coach ');
+    expect(app).not.toContain('./screens/Onboarding');
+    // and a device that has already taken one is never offered the destructive close again
+    expect(app).toContain('hasRealRows()');
+    expect(app).toContain('launched.current = true');
   });
 
-  it('a tour reopened from Settings starts at the beginning, not where it was left', async () => {
-    const a = await mount();
-    await a.press('Next: ' + SCREENS[1]!.heading);
-    expect(a.text()).toContain('2 / ' + TOUR_LEN);
-    await act(async () => { live?.unmount(); });
-    const b = await mount({ from: 0 });
-    expect(b.text()).toContain('1 / ' + TOUR_LEN);
-  });
-});
-
-/* ───── the wiring contract with the shared files ───── */
-
-/** `Settings.onboarded` arrived through `qa/HANDOFF-A4.md` as an OPTIONAL field, and optional is the whole
- *  point: a settings row written before the tour existed has no such key, which is precisely the case
- *  `toured(undefined)` answers, so `DEFAULT_SETTINGS` needs no entry and a cold start needs no migration.
- *
- *  This block used to assert two things about the hand-off *document* — that `qa/HANDOFF-A4.md` spelled
- *  `onboarded?: number;`, and that it was spelled there at most once. Both were the same class of test as
- *  `scripts.test.ts`'s `expect(faces).toContain('PLATE_DARK_MATRIX')`: a test that checks a word appears in a
- *  file, passing exactly as long as the word does. One of them had already turned false — the patch landed
- *  and the shared field is on the type — and nothing had noticed, which is the whole argument against them.
- *  What is left asserts the three things that are still true of the shipped code. */
-/** `onboarded?: number;` or `onboarded: number;`, with or without the docstring's indentation. */
-const FIELD_ONE = /onboarded\??\s*:\s*number\s*;/;
-describe('the one shared-type field the gate needs is optional, declared once, and needs no default', () => {
-  const types = readFileSync(join(__dirname, '..', 'domain', 'types.ts'), 'utf8');
-
-  it('is declared on Settings exactly once — a re-applied patch would break the build', () => {
-    expect(types.match(new RegExp(FIELD_ONE.source, 'g'))?.length ?? 0).toBe(1);
-    expect(types).toMatch(FIELD_ONE);
-    // optional, not required: that is what makes an old settings row legal without a migration
-    expect(types).toMatch(/onboarded\?: number;/);
+  it('DEFAULT_SETTINGS still has no `onboarded` key', () => {
+    expect(Object.keys(DEFAULT_SETTINGS)).not.toContain('onboarded');
+    expect(withDefaults({}).onboarded).toBeUndefined();
   });
 
-  it('and it is read off the type, with no cast left behind from the hand-off window', () => {
+  it('a field that shadows a real key is the kind of miss the tour must not make', () => {
+    const types = readFileSync(join(__dirname, '..', 'domain', 'types.ts'), 'utf8');
     const settings = readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8');
-    expect(settings).toContain('const onboarded = s.onboarded');
-    // the intersection cast is what the hand-off needed while the field was optional-but-undeclared
-    expect(settings).not.toContain('Settings & { onboarded?: number }');
-  });
-
-  it('and the gate needs no default, because absent already means "has not seen it"', () => {
-    // This is the property that makes the whole thing survive a cold start: `withDefaults` never sees the
-    // field, so a fresh install has none, and `undefined` is already the answer that shows the tour.
-    const fresh = withDefaults({});
-    expect(fresh.onboarded).toBeUndefined();
-    expect(toured(fresh.onboarded)).toBe(false);
-    // and it must stay absent from DEFAULT_SETTINGS, or a settings row written by an older build would
-    // gain a field it never had. Asserted over the source, since the object type would allow either.
-    expect(readFileSync(join(__dirname, '..', 'domain', 'defaults.ts'), 'utf8')).not.toMatch(/DEFAULT_SETTINGS[^}]*onboarded/s);
+    const defaults = readFileSync(join(__dirname, '..', 'domain', 'defaults.ts'), 'utf8');
+    expect(types).toMatch(/^\s{2}onboarded\??: number;/m); // optional, so it can be absent at runtime
+    expect(settings).toContain('act.setSettings({ onboarded: v })');
+    expect(defaults).toContain('(seen ?? 0) >= TOUR_VERSION');
   });
 });
 
-/* ───── the five screens ───── */
+/* ───── the step list ───── */
 
-describe('the tour is five screens that each teach one thing', () => {
-  it('is five, not a carousel of everything the app does', () => {
-    expect(TOUR_LEN).toBe(5);
-    expect(SCREENS).toHaveLength(5);
+describe('ten steps, seven of them under the user\'s own finger', () => {
+  it('is ten — the seven the app can be tapped through, plus the three look steps', () => {
+    expect(TOUR_LEN).toBe(10);
+    expect(STEPS).toHaveLength(10);
   });
 
-  it('gives every screen a unique id and a heading that reads as a sentence', () => {
-    const ids = SCREENS.map((s) => s.id);
+  it('gives every step a unique id and a heading that reads as a sentence', () => {
+    const ids = STEPS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const s of SCREENS) {
+    for (const s of STEPS) {
       expect(s.heading.length).toBeGreaterThan(8);
       expect(s.body.join(' ').length).toBeGreaterThan(40);
     }
   });
 
-  it('renders every screen, in order, with its own heading and progress', async () => {
+  it('points every step at a control the app actually registers, on a page that exists', () => {
+    const routes = ['Today', 'Week', 'Tasks', 'Grades', 'Stats', 'Focus'];
+    const seen = new Set<string>();
+    for (const f of walk('src')) if (f.endsWith('.tsx') || f.endsWith('.ts')) {
+      const src = readFileSync(f, 'utf8');
+      for (const m of src.matchAll(/useCoachSlot\('([a-z-]+)'[,)]|tour="([a-z-]+)"/g)) seen.add(m[1] ?? m[2]!);
+    }
+    expect([...seen].sort()).toEqual(['fab', 'focus-dial', 'gear', 'sheet-close', 'tab-grades', 'tab-tasks', 'tab-week', 'task-row', 'week-class']);
+    for (const s of STEPS) {
+      if (s.route) expect(routes).toContain(s.route);
+      if (s.target) expect([...seen]).toContain(s.target);
+    }
+    // and the ones that wait for something wait for a real event, not a timer
+    expect(STEPS.filter((s) => s.await).map((s) => s.id)).toEqual(['add', 'close', 'week', 'todo', 'dial']);
+  });
+
+  it('renders every step, in order, with its own heading and progress', async () => {
     for (let i = 0; i < TOUR_LEN; i++) {
       const s = await mount({ from: i });
-      expect(s.text()).toContain(SCREENS[i]!.heading);
+      expect(s.text()).toContain(STEPS[i]!.heading);
       expect(s.text()).toContain(`${i + 1} / ${TOUR_LEN}`);
+      await s.unmount();
     }
   });
 
-  it('teaches the five things a first-time user cannot guess, in the app\'s own words', async () => {
-    const seen: string[] = [];
-    for (let i = 0; i < TOUR_LEN; i++) seen.push((await mount({ from: i })).text());
-    const all = seen.join(' ');
-    expect(all).toMatch(/No account, no sign-in, no server/);  // it is local, and that is why it asks
-    expect(all).toContain('five tabs along the bottom');        // the map
-    expect(all).toMatch(/Right finishes\. Left crumples/);     // the accidental gesture
-    expect(all).toMatch(/Task deleted/);                       // …and the safety net
-    expect(all).toMatch(/Tap once, then hold/);                 // the precise gesture
-    expect(all).toMatch(/one tap marks it Here/i);              // …taught with its actual outcome
-    expect(all).toMatch(/Drag the ring/);                       // the hardest, and live
-    expect(all).toMatch(/unlocks after 5 min of work/);
-    expect(all).toMatch(/margin 1\.0 · local-first/i);         // the promise, paid
+  it('teaches, in the app\'s own words, the things the five illustrated screens used to draw', async () => {
+    const all: string[] = [];
+    for (let i = 0; i < TOUR_LEN; i++) { const s = await mount({ from: i }); all.push(s.text()); await s.unmount(); }
+    const seen = all.join('\n');
+    expect(seen).toContain('No account, no sign-in, no server'); // screen 1, `local`
+    expect(seen).toContain('It is the only way in');             // screen 1, the +
+    expect(seen).toContain('Show the tour again');               // screen 1, the gear
+    expect(seen).toMatch(/Right finishes\. Left crumples\./);    // screen 2, `undo`
+    expect(seen).toMatch(/Tap once, then hold\./);               // screen 3, `attendance`
+    expect(seen).toMatch(/Drag the ring/);                       // screen 4, `dial`
+    expect(seen).toContain('Today, Week, To-do, Grades, Stats'); // screen 5, `recap`
+    expect(seen).toContain('a sample semester');                 // new: the hand-over
   });
 
-  it('uses the app\'s own margin note rather than writing its own', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    expect(s.text()).toContain('focus doesn’t');
-    expect(s.text()).toContain('happen by accident');
-  });
-
-  it('shows the real nav bar and the real + on the first screen', async () => {
-    const s = await mount({ from: 0 });
-    for (const l of ['Today', 'Week', 'To-do', 'Grades', 'Stats']) expect(s.text()).toContain(l);
-    expect(s.labelled()).toContain('Adds anything');
-  });
-
-  it('shows the real Undo toast, not the word "undo"', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'undo') });
-    expect(s.text()).toContain('Task deleted');
-    expect(s.labelled().some((l) => /Undo/i.test(l))).toBe(true);
+  it('the last step offers the sample semester only on a genuine first run', async () => {
+    const first = await mount({ from: TOUR_LEN - 1, firstRun: true });
+    expect(first.labelled()).toContain('Start empty and remove the sample semester');
+    expect(first.text()).toContain('Nothing of yours is in it');
+    const replay = await mount({ from: TOUR_LEN - 1, firstRun: false });
+    expect(replay.labelled()).not.toContain('Start empty and remove the sample semester');
+    expect(replay.text()).toContain('Settings → Show the tour again');
   });
 });
 
-/* ───── accessibility: the app's own rule is that every gesture has a button path ───── */
+/* ───── the step machine ───── */
 
-describe('every screen is operable without a gesture', () => {
-  it('Next is a button on every screen and it names where it goes', async () => {
+describe('the tour runs the app, and the app runs the tour', () => {
+  it('Next is a button on every step but the last, and it names where it goes', async () => {
     for (let i = 0; i < TOUR_LEN - 1; i++) {
       const s = await mount({ from: i });
-      expect(s.labelled()).toContain(`Next: ${SCREENS[i + 1]!.heading}`);
+      expect(s.labelled()).toContain(`Next: ${STEPS[i + 1]!.heading}`);
+      await s.press(`Next: ${STEPS[i + 1]!.heading}`);
+      expect(s.text()).toContain(STEPS[i + 1]!.heading);
+      await s.unmount();
     }
-    const last = await mount({ from: TOUR_LEN - 1 });
-    expect(last.labelled()).toContain('Start using Margin');
   });
 
-  it('Next really advances, and the last one really finishes', async () => {
-    const s = await mount();
-    for (let i = 1; i < TOUR_LEN; i++) await s.press(`Next: ${SCREENS[i]!.heading}`);
-    expect(s.text()).toContain(`${TOUR_LEN} / ${TOUR_LEN}`);
-    await s.press('Start using Margin');
+  it('leaving a sheet step by Next puts the sheet away, so the scrim cannot trap one nobody can close', async () => {
+    /* Step 2 opens the ADD sheet so its ✕ can be pointed at. A user who presses Next instead of the ✕
+       leaves it open — and the scrim, which is meant to block the *rest* of the app, then blocks that ✕
+       too, leaving a sheet on screen that nothing can dismiss. Every later step would inherit it. */
+    const s = await mount({ from: 1 });
+    expect(getState().sheet).not.toBeNull();
+    await s.press(`Next: ${STEPS[2]!.heading}`);
+    expect(getState().sheet).toBeNull();
+    expect(s.text()).toContain(STEPS[2]!.heading);
+    await s.unmount();
+  });
+
+  it('the last step finishes once, even under a double press', async () => {
+    const s = await mount({ from: TOUR_LEN - 1 });
+    await s.press('Keep the sample data and finish the tour');
+    await s.press('Keep the sample data and finish the tour');
     expect(s.done).toEqual(['done']);
   });
 
-  it('Back is a button from the second screen onwards, and never on the first', async () => {
+  it('Back is a button from the second step on, and never on the first', async () => {
+    expect((await mount({ from: 0 })).labelled()).not.toContain('Back');
+    for (let i = 1; i < TOUR_LEN; i++) {
+      const s = await mount({ from: i });
+      expect(s.labelled()).toContain('Back');
+      await s.press('Back');
+      expect(s.text()).toContain(i - 1 >= 0 ? STEPS[i - 1]!.heading : '');
+      await s.unmount();
+    }
+  });
+
+  it('Skip is on every step', async () => {
+    for (let i = 0; i < TOUR_LEN; i++) {
+      const s = await mount({ from: i });
+      expect(s.labelled()).toContain('Skip the tour');
+      await s.unmount();
+    }
+  });
+
+  it('Android back steps the tour back, and off the first step ends it rather than the app', async () => {
+    const s = await mount({ from: 3 });
+    await act(async () => { backs[backs.length - 1]?.({}); });
+    expect(s.done).toEqual([]);
+    expect(s.text()).toContain(STEPS[2]!.heading);
+
     const first = await mount({ from: 0 });
-    expect(first.labelled()).not.toContain('Back');
-    const s = await mount({ from: 2 });
-    expect(s.labelled()).toContain('Back');
-    await s.press('Back');
-    expect(s.text()).toContain(`2 / ${TOUR_LEN}`);
+    await act(async () => { backs[backs.length - 1]?.({}); });
+    expect(first.done).toEqual(['skipped']);
   });
 
-  it('Skip is on every screen', async () => {
-    for (let i = 0; i < TOUR_LEN; i++) expect((await mount({ from: i })).labelled()).toContain('Skip the tour');
+  it('unmounting is not finishing, and nothing it armed can fire into the app behind it', async () => {
+    const s = await mount({ from: TOUR_LEN - 2 });
+    await s.unmount();
+    expect(s.done).toEqual([]);
   });
 
-  it('the dial — the one control with no visible ± — carries the app\'s own non-gesture path', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    expect(s.roles()).toContain('adjustable');
-    const dial = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'adjustable')[0];
-    const acts = ((dial?.props as { accessibilityActions?: { name: string }[] }).accessibilityActions ?? []).map((a) => a.name);
-    expect(acts).toEqual(['increment', 'decrement']);
-    expect((dial?.props as { accessibilityValue: { text: string } }).accessibilityValue.text).toBe('25 minutes');
-  });
-
-  it('increment and decrement move the dial by five minutes, the app\'s own step', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    const dial = () => s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'adjustable')[0]!;
-    await act(async () => { (dial().props as { onAccessibilityAction: (e: unknown) => void }).onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }); });
-    expect((dial().props as { accessibilityValue: { text: string } }).accessibilityValue.text).toBe('30 minutes');
-    await act(async () => { (dial().props as { onAccessibilityAction: (e: unknown) => void }).onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } }); });
-    expect((dial().props as { accessibilityValue: { text: string } }).accessibilityValue.text).toBe('25 minutes');
-  });
-
-  it('the presets are buttons, not part of the drag', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    for (const m of ['25 minutes', '45 minutes', '50 minutes', '90 minutes']) expect(s.labelled()).toContain(m);
-    await s.press('90 minutes');
-    const dial = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'adjustable')[0];
-    expect((dial?.props as { accessibilityValue: { text: string } }).accessibilityValue.text).toBe('90 minutes');
-  });
-
-  it('the heading is a header, and the progress is announced politely', async () => {
-    const s = await mount({ from: 1 });
-    expect(s.roles()).toContain('header');
-    const live = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityLiveRegion?: string }).accessibilityLiveRegion === 'polite');
-    expect(live.length).toBeGreaterThan(0);
-    expect(leaves((live[0]!.props as { children?: unknown }).children).join('')).toContain('2 / 5');
-  });
-
-  it('the artwork is hidden from a screen reader, so a screen is read once and not drawn out', async () => {
+  it('the awaited events are the app\'s own writes', async () => {
     const s = await mount({ from: 0 });
-    const hidden = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { importantForAccessibility?: string }).importantForAccessibility === 'no-hide-descendants');
-    expect(hidden.length).toBeGreaterThan(0);
-    // …and the sentence itself is real text, not inside a drawing
-    expect(s.text()).toContain('No account, no sign-in, no server.');
+    expect(s.text()).toContain('Everything lives on this phone.');
+    await act(async () => { storeAct.open({ t: 'add' }); });          // the user taps the real +
+    expect(s.text()).toContain('Every sheet closes with the ✕.');
+    expect(getState().sheet).not.toBeNull();
+    await act(async () => { storeAct.close(); });                     // the user taps the real ✕
+    expect(s.text()).toContain('The gear changes anything.');
+    await s.press(`Next: ${STEPS[3]!.heading}`);                      // the gear is a look step
+    await act(async () => { storeAct.go('Week'); });                  // the user taps Week
+    expect(s.text()).toContain('Tap once, then hold.');
+    expect(getState().route).toBe('Week');
+    await s.press(`Next: ${STEPS[5]!.heading}`);                      // attendance is a look step
+    await act(async () => { storeAct.go('Tasks'); });                 // the user taps To-do
+    expect(s.text()).toContain('Right finishes. Left crumples.');
   });
 
-  it('fixed-size cells cap their growth, so Android font scale 1.4 cannot burst them', async () => {
-    const s = await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    const dial = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'adjustable')[0];
-    const capped = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { maxFontSizeMultiplier?: number }).maxFontSizeMultiplier !== undefined);
-    expect(capped.length).toBeGreaterThan(0);
-    expect((dial?.props as { accessibilityRole: string }).accessibilityRole).toBe('adjustable');
+  it('the dial step is over when the round has moved from where the tour found it', async () => {
+    const s = await mount({ from: 8 });
+    expect(s.text()).toContain('The dial is a real dial.');
+    expect(getState().route).toBe('Focus');                            // the step opens the page it is about
+    await act(async () => { storeAct.timerSetMin(getState().timer.planMin + 10); });
+    expect(s.text()).toContain('That’s Margin.');
+  });
+
+  it('a step that waits for nothing does not advance on an unrelated write', async () => {
+    const s = await mount({ from: 2 });                                // the gear: a look step
+    await act(async () => { storeAct.go('Week'); });
+    expect(s.text()).toContain('The gear changes anything.');
+  });
+
+  it('a step that needs a page puts the app on it itself, so Next is as honest as the tap', async () => {
+    await mount({ from: 4 });
+    expect(getState().route).toBe('Week');                             // the timetable block lives here
+    const s = await mount({ from: 1 });                                // the sheet step, entered with no sheet
+    expect(getState().sheet).not.toBeNull();                           // it opens the sheet the + opens
+    expect(s.text()).toContain('Every sheet closes with the ✕.');
+  });
+
+  it('the callout still reads when its control is not on screen', async () => {
+    // Nothing is measured in jest, which is exactly the empty-timetable case: the control this step
+    // points at is not on screen, so there is no hole to cut and the scrim stays one unbroken sheet.
+    const s = await mount({ from: 4 });
+    expect(s.text()).toContain('Tap once, then hold.');
+    expect(rectsOf(s)).toHaveLength(1);
   });
 });
 
-/* ───── reduce-motion ───── */
+/* ───── the cut-out ───── */
 
-describe('reduce-motion collapses the tour to its end state, not to a fade', () => {
-  it('renders every screen with motion off', async () => {
-    for (let i = 0; i < TOUR_LEN; i++) {
-      const s = await mount({ reduce: true, from: i });
-      expect(s.text()).toContain(SCREENS[i]!.heading);
+describe('the scrim is exactly as blocking as it looks', () => {
+  const covers = (rects: { x: number; y: number; w: number; h: number }[], px: number, py: number) =>
+    rects.filter((r) => px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h).length;
+
+  it('covers the window exactly once everywhere except the hole', () => {
+    const W = 393, H = 852, pad = 6, box = { x: 300, y: 760, w: 62, h: 62 };
+    const rects = cutRects(box, W, H, pad), hole = holeBox(box, pad)!;
+    for (let x = 0; x < W; x += 7) for (let y = 0; y < H; y += 7) {
+      const inHole = x >= hole.x && x < hole.x + hole.w && y >= hole.y && y < hole.y + hole.h;
+      expect(covers(rects, x, y)).toBe(inHole ? 0 : 1);
     }
   });
 
-  it('the crumple screen still says the whole sentence: gone, and it comes back', async () => {
-    const s = await mount({ reduce: true, from: SCREENS.findIndex((x) => x.id === 'undo') });
-    expect(s.text()).toContain('Task deleted');
-    expect(s.labelled().some((l) => /Undo/i.test(l))).toBe(true);
-    expect(s.text()).toContain('six seconds');
+  it('with no control to point at, the scrim is one unbroken sheet', () => {
+    const rects = cutRects(null, 393, 852, 6);
+    expect(rects).toEqual([{ x: 0, y: 0, w: 393, h: 852 }]);
+    expect(holeBox(null, 6)).toBeNull();
   });
 
-  it('the attendance screen still shows both outcomes', async () => {
-    const s = await mount({ reduce: true, from: SCREENS.findIndex((x) => x.id === 'attendance') });
-    expect(s.text()).toContain('One tap marks it Here');
-    expect(s.text()).toContain('so holding it opens this');
-    for (const l of ['Here', 'Late', 'Absent', 'Sick']) expect(s.text()).toContain(l);
+  it('the callout sits under the hole when there is room and over it when there is not', () => {
+    expect(cardTop({ x: 10, y: 100, w: 100, h: 60 }, 852, 214, 12, 12)).toBe(172);   // under
+    expect(cardTop({ x: 0, y: 700, w: 393, h: 62 }, 852, 214, 12, 12)).toBe(474);    // over — the FAB case
+    expect(cardTop(null, 852, 214, 12, 12)).toBe((852 - 214) / 2);                    // centred
+    // and it never overlaps the hole it is talking about
+    const hole = holeBox({ x: 0, y: 700, w: 393, h: 62 }, 6)!;
+    expect(cardTop(hole, 852, 214, 12, 12) + 214).toBeLessThanOrEqual(hole.y);
   });
 
-  it('the dial is still fully usable, because dragging is input rather than animation', async () => {
-    const s = await mount({ reduce: true, from: SCREENS.findIndex((x) => x.id === 'dial') });
-    await s.press('50 minutes');
-    const dial = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'adjustable')[0];
-    expect((dial?.props as { accessibilityValue: { text: string } }).accessibilityValue.text).toBe('50 minutes');
+  it('when neither side fits, the callout takes the side with more room', () => {
+    // a tall control on a short screen: 200 + 100 leaves 328 below and 188 above, so it goes under…
+    expect(cardTop({ x: 0, y: 200, w: 393, h: 100 }, 640, 400, 12, 12)).toBe(312);
+    // …and the same control further down leaves 128 below and 388 above, so it goes over.
+    expect(cardTop({ x: 0, y: 400, w: 393, h: 100 }, 640, 400, 12, 12)).toBe(12);
   });
 
-  it('Next and Skip still work with motion off', async () => {
-    const s = await mount({ reduce: true });
-    await s.press(`Next: ${SCREENS[1]!.heading}`);
-    expect(s.text()).toContain(`2 / ${TOUR_LEN}`);
-    await s.press('Skip the tour');
-    expect(s.done).toEqual(['skipped']);
-  });
-});
-
-/* ───── no off-screen work ───── */
-
-describe('the tour stops when it is gone', () => {
-  it('unmounts cleanly, so nothing it armed can fire into the app behind it', async () => {
+  it('renders the layers that make the blocking claim true', async () => {
     const s = await mount();
-    expect(s.text()).toContain(SCREENS[0]!.heading);
-    await act(async () => { live?.unmount(); });
-    live = undefined;
-    expect(s.done).toEqual([]);   // unmounting is not finishing
-  });
-
-  it('the face inside the dial is drawn static, so a hidden clock cannot tick', async () => {
-    await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
-    const faces = (globalThis as { __faces?: { live: unknown }[] }).__faces ?? [];
-    void faces;
-    const src = readFileSync(join(__dirname, '..', 'ui', 'onboard', 'art.tsx'), 'utf8');
-    expect(src).toMatch(/<ClockFace[^>]*live=\{false\}/);
-    // `live={false}` and no `time` prop is the pair `ClockFace` reads to return its static composite
-    // instead of arming a `useFrameCallback`.
-    const m = src.match(/<ClockFace[^>]*\/>/);
-    expect(m?.[0]).not.toMatch(/time=/);
+    expect(coachOf(s).children).toHaveLength(2);                                   // the scrim, then the callout
+    const scrim = scrimOf(s);
+    expect(scrim.props.importantForAccessibility).toBe('no-hide-descendants');     // TalkBack still reaches the app
+    expect(scrim.props.pointerEvents).toBe('box-none');                            // …and only through the hole
+    expect(cardOf(s).props.pointerEvents).toBe('box-none');                        // only the card takes touches
+    // the scrim rectangles are plain Views: no handler, no `pointerEvents`, so each one is a target
+    // that swallows the touch rather than passing it to the page behind
+    expect(rectsOf(s).length).toBeGreaterThan(0);
+    expect(rectsOf(s).every((r) => r.props.onPress === undefined && r.props.pointerEvents === undefined)).toBe(true);
   });
 });
 
-/* ───── reduce-motion is about animation, not about being able to read the page ───── */
+/* ───── first run and the hand-over ───── */
 
-/**
- * The bug this file now guards: the tour's `ScrollView` carried `scrollEnabled={!rm}`, so the moment a
- * user turned Android's "Remove animations" on, the tour became a fixed-height page that could not scroll.
- * At the 1.3× font scale the layout must survive, or on a 320 dp screen, or at a 2.0× system
- * font, the body text falls below the fold and there is no way to reach it. `useReduceMotion()` is a
- * contract about *motion*; a locked ScrollView is not motion, it is content loss — and it is invisible in a
- * render at default settings, which is exactly why it survived.
- */
-describe('reduce-motion removes movement, never the ability to read', () => {
-  it('no ScrollView anywhere in the tour is gated on the motion preference', () => {
-    // source-level, because the render mock replaces ScrollView with a plain View and cannot see the prop
-    for (const rel of ['screens/Onboarding.tsx', 'ui/onboard/art.tsx', 'ui/kit.tsx', 'ui/Sheet.tsx']) {
-      const src = readFileSync(join(__dirname, '..', rel), 'utf8');
-      expect({ rel, gate: /scrollEnabled=\{[^}]*\brm\b/.test(src) || /scrollEnabled=\{!/.test(src) }).toEqual({ rel, gate: false });
-    }
+describe('the one destructive thing the tour ever offers', () => {
+  it('knows a sample semester from a planner somebody has used', async () => {
+    const repo = new MemoryRepository(() => NOW);
+    await repo.seed(seedSnapshot(NOW));
+    await hydrate(repo);
+    expect(hasRealRows()).toBe(false);                                   // all of it is `demo: true`
+    set({ courses: [...getState().courses, { id: 'c-real', name: 'Mine', room: '', teacher: '', goal: null, sort: 99, demo: false }] });
+    expect(hasRealRows()).toBe(true);                                    // an upgrading device is never offered it
+    await act(async () => { await storeAct.purgeDemo(); });
+    expect(hasRealRows()).toBe(true);                                    // the row the user made survived
   });
 
-  it('and nothing in the rendered tree disables scrolling, at either motion setting', async () => {
-    for (const reduce of [false, true]) {
-      const s = await mount({ reduce });
-      const off = s.r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { scrollEnabled?: unknown }).scrollEnabled === false);
-      expect({ reduce, disabledScrollers: off.length }).toEqual({ reduce, disabledScrollers: 0 });
-    }
+  it('Start empty removes the sample semester and leaves a working planner', async () => {
+    const s = await mount({ from: TOUR_LEN - 1, firstRun: true });
+    expect(getState().courses.length).toBeGreaterThan(0);
+    await s.press('Start empty and remove the sample semester');
+    expect(getState().courses.filter((c) => c.demo)).toEqual([]);
+    expect(getState().tasks.filter((t) => t.demo)).toEqual([]);
+    expect(getState().marks.filter((m) => m.demo)).toEqual([]);
+    expect(getState().toast?.text).toBe('Sample data removed');
+    expect(s.done).toEqual(['done']);
+    expect(getState().settings.onboarded).toBeUndefined();               // App.tsx writes it, not the tour
   });
 
-  it('every screen still renders its full body under reduce-motion, not just the heading', async () => {
-    for (let i = 0; i < TOUR_LEN; i++) {
-      const s = await mount({ from: i, reduce: true });
-      for (const line of SCREENS[i]!.body) expect(s.text()).toContain(line.slice(0, 40));
-    }
-  });
-
-  it('and reduce-motion is still honoured: every shared value starts at its end state and arms no tween', () => {
-    const screen = readFileSync(join(__dirname, '..', 'screens', 'Onboarding.tsx'), 'utf8');
-    const art = readFileSync(join(__dirname, '..', 'ui', 'onboard', 'art.tsx'), 'utf8');
-    // `Placed`: starts settled, and the effect only assigns 1 when reduced
-    expect(screen).toContain('const k = useSharedValue(reduce ? 1 : 0)');
-    expect(screen).toContain('k.set(reduce ? 1 : withTiming(1');
-    // the crumple, the tap, the ring and the sheet all collapse to their end state rather than fading
-    for (const v of ['p', 'tap', 'ring', 'rise']) expect(art).toMatch(new RegExp(`useSharedValue\\(reduce \\? 1 : 0\\)` + (v === 'p' ? '' : '')));
-    expect(art.match(/reduce \? 1 : 0/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
-    expect(art).toContain('if (reduce) { p.set(1); return; }');
-    expect(art).toContain('if (reduce) { tap.set(1); ring.set(1); rise.set(1); return; }');
+  it('Keep exploring removes nothing', async () => {
+    const s = await mount({ from: TOUR_LEN - 1, firstRun: true });
+    const before = getState().courses.length;
+    await s.press('Keep the sample data and finish the tour');
+    expect(getState().courses.length).toBe(before);
+    expect(s.done).toEqual(['done']);
   });
 });
 
-/* ───── the dial's readout hub: the defect two renders found and one assertion could not ───── */
+/* ───── accessibility, and the motion the tour does not have ───── */
 
-/**
- * `DialArt`'s paper hub had **two** faults stacked, and the second was hiding the first.
- *
- *  1. The path is `handPath(104, 104, …)`, which by `ui/hand.ts`'s contract walks a box from `(0,0)`. The
- *     `Svg` around it declared `viewBox="-54 -54 108 108"` — a frame centred on the dial. So the hub occupied
- *     0…104 inside a frame showing −54…54: **only its top-left quadrant was on screen**, the ink arc appeared
- *     up and to the left of the centre, and the `25` sat on the bare guilloché, illegible. `Focus.tsx:154` gets
- *     this right (`viewBox="-2 -2 CAP_BOX CAP_BOX"` over a 0-based path) and this file did not copy it.
- *  2. Fixing the viewBox alone made it *worse*: the hub was a **104-unit disc**, and `Focus.tsx`'s own comment
- *     records that a disc was thrown out precisely because "a disc has to be as wide as the numeral and as tall
- *     again … and hid the entire centre of the selected clock face — which is where the guilloché and the two
- *     rosette lattices live, and the thing the dial is there to show."
- *
- * The tour had copied a geometry that had already been rejected, then buried it under fault 1.
- * `/tmp/render/a8/DIALBUG.png` shows all three states side by side at 411 px.
- *
- * **This is what a test cannot do.** Every number involved was plausible, `handPath` returned a valid non-empty
- * path, and a render was the only thing that showed a paper capsule in the wrong place. So the assertions below
- * pin the *arithmetic* — path extent against viewBox — which is what was actually wrong, and the visual
- * judgement is recorded in the render.
- */
-describe('the dial readout sits on a capsule that is actually on screen', () => {
-  const art = () => readFileSync(join(__dirname, '..', 'ui', 'onboard', 'art.tsx'), 'utf8');
-
-  it('uses the capsule Focus.tsx uses, not a disc — 108x44 claims 22 units of radius, 104x104 claims 52', () => {
-    const s = art();
-    expect(s).toContain('const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2');
-    expect(s).toMatch(/handPath\(CAP_W, CAP_H, HUB_R, 7717, 1\.6\)/);
-    // and the container is centred on the dial using the CAPSULE's half-extent
-    expect(s).toContain('left: DC * k - (CAP_W / 2) * k, top: DC * k - (CAP_H / 2) * k, width: CAP_W * k, height: CAP_H * k');
+describe('every control the tour adds is a button, and every word is announced', () => {
+  it('the heading is a header, the progress is announced politely, and both stop at the FS cap', async () => {
+    const s = await mount();
+    const headers = s.root.findAll((n) => n.props.accessibilityRole === 'header');
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers.some((n) => String(n.children[0]) === STEPS[0]!.heading)).toBe(true);
+    expect(s.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite').length).toBeGreaterThan(0);
+    expect(s.root.findAll((n) => typeof n.props.maxFontSizeMultiplier === 'number').length).toBeGreaterThan(0);
   });
 
-  it('the hub path lies inside its own viewBox — the defect the render found', () => {
-    // comments are stripped: the note recording the old value quotes it verbatim
-    const code = art().replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    // `handPath` fills 0..CAP_W by 0..CAP_H, so the frame must start at (or below) 0 and reach at least CAP_W.
-    // the Svg is the one whose width is derived from the capsule, not from DIAL
-    const m = /width=\{\(CAP_W \+ 4\) \* k\}[^>]*viewBox="(-?\d+) (-?\d+) (\d+) (\d+)"/.exec(code);
-    expect(m).not.toBeNull();
-    const box = m!.slice(1).map(Number);
-    const CAP_W = 108, CAP_H = 44;
-    // the frame must reach CAP_W across and CAP_H down, and start at 0 or below to admit the path
-    expect({ x: box[0], w: box[2], reachesCapW: box[0]! <= 0 && box[0]! + box[2]! >= CAP_W }).toEqual({ x: -2, w: 112, reachesCapW: true });
-    expect({ y: box[1], h: box[3], reachesCapH: box[1]! <= 0 && box[1]! + box[3]! >= CAP_H }).toEqual({ y: -2, h: 112, reachesCapH: true });
+  it('reaches the end under reduce-motion, with no fade anywhere to remove', async () => {
+    const s = await mount({ reduce: true });
+    for (let i = 0; i < TOUR_LEN - 1; i++) { await s.press(`Next: ${STEPS[i + 1]!.heading}`); expect(s.text()).toContain(STEPS[i + 1]!.heading); }
+    expect(s.text()).toContain('That’s Margin.');
+    await s.press('Keep the sample data and finish the tour');
+    expect(s.done).toEqual(['done']);
   });
 
-  it('and the readout is centred in the same capsule, so the paper is behind the number', () => {
-    const s = art();
-    expect(s).toContain("<Txt f=\"type\" s={27 * k} style={{ letterSpacing: -0.8 }}");
-    // the Svg is inset by the same 2 dp shadow bleed Focus uses, so the outline is not clipped
-    expect(s).toContain('left: -2 * k, top: -2 * k');
-    expect(s).toContain('transform={`translate(${2.6} ${3})`}');
+  it('arms no tween of its own, so the reduce-motion contract is a fact about the code', () => {
+    const coach = readFileSync(join(__dirname, '..', 'ui', 'onboard', 'Coach.tsx'), 'utf8');
+    for (const banned of ['useSharedValue', 'useAnimatedStyle', 'withTiming', 'withSequence', 'entering=', 'exiting=']) expect(coach).not.toContain(banned);
   });
 
-  it('no Svg in the tour declares a viewBox its own path cannot reach', () => {
-    // `DialArt`'s other three are `0 0 DIAL DIAL` over 0-based paths (bed, knurl, pointer), which is correct;
-    // this is the general statement, so a future centred frame cannot slip back in.
-    const s = art().replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    const frames = [...s.matchAll(/viewBox=[{"`]([^"`]+)["`}]/g)].map((m) => m[1]!);
-    for (const f of frames) {
-      const n = f.trim().split(/\s+/).map(Number);
-      // a negative origin is only legal for a path that is itself centred on the origin, and `handPath` never is:
-      // the only frame with one is the 2 dp shadow bleed that `Focus.tsx` also uses
-      if ((n[0] ?? 0) < 0 || (n[1] ?? 0) < 0) expect(f).toMatch(/^-2 -2 /);
+  it('no ScrollView in the tour is gated on the motion preference', () => {
+    const src = readFileSync(join(__dirname, '..', 'ui', 'onboard', 'Coach.tsx'), 'utf8');
+    for (const f of ['ui/kit.tsx', 'ui/Sheet.tsx']) {
+      const other = readFileSync(join(__dirname, '..', f), 'utf8');
+      const blocks = other.match(/<ScrollView[^>]*>/g) ?? [];
+      for (const b of blocks) expect(b).not.toContain('rm ?');
     }
+    const scrolls = src.match(/<ScrollView[^>]*>/g) ?? [];
+    expect(scrolls.length).toBeGreaterThan(0);
+    for (const b of scrolls) expect(b).not.toContain('rm ?');
   });
 });
+
+/** Every `.ts`/`.tsx` under a directory, as absolute paths — the same walk `dead-code.test.ts` uses,
+ *  so a rule about "the app registers this id" can be checked against the app rather than a list. */
+function walk(dir: string): string[] {
+  const out: string[] = [], root = resolve(__dirname, '..', '..', dir);
+  (function step(d: string): void {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.name === 'test') continue;
+      const p = join(d, e.name);
+      if (e.isDirectory()) step(p);
+      else if (/\.tsx?$/.test(e.name)) out.push(p);
+    }
+  })(root);
+  return out;
+}

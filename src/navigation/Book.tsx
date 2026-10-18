@@ -10,6 +10,7 @@ import { NAV_BODY, navInset } from '../ui/fit';
 import { useKeyboardUp } from '../ui/keyboard';
 import { ScreenLive } from '../ui/live';
 import { toNavigator, toStore } from './sync';
+import { useCoachSlot } from '../ui/onboard/coach';
 
 const TABS: { name: RouteName; label: string; icon: string }[] = [{ name: 'Today', label: 'Today', icon: 'today' }, { name: 'Week', label: 'Week', icon: 'week' }, { name: 'Tasks', label: 'To-do', icon: 'tasks' }, { name: 'Grades', label: 'Grades', icon: 'grades' }, { name: 'Stats', label: 'Stats', icon: 'stats' }];
 type Nav = TabNavigationState<ParamListBase>;
@@ -55,6 +56,10 @@ function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
 function BookView({ initialRouteName, children, screenOptions, id }: { initialRouteName?: string; children: React.ReactNode; screenOptions?: object; id?: string }) {
   const { state, descriptors, navigation, NavigationContent } = useNavigationBuilder(TabRouter, { initialRouteName, children, screenOptions, id } as never) as unknown as { state: Nav; descriptors: Record<string, { render: () => React.ReactNode }>; navigation: { navigate: (n: never) => void }; NavigationContent: React.ComponentType<{ children: React.ReactNode }> };
   const route = useStore((s) => s.route), { c } = useTheme(), ins = useSafeAreaInsets();
+  /* The tour points at three of the five tabs — it rings the Week tab, then the To-do tab, then the
+     Grades tab as the stand-in for the two that read the marks back. Three slots and one lookup is the
+     whole of the tour's footprint in this file; the other two tabs are never pointed at. */
+  const tour: Partial<Record<RouteName, { current: View | null }>> = { Week: useCoachSlot('tab-week'), Tasks: useCoachSlot('tab-tasks'), Grades: useCoachSlot('tab-grades') };
   const cur = state.routes[state.index]?.name as RouteName | undefined, kbUp = useKeyboardUp();
   /* A tab tap does NOT come through these syncs: `onPressIn` writes the store and moves the navigator
    *  in the SAME event handler, React batches both into ONE render, and that render already has
@@ -99,7 +104,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
             <HandBox seed="nav" fill={c.card} sw={2} amp={1.6} style={{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }}>
               {TABS.map((t) => { const on = cur === t.name; return (
-                <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} ref={tour[t.name]} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                   <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? hexA(c.acc, 0.2) : 'transparent', borderWidth: on ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
                   <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}

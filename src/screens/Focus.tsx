@@ -15,6 +15,7 @@ import { fmtClock, fmtDur } from '../domain/time';
 import { fx } from '../services/fx';
 import { handPath } from '../ui/hand';
 import { hexA } from '../tokens/theme';
+import { useCoachSlot } from '../ui/onboard/coach';
 
 const PAGE = require('../../assets/images/journal-page.jpg');
 function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { children?: React.ReactNode; style?: object; seed: string; fill?: string; sw?: number; shadow?: boolean }) {
@@ -79,6 +80,9 @@ const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
 function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean }) {
   const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), focused = useScreenLive(), reduce = useReduceMotion();
   const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0);
+  /* The tour's dial step rings this same node — the one `measure` uses to find the dial's own centre, so
+     the ring and the drag agree about where the control is without a second measurement of it. */
+  useCoachSlot('focus-dial', ref);
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
   const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
   const wholeSec = Math.floor(leftMs / 1000);

@@ -14,6 +14,7 @@ import { hexA } from '../tokens/theme';
 import { fx } from '../services/fx';
 import { SwipeCard } from '../ui/Swipe';
 import { FS, pageBottomPad } from '../ui/fit';
+import { useCoachSlot } from '../ui/onboard/coach';
 
 export function Page({ title, sub, children, right }: { title: string; sub?: string; children: React.ReactNode; right?: React.ReactNode }) {
   const ins = useSafeAreaInsets();
@@ -22,6 +23,8 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
      it read as a printed icon until the sheet opened. It now dips like `StepBtn` does (0.95, the number
      a 26 dp icon needs rather than the 0.97 a full-width button gets). */
   const gear = useAnimatedStyle(() => ({ transform: [{ scale: gp.get() }] }));
+  /* The tour's third step rings this gear. Every page renders this header, so one ref covers all six. */
+  const tourGear = useCoachSlot('gear');
   return (
     <View style={{ flex: 1 }}>
       <PaperBg />
@@ -31,7 +34,7 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
               word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
           <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
           {right}
-          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
+          <Pressable testID="open-settings" ref={tourGear} accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
             onPressIn={() => gp.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => gp.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
             android_ripple={{ color: hexA(c.ink, 0.18) }} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}>
             <Animated.View style={gear}><Icon name="gear" size={26} /></Animated.View>
@@ -76,10 +79,12 @@ export function nextWhen(start: number, now: number, h12 = false) {
 const KIND_ICON: Record<Task['kind'], string> = { assignment: 'tasks', exam: 'exam', reading: 'book', project: 'flag', lab: 'lab', deadline: 'flag', other: 'pencil' };
 /** Memoized: a card only re-renders when its task object changes or the minute boundary flips (its text is
  *  minute-granular). Narrow selectors keep it off every unrelated store write, and it opens its own sheet so
- *  the parent can't hand it a fresh inline callback that would defeat the memo. */
-export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now: number }) {
+ *  the parent can't hand it a fresh inline callback that would defeat the memo. `tour` is the slot id the
+ *  tour's swipe step points at — handed by To-do and deliberately not by Today, so the ring lands on a row
+ *  of the page the user is actually looking at. */
+export const TaskCard = React.memo(function TaskCard({ t, now, tour }: { t: Task; now: number; tour?: string }) {
   const { c } = useTheme();
-  const reduce = useReduceMotion(), press = useSharedValue(1), check = useSharedValue(1);
+  const reduce = useReduceMotion(), press = useSharedValue(1), check = useSharedValue(1), tourRow = useCoachSlot(tour);
   /* Press feedback on the card itself: the ripple is real but invisible — HandBox paints an opaque
      fill straight over it — so without the dip the only cue that a tap registered was the sheet opening.
      0.97 is the kit's full-width button number; the checkbox gets the deeper 0.95 because it is
@@ -92,7 +97,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
   return (
     <SwipeCard onComplete={() => act.toggleTask(t.id)} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
-      <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
+      <Pressable ref={tourRow} onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
         accessibilityRole="button" accessibilityLabel={`${t.title}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
         <Animated.View style={face}>
@@ -123,7 +128,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
       </Pressable>
     </SwipeCard>
   );
-}, (a, b) => a.t === b.t && Math.floor(a.now / 60_000) === Math.floor(b.now / 60_000));
+}, (a, b) => a.t === b.t && a.tour === b.tour && Math.floor(a.now / 60_000) === Math.floor(b.now / 60_000));
 /** the 28px attendance cell; the hit area is the cell itself because the 3px gutter leaves no room for an honest bigger one */
 export function AttCell({ status, inferred, future, locked, onTap, onHold, label, pulse, testID }: { status: AttStatus | null; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), sc = useSharedValue(1), sh = useSharedValue(0);

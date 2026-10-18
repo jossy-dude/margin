@@ -341,7 +341,7 @@ export function SettingsSheet() {
   </>);
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
-    <Txt f="serif" s={16} c="mut">The five-screen tour that runs the first time this app opens. It teaches the five things a first-time user cannot guess: that everything is on this phone, that the + is the only way to add anything, that swiping left crumples and Undo brings it back, that attendance is one tap and then a hold, and that the Focus dial is a real dial.</Txt>
+    <Txt f="serif" s={16} c="mut">The tour runs the first time this app opens, over the app itself rather than instead of it: it rings the real +, the real sheet close, the real gear, the tab bar, a timetable block, a task row and the real Focus dial — which it waits for you to drag. Every step has a Next and a Skip, and nothing on it changes your data.</Txt>
     <Btn kind="ghost" icon="play" label="Run it now" onPress={() => { replay(0); act.close(); }} />
     <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You finished build ${TOUR_VERSION} of it. Running it again changes nothing about your data.` : 'You have not seen it yet, so it will run the next time this app opens anyway.'}</Txt>
   </>);

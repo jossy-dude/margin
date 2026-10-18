@@ -24,7 +24,8 @@ import { TasksScreen } from './screens/Tasks';
 import { GradesScreen } from './screens/Grades';
 import { StatsScreen } from './screens/Stats';
 import { FocusScreen } from './screens/Focus';
-import { Onboarding } from './screens/Onboarding';
+import { Coach } from './ui/onboard/Coach';
+import { hasRealRows } from './ui/onboard/coach';
 import { TOUR_VERSION, toured } from './domain/defaults';
 import { getState, hydrate, set, useStore, wireLifecycle, act } from './store/store';
 import { openRepository } from './data/sqliteExpo';
@@ -133,14 +134,34 @@ function FontsFailed({ message, onRetry }: { message: string; onRetry: () => voi
 
 function Gate() {
   const ready = useStore((s) => s.ready), error = useStore((s) => s.error), onboarded = useStore((s) => s.settings.onboarded);
+  /* Set once this session has been past the tour. A replay from Settings writes `0` over a build
+     number, so the only record that a device has already taken the tour is having watched it happen:
+     without this, a planner still holding the sample set would be offered "Start empty" a second time
+     (the field is deliberately absent from `DEFAULT_SETTINGS`, so there is nothing persisted to read). */
+  const launched = useRef(false), firstRun = useRef<boolean | null>(null);
+  useEffect(() => { if (toured(onboarded)) launched.current = true; }, [onboarded]);
   if (!ready) return <Splash />;
   if (error) return <Fatal message={error} />;
-  // The tour REPLACES the shell rather than covering it, so no page is mounted underneath it: nothing hidden
-  // ticks, nothing fills off-screen, and no gesture can reach the app through it. That is why
-  // it is a screen and not a sheet. Skipping and finishing write the same value — the point is only that it is
-  // not shown twice — and Settings → "Show the tour again" replays it by writing `0`.
-  if (!toured(onboarded)) return <Onboarding onFinish={() => act.setSettings({ onboarded: TOUR_VERSION })} />;
-  return <Shell />;
+  // The tour COVERS the shell rather than replacing it, because it now runs the shell's own controls: the
+  // `+` it points at is the `+` that adds, the dial it waits on is the dial that sets a round. The gate is
+  // still one number — skipping and finishing write the same value, so it is not shown twice — and
+  // Settings → "Show the tour again" replays it by writing `0`.
+  const done = toured(onboarded);
+  /* Frozen on the render that mounts the tour. An upgrading device full of a term's real marks answers
+     `true` here and is never offered the destructive close, and neither is anything taken through once. */
+  if (!done && firstRun.current === null) firstRun.current = !launched.current && !hasRealRows();
+  /* A ref cannot be narrowed by the assignment above (it is mutable), so the value crosses into the
+     render as a local — which is also the honest shape: this is one frozen decision, not a live read. */
+  const first = firstRun.current ?? false;
+  /* Every finish clears the flag, not only `done`. The purge belongs to a device's first-ever pass
+     through the tour, and a skip followed by a replay from Settings in the same session is not one —
+     so the second pass has to find the flag already spent, however the first one ended. */
+  return (
+    <View style={{ flex: 1 }}>
+      <Shell />
+      {!done && <Coach firstRun={first} onFinish={() => { firstRun.current = false; act.setSettings({ onboarded: TOUR_VERSION }); }} />}
+    </View>
+  );
 }
 
 const Splash = () => {
