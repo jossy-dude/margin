@@ -6,10 +6,10 @@ const book = readFileSync(join(__dirname, '..', 'navigation', 'Book.tsx'), 'utf8
 const overlay = readFileSync(join(__dirname, '..', 'ui', 'Overlay.tsx'), 'utf8');
 const kb = readFileSync(join(__dirname, '..', 'ui', 'keyboard.ts'), 'utf8');
 
-/* The defect (BUG-028) was that the floating chrome kept floating while the keyboard was up. Measured on
-   the SM-A516N at 411 dp with the keyboard showing: the nav's bottom stroke sat at y 1485 and the
+/* The defect (BUG-028) was that the floating chrome kept floating while the keyboard was up. Measured at
+   411 dp with the keyboard showing: the nav's bottom stroke sat at y 1485 and the
    keyboard's top edge at y 1521 — a 36 px gap, i.e. exactly `navInset`'s 14 dp. So the nav was already at
-   the bottom of the *visible* area and V19's requirement was met; what was wrong is that anything floats
+   the bottom of the *visible* area; what was wrong is that anything floats
    over the content at all. The + button occupied y 1131-1278, squarely on a task card's text. */
 
 describe('floating chrome yields to the keyboard (BUG-028)', () => {

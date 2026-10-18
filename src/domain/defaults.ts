@@ -22,7 +22,7 @@ export const DEFAULT_NOTIF: NotifSettings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  name: 'Jossy', theme: 'auto', paper: 'dots', pen: 'warm', palette: 'refined', texture: 'grain',
+  name: '', theme: 'auto', paper: 'dots', pen: 'warm', palette: 'refined', texture: 'grain',
   clock: 'rb', bar: 'glass', semesterStart: '2026-09-07',
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },

@@ -161,10 +161,10 @@ describe('the Diagnostics hint does not re-read the crash log on every keystroke
     const afterMount = mockReads();
     expect(afterMount).toBeGreaterThan(0);
 
-    for (const text of ['J', 'Jo', 'Jos', 'Joss', 'Jossy']) await s.type(text);
+    for (const text of ['S', 'Sa', 'Sam']) await s.type(text);
 
     expect(mockReads()).toBe(afterMount); // typing re-rendered the sheet and read the file zero more times
-    expect(s.json()).toContain('Jossy'); // …and the field still took the text
+    expect(s.json()).toContain('Sam'); // …and the field still took the text
   });
 
   it('still pluralises, and still reads at all', async () => {

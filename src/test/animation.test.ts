@@ -12,10 +12,10 @@
  *     structure the model assumes, so the two cannot drift silently.
  *
  * What is being protected, in the order it matters:
- *  · **reduce-motion collapses everything** — a correctness requirement, not polish (`COORDINATION.md` §5,
- *    prompt.md V14). A switch that says "on" and then does not move is a bug the user can see.
- *  · **nothing animates off-screen** — prompt.md V17, restated as a project rule.
- *  · **rapid repeated input cannot leave a stuck state** — prompt.md V18, and there were two real
+ *  · **reduce-motion collapses everything** — a correctness requirement, not polish (`COORDINATION.md` §5).
+ *    A switch that says "on" and then does not move is a bug the user can see.
+ *  · **nothing animates off-screen** — restated as a project rule.
+ *  · **rapid repeated input cannot leave a stuck state** — and there were two real
  *    instances of it in the sheet: catching a dismissing sheet latched it shut for good, and a right-swipe
  *    landing inside a crumple could complete a task that was already being deleted.
  *  · **re-entrancy retargets rather than snaps** — a value that is assigned a fresh start strobes.
@@ -126,7 +126,7 @@ function stepper(value: number, reduce = false) {
 /** The chart leaves: it enters once — on FIRST FOCUS, not on mount, because every page now mounts on
  *  the navigator's first render — and then travels. `live` is the off-screen gate (`show`/`hide` flip
  *  it the way the navigator's focus context does); while hidden the value is assigned the correct
- *  picture and no tween ever starts (prompt.md V17). Mirrors `useEnter`/`Ring` in `charts.tsx`. */
+ *  picture and no tween ever starts. Mirrors `useEnter`/`Ring` in `charts.tsx`. */
 function chart(target: number, live: boolean, reduce: boolean) {
   const v = new Shared(reduce || !live ? target : 0);
   let on = live, entered = false;
@@ -360,7 +360,7 @@ describe('nothing animates while off-screen', () => {
 
 describe('rapid repeated input cannot leave a stuck state', () => {
   it('ten toggle flips in a row leave the knob exactly where the last flip put it', () => {
-    // prompt.md V18. The model is only meaningful because a retarget starts from the current value.
+    // The model is only meaningful because a retarget starts from the current value.
     const c = toggle(false);
     for (let i = 0; i < 10; i++) c.flip(i % 2 === 0); // i = 9, so the tenth flip is `off`
     settle(c.k);
@@ -411,7 +411,7 @@ describe('rapid repeated input cannot leave a stuck state', () => {
     expect(kit).toContain('if (last.current === value) return;');
   });
 
-  it('catching a sheet mid-dismiss un-latches it, so it can still be dismissed (V18)', () => {
+  it('catching a sheet mid-dismiss un-latches it, so it can still be dismissed', () => {
     // This was a real stuck state, not a feel problem: `close()` returns early while `closing` is set,
     // and nothing cleared it except finishing — so catching a closing sheet left a sheet that could never
     // be closed again. Ten open/close cycles is exactly how you hit it.
@@ -436,7 +436,7 @@ describe('rapid repeated input cannot leave a stuck state', () => {
   });
 
   it('the delete resets before it writes, so a re-mounted card can never paint folded', () => {
-    // prompt.md V9: "restored card is NOT left invisible/scaled".
+    // The restored card must not be left invisible or scaled.
     const idx = swipe.indexOf('const finishDelete');
     const body = swipe.slice(idx, idx + 220);
     expect(body.indexOf('p.set(0)')).toBeLessThan(body.indexOf('onDelete()'));
@@ -476,7 +476,7 @@ describe('re-entrancy retargets rather than snaps', () => {
   });
 
   it('the pattern id is per instance, because two `PaperBg`s really are mounted at once', () => {
-    // prompt.md R11, live: opening any sheet mounts a second PaperBg on the page behind it.
+    // Live: opening any sheet mounts a second PaperBg on the page behind it.
     const code = paperBg.split('\n').filter((l) => !/^(\s*\*|\s*\/\/|\s*\/\*)/.test(l)).join('\n');
     expect(paperBg).toContain('const id = useId();');
     expect(code).not.toMatch(/id="pp"/);
@@ -522,7 +522,7 @@ describe('the 17-bar picker renders every kind, and nothing it renders can colli
     expect(new Set(all).size).toBe(17);
   });
 
-  it('no instrument emits an SVG id at all, so 16 in one tree cannot collide (prompt.md R11)', () => {
+  it('no instrument emits an SVG id at all, so 16 in one tree cannot collide', () => {
     const inks = { ink: '#FAF4E6', slab: '#2F2920', acc: '#8A4B27', warn: '#8F5A00' };
     const ids = new Set<string>();
     for (const id of INSTRUMENT_IDS) {
@@ -636,7 +636,7 @@ const mount = async (settingsPath: string[]) => {
     text: () => leaves(r.toJSON()).join(''),
     /** Every `accessibilityRole="radio"` with a label. `findAll` matches the composite `Pressable` *and*
      *  the host view it renders, so this de-duplicates on the label — which is the property that matters,
-     *  since prompt.md V14 is about what TalkBack announces. */
+     *  since the rule is about what TalkBack announces. */
     radios: () => [...new Set(r.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'radio')
       .map((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel ?? '')
       .filter(Boolean))],

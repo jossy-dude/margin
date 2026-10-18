@@ -11,7 +11,7 @@
 # Chrome is already present; nothing to install. No network.
 set -uo pipefail
 
-CHROME=/home/jossy/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome
+CHROME=${HOME}/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome
 OUT=/tmp/render
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 mkdir -p "$OUT"

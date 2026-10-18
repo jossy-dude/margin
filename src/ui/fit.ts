@@ -85,14 +85,14 @@ export function heatRow(avail: number, days: number): HeatRow {
 
 /** Dynamic type ceiling, applied per-call as `maxFontSizeMultiplier={FS}`.
  *
- *  `allowFontScaling` is on everywhere and prompt.md V14 only requires the layout to survive Android's
+ *  `allowFontScaling` is on everywhere and the requirement is only that the layout survive Android's
  *  1.3x font scale. Boxes whose size is fixed in the design cannot grow with the glyphs — a 28 dp attendance
  *  cell, a 52x66 dp day cell, a 66 dp week strip cell, the 44 dp sheet header row — so at a 2.0x system
  *  setting they either clip the text or push the row's neighbours off the screen. Those call sites cap at FS.
  *  Prose, headings, body copy and anything already measured in `numberOfLines` stay uncapped, so the
  *  accessibility win is kept wherever the layout can actually absorb it.
  *
- *  Why 1.4 and not 1.3: V14 asks for 1.3x to survive, and 1.4 leaves a little headroom for the fonts whose
+ *  Why 1.4 and not 1.3: 1.3x is the scale the layout has to survive, and 1.4 leaves a little headroom for the fonts whose
  *  natural line box is already taller than their point size (Permanent Marker at 1.25, Special Elite at 1.18).
  *  A fixed cell sized for the unscaled glyph still clears at 1.4x but not at 2.0x, so 1.4 is the point where
  *  the cap starts costing real accessibility rather than buying anything. `Btn` and `Chip` are deliberately
@@ -102,7 +102,7 @@ export const FS = 1.4;
 /** Where a bottom sheet sits while the soft keyboard is up.
  *
  *  `Sheet` used to derive everything from `useWindowDimensions().height`, on the assumption that the
- *  window's JS height is what shrinks for the keyboard. On the SM-A516N (`adjustResize` +
+ *  window's JS height is what shrinks for the keyboard. On a 411 dp phone (`adjustResize` +
  *  edge-to-edge) it is not: the root view shrinks — measured, the nav's bottom stroke at y1485 against
  *  the keyboard top at y1521 — while the JS window height stays full. So `lift` came out 0, `bottom`
  *  became a full keyboard height on top of a container that had already shrunk by one, and the sheet

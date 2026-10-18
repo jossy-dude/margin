@@ -36,7 +36,7 @@ export function DiagnosticsPage() {
   return (
     <>
       <HandBox seed="diag" fill={c.card} style={{ padding: 12, gap: 4 }}>
-        <Txt f="bold" s={20}>Marginalia {appVersion()} · Expo SDK {sdkVersion()}</Txt>
+        <Txt f="bold" s={20}>Margin {appVersion()} · Expo SDK {sdkVersion()}</Txt>
         <Txt f="serif" s={15} c="mut">
           {list.length === 0 ? 'No crashes recorded.' : `${list.length} crash${list.length === 1 ? '' : 'es'} recorded, newest first.`}
         </Txt>

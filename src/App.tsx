@@ -49,8 +49,8 @@ const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('S
 function Shell() {
   const { c } = useTheme();
   // While a sheet is open the navigator must not be reachable: `accessibilityViewIsModal` on the sheet is
-  // iOS-only, so on Android the background is hidden explicitly here (V14 "background content not reachable
-  // while a sheet is open"). `ui/Overlay` marks itself `yes` over the same condition so the sheet stays readable.
+  // iOS-only, so on Android the background is hidden explicitly here (background content must not be reachable
+  // while a sheet is open). `ui/Overlay` marks itself `yes` over the same condition so the sheet stays readable.
   const sheet = useStore((s) => s.sheet);
   /** Stable identity on purpose: a fresh `theme` object per render put a new value into navigation's
    *  ThemeContext, which re-rendered every consumer on each sheet open/close. */
@@ -136,7 +136,7 @@ function Gate() {
   if (!ready) return <Splash />;
   if (error) return <Fatal message={error} />;
   // The tour REPLACES the shell rather than covering it, so no page is mounted underneath it: nothing hidden
-  // ticks, nothing fills off-screen, and no gesture can reach the app through it (prompt.md V17). That is why
+  // ticks, nothing fills off-screen, and no gesture can reach the app through it. That is why
   // it is a screen and not a sheet. Skipping and finishing write the same value — the point is only that it is
   // not shown twice — and Settings → "Show the tour again" replays it by writing `0`.
   if (!toured(onboarded)) return <Onboarding onFinish={() => act.setSettings({ onboarded: TOUR_VERSION })} />;
@@ -154,7 +154,7 @@ const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Itali
 
 /** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
  *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default
- *  and pin the icon brightness. The background is what the band under the status bar shows, edge-to-edge (V19).
+ *  and pin the icon brightness. The background is what the band under the status bar shows, edge-to-edge.
  *
  *  **The status bar names its own background colour, and that is the fix for the black band.** It used to mount
  *  `expo-status-bar`'s wrapper, which forwards only `animated`, `hidden`, `barStyle` and `showHideTransition` and

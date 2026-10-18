@@ -20,7 +20,7 @@ const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 
 describe('horizontal strips announce that they scroll (BUG-026)', () => {
   it('the predicate only claims there is more when there demonstrably is', () => {
-    // The real To-do strip on the SM-A516N: ~379 dp of viewport, well over 500 dp of chips.
+    // The real To-do strip at 411 dp: ~379 dp of viewport, well over 500 dp of chips.
     expect(stripHasMore(600, 379, 0)).toBe(true);
     expect(stripHasMore(379, 379, 0)).toBe(false); // content exactly fills it — nothing hidden
     expect(stripHasMore(340, 379, 0)).toBe(false); // content fits — no fade, no phantom affordance

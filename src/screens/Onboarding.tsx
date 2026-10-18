@@ -11,7 +11,7 @@
  *
  * **It replaces the navigator rather than covering it.** `Gate` renders this instead of `Shell`, so
  * no page mounts underneath: no hidden clock ticking, no hidden `DayBar` filling, and no gesture can
- * reach the app under the tour. That is V17's rule about off-screen work, and it is why this is a
+ * reach the app under the tour. That is the rule about off-screen work, and it is why this is a
  * screen rather than a sheet.
  *
  * **Every gesture has a button.** Back is a button. Next is a button. Skip is a button on every
@@ -123,7 +123,7 @@ export function Onboarding({ onFinish, reduce, from = 0 }: OnboardingProps) {
           <Btn
             label={last ? 'Start' : 'Next'}
             icon={last ? undefined : 'chevron'}
-            a11y={last ? 'Start using Marginalia' : `Next: ${SCREENS[i + 1]?.heading}`}
+            a11y={last ? 'Start using Margin' : `Next: ${SCREENS[i + 1]?.heading}`}
             onPress={next}
             style={{ width: last ? 128 : 120 }}
           />

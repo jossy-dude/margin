@@ -9,8 +9,8 @@
  *   2. the computed `opacity` of `focus-dial-face` is < 1 (the face is see-through);
  *   3. `focus-time` shows the plan's minutes in the `set` phase and a different text once a round runs;
  *   4. the `focus-tape` bbox clears the dial's feathered rim: its nearest point is ≥ 125 canvas units from
- *      the dial centre (the feather radius 122 plus the review's 3), i.e. the tape's top corner no longer
- *      sits inside the fade the owner reads as the rim;
+ *      the dial centre (the feather radius 122 plus the design's 3), i.e. the tape's top corner no longer
+ *      sits inside the fade that reads as the rim;
  *   5. the `focus-time-text` left edge is ≥ 8 canvas units right of the tape's rightmost rendered extent,
  *      so the readout's first glyph is never over the tape.
  * Assertions 4 and 5 print canvas units (measured pixels ÷ the page's own scale, taken from the dial box),

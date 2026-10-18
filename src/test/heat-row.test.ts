@@ -9,8 +9,8 @@ const NOW = new Date(2026, 9, 5, 8).getTime();
 const SNAP = seedSnapshot(NOW);
 /** The width the Stats cards actually get: page padding 16 either side, card padding 14 either side. */
 const cardInner = (screen: number) => screen - 32 - 28;
-/** The device this gate runs on, and the narrowest screen prompt.md V13 asks the layout to survive. */
-const DEVICES: [number, string][] = [[320, 'small phone'], [360, 'V13 minimum'], [411.43, 'SM-A516N'], [480, 'large phone'], [768, 'tablet']];
+/** The widths this gate runs on, and the narrowest screen the layout has to survive. */
+const DEVICES: [number, string][] = [[320, 'small phone'], [360, 'minimum width'], [411.43, 'reference phone'], [480, 'large phone'], [768, 'tablet']];
 
 describe('attendance heatmap row fits its card (BUG-023)', () => {
   it('the shipped geometry is 434 dp wide — wider than the card, which is why the last cell was cut', () => {

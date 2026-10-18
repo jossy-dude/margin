@@ -8,9 +8,9 @@ import { Keyboard } from 'react-native';
  *  bottom of what is left — which on a 411 dp phone is a strip about 900 px tall, so a floating bar and a
  *  62 dp button end up sitting **on** the content you are typing near.
  *
- *  Measured on the SM-A516N: with the keyboard up the nav's bottom stroke sat at y 1485 and the
+ *  Measured on a 411 dp Android phone: with the keyboard up the nav's bottom stroke sat at y 1485 and the
  *  keyboard's top edge at y 1521 — a 36 px gap, which is exactly `navInset`'s 14 dp. So the nav is
- *  already at the bottom of the *visible* area and V19's requirement is met; what is wrong is that
+ *  already at the bottom of the *visible* area; what is wrong is that
  *  anything floats over the content at all. The + button occupied y 1131-1278, squarely on a task card.
  *
  *  Neither control is usable while typing, so both yield to the keyboard rather than covering the field. */

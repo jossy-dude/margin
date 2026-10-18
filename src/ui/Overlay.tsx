@@ -48,7 +48,7 @@ export function Overlay() {
   const kbUp = useKeyboardUp(), showFab = fabAllowed && !kbUp;
   return (
     // `importantForAccessibility` is the Android half of the sheet's modal focus trap — `accessibilityViewIsModal`
-    // on the sheet itself only does anything on iOS (V14). App.tsx hides the navigator behind this view at the
+    // on the sheet itself only does anything on iOS. App.tsx hides the navigator behind this view at the
     // same time, so while a sheet is open nothing behind it can be reached or read out.
     <View pointerEvents="box-none" importantForAccessibility={sheet ? 'yes' : 'auto'} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 2000 }}>
       {/* The + is the app's one way in, on every surface. The tour says so in words ("the + adds
@@ -79,7 +79,7 @@ export function Overlay() {
            which `expo-animation` calls "as weak as CSS's". The app decelerates on `EASE` everywhere
            else — the page placement, and now every control in `kit.tsx` — so the toast was the one
            thing arriving on a different shape. Durations, direction and both layout animations are the
-           numbers `prompt.md` and `make-interfaces-feel-better` already chose: an exit softer than an
+           numbers the motion rules already fixed: an exit softer than an
            enter, 180 against 220. */
         <Animated.View key={toast.id} entering={FadeInDown.duration(220).easing(EASE)} exiting={FadeOutDown.duration(180).easing(EASE)} style={{ position: 'absolute', left: 14, right: 14, bottom: sheet ? navInset(ins.bottom) + 10 : kbUp ? Math.max(ins.bottom, 8) + TOAST_CLEAR : toastBottom(ins.bottom), zIndex: 3000 }} accessibilityLiveRegion="polite">
           <HandBox seed="toast" fill={c.ink} stroke={c.ink} sw={2} amp={1.4} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 6, paddingVertical: 6, gap: 8, minHeight: 52 }}>

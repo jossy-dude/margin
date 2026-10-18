@@ -3,7 +3,7 @@
  *
  * Answers three questions the web measurement could not, by rendering the REAL app tree
  * (Book navigator + all six screens + Overlay + the Settings sheet) under react-test-renderer
- * and counting WHICH components re-run their render function for each of the owner's three
+ * and counting WHICH components re-run their render function for each of the three
  * complaints:
  *
  *   E0  how many react-native-svg native views (RNSVG*) exist per screen / per clock face

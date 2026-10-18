@@ -233,7 +233,7 @@ describe('the tour is five screens that each teach one thing', () => {
     expect(all).toMatch(/one tap marks it Here/i);              // …taught with its actual outcome
     expect(all).toMatch(/Drag the ring/);                       // the hardest, and live
     expect(all).toMatch(/unlocks after 5 min of work/);
-    expect(all).toMatch(/marginalia 1\.0 · local-first/i);     // the promise, paid
+    expect(all).toMatch(/margin 1\.0 · local-first/i);         // the promise, paid
   });
 
   it('uses the app\'s own margin note rather than writing its own', async () => {
@@ -264,14 +264,14 @@ describe('every screen is operable without a gesture', () => {
       expect(s.labelled()).toContain(`Next: ${SCREENS[i + 1]!.heading}`);
     }
     const last = await mount({ from: TOUR_LEN - 1 });
-    expect(last.labelled()).toContain('Start using Marginalia');
+    expect(last.labelled()).toContain('Start using Margin');
   });
 
   it('Next really advances, and the last one really finishes', async () => {
     const s = await mount();
     for (let i = 1; i < TOUR_LEN; i++) await s.press(`Next: ${SCREENS[i]!.heading}`);
     expect(s.text()).toContain(`${TOUR_LEN} / ${TOUR_LEN}`);
-    await s.press('Start using Marginalia');
+    await s.press('Start using Margin');
     expect(s.done).toEqual(['done']);
   });
 
@@ -390,7 +390,7 @@ describe('the tour stops when it is gone', () => {
     expect(s.done).toEqual([]);   // unmounting is not finishing
   });
 
-  it('the face inside the dial is drawn static, so a hidden clock cannot tick (V17)', async () => {
+  it('the face inside the dial is drawn static, so a hidden clock cannot tick', async () => {
     await mount({ from: SCREENS.findIndex((x) => x.id === 'dial') });
     const faces = (globalThis as { __faces?: { live: unknown }[] }).__faces ?? [];
     void faces;
@@ -408,7 +408,7 @@ describe('the tour stops when it is gone', () => {
 /**
  * The bug this file now guards: the tour's `ScrollView` carried `scrollEnabled={!rm}`, so the moment a
  * user turned Android's "Remove animations" on, the tour became a fixed-height page that could not scroll.
- * At the 1.3× font scale `prompt.md` V14 requires, or on the 320 dp screen V20 names, or at a 2.0× system
+ * At the 1.3× font scale the layout must survive, or on a 320 dp screen, or at a 2.0× system
  * font, the body text falls below the fold and there is no way to reach it. `useReduceMotion()` is a
  * contract about *motion*; a locked ScrollView is not motion, it is content loss — and it is invisible in a
  * render at default settings, which is exactly why it survived.
@@ -464,9 +464,9 @@ describe('reduce-motion removes movement, never the ability to read', () => {
  *  2. Fixing the viewBox alone made it *worse*: the hub was a **104-unit disc**, and `Focus.tsx`'s own comment
  *     records that a disc was thrown out precisely because "a disc has to be as wide as the numeral and as tall
  *     again … and hid the entire centre of the selected clock face — which is where the guilloché and the two
- *     rosette lattices live, and the thing the owner asked to see."
+ *     rosette lattices live, and the thing the dial is there to show."
  *
- * The tour had copied a geometry the owner had already rejected, then buried it under fault 1.
+ * The tour had copied a geometry that had already been rejected, then buried it under fault 1.
  * `/tmp/render/a8/DIALBUG.png` shows all three states side by side at 411 px.
  *
  * **This is what a test cannot do.** Every number involved was plausible, `handPath` returned a valid non-empty

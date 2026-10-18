@@ -28,7 +28,7 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
           {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
-              word and pushes the right-hand cluster off a 320 dp screen (V2). The sub-line wraps instead. */}
+              word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
           <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
           {right}
           <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
@@ -82,7 +82,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const reduce = useReduceMotion(), press = useSharedValue(1), check = useSharedValue(1);
   /* Press feedback on the card itself: the ripple is real but invisible — HandBox paints an opaque
      fill straight over it — so without the dip the only cue that a tap registered was the sheet opening.
-     0.97 is the kit's full-width button number (V18); the checkbox gets the deeper 0.95 because it is
+     0.97 is the kit's full-width button number; the checkbox gets the deeper 0.95 because it is
      a 28 dp box, the same reason `StepBtn` uses 0.95. */
   const face = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
   const box = useAnimatedStyle(() => ({ transform: [{ scale: check.get() }] }));

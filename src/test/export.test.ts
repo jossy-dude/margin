@@ -6,7 +6,7 @@ const NOW = new Date(2026, 9, 12, 9, 30).getTime();
 const snap = seedSnapshot(NOW);
 
 describe('export', () => {
-  it('names the file from the export date', () => { expect(exportName(NOW, 'xlsx')).toBe('marginalia-2026-10-12.xlsx'); expect(exportName(NOW, 'zip', '-csv')).toBe('marginalia-2026-10-12-csv.zip'); });
+  it('names the file from the export date', () => { expect(exportName(NOW, 'xlsx')).toBe('margin-2026-10-12.xlsx'); expect(exportName(NOW, 'zip', '-csv')).toBe('margin-2026-10-12-csv.zip'); });
   it('is the full dataset, not a sample', () => {
     const t = Object.fromEntries(buildTables(snap, NOW).map((x) => [x.name, x]));
     expect(t.Courses!.rows).toHaveLength(snap.courses.length); expect(t.Tasks!.rows).toHaveLength(snap.tasks.length); expect(t.Marks!.rows).toHaveLength(snap.marks.length);

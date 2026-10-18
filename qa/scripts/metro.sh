@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Metro lifecycle for Marginalia QA. Kept in a file on purpose: doing this
+# Metro lifecycle for Margin QA. Kept in a file on purpose: doing this
 # inline means the pkill pattern ends up in the caller's own command line and
 # pkill -f happily kills the caller.
 #

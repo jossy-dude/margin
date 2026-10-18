@@ -17,7 +17,7 @@ export const fx = {
   crumple() { play('crumple'); hapticBurst('crumple', 4, 70); setTimeout(() => { play('thud'); haptic('fall'); }, 620); },
   stamp(s: AttStatus) { play(STAMP[s]); haptic(s === 'a' ? 'heavy' : s === 'p' ? 'stamp' : 'tap'); },
   /** `'error'`, not `'warn'`. It is Android's `Reject` and iOS's `NotificationFeedbackType.Error` — a refusal,
-   *  where `warn` is `Context_Click`, a menu press. `prompt.md` V7 asks for a *distinct* feel for "denied
+   *  where `warn` is `Context_Click`, a menu press. A *distinct* feel is wanted for "denied
    *  (locked cell)" and this was the feel that was mapped and never requested. Nothing else in the app is a
    *  refusal, so it cannot be confused with another event. */
   denied() { haptic('error'); },

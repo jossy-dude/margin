@@ -133,19 +133,19 @@ const when = (ms: number) => {
 
 /** The exact text one crash copies out as. Stable and greppable — this is what goes in a bug report. */
 export function formatCrash(e: CrashEntry): string {
-  return [`Marginalia crash — ${e.phase === 'boot' ? 'during boot' : 'while running'}`, `when:   ${when(e.at)}`, `route:  ${e.route}`, `app:    ${e.version} (Expo SDK ${e.sdk})`, `error:  ${e.message}`, '', e.stack].join('\n');
+  return [`Margin crash — ${e.phase === 'boot' ? 'during boot' : 'while running'}`, `when:   ${when(e.at)}`, `route:  ${e.route}`, `app:    ${e.version} (Expo SDK ${e.sdk})`, `error:  ${e.message}`, '', e.stack].join('\n');
 }
 
 export function formatAllCrashes(list: CrashEntry[]): string {
-  if (list.length === 0) return 'Marginalia: no crashes recorded.';
-  return [`Marginalia crash log — ${list.length} entr${list.length === 1 ? 'y' : 'ies'} — app ${appVersion()} (Expo SDK ${sdkVersion()})`, ''].concat(list.map((e, i) => `${i + 1}. ${formatCrash(e)}`)).join('\n\n');
+  if (list.length === 0) return 'Margin: no crashes recorded.';
+  return [`Margin crash log — ${list.length} entr${list.length === 1 ? 'y' : 'ies'} — app ${appVersion()} (Expo SDK ${sdkVersion()})`, ''].concat(list.map((e, i) => `${i + 1}. ${formatCrash(e)}`)).join('\n\n');
 }
 
 /** What the Diagnostics "Test the crash reporter" button runs: a real throw, caught on the spot, stored through
  *  exactly the path the boundary uses. The app keeps running — nothing here reaches React's error handling. */
 export function testCrashReporter(route = 'diagnostics'): CrashEntry | null {
   try {
-    throw new Error('Marginalia diagnostics: test crash. Nothing is broken — this line proves the reporter works.');
+    throw new Error('Margin diagnostics: test crash. Nothing is broken — this line proves the reporter works.');
   } catch (e) {
     return recordCrash(e, 'runtime', route);
   }

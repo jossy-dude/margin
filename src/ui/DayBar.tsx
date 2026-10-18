@@ -86,7 +86,7 @@ function DayBars({ periods, ink, w, h, day, X, live }: { periods: BarPeriod[]; i
  * Sight glass: the whole day as a filling tube.
  *
  * The liquid used to carry a second pattern hatch, id `liq`, over the fill. It is a solid fill now, for
- * three reasons in order: an id per bar that collides when Settings mounts the picker (R11 again), a
+ * three reasons in order: an id per bar that collides when Settings mounts the picker, a
  * rotated-pattern dependency that has never been seen on a device (EXPO_GO_AUDIT B2), and a second
  * texture on a 16px-tall tube is decoration, which is the thing this system is not.
  */

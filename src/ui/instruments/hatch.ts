@@ -21,7 +21,7 @@ export function clipSeg(x1: number, y1: number, x2: number, y2: number, bx: numb
  * WHY GEOMETRY AND NOT `<Pattern>`: the cancelled-class hatch used to be `fill="url(#hat)"` with a
  * hardcoded id. Settings renders every bar kind LIVE in one sheet, so two copies of Bookshelf in one
  * tree means two elements named `hat` and whichever loses, loses — that is the documented
- * `SvgXml` id collision (`prompt.md` R11). A clip or a pattern is the only thing that needed the id,
+ * `SvgXml` id collision. A clip or a pattern is the only thing that needed the id,
  * and clipping the segments by hand removes the id, the collision and the dependence on
  * `patternTransform`, which `qa/EXPO_GO_AUDIT.md` B2 records as never reached on a real device.
  */

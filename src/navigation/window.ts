@@ -13,7 +13,7 @@
  *  ── the page swap: a cut, not a placement ──
  *  There is no duration constant here, and that is the decision rather than a number. The navigator
  *  used to run a 160 ms paper drop — 70 dp of travel, a tilt, a scale and a shadow overlay — on every
- *  tab tap. The owner's report was that the page arrived "sooo long" after the press, and the
+ *  tab tap. The report was that the page arrived "sooo long" after the press, and the
  *  forensics agreed with the report rather than with the design: for a page nobody asked to move, the
  *  drop paid a whole extra layout pass and two composited full-screen pages before its first moving
  *  frame, and then kept them composited for ten more. So the travel, the tilt, the lift, the shadow

@@ -42,8 +42,8 @@ const ARC_MS = 480;
 const HIST_STEP = 10;
 const BAR_STEP = 45;
 
-/** Is the screen that owns these charts the one on top? prompt.md V17: "Hidden screens must not tick
- *  fast" and `COORDINATION.md` §5 restates it as a project rule. Stats stays mounted behind whichever
+/** Is the screen that owns these charts the one on top? The project rule is that hidden screens must
+ *  not tick fast, restated in `COORDINATION.md` §5. Stats stays mounted behind whichever
  *  page you went to, so without this a task you finish on To-do re-animates 69 props for nobody.
  *  Read once per container and passed down — one subscription per `HBars`/`Hist24`, not per bar.
  *  The flag is the navigator's context (`ui/live.ts`), not `s.route`: every page stays mounted, and a
@@ -58,7 +58,7 @@ function useLive() { return useScreenLive(); }
  * no longer "the page became visible": the entrance is armed from a LAYOUT effect that first turns
  * `live` true, so the reset-to-zero lands in the same pre-paint commit that focuses the page and the
  * growth plays under the placement exactly as the old cold mount did. While the page is hidden the
- * value is assigned the correct picture with no motion (prompt.md V17), and a later focus does not
+ * value is assigned the correct picture with no motion while hidden, and a later focus does not
  * replay what already played — `entered` is consumed once, ever, the way `first` used to be consumed
  * by the mount. Under reduce-motion the value is assigned everywhere: the correct picture, no motion.
  */
@@ -168,9 +168,9 @@ export function Line2({ values, labels, w, h = 100, goal, max = 100 }: { values:
  * "On time" from 0.71 to 0.73 — re-drew the arc from empty over 900 ms. Four of them, on the screen you
  * are looking at. So `from` holds the value the arc is travelling *from*, frozen at wherever the previous
  * tween had got to, and `p` is the progress of the journey. The FIRST FOCUS sweeps from zero — the one
- * entrance prompt.md V13 asks for ("charts animate once on first view") — armed from a layout effect so
+ * entrance the design asks for ("charts animate once on first view") — armed from a layout effect so
  * the reset-to-zero lands pre-paint on the commit that focuses the page; later focuses and data changes
- * travel instead of replaying, and a hidden ring holds the correct picture with no motion (V17).
+ * travel instead of replaying, and a hidden ring holds the correct picture with no motion.
  */
 export function Ring({ value, size = 76, label, sub }: { value: number | null; size?: number; label: string; sub?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), live = useLive(), r = size / 2 - 7, circ = 2 * Math.PI * r, v = value ?? 0;

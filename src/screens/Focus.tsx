@@ -24,15 +24,15 @@ function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { childre
 const D = 282, C0 = 141;
 /** The readout is a hand-cut slip of paper taped below the dial. It used to ride a capsule concentric with
  *  the face (before that, a disc pasted over it), and any shape at the centre hides the one thing the face is
- *  for: the guilloché and the two rosette lattices the owner asked to see. Off the face and onto the page, the
+ *  for: the guilloché and the two rosette lattices the dial is there to show. Off the face and onto the page, the
  *  number costs the artwork nothing. Nothing about the number itself changed: same face, same size. */
 const SLIP_W = 152, SLIP_H = 38, SLIP_SEED = 6421;
 /** The slot the slip takes is measured, not eyeballed. The face is 236 wide and centred in the 282-unit dial
  *  box at (left 76, top 350), so its drawn edge is canvas y ≈ 609 and its **feather** — the visible torn rim —
  *  is the halo veil out to r ≈ 122 from the dial centre (217, 491). A first pass put the slip's top at 612,
  *  which left the tape's rotated corner at y ≈ 610.4, x ≈ 192.4: 121.9 from the dial centre, i.e. *inside* the
- *  fade the owner reads as the rim (vision review W3, "adjacent to the rim"). The corner now sits at ≈ 617.0,
- *  **134.3** from the centre — 12.3 clear of the feather radius, against the 3 the review asked for (both
+ *  fade that reads as the rim. The corner now sits at ≈ 617.0,
+ *  **134.3** from the centre — 12.3 clear of the feather radius, against the 3 the design asked for (both
  *  numbers measured in the browser by `tools/w3-assert.mjs`, assertion 4).
  *
  *  The room for that comes from two places, in this order: `SLIP_H` drops 42 → 38 (the readout's own line box
@@ -58,7 +58,7 @@ const TAPE_W = 40, TAPE_LEFT = -12, SLIP_PAD_LEFT = 24;
 const FACE_OP = 0.86;
 /** the clock face IS the dial: it fills the pan, so nothing decorative sits between the artwork and the
  *  dial's edge. What used to be a knurled bed ring + four outer numerals + a hatch sector is gone (the
- *  owner read the escapement's teeth as red dots and the ring as clutter); the edge is now a feather — a
+ *  escapement's teeth read as red dots and the ring as clutter); the edge is now a feather — a
  *  halo-coloured radial veil over the last few units of artwork — and progress rides the rim as a slim
  *  accent ring, which is legible where the sector inside the face never was. */
 const FACE = 236, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
@@ -69,8 +69,8 @@ const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
 
 /* ── what carries the countdown now ────────────────────────────────────────────────────────────────────────
    The escapement (rotating toothed wheel, its index bar, the per-second release kick) and the knurled bed
-   with its 60 ticks and four outer numerals were dropped with the dial redesign: the owner read the teeth
-   as red dots and the ring as clutter, and asked for the face itself to be the dial — integrated, feathered
+   with its 60 ticks and four outer numerals were dropped with the dial redesign: the teeth
+   read as red dots and the ring as clutter, and the face itself had to be the dial — integrated, feathered
    at its edge, not a photograph pasted inside a mechanism. Motion stays where it still says something: the
    pointer's per-second jolt, the slip's tick wash, the last-ten-seconds red pen border round that slip, and
    the rim ring that shows elapsed time where a sector inside the face never could be read. Nothing on the face
@@ -125,7 +125,7 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
   const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360, prog = progDeg / 360;
   /** Per-instance, and sanitised. `useId()` is the right source of uniqueness — it is what `PaperBg` and
    *  `HStrip` already use — but React's ids can contain characters that are not legal in an XML name, and this
-   *  markup is parsed as XML. `prompt.md` R11 names a bare element id resolving another element's `url(#…)` as
+   *  markup is parsed as XML. A bare element id resolving another element's `url(#…)` is
    *  exactly this failure; this veil's gradient is the last one left in a screen. */
   const hid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const feather = useMemo(() => <Defs><RadialGradient id={hid}>
@@ -140,7 +140,7 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
         {...webValue} {...webKeys}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
-        {/* the one lift off full opacity on the dial: the artwork is what the owner asked to see, and the paper
+        {/* the one lift off full opacity on the dial: the artwork is what the dial is there to show, and the paper
             and grain of the page read through it. The veil, the rim ring and the pointer below are NOT faded —
             they are what feathers the face's clip edge into the page in both themes. */}
         <View testID="focus-dial-face" style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', opacity: FACE_OP }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
@@ -238,7 +238,7 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
   /* Settings are read field by field, and `sheet` is not subscribed at all: the one place it is read is the
      back-handler below, which takes it from `getState()` at press time. A whole-`settings` selector here
      cost this screen a re-render per sheet open/close and per write anywhere in Settings
-     (lag-diagnosis-2026-10-14, RC-1); the dial keeps its own `settings.clock` leaf. */
+     (RC-1); the dial keeps its own `settings.clock` leaf. */
   const timer = useStore((s) => s.timer), fev = useStore((s) => s.fev), tickOn = useStore((s) => s.settings.tickOn), soundOn = useStore((s) => s.settings.soundOn), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses);
   const st = { timer, fev, tasks, courses };
   const focused = useScreenLive();

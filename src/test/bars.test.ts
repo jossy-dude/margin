@@ -384,7 +384,7 @@ describe('two inks only, and the accent is spent on nothing but the mover', () =
 
 describe('two copies of a bar in one tree cannot fight over an id', () => {
   it('not one instrument emits an id or a url(#…) reference, at any width or p', () => {
-    // prompt.md R11: SvgXml ids collide when two copies render in one tree, and Settings mounts every
+    // SvgXml ids collide when two copies render in one tree, and Settings mounts every
     // bar kind LIVE in that one sheet. The fix is stronger than unique ids — there are none. A
     // gradient, a clip and a pattern are the only things that ever needed one, and this system uses
     // geometry instead of all three.
@@ -504,7 +504,7 @@ describe('the app\'s own day bar is kept, not replaced', () => {
     expect(src).toContain('export type { BarKind }');
   });
 
-  it('nothing in the bar animates while its screen is off-screen (prompt.md V17, A1 PERF #7)', () => {
+  it('nothing in the bar animates while its screen is off-screen (A1 PERF #7)', () => {
     // Today stays mounted behind the page you went to, and every one of these re-keyed on the screen's
     // 30 s `now` — so off-screen they used to re-fire forever: a 900 ms day tween, up to seven 800 ms
     // fill retargets, and a 1 Hz instrument tick, on a JS thread that is also mounting the page you

@@ -1,5 +1,5 @@
 /**
- * The app's ORIGINAL day bars, as data — reduced to Sight glass (owner decision 2026-10-08).
+ * The app's ORIGINAL day bars, as data — reduced to Sight glass, the one variant that ships.
  *
  * They live in their own module, not in `DayBar.tsx`, for one reason: this file has no React in it,
  * so a plain node test can assert what they are without pulling `react-native-reanimated` into a jest

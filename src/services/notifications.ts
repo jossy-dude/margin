@@ -117,7 +117,7 @@ export async function scheduleFocusEnd(at: number, title: string, body: string) 
 }
 export async function cancelFocusEnd() { try { await N.cancelScheduledNotificationAsync('focus-end'); } catch { /* ignore */ } }
 export async function sendTest(seconds = 10) {
-  try { await N.cancelScheduledNotificationAsync(TEST); await N.scheduleNotificationAsync({ identifier: TEST, content: { title: 'Marginalia test', body: 'If you can read this, reminders reach you. Tap it and the app opens.' }, trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CH.tasks } }); return true; } catch { return false; }
+  try { await N.cancelScheduledNotificationAsync(TEST); await N.scheduleNotificationAsync({ identifier: TEST, content: { title: 'Margin test', body: 'If you can read this, reminders reach you. Tap it and the app opens.' }, trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CH.tasks } }); return true; } catch { return false; }
 }
 /** A copy of a real reminder, fired in `seconds`, carrying that reminder's real entity id — so the
  *  buttons do the real thing instead of a mock of it. It is logged under its own id: the row must say

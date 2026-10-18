@@ -40,8 +40,8 @@ export const palettes = { refined: REFINED, original: ORIGINAL };
  *  `ONYX.light` used to sit beside it, "the same material a shade down … for the plate work". It was read by
  *  nothing, and the plate work was abandoned: `assets/plates/` does not exist, `FACES` has five entries, and
  *  the `plates:gen` / `plates:preview` npm scripts were deleted with a test that keeps them deleted
- *  (`scripts.test.ts`). A token that only exists to serve a feature that does not is the residue
- *  `prompt.md` R5 asks to be cleaned up, so it is gone; if the plates ever come back the material comes back
+ *  (`scripts.test.ts`). A token that only exists to serve a feature that does not is residue,
+ *  so it is gone; if the plates ever come back the material comes back
  *  with them. See `STATE.md` deviation 10. */
 export const ONYX = { dark: '#17130F' } as const;
 /** Dial materials for the clock faces, alongside ONYX and for the same reason: a dial is a physical plate,
@@ -50,8 +50,8 @@ export const ONYX = { dark: '#17130F' } as const;
  *  only reads as engraving when the ink is as far from it as it can get, and that is what stops a dial
  *  reading as haze. `refined.dark.card` is `#353029`, a brown-grey that belongs to no material and that
  *  made the ornament read as dust; a cream dial is likewise four steps off `paper`, so the dial stopped
- *  being an object. SECOND is the sweep hand and the Scales sub-seconds: `prompt.md` V4 calls it
- *  red-brown, which is a lacquered-steel colour and not a theme accent — `refined.dark.acc` is `#E0A47A`,
+ *  being an object. SECOND is the sweep hand and the Scales sub-seconds: it is red-brown, a
+ *  lacquered-steel colour and not a theme accent — `refined.dark.acc` is `#E0A47A`,
  *  a pale peach that reads grey at hairline width. Contrast against their own grounds: 6.7:1 in light,
  *  5.2:1 in dark, both over the 3:1 a non-text accent needs. Like ONYX, none of these follow
  *  `palette: 'original'`: they are materials, not theme colours. */

@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-/* Measure tap -> visible latency for the paths the owner called slow.
+/* Measure tap -> visible latency for the paths reported slow.
  *
  *   node tools/probe-clock.mjs [--url http://localhost:8099] [--dark]
  *

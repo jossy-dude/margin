@@ -5,7 +5,7 @@ import { total } from '../domain/grades';
 
 export type Cell = string | number | boolean | null;
 export interface Table { name: string; header: string[]; rows: Cell[][]; date?: number[] }
-export const exportName = (now: number, ext: string, tag = '') => { const d = new Date(now); return `marginalia-${ymd(d)}${tag}.${ext}`; };
+export const exportName = (now: number, ext: string, tag = '') => { const d = new Date(now); return `margin-${ymd(d)}${tag}.${ext}`; };
 
 const isoUtc = (ms: number) => new Date(ms).toISOString();
 /** local wall-clock "YYYY-MM-DD HH:mm" — what a person reading the spreadsheet expects */
@@ -35,10 +35,10 @@ export function buildTables(s: Snapshot, now: number): Table[] {
     { name: 'Alarms', header: ['id', 'at', 'label', 'enabled', 'kind', 'task'], rows: s.alarms.map((a) => [a.id, iso(a.at), a.label, a.enabled, a.kind, a.taskId]) },
     { name: 'Settings', header: ['key', 'value'], rows: Object.entries(st).map(([k, v]): Cell[] => [k, typeof v === 'object' ? JSON.stringify(v) : (v as Cell)]) },
   ];
-  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', 'Marginalia 1.0'], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
+  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', 'Margin 1.0'], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
   return tables;
 }
-export const toJson = (s: Snapshot, now: number) => JSON.stringify({ app: 'marginalia', version: 1, exportedAt: isoUtc(now), ...Object.fromEntries(buildTables(s, now).filter((t) => t.name !== 'Summary').map((t) => [t.name, t.rows.map((r) => Object.fromEntries(t.header.map((h, i) => [h, r[i] ?? null])))])), raw: s }, null, 2);
+export const toJson = (s: Snapshot, now: number) => JSON.stringify({ app: 'margin', version: 1, exportedAt: isoUtc(now), ...Object.fromEntries(buildTables(s, now).filter((t) => t.name !== 'Summary').map((t) => [t.name, t.rows.map((r) => Object.fromEntries(t.header.map((h, i) => [h, r[i] ?? null])))])), raw: s }, null, 2);
 
 const csvCell = (v: Cell) => { const x = v === null ? '' : String(v); return /[",\r\n]/.test(x) || /^[=+\-@]/.test(x) && typeof v === 'string' ? `"${(/^[=+\-@]/.test(x) && typeof v === 'string' ? "'" + x : x).replace(/"/g, '""')}"` : x; };
 export const toCsv = (t: Table) => '\uFEFF' + [t.header, ...t.rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';

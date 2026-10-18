@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PLACE_EASE } from '../navigation/window';
 
-/* The page swap is the app's only always-on gesture, and its cost was the complaint: the owner
- * reported pages arriving "sooo long" after the press, worst on To-do.
+/* The page swap is the app's only always-on gesture, and its cost was the complaint: pages arrived
+ * "sooo long" after the press, worst on To-do.
  *
  * The answer was not to shorten the motion — it was proven FRAME FOR FRAME that the motion was not
  * the thing that made it feel fast. `PLACE_MS` went 520 → 200 → 160 and the report kept coming, so

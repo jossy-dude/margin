@@ -120,8 +120,8 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
   /* Caught mid-dismiss. The sheet is only removed from the store when the close animation FINISHES, so a
      user who drags it back up inside that ~200 ms has not dismissed anything — they have caught it. The
      latch has to come off, because `close()` returns early while it is set: without this, catching a
-     closing sheet leaves a sheet that can never be dismissed again, which is exactly what prompt.md V18's
-     "open/close Settings 10x" produces. This is a stuck state, not a feel problem. */
+     closing sheet leaves a sheet that can never be dismissed again, which is exactly what opening and
+     closing Settings ten times over produces. This is a stuck state, not a feel problem. */
   const catchBack = useCallback(() => { if (closing.current) { closing.current = false; setGone(false); } }, [setGone]);
   useEffect(() => { const s = BackHandler.addEventListener('hardwareBackPress', () => { if (back) { back(); return true; } close(); return true; }); return () => s.remove(); }, [close, back]);
   const pan = Gesture.Pan().activeOffsetY(8).onUpdate((e) => { y.set(Math.max(0, e.translationY)); }).onEnd((e) => {
@@ -142,7 +142,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
           `importantForAccessibility`; App.tsx hides the navigator behind this sheet at the same time. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none" accessibilityViewIsModal importantForAccessibility="yes"
         /* The one honest measurement of the space this sheet lives in. The window's JS height does not
-           reliably track the keyboard — on the SM-A516N the root view shrinks for it while the window
+           reliably track the keyboard — on a 411 dp phone the root view shrinks for it while the window
            height stays full — and every term of the keyboard arithmetic is taken from this layout
            instead. See `sheetFit`. */
         onLayout={(e) => setBoxH(e.nativeEvent.layout.height)}>

@@ -29,8 +29,8 @@ import { fx } from '../services/fx';
  *   user hits ten times a minute reads as a hitch.
  *
  * Every one of these collapses under `useReduceMotion()` to an instant assignment.
- * That is a correctness requirement, not a nicety (`COORDINATION.md` §5, prompt.md
- * V14): the OS "remove animations" switch has to actually remove the animation,
+ * That is a correctness requirement, not a nicety (`COORDINATION.md` §5):
+ * the OS "remove animations" switch has to actually remove the animation,
  * and a switch that is checked must not be lying about where it is.
  */
 export const EASE = Easing.bezier(0.2, 0.9, 0.25, 1);
@@ -46,7 +46,7 @@ export const KNOB = { duration: 220, dampingRatio: 0.78 } as const;
  * *accessibility* focus paints its own rectangle over whatever it lands on; *input* focus — a hardware
  * keyboard's Tab, a switch-access scan, anything that arrives through `onFocus` on a focusable view —
  * paints nothing on a custom control, so a form of paper buttons was invisible to exactly the users
- * prompt.md V14 is about. `Pressable` is focusable by default on Android, so the event already arrives;
+ * the accessibility rules exist for. `Pressable` is focusable by default on Android, so the event already arrives;
  * what was missing was the ring.
  *
  * The ring is the platform `outline`, not a child `View`: RN's Android renderer draws it as its own
@@ -181,7 +181,7 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
      to a screen reader. The flag is set when press-in acts and consumed by the release's `onPress`, so
      one gesture fires once on either path, and the accessibility path stays live behind it. */
   /* Press-in and press-out are two writes to one value, never a reset, so a button tapped again
-     before the spring finishes continues from where it is (V18: no stuck, half-animated state).
+     before the spring finishes continues from where it is (no stuck, half-animated state).
      `usePressIn` carries the dispatch and the TalkBack guard; `danger` is the one kind that opts out,
      because `onPressIn` commits on touch-down even if the finger slides off, and a button whose
      slide-off destroys data is not one anyone can safely correct. It pays the hold time for that. */
@@ -301,7 +301,7 @@ function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: 
 /**
  * A stepper's value changing IS a state change, so it moves.
  *
- * The hard part is the fast repeat: `onLongPress` at 350 ms, and V18's "toggle done 10x", mean the
+ * The hard part is the fast repeat: `onLongPress` at 350 ms, and a ten-toggle run in a row, mean the
  * value can change several times inside one animation. The fix is structural rather than a longer
  * duration: `k` is only ever *retargeted*, never assigned a fresh start, so ten increments leave the
  * digits travelling continuously out of and back into place instead of strobing through zero ten

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-/* W2, 2026-10-16: on the owner's phone the native paper arrived as ONE dense block of grain in the
+/* W2: on device the native paper arrived as ONE dense block of grain in the
  * top-left corner with bare paper everywhere else. `Image resizeMode="repeat"` is not a layout on
  * Android — Fresco's `TilePostprocessor` bakes a single bitmap the size of the View *at the moment the
  * image arrives* and draws it through `ScaleTypeStartInside`, which never scales up and is anchored

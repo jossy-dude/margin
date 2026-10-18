@@ -4,7 +4,7 @@ import { sheetFit } from '../ui/fit';
 
 /* The break: the + FAB's form misbehaves when the soft keyboard comes up. `Sheet` sized itself from
    `useWindowDimensions().height`, assuming the JS window height is what shrinks for the keyboard. On the
-   SM-A516N (`adjustResize` + edge-to-edge) it is not: the root view shrinks — nav bottom stroke at
+   a 411 dp phone (`adjustResize` + edge-to-edge) it is not: the root view shrinks — nav bottom stroke at
    y 1485 against the keyboard top at y 1521, i.e. the bar sitting at the bottom of the *visible* area —
    while the window height stays full. So `lift = restH - H` read 0, `bottom` became a full keyboard
    height on top of a container that had already shrunk by one, and the sheet's top edge landed a full

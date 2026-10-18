@@ -140,7 +140,7 @@ export function PromiseArt({ c, reduce }: ArtProps) {
           <Animated.View style={[{ position: 'absolute', left: X0, top: 8, width: SW, height: SH }, dropStyle]}>
             <HandBox seed="onb-s1-t" fill={c.card} sw={1.8} style={{ flex: 1, paddingHorizontal: 18, paddingTop: 34 }}>
               <Tape w={58} rot={-5} style={{ left: 14, top: -9 }} />
-              <Txt f="marker" s={26} numberOfLines={1} maxFontSizeMultiplier={FS}>MARGINALIA</Txt>
+              <Txt f="marker" s={26} numberOfLines={1} maxFontSizeMultiplier={FS}>MARGIN</Txt>
               <Svg width="100%" height={11} pointerEvents="none" viewBox="0 0 200 11" preserveAspectRatio="none">
                 <Path d="M2 8C40 3 96 11 198 5" stroke={c.ink} strokeWidth={2} fill="none" strokeLinecap="round" />
               </Svg>
@@ -377,8 +377,8 @@ const BED_RING = `M${DC + 139} ${DC}A139 139 0 1 1 ${DC - 139} ${DC}A139 139 0 1
 /** The readout's hub is a CAPSULE and not a disc, and that is `Focus.tsx`'s own decision copied deliberately.
  *  Its comment records why the disc was thrown out: "A disc has to be as wide as the numeral *and* as tall
  *  again, so the old 104-unit disc claimed 57 units of dial radius and hid the entire centre of the selected
- *  clock face — which is where the guilloché and the two rosette lattices live, and the thing the owner asked
- *  to see." This file had a 104-unit disc anyway, and the guilloché underneath is invisible because of it.
+ *  clock face — which is where the guilloché and the two rosette lattices live, and the thing the dial
+ *  is there to show." This file had a 104-unit disc anyway, and the guilloché underneath is invisible because of it.
  *  `CAP_W x CAP_H = 108 x 44` is Focus's pair exactly; the disc claimed 104 units of *diameter* and this
  *  claims 22 units of radius. Both are visible side by side in `/tmp/render/a8/DIALBUG.png`. */
 const CAP_W = 108, CAP_H = 44, CAP_R = CAP_H / 2, HUB_R = { h: [CAP_R, CAP_R, CAP_R, CAP_R], v: [CAP_R, CAP_R, CAP_R, CAP_R] } as const;
@@ -403,8 +403,7 @@ export function DialArt({ c, reduce }: ArtProps) {
 
   /** Drag up or down the ring, through the app's own 6°-per-minute figure, so one full turn of the
    *  finger is an hour. Vertical travel is used rather than an angle about a measured centre because
-   *  the tour's dial is scaled by the window width, and a mis-measured centre is exactly the defect
-   *  `prompt.md` N3 warns about. */
+   *  the tour's dial is scaled by the window width, and a centre measured at one width is wrong at another. */
   const drag = Gesture.Pan().minDistance(0)
     .onBegin(() => { cur.set(Math.round(min / DIAL_STEP) * DIAL_STEP); })
     .onUpdate((e) => {
@@ -452,8 +451,8 @@ export function DialArt({ c, reduce }: ArtProps) {
           }}
           style={{ width: S, height: S, alignSelf: 'center' }}
         >
-          {/* `live={false}` is load-bearing: a tour can be mounted while nothing else is, and V17 says
-              a hidden clock must not tick. This draws its composite once and starts no frame loop. */}
+          {/* `live={false}` is load-bearing: a tour can be mounted while nothing else is, and a hidden
+              clock must not tick. This draws its composite once and starts no frame loop. */}
           <View style={{ position: 'absolute', left: (S - S * 0.66) / 2, top: (S - S * 0.66) / 2, width: S * 0.66, height: S * 0.66, borderRadius: S * 0.33, overflow: 'hidden', borderWidth: 1.5, borderColor: hexA(c.ink, 0.34) }}>
             <ClockFace id={clock} size={S * 0.66} live={false} hands={false} />
           </View>
@@ -542,7 +541,7 @@ export function RecapArt({ c }: ArtProps) {
         </Inline>
       ))}
       <View style={{ height: 1.4, backgroundColor: hexA(c.ink, 0.18), marginVertical: 8 }} />
-      <Say size={15.5} style={{ lineHeight: 20 }}>Marginalia 1.0 · local-first, no account, no network needed.{'\n'}Everything else lives behind the gear — and it changes the page behind it as you watch.</Say>
+      <Say size={15.5} style={{ lineHeight: 20 }}>Margin 1.0 · local-first, no account, no network needed.{'\n'}Everything else lives behind the gear — and it changes the page behind it as you watch.</Say>
     </HandBox>
   );
 }

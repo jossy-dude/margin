@@ -30,7 +30,7 @@ const mins = (ms: number) => { const n = Math.max(0, Math.ceil(ms / 60_000)); re
  *  Reusable as-is on any `Page`-based screen: it reads the store itself and takes only an optional
  *  `style` for placement. */
 export function RunningTimer({ style }: { style?: StyleProp<ViewStyle> }) {
-  // A raw state field, so the selector is referentially stable between writes (N9). Copied from
+  // A raw state field, so the selector is referentially stable between writes. Copied from
   // `ui/Overlay.tsx` (`useStore((s) => s.sheet)`) / `ui/PaperBg.tsx` (`useStore((s) => s.settings.paper)`).
   // Nothing derived is returned from here; the view below is derived in render, from `useMemo`-free
   // pure functions over two stable primitives.

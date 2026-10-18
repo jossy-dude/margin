@@ -338,7 +338,7 @@ console.log('\n=== B — same shift, Tue picked in the strip, 12h roundtrip ==='
   });
   await p.waitForTimeout(400);
 
-  /* Geometry of the surfaces the vision round flagged (`/tmp/opencode/logs/w4-probe-c.log`): the
+  /* Geometry of the measured surfaces: the
      12-hour strings widen the day list's time column (the name must not pay for it — `Computer
      Program…`), the card's `Period 1 of 4` subtitle clipped although 39 px of slack sat unused, the
      Week due times ended under the FAB's band (x 332–394, y 763–825 at 412×915), and the hour axis

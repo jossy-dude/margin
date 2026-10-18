@@ -21,7 +21,7 @@ const PHOTO_WEB = Asset.fromModule(PHOTO_SRC).uri;
  * Three things in here are about not flashing, which is what a paper background must never do — it is
  * behind every single pixel of the app.
  *
- * **The pattern id is now per instance.** It was the literal `id="pp"`, and `prompt.md` R11 is exactly
+ * **The pattern id is now per instance.** It was the literal `id="pp"`, and that is exactly
  * this: two copies of a component that owns an SVG id, both mounted, resolving each other's `url(#pp)`.
  * It was live — opening any sheet mounts a second `PaperBg` on top of the page's, and the Settings sheet
  * holds two at once (the peek backdrop and the sheet itself). `useId()` is the fix, and it is the same
@@ -74,8 +74,8 @@ const tileStyle = (col: number, row: number, px: number): ImageStyle => ({ posit
  * The native texture: an explicit grid of `Image`s, one per tile.
  *
  * The comment this replaced claimed native already tiled "at the bitmap's own size" through
- * `resizeMode="repeat"`, and that only the web needed a CSS background. The owner's phone said
- * otherwise on 2026-10-16: the grain arrived as one dense block in the top-left corner with bare paper
+ * `resizeMode="repeat"`, and that only the web needed a CSS background. On a real device
+ * it was neither: the grain arrived as one dense block in the top-left corner with bare paper
  * everywhere else.
  *
  * `resizeMode="repeat"` is not a layout on Android. `ImageResizeMode` maps it to `Shader.TileMode.REPEAT`

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# adb helper for Marginalia device QA. Every QA agent drives the device
+# adb helper for Margin device QA. Every QA agent drives the device
 # through this script so behaviour stays identical between agents.
 #
 #   ./qa/scripts/adb.sh shot today_01            screenshot -> qa/shots/today_01.png

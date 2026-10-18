@@ -20,15 +20,15 @@ import { Icon, Txt } from './kit';
  *    gesture's velocity — and without it a flicked card reads as a stall then a correction.
  *  · **The pan is locked while a crumple is running.** `crumpled` is a shared value so the worklet can
  *    read it. Before, a right-swipe landing inside the 1100 ms could call `onComplete()` *and* leave the
- *    delete running: one card, two actions, and prompt.md V18's "swipe-delete two tasks in a row" as the
- *    test for it.
+ *    delete running: one card, two actions, and "swipe-delete two tasks in a row" as the test for it —
+ *    a second delete landing inside the window must find nothing left to delete.
  *  · **The animated `borderRadius` is gone.** It was a *layout* property on a view holding text and an
  *    SVG, so it re-ran Yoga every frame for 550 ms. At 30 % scale the corner rounding is not perceptible,
  *    so it was paying a layout pass for nothing — the same class of cost A1 removed from page placement.
  *  · **`overflow` moved to the static style.** It was never animated.
  *  · **The delete resets before it writes.** `p`/`x` are cleared before `onDelete()`, so the React commit
- *    that re-mounts the card can never observe it at `p = 1` (invisible, 30 %, rotated 150°) — prompt.md
- *    V9's "restored card is NOT left invisible/scaled".
+ *    that re-mounts the card can never observe it at `p = 1` (invisible, 30 %, rotated 150°): a restored
+ *    card must not be left invisible or scaled.
  */
 export function SwipeCard({ children, onComplete, onDelete, onOpen, doneLabel = 'Done', disabled }: { children: React.ReactNode; onComplete: () => void; onDelete: () => void; onOpen?: () => void; doneLabel?: string; disabled?: boolean }) {
   const { c } = useTheme(), reduce = useReduceMotion(), x = useSharedValue(0), p = useSharedValue(0), w = useSharedValue(320), buzzed = useSharedValue(0);

@@ -22,7 +22,7 @@ export const nudgeStep = (breakMs: number) => Math.max(60_000, Math.min(NUDGE_MS
  *  minutes, so the honest thing is to say what the stepper is about to do rather than to name one number.
  *  Below 3 minutes there is no third to take and the floor of one minute wins. `src/test/settings-render.test.ts`
  *  asserts this sentence against `nudgeStep` over the whole 1–30 range, so the copy cannot drift from the code
- *  again — the same class of failure `prompt.md` V10e already describes. */
+ *  again. */
 export function nudgeWord(breakMs: number): string {
   const min = Math.round(nudgeStep(breakMs) / 60_000);
   return min === 1 ? 'every minute' : `every ${min} minutes`;

@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 
 /** Every `npm run` script that names a file must name one that exists. `plates:gen` and
  *  `plates:preview` pointed at scripts that were never written, so both failed with MODULE_NOT_FOUND
- *  on first run — and they are the documented entry points for the <plates> work in prompt.md. */
+ *  on first run — and they are the documented entry points for the <plates> work. */
 const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8')) as { scripts: Record<string, string> };
 const ROOT = resolve(__dirname, '../..');
 
@@ -31,8 +31,8 @@ describe('every npm script runs something that exists (BUG-012)', () => {
   });
 
   it('and the two dead plate entry points are gone, not merely repointed', () => {
-    // The <plates> feature is blocked on PNGs the user has not supplied (prompt.md: "ask the user;
-    // stop and ask if absent"), so the honest fix is to stop shipping entry points that cannot run.
+    // The <plates> feature is blocked on PNGs the user has not supplied, so the honest fix is to stop
+    // shipping entry points that cannot run.
     // When the PNGs arrive the scripts come back with them.
     expect(Object.keys(pkg.scripts).filter((k) => k.startsWith('plates:'))).toEqual([]);
     expect(JSON.stringify(pkg.scripts)).not.toContain('plate-preview');

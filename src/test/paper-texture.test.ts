@@ -6,7 +6,7 @@ import { join } from 'path';
  * `tiled()` used to hardcode '256px 256px' for both textures. That is exact for grain.png, which IS
  * 256 square — so the bug was invisible for nine textures' worth of testing and showed up only on the
  * photograph, t1.jpg at 520 square, which was rescaled to 49% and repeated every 256 px across the
- * whole app. The owner's report was "the background image is not well aligned".
+ * whole app — reported as "the background image is not well aligned".
  *
  * This reads the real bytes rather than trusting a comment, so swapping an asset without moving its
  * tile size fails here instead of shipping as ragged paper. */
