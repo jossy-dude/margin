@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # typecheck + lint + jest + dependency-cruiser. Needs no device and no network.
+      - name: Check
+        run: npm run check
+
+      - name: Bundle (Android)
+        run: npm run bundle
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-bundle
+          path: /tmp/marginalia-export
+          if-no-files-found: error

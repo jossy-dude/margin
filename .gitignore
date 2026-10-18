@@ -11,5 +11,9 @@ ios/build
 qa/shots/*.tmp
 .shots/
 
+# OS junk
+.DS_Store
+Thumbs.db
+
 # sound scratch directory (audit M8)
 assets/sounds-candidates/
