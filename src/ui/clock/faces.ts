@@ -23,7 +23,7 @@ export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id)
  *  tokens/theme.ts — so every face is white enamel in light and black lacquer in dark, and the two themes
  *  are genuinely different instruments rather than one being a filtered version of the other. `native` then
  *  only decides how the ENGRAVING reads on that ground, not what the ground is: the same cut is a dark
- *  line in white and a bright line in black. `second` is the sweep hand, red-brown per prompt.md V4 for
+ *  line in white and a bright line in black. `second` is the sweep hand, red-brown for
  *  the same reason — a material, not `acc`, because the pale peach `acc` becomes in the dark palette reads
  *  as grey at hairline width.
  *
@@ -153,7 +153,7 @@ export interface SpinLayer { key: string; x: number; y: number; R: number; svg: 
    A 20-lattice guilloché cannot be read in 96 pixels: at half a pixel per line the crossings merge and the weave
    becomes a flat grey disc — the same disease as the stippled tick ring, one octave in. A rose engine solves this the
    same way a real one does: a small plate gets a simpler cut. So the line count steps down with the plate and the
-   weight steps up to keep the figure reading as lines, and at 96 dp the owner gets eight bold lobes rather than a
+   weight steps up to keep the figure reading as lines, so at 96 dp the dial resolves into eight bold lobes rather than a
    smudge. What changes between sizes is the CUT, not the design: same ellipses, same centres, same two rosette
    lattices, fewer of them. ── */
 const detail = (px: number, full: number, mid: number, small: number) => (px >= 260 ? full : px >= 150 ? mid : small);
@@ -209,20 +209,45 @@ const ONYX_WHEEL_R = gearGeometry({ n: 24, m: 2 }).ra + 1.5;
 export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
   // Guilloché's 20-ellipse weave is the ground and stays still — a rotating mesh of that density swims against itself
   // and shimmers at 96 dp, and a rose-engine dial is a finished cut, not a moving part. The movement on this face is
-  // the 12-spoke centre wheel turning against a still ground, at −6 dps: under a third of the 30° repeat of a 12-fold
-  // figure, so it reads as a slow deliberate turn and cannot alias against its own spokes. Straight arms only — a real
-  // guilloché is a straight-line weave, unlike Rosette Blanc's petals.
+  // the 12-spoke centre wheel turning against a still ground. It used to run at −6 dps (a turn a minute),
+  // which reads as a still engraving at masthead size. It is now −12 dps (30 s a turn), and the wheel
+  // carries ONE accent jewel at a spoke tip. That jewel is the real fix, not the speed: a 12-fold figure rotating by
+  // its own 30° repeat is geometrically identical one second in every two, so no speed makes it *read* as turning —
+  // one asymmetric mark the eye can follow does. Straight arms only — a real guilloché is a straight-line weave,
+  // unlike Rosette Blanc's petals.
   if (id === 'g') {
     const R = 31, arms = `<g fill="none" stroke="${engrave(pal, TONE.figure)}" stroke-width="${sw(px, 2)}">${each(12, (i) => `<line y1="-10" y2="-27" transform="rotate(${i * 30})"/>`)}<circle r="27" stroke-width="${sw(px, 1.6)}"/></g>`;
-    return [{ key: 'sun', x: 0, y: 0, R, svg: svg(arms, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -6 }];
+    const jewel = `<circle cy="-27" r="${f2(dot(px, 2.6))}" fill="${pal.accent}" stroke="${engrave(pal, 0.95)}" stroke-width="${sw(px, 0.7)}"/>`;
+    return [{ key: 'sun', x: 0, y: 0, R, svg: svg(arms + jewel, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -12 }];
   }
-  // Rosette Blanc: the two lattices counter-rotate at equal and opposite speed (prompt.md V4), which is the whole
-  // point of the figure — the weave is only alive while they slide through each other.
+  // Rosette Blanc: the two lattices counter-rotate at equal and opposite speed, which is the whole
+  // point of the figure — the weave is only alive while they slide through each other. 16 dps each (19 s a turn,
+  // against): fast enough to see the lobes cross without staring, slow enough to stay an engraving.
   if (id === 'rb') {
     const R = ART_R + 1;
     return [
-      { key: 'r1', x: 0, y: 0, R, svg: svg(ART.latOut(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 12 },
-      { key: 'r2', x: 0, y: 0, R, svg: svg(ART.latIn(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -12 },
+      { key: 'r1', x: 0, y: 0, R, svg: svg(ART.latOut(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 16 },
+      { key: 'r2', x: 0, y: 0, R, svg: svg(ART.latIn(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -16 },
+    ];
+  }
+  // Celtic Knot used to be the one face with no movement at all — a static engraving among four instruments
+  // (pinned as such by `clock-engine.test.ts` until it moved). What moved it: every dial in the app shows a
+  // little of the movement under its dial, and this one showed nothing. The knot
+  // itself now turns at +9 dps (40 s a turn), and a 12-tooth collet turns the other way beneath it at −24 dps —
+  // twice its speed, opposite hand. Two speeds in the middle is what makes a middle read as a movement rather
+  // than a decal; the boss at the very centre stays still (it is a circle, and it is what the collet turns about).
+  if (id === 'c') {
+    const R = 48, ring = (i: number) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`;
+    // the same two passes `staticSvg` used to draw here: a tone ring, then a dial-coloured core that gives each
+    // ring its bevel. Both passes live in ONE layer so the weave cannot drift out of register with itself.
+    const knot = `<g fill="none" stroke="${engrave(pal, TONE.figure)}" stroke-width="${sw(px, 6.4)}">${each(3, ring)}</g>` +
+      `<g fill="none" stroke="${pal.dial}" stroke-width="${sw(px, 2)}">${each(3, ring)}</g>`;
+    const RC = 15, teeth = each(12, (i) => `<line y1="-9.5" y2="-12.5" transform="rotate(${i * 30})"/>`);
+    const cog = `<g fill="none" stroke="${engrave(pal, TONE.figure)}" stroke-width="${sw(px, 1)}"><circle r="11"/>${teeth}</g>` +
+      `<circle cy="-11" r="${f2(dot(px, 1.8))}" fill="${pal.accent}" stroke="${engrave(pal, 0.95)}" stroke-width="${sw(px, 0.6)}"/>`;
+    return [
+      { key: 'knot', x: 0, y: 0, R, svg: svg(knot, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 9 },
+      { key: 'cog', x: 0, y: 0, R: RC, svg: svg(cog, `${-RC} ${-RC} ${2 * RC} ${2 * RC}`), dps: -24 },
     ];
   }
   if (id === 's') {
@@ -256,15 +281,18 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
  *
  * `uid` suffixes the one element id this emits (Scales and Lily's `clipPath id="sc"`), because two copies of a
  * face can be mounted at once — the live clock on Today and its thumbnail in Settings → Clock face, which is
- * exactly the case `prompt.md` R11 describes and which `inMountWindow` made permanent by keeping two screens
- * mounted by design. `useId()` is the source, sanitised by `ClockFace.tsx` to an XML-legal name; the default is
+ * exactly the collision two documents answering the same `url(#sc)` produce, and which `inMountWindow`
+ * made permanent by keeping two screens mounted by design. `useId()` is the source, sanitised by
+ * `ClockFace.tsx` to an XML-legal name; the default is
  * a literal so the offline render and the tests keep a stable filename.
  */
 export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = 'a'): string {
   const ink = pal.ink, o = (t: number) => `stroke="${engrave(pal, t)}" fill="none"`;
   let orn = '';
   if (f.id === 'g') orn = `${ART.guilloche(pal, px)}<circle r="30" ${o(TONE.sub)} stroke-width="${sw(px, 1.1)}"/>`;
-  if (f.id === 'c') orn = `<g ${o(TONE.figure)} stroke-width="${sw(px, 6.4)}">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><g fill="none" stroke="${pal.dial}" stroke-width="${sw(px, 2)}">${each(3, (i) => `<circle cy="-16" r="30" transform="rotate(${i * 120})"/>`)}</g><circle r="7" ${o(TONE.structure)} stroke-width="${sw(px, 3)}"/>`;
+  /* The knot left this file for `spinLayers` — it turns now, so the still part of a Celtic Knot dial is the
+     case, the chapter ring and the boss at the centre (which the collet underneath turns about). */
+  if (f.id === 'c') orn = `<circle r="7" ${o(TONE.structure)} stroke-width="${sw(px, 3)}"/>`;
   if (f.id === 'sl') {
     // the scale ground thins with the plate for the same reason the guilloché does: 576 half-pixel arcs in a
     // 96 dp dial is a grey disc, so a smaller plate gets a coarser scale
@@ -308,7 +336,7 @@ export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = '
 export type HandKind = 'hour' | 'minute' | 'second';
 /**
  * Hand angles for a UTC instant, given a timezone offset in ms. Pure, so it can be asserted without a renderer
- * — which is the only way to prove R6 on a machine with no phone.
+ * — which is the only way to prove the offset handling on a machine with no phone.
  *
  * `Date.now()` is UTC milliseconds; local wall time is `now - offset`, because `getTimezoneOffset()` is minutes
  * *west* of UTC and so is negative east of it (UTC+2 returns `-120`, and subtracting `-7_200_000` adds the two
@@ -318,7 +346,7 @@ export type HandKind = 'hour' | 'minute' | 'second';
  * **The offset is a parameter, not a constant.** It used to be read once into a module-scope `MS_TZ` in
  * `ClockFace.tsx`. An offset is by definition DST-dependent, so any app that stayed alive across a transition — a
  * phone asleep on the table overnight — showed every face an hour wrong until the process restarted, and nothing
- * in the tree could notice (`prompt.md` R6). `ClockFace.tsx` now keeps it in a shared value and re-reads it.
+ * in the tree could notice. `ClockFace.tsx` now keeps it in a shared value and re-reads it.
  *
  * **This function is a worklet.** `ClockFace`'s `useFrameCallback` runs on the UI runtime, and a plain JS
  * function captured in a worklet closure is serialised as a *remote* function, so calling it from there

@@ -36,7 +36,7 @@ describe('faces', () => {
       }
     }
   });
-  it('only faces with motion declare spin layers', () => { const ids = (['g', 'rb', 'c', 'sl', 's'] as FaceId[]).filter((i) => spinLayers(i, dialPal(FACES[0]!, palettes.refined.light, false)).length); expect(ids).toEqual(['g', 'rb', 'sl', 's']); });
+  it('every face declares a moving centre part (the static engraving is gone)', () => { const ids = (['g', 'rb', 'c', 'sl', 's'] as FaceId[]).filter((i) => spinLayers(i, dialPal(FACES[0]!, palettes.refined.light, false)).length); expect(ids).toEqual(['g', 'rb', 'c', 'sl', 's']); });
   it('every moving part turns about the dial centre, inside its own viewBox', () => {
     const pal = dialPal(FACES[0]!, palettes.refined.light, false);
     for (const f of FACES) for (const l of spinLayers(f.id, pal)) {

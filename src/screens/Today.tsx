@@ -18,7 +18,7 @@ import { FS } from '../ui/fit';
 import type { Course } from '../domain/types';
 
 /* ── the command deck ─────────────────────────────────────────────────────
-   `deck()` in the design of record (`/home/jossy/Downloads/marginalia-v10(1).html`, line 236),
+   `deck()` in the design of record (`marginalia-v10(1).html`, line 236),
    rebuilt on this app's own primitives. Every row below is one of its rows, in its order: state
    word and room, subject, countdown, progress bar, what is next. Nothing added, nothing reordered,
    nothing moved out of the slab the app already had. `qa/CARD-GAP.md` carries the line-by-line
@@ -26,7 +26,7 @@ import type { Course } from '../domain/types';
    rim, which is invisible against its own fill in the reference too (checked at 500%) and would be a
    divergence here; the 16%-opacity tape, which this app's solid `Tape` cannot be without becoming
    louder than the reference's; and the title's `1.05` leading, which `Txt`'s own `1.25` replaces
-   because a fixed tighter leading collides with itself at the 1.3x font scale V14 asks to survive.
+   because a fixed tighter leading collides with itself at the 1.3x font scale the layout has to survive.
 
    The reference's `.dk` re-points its own tokens so the card inverts against the page — near-black
    with cream text in light, cream with near-black text in dark. `c.deck` is this app's command-deck
@@ -38,8 +38,11 @@ import type { Course } from '../domain/types';
 const DECK_PAD_X = 16;
 const DECK_BAR_H = 48;
 /* The masthead clock. It used to be 124 and sit alone above the deck; it is now taped to the card's
- *  top-left corner, so its size is a named constant the card's `headPad` is derived from. */
-const CLOCK = 92;
+ *  top-left corner, so its size is a named constant the card's `headPad` is derived from.
+ *  92 was too small to read at a glance — squinting at a masthead clock is a failed size — so it grew
+ *  (92 → 115). Everything the face draws is generated at `size` (`k = size / 200` in `ClockFace.tsx`),
+ *  so this scales strokes and numerals too, not just the box; `headPad` below follows it. */
+const CLOCK = 115;
 
 /* An overnight class (23:30–00:30) has both ends stamped on the day it occurs, so it arrives here with
  *  `end <= start` and disappears — `activePeriod` drops any period whose end is not after its start, and
@@ -106,7 +109,7 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
 
 /** The reference's `.dk::before` texture: a 45° hatch at 8% ink, drawn as clipped geometry with A2's
  *  own `hatch()` rather than an SVG `<Pattern>`, so two cards in one tree cannot collide on an
- *  element name (`prompt.md` R11 — the reason `Spines` was redrawn the same way).
+ *  element name (the reason `Spines` was redrawn the same way).
  *
  *  `7`, not `5`: `hatch()` advances `d` along x while the line itself runs corner to corner at 45°,
  *  so the pitch you SEE is `step / √2`. The reference's gradient is `1px` lines every `5px` measured
@@ -211,8 +214,8 @@ function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
  *
  * It owns its own 1 Hz clock rather than borrowing the page's 30 s one, so the digits can count
  * without re-rendering the class list, the notes strip and everything else below them. `live` is the
- * same off-screen gate the page applies to its own `useNow` — `prompt.md` V17 asks that a hidden
- * screen does not tick fast — so off Today the card drops to the same 60 s the page uses.
+ * same off-screen gate the page applies to its own `useNow` — a hidden
+ * screen must not tick fast — so off Today the card drops to the same 60 s the page uses.
  */
 export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isToday, bar, w, live, hour12, headPad = 0 }: {
   periods: Period[]; occ: Occurrence[]; courses: Course[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
@@ -312,7 +315,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
 
 /** The header clock subscribes to its own face, in the pattern `Focus`'s `Dial` already uses: writing a
  *  clock face re-renders this 200-unit SVG leaf and nothing else. Today's body — dayBlock, ActiveCard,
- *  the week strip, the notices — used to ride along on every clock select (lag-diagnosis-2026-10-14, RC-1). */
+ *  the week strip, the notices — used to ride along on every clock select (RC-1). */
 const HeaderClock = React.memo(function HeaderClock({ live, size }: { live: boolean; size: number }) {
   const id = useStore((s) => s.settings.clock);
   return <ClockFace id={id} size={size} live={live} />;

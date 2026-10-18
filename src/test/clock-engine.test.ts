@@ -16,7 +16,7 @@ import { palettes, PENS, SECOND, type Colors } from '../tokens/theme';
  *     and 48 broken dashes in a ring is grain.  These tests hold the floor at every size the app draws at.
  *  B. EVERY FIGURE HAS ITS OWN VELOCITY.  A centre artifact that moves as one uniform spin is a loading icon.
  *
- * and the Focus dial's, which is the other half of the owner's complaint:
+ * and the Focus dial's, which is the other half of the brief:
  *
  *  C. THE COUNTDOWN IS A MECHANISM.  Continuous and derived, with a discrete asymmetric release, and nothing that
  *     carries meaning moves.  Nothing scales.
@@ -114,16 +114,28 @@ describe('B. every centre artifact has its own velocity', () => {
   const pal = palOf(FACES[0]!, 'refined', 'light');
   const moving = FACES.filter((f) => spinLayers(f.id, pal, 200).length);
 
-  it('a face with no ornament does not claim motion, and a face with ornament does', () => {
-    expect(spinLayers('c', pal, 200)).toEqual([]);            // Celtic Knot is a static engraving
-    expect(moving.map((f) => f.id)).toEqual(['g', 'rb', 'sl', 's']);
+  it('every face moves something — no centre may ship as a still engraving', () => {
+    // Celtic Knot was the exception: it shipped as a static engraving among four instruments,
+    // pinned as such by this test. It turns now, like the rest.
+    expect(moving.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']);
+    expect(spinLayers('c', pal, 200).map((l) => l.key)).toEqual(['knot', 'cog']);
+  });
+
+  it('every centre artifact is fast enough to be seen at masthead size', () => {
+    // A turn slower than 6 dps (a minute a turn) reads as a still engraving at masthead size: too slow to
+    // notice at a glance. This floor is what stops that coming back.
+    for (const f of FACES) {
+      const ls = spinLayers(f.id, pal, 200);
+      const seen = ls.some((l) => (l.osc ? l.osc.swing >= 60 && l.osc.period <= 1.2 : Math.abs(l.dps) >= 6));
+      expect({ face: f.id, legs: ls.length, visible: seen }).toEqual({ face: f.id, legs: expect.any(Number), visible: true });
+    }
   });
 
   it('no face that moves more than one part moves them all at one speed', () => {
     const multi = moving.filter((f) => spinLayers(f.id, pal, 200).filter((l) => !l.osc).length > 1).map((f) => f.id);
-    expect(multi).toEqual(['rb', 's']);          // only these two have more than one turning part
+    expect(multi).toEqual(['rb', 'c', 's']);  // these have more than one turning part
     for (const id of multi) {
-      // signed, not magnitude: Rosette's two lattices run at +12 and −12, which is two velocities and one figure.
+      // signed, not magnitude: Rosette's two lattices run at +16 and −16, which is two velocities and one figure.
       // Collapsing to |dps| would call that a uniform spin, which is exactly what it is not.
       const speeds = new Set(spinLayers(id as FaceId, pal, 200).filter((l) => !l.osc).map((l) => l.dps));
       expect({ id, distinctSpeeds: [...speeds].length, speeds: [...speeds] }).toEqual({ id, distinctSpeeds: expect.any(Number), speeds: expect.any(Array) });
@@ -131,13 +143,30 @@ describe('B. every centre artifact has its own velocity', () => {
     }
   });
 
-  it("Rosette Blanc's two lattices counter-rotate at equal and opposite speed (prompt.md V4)", () => {
+  it("Rosette Blanc's two lattices counter-rotate at equal and opposite speed", () => {
     const [a, b] = spinLayers('rb', pal, 200);
-    expect([a!.dps, b!.dps]).toEqual([12, -12]);
+    expect([a!.dps, b!.dps]).toEqual([16, -16]);
     // and they are offset by half a step, which is what makes the weave slide instead of just spin
     const firstOffset = (l: typeof a) => Number(l!.svg.match(/transform="rotate\(([\d.-]+)\)"/)![1]);
     expect(firstOffset(a)).toBe(0);
     expect(firstOffset(b)).toBeCloseTo(360 / 9 / 2, 3);
+  });
+
+  it("Celtic Knot's knot turns one way and its collet the other, twice as fast", () => {
+    const [knot, cog] = spinLayers('c', pal, 200);
+    expect([knot!.dps, cog!.dps]).toEqual([9, -24]);
+    // both passes of the knot's weave live in ONE layer: split, they could drift out of register with each other
+    expect(knot!.svg.match(/<g /g)?.length).toBe(2);
+    // and the collet is an annulus — it must not reach the still boss it turns about (r=7, half-width 1.5)
+    const teeth = Number(cog!.svg.match(/y2="(-?[\d.]+)"/)![1]);
+    expect(Math.abs(teeth)).toBeGreaterThan(8.5);
+    expect(cog!.R).toBeLessThanOrEqual(15);
+  });
+
+  it("Guilloché's wheel carries one asymmetric jewel, because a 12-fold figure alone cannot read as turning", () => {
+    const [sun] = spinLayers('g', pal, 200);
+    expect(sun!.dps).toBe(-12);
+    expect(sun!.svg).toContain(`fill="${pal.accent}"`);
   });
 
   it("the Skeleton's wheels obey their gear ratio and its balance oscillates instead of spinning", () => {
@@ -160,7 +189,7 @@ describe('B. every centre artifact has its own velocity', () => {
 });
 
 /* C. The countdown used to carry its own arithmetic: an escape wheel turned from elapsed time, released once a
-   second with an asymmetric kick, pinned here tooth by tooth. The owner's dial redesign removed the escapement
+   second with an asymmetric kick, pinned here tooth by tooth. The dial redesign removed the escapement
    (the teeth read as red dots) along with the knurled bed and the four outer numerals, so those pins left with
    it — deliberately, and this note is what says so. What remains is the part of the contract that outlived the
    mechanism: the number itself never moves, and no frame is burned while nothing is counting. */
@@ -210,7 +239,7 @@ describe('D. the second hand is a material of its own, not the theme accent', ()
   });
 
   it('pal.second is the red-brown material, not the accent and not a literal in faces.ts', () => {
-    // The sweep hand is a *material* (lacquered red-brown steel, prompt.md V4), so it does not follow the
+    // The sweep hand is a *material* (lacquered red-brown steel), so it does not follow the
     // accent pen: `refined.dark.acc` is #E0A47A, a pale peach that reads grey at hairline width. It comes
     // from tokens/theme.ts like ONYX and DIAL, never from a hex pasted into the engine.
     for (const m of ['light', 'dark'] as const) {
@@ -276,7 +305,7 @@ describe('the gear lock held', () => {
 
   it('the phases are still solved, not typed in: each is what meshPhase derives from the one before it', () => {
     // the phases are computed, so "byte-identical" has to mean "still derived from RAW by the same solver", not
-    // "equal to some literal" — a literal would be the one thing prompt.md N7 forbids.
+    // "equal to some literal" — a literal would defeat the point of the assertion.
     const raw = SKELETON.map((g) => ({ n: g.n, m: g.m, x: g.x, y: g.y, t: g.t, w: g.w, spokes: g.spokes }));
     expect(SKELETON[0]!.ph).toBe(0);
     for (const [a, b] of MESHES) expect(SKELETON[b]!.ph).toBeCloseTo(meshPhase(SKELETON[a]!, raw[b]!), 9);
@@ -300,7 +329,7 @@ describe('the face list itself', () => {
   });
 });
 /**
- * E. THE TIMEZONE OFFSET IS AN ARGUMENT, NOT A CONSTANT.  `prompt.md` R6.
+ * E. THE TIMEZONE OFFSET IS AN ARGUMENT, NOT A CONSTANT.
  *
  * `ClockFace.tsx` used to read `new Date().getTimezoneOffset()` once at module scope and bake it into
  * `MS_TZ`. An offset is by definition DST-dependent, so any app that stayed alive across a transition —
@@ -308,7 +337,7 @@ describe('the face list itself', () => {
  * and nothing in the tree could notice. The arithmetic is now `handAngles(utcMs, offsetMs)`, pure, so it
  * can be asserted here; and the two live offsets can be told apart without a device.
  */
-describe('E. the hand angles take the timezone offset as an argument (prompt.md R6)', () => {
+describe('E. the hand angles take the timezone offset as an argument', () => {
   /** 2026-01-15T15:24:00Z. Winter in northern Europe: UTC+1. */
   const WINTER = Date.UTC(2026, 0, 15, 15, 24, 0);
   /** the same wall clock six months later: UTC+2, because the zone is still on summer time. */
@@ -358,7 +387,9 @@ describe('E. the hand angles take the timezone offset as an argument (prompt.md 
     // the mutation check: reintroducing `const MS_TZ = new Date()…` at module scope fails this
     const src = readFileSync(join(__dirname, '..', 'ui', 'clock', 'ClockFace.tsx'), 'utf8');
     expect(src).not.toMatch(/^const\s+\w*TZ\s*=\s*new Date\(\)\.getTimezoneOffset\(\)/m);
-    expect(src).toMatch(/handAngles\(now, tz\.value\)/);
+    // the frame callback calls it per frame with the CURRENT offset, not a baked one (`now` became
+    // `Date.now()` when the timestamp stopped being handed on to the ornaments — see `SpinView`)
+    expect(src).toMatch(/handAngles\(Date\.now\(\), tz\.value\)/);
     // and it really does re-read: an AppState resume plus a poll while the loop runs
     expect(src).toMatch(/AppState\.addEventListener\('change'/);
     expect(src).toMatch(/setInterval\(read, 60_000\)/);
