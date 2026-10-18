@@ -2,7 +2,7 @@
   "expo": {
     "name": "Margin",
     "slug": "marginalia",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "marginalia",
     "userInterfaceStyle": "automatic",
