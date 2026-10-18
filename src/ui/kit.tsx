@@ -308,8 +308,19 @@ function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: 
  * times. `dir` is a shared value rather than a ref because the UI thread has to read it.
  */
 export function Stepper({ value, onChange, min, max, step = 1, fmt, label }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; fmt?: (v: number) => string; label?: string }) {
-  const reduce = useReduceMotion(), k = useSharedValue(0), dir = useSharedValue(-1), last = useRef(value);
+  const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(0), dir = useSharedValue(-1), last = useRef(value);
   const dec = () => onChange(Math.max(min, value - step)), inc = () => onChange(Math.min(max, value + step));
+  /* v0.2 — the value itself is tappable. A 0–100 grade goal settable only by tapping "+" is a
+     crime (Jossy, 2026-10-19): two thousand taps for a week-long reminder lead. Tap the number,
+     the keyboard takes over, type 78 and submit. The parsed entry is CLAMPED to [min, max] and a
+     garbage/empty entry reverts to the previous value — a typo must never brick the field. */
+  const [editing, setEditing] = useState(false), [draft, setDraft] = useState('');
+  const openEdit = () => { setDraft(String(value)); setEditing(true); };
+  const commit = () => {
+    const n = Number(draft.trim());
+    setEditing(false);
+    if (draft.trim() !== '' && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));
+  };
   useEffect(() => {
     if (last.current === value) return;
     dir.set(value > last.current ? -1 : 1); // the digits travel up when the number rises
@@ -321,7 +332,11 @@ export function Stepper({ value, onChange, min, max, step = 1, fmt, label }: { v
   return (
     <HandBox seed={`st${label}`} shadow={false} corners={RS} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
       <StepBtn t="−" onPress={dec} dis={value <= min} a={`Decrease ${label ?? ''}`} />
-      <Animated.View style={[{ minWidth: 74, alignItems: 'center' }, nudge]} accessibilityLiveRegion="polite"><Txt f="bold" s={22}>{fmt ? fmt(value) : String(value)}</Txt></Animated.View>
+      {editing
+        ? <TextInput value={draft} onChangeText={setDraft} onSubmitEditing={commit} onEndEditing={commit} onBlur={commit} keyboardType="numeric" returnKeyType="done" autoFocus accessibilityLabel={`Set ${label ?? ''} by typing`} style={{ minWidth: 74, textAlign: 'center', fontSize: 22, fontWeight: 'bold', color: c.ink, padding: 0 }} />
+        : <Animated.View style={[{ minWidth: 74, alignItems: 'center' }, nudge]} accessibilityLiveRegion="polite">
+            <Pressable onPress={openEdit} accessibilityRole="button" accessibilityLabel={`Set ${label ?? ''} by typing`}><Txt f="bold" s={22}>{fmt ? fmt(value) : String(value)}</Txt></Pressable>
+          </Animated.View>}
       <StepBtn t="+" onPress={inc} dis={value >= max} a={`Increase ${label ?? ''}`} />
     </HandBox>
   );
