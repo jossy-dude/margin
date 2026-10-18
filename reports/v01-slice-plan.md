@@ -16,4 +16,4 @@ Approved in chat 2026-10-18. One shippable slice: exactly the five complaints + 
 - ✅ `060242e` — app.json + android versionName → 0.1.0; npm run check green.
 
 ## S5 — Compile (v0.1)
-- gradle assembleDebug running (2026-10-18); no adb device attached at build time — install pending device; else hand over the APK path. Releases tag v0.1 also runs the GH workflow (margin-v0.1-android.apk).
+- Builds happen IN GITHUB, not locally (Jossy's instruction, 2026-10-18: "never locally"). Branch v2-improvements pushed; tag v0.1 pushes next, which triggers `release-apk.yml` → margin-v0.1-android.apk on a GitHub release with it, ready to install when the phone is next connected. (A local gradle attempt right before this died at the first hard lesson: default JDK 27 unsupported by Gradle 9.3.1 — moot now, but the fact stands.)
