@@ -83,9 +83,9 @@ describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not 
     // purpose" about. A verdict recording a silence that does not exist is worse than a missing one —
     // it is the exact failure this list is here to prevent — so it went rather than being reworded.
     const verdicts = [
-      'Focus.tsx:100 sticker fall, keyed on [falling] so it runs once per fall',
-      'Focus.tsx:137/147 fev event block: discrete timer events, not derived state',
-      'Focus.tsx:143 the same block, [st.fev]',
+      'Focus.tsx:255 sticker fall, keyed on [falling] so it runs once per fall',
+      'Focus.tsx:314/322 fev event block: discrete timer events, not derived state',
+      'Focus.tsx:322 the same block, [st.fev]',
       'Book.tsx:23  Placed page placement, keyed on [on]',
       'Book.tsx:40  store→navigator, keyed on [route] so a tab tap navigates',
       'Book.tsx:41  navigator→store, keyed on [cur] so a BACK writes the store',

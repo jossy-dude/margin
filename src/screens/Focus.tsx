@@ -22,7 +22,17 @@ function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { childre
   const { c } = useTheme();
   return <HandBox seed={seed} fill={fill ?? c.card} sw={sw} amp={1.5} shadow={shadow} style={style}>{children}</HandBox>;
 }
-const D = 282, C0 = 141;
+/** One shrink drives every dial figure: the first on-device look at v0.1 read the whole instrument
+ *  oversized, so the dial now draws at 75 % of its design size. Nothing below was re-eyeballed for
+ *  it — every clearance was measured against the face's centre, and the dial is re-hung from exactly
+ *  that centre (217, 491), so they all keep; most gain, because the rim moves away from what is
+ *  below it, not towards. */
+const SHRINK = 0.75;
+/** The pointer is drawn on the dial's ORIGINAL design frame (282 units) and scaled by the box it
+ *  sits in, via viewBox: its stem, arrowhead and hub were set in that frame, and scaling the whole
+ *  drawing cannot drift a second copy of the dial's size the way re-derived numbers could. */
+const DRAW = 282, DRAW_C = DRAW / 2;
+const D = DRAW * SHRINK, C0 = D / 2;
 /** The readout is a hand-cut slip of paper taped below the dial. It used to ride a capsule concentric with
  *  the face (before that, a disc pasted over it), and any shape at the centre hides the one thing the face is
  *  for: the guilloché and the two rosette lattices the dial is there to show. Off the face and onto the page, the
@@ -30,7 +40,9 @@ const D = 282, C0 = 141;
 const SLIP_W = 152, SLIP_H = 38, SLIP_SEED = 6421;
 /** The slot the slip takes is measured, not eyeballed. The face is 236 wide and centred in the 282-unit dial
  *  box at (left 76, top 350), so its drawn edge is canvas y ≈ 609 and its **feather** — the visible torn rim —
- *  is the halo veil out to r ≈ 122 from the dial centre (217, 491). A first pass put the slip's top at 612,
+ *  is the halo veil out to r ≈ 122 from the dial centre (217, 491). [Design-frame numbers, as measured at the
+ *  W3 review; v0.1's 0.75 dial re-hangs on the same centre (217, 491) and scales every figure below it, so the
+ *  rim is now 91.5 out and its edge ≈ 579 — away from the slip, which is why every clearance hereafter grew.] A first pass put the slip's top at 612,
  *  which left the tape's rotated corner at y ≈ 610.4, x ≈ 192.4: 121.9 from the dial centre, i.e. *inside* the
  *  fade that reads as the rim. The corner now sits at ≈ 617.0,
  *  **134.3** from the centre — 12.3 clear of the feather radius, against the 3 the design asked for (both
@@ -55,17 +67,21 @@ const SLIP_RAD = { h: [9, 6, 11, 7], v: [7, 11, 6, 9] } as const;
 const TAPE_W = 40, TAPE_LEFT = -12, SLIP_PAD_LEFT = 24;
 /** The face is see-through now: the page's own paper and grain read through the artwork, which is the whole
  *  reason the readout left it. Only the face — the feather veil, the progress rim and the pointer stay at full
- *  opacity, because they are what dissolve the face's circular clip edge into the page in both themes. */
-const FACE_OP = 0.86;
+ *  opacity, because they are what dissolve the face's circular clip edge into the page in both themes.
+ *  The see-through constant is theme-split at the dial (`faceOp`): light keeps the 0.86 the design was
+ *  tuned with, dark lifts the artwork to 0.95, because dark grounds the page far deeper (the two scrims on
+ *  `FocusScreen` sink to 0.9) and a face faded that far reads as mud over it rather than as ink. */
 /** the clock face IS the dial: it fills the pan, so nothing decorative sits between the artwork and the
  *  dial's edge. What used to be a knurled bed ring + four outer numerals + a hatch sector is gone (the
  *  escapement's teeth read as red dots and the ring as clutter); the edge is now a feather — a
  *  halo-coloured radial veil over the last few units of artwork — and progress rides the rim as a slim
  *  accent ring, which is legible where the sector inside the face never was. */
-const FACE = 236, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
-/** the veil reaches 4 units past the clip (FACE_R + 2 ≈ 119.5) so full halo covers the seam itself */
-const FEATHER_R = 122;
-const PROG_R = 135, PROG_W = 6, PROG_C = 2 * Math.PI * PROG_R;
+const FACE = 236 * SHRINK, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
+/** the veil reaches past the clip (FEATHER_R − (FACE_R + 2) = 1 unit here, 2 in the full-size design)
+ *  so full halo covers the seam itself — and because every figure scales by one SHRINK, the stop
+ *  fractions that paint the full-halo band stay anchored around the seam on their own */
+const FEATHER_R = 122 * SHRINK;
+const PROG_R = 135 * SHRINK, PROG_W = 6, PROG_C = 2 * Math.PI * PROG_R;
 const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
 
 /* ── what carries the countdown now ────────────────────────────────────────────────────────────────────────
@@ -147,7 +163,7 @@ function Dial({ min, phase, leftMs, editable, onChange }: { min: number; phase: 
    *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing.
    *  The feather veil is painted in the same halo for the same reason: it is what lets the face's circular clip
    *  edge dissolve into the page in both themes instead of reading as a pasted photograph. */
-  const halo = dark ? c.desk : c.paper, ink = c.ink;
+  const halo = dark ? c.desk : c.paper, ink = c.ink, faceOp = dark ? 0.95 : 0.86;
   /* The ring is the same quantity as the hand — one formula, so the arc and its leading edge can never
      be made to disagree by someone changing one of them. It is 0 while the dial is only being set. */
   const progDeg = live ? ang : 0, prog = progDeg / 360;
@@ -161,17 +177,17 @@ function Dial({ min, phase, leftMs, editable, onChange }: { min: number; phase: 
     <Stop offset="0.967" stopColor={halo} stopOpacity="1" />
     <Stop offset="1" stopColor={halo} stopOpacity="1" />
   </RadialGradient></Defs>, [halo, hid]);
-  const pointer = useMemo(() => <Svg width={D} height={D}><Path d={`M${C0} ${C0 + 14}L${C0} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${C0} 34L${C0 + 6.5} 58L${C0 - 6.5} 58Z`} fill={ink} /><Circle cx={C0} cy={C0} r={6.5} fill={ink} /></Svg>, [ink]);
+  const pointer = useMemo(() => <Svg width={D} height={D} viewBox={`0 0 ${DRAW} ${DRAW}`}><Path d={`M${DRAW_C} ${DRAW_C + 14}L${DRAW_C} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${DRAW_C} 34L${DRAW_C + 6.5} 58L${DRAW_C - 6.5} 58Z`} fill={ink} /><Circle cx={DRAW_C} cy={DRAW_C} r={6.5} fill={ink} /></Svg>, [ink]);
   return (
     <GestureDetector gesture={pan}>
-      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 76, top: 350, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: dialValue }}
+      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 217 - C0, top: 491 - C0, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: dialValue }}
         {...webValue} {...webKeys}
         accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
         <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
         {/* the one lift off full opacity on the dial: the artwork is what the dial is there to show, and the paper
             and grain of the page read through it. The veil, the rim ring and the pointer below are NOT faded —
             they are what feathers the face's clip edge into the page in both themes. */}
-        <View testID="focus-dial-face" style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', opacity: FACE_OP }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
+        <View testID="focus-dial-face" style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', opacity: faceOp }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
         {/* the veil feathers the face's clip edge into the page; the rim ring shows elapsed time where the old
             hatch sector inside the face could never be read. Both sit under the pointer and the slip below. */}
         <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">
@@ -329,14 +345,16 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
       {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
           luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos and the dial's feather veil
           (both painted in `desk` in dark) had nothing to match and the page read as the light one with the
-          brightness pulled down. Two layers
-          off the theme's own desk do the work instead: a deep scrim that takes the page to a ground ink can be
-          read on, then a thin lift of the theme's paper so the photograph's own relief survives as a plate
-          rather than disappearing into a brown. */}
+          brightness pulled down. Two layers off the theme's own desk do the work instead: a deep scrim that
+          takes the page to a ground ink can be read on, then a thin lift of the theme's paper so the
+          photograph's own relief survives as a plate rather than disappearing into a brown.
+          On the device the 0.82 the first pass sunk to was not deep enough — the photograph's grain simulated
+          through the ink read as noise ("very grainy") — so the sink deepened to 0.9, the lift thinned to
+          0.05, and the dial's artwork (the only faded element) lifts to 0.95 in dark to keep its ink. */}
       {dark && (
         <>
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.desk, opacity: 0.82 }]} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.paper, opacity: 0.07 }]} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.desk, opacity: 0.9 }]} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.paper, opacity: 0.05 }]} />
         </>
       )}
       <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
