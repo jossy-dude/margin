@@ -42,7 +42,9 @@ Download the latest build from **[GitHub Releases →](https://github.com/jossy-
 
 The APK is built automatically by the **Release APK** workflow (`.github/workflows/release-apk.yml`). It runs when a `v*` tag is pushed, or by hand from the **Actions** tab via *Run workflow*. Either way the built APK is attached to the release (tag runs) or kept as a downloadable workflow artifact (manual runs).
 
-> It is an `assembleDebug` build signed with the debug keystore that is committed in `android/app/debug.keystore` — installable, but not a Play-store release build.
+> It is an `assembleRelease` build: the app's JS is bundled **inside** the APK, so it boots straight into the app — no laptop, no server. Signed with the debug keystore committed in `android/app/debug.keystore` (installable everywhere, but not a Play-store signing setup).
+>
+> A debug build (`assembleDebug`) is a **dev client**: it boots to Expo's "start a development server" screen and loads the app from a laptop running `npx expo start`. That is the correct artifact for development and the wrong one to install as your app.
 
 ## Run it yourself
 
@@ -72,6 +74,8 @@ cd android
 ```
 
 The APK lands at `android/app/build/outputs/apk/debug/app-debug.apk` — built for `arm64-v8a` (`reactNativeArchitectures` in `android/gradle.properties`). The manifest already declares `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` and `USE_FULL_SCREEN_INTENT`, so nothing has to be re-declared to grant them later.
+
+That is a **dev client** — it needs `npm run start:lan` running somewhere. For a standalone APK that boots by itself, build `assembleRelease` instead (lands at `android/app/build/outputs/apk/release/app-release.apk`).
 
 ## Project layout
 

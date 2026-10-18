@@ -16,4 +16,4 @@ Approved in chat 2026-10-18. One shippable slice: exactly the five complaints + 
 - ✅ `060242e` — app.json + android versionName → 0.1.0; npm run check green.
 
 ## S5 — Compile (v0.1)
-- ✅ Builds happen IN GITHUB, not locally (Jossy's instruction, 2026-10-18: "never locally"). Branch v2-improvements + tag v0.1 pushed; workflow run 39166911292 **success** — `margin-v0.1-android.apk` (48.6 MB) published on release v0.1. Install pending next phone connection.
+- ✅ Builds happen IN GITHUB, not locally (Jossy's instruction, 2026-10-18: "never locally"). Branch v2-improvements + tag v0.1 pushed; workflow run 39166911292 **success** — but the v0.1 APK was an `assembleDebug` build, i.e. a **dev client**: it booted Expo's "start a server" screen. Re-tagged `v0.1` on `0f69520` (workflow switched to `assembleRelease`, JS bundled in the APK) — the release APK is the deliverable, not the dev client. README corrected.
