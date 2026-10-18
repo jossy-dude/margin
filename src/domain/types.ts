@@ -49,6 +49,12 @@ export interface NotifSettings {
   weekend: 'normal' | 'quiet' | 'off';
   duringClass: 'defer' | 'allow';
   homeAt: string; effortBuffer: number;
+  /** D4/W5: show reminder text on the lock screen. ON is the platform default (text visible); OFF puts
+   *  `lockscreenVisibility: SECRET` on the `classes` and `tasks` channels, so a reminder still rings but
+   *  its text is hidden until unlock. A plain boolean with a `DEFAULT_NOTIF` entry of `true`, so
+   *  `withDefaults` gives every settings row written before this field existed the ON behaviour — no
+   *  SQL migration. */
+  lockText: boolean;
 }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';

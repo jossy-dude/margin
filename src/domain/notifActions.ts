@@ -131,6 +131,57 @@ export function statusHint(ns: QueueStatus | null): string {
   return ns.queueRead ? `${ns.scheduled} queued` : 'allowed · the queue could not be read';
 }
 export const KIND_WORD: Record<string, string> = { class: 'heads-up', ended: 'class ended', task: 'task', exam: 'exam', start: 'start' };
+/* ───── exact vs inexact: what the app can and cannot know ───── */
+/** Android reads whether this phone will grant exact alarms with `AlarmManager.canScheduleExactAlarms()`,
+ *  and nothing in the installed dependencies exposes it to JS (see `reports/w5-d0-mechanism.md` §4). So
+ *  this is the state the app is honestly in until W5b adds the native read: it says it does not know,
+ *  and quotes every reminder as a window instead of the minute the planner picked. */
+export const EXACT_ALARM_UNKNOWN = 'This phone will not tell the app whether exact alarms are allowed, so the times below are windows, not promises.';
+/** How wide the window is, in the app's words. An inexact `setAndAllowWhileIdle` alarm is fired
+ *  "approximately" and may be held into the next Doze maintenance window; the app names a small,
+ *  honest window rather than repeating the planned minute as if it were a promise. */
+export const INEXACT_WINDOW_MIN = 5;
+export const inexactWindow = (min = INEXACT_WINDOW_MIN) => `give or take ${min} min`;
+/** Delivery status's one line about the next reminder. `fmt` is the caller's h12-aware time formatter
+ *  (`fmtTime`) and `rel` its relative form (`relFire`), so this stays pure and store-free. */
+export function nextRingLine(at: number, fmt: (ms: number) => string, rel: (ms: number) => string, min = INEXACT_WINDOW_MIN): string {
+  return `Next one is planned for around ${fmt(at)} — ${inexactWindow(min)} — ${rel(at)}.`;
+}
+/* ───── D4: what a channel is actually doing with text on the lock screen ───── */
+/** The three answers `getNotificationChannelAsync` can give for `lockscreenVisibility`, in the app's
+ *  words. `unknown` is the phone's own UNKNOWN value; `null` (kept by the caller) means the phone would
+ *  not answer at all. */
+export type ChannelVisibility = 'public' | 'private' | 'secret' | 'unknown';
+const whatChannelDoes: Record<ChannelVisibility, string> = {
+  public: 'shows its full text',
+  private: 'hides the text on a secure lock screen',
+  secret: 'hides even that a reminder arrived',
+  unknown: 'will not say what it does',
+};
+/** What Delivery status is allowed to claim about the D4 toggle. The setting is the wish; the channel is
+ *  the truth, so the line always names BOTH the setting and what the phone's own channel reports — and
+ *  when they disagree it says so rather than repeating the wish. */
+export function lockTextLine(setting: boolean, actual: ChannelVisibility | null): string {
+  const wish = setting ? 'Reminder text is set to show on the lock screen' : 'Reminder text is set to stay hidden until you unlock';
+  if (actual === null) return `${wish}. This phone would not say what its channels actually do.`;
+  const does = whatChannelDoes[actual];
+  const agrees = setting ? actual === 'public' || actual === 'private' : actual === 'secret';
+  return agrees ? `${wish}, and this phone's channel ${does}.` : `${wish}, but this phone's channel ${does} — the channel wins until Android recreates it.`;
+}
+/* ───── a build that cannot schedule anything at all ───── */
+/** Web, or a native build the phone would not give the notification module to: both mean no alarm can
+ *  ever be scheduled from here, and the Reminders pages say so in one sentence instead of showing
+ *  controls that pretend. W8's onboarding ask is the only other place that must know this. */
+export const NO_MODULE_LINE = 'This build has no notification module, so nothing can be scheduled here — ringing reminders need the development build on a phone.';
+/** The same fact for a row hint, where one line is all there is room for. */
+export const NO_MODULE_HINT = 'alarms need the development build';
+/** `platform` is `Platform.OS`; `permission` is what `ensurePermission` last reported (`unavailable` is
+ *  the module itself missing). `null` permission = not read yet, which only defers to the platform. */
+export function noModuleNote(platform: string, permission: PermissionState | null): string | null {
+  if (platform === 'web') return NO_MODULE_LINE;
+  if (permission === 'unavailable') return NO_MODULE_LINE;
+  return null;
+}
 /** What one logged reminder can honestly be said to have done. `opened` with no `shown` is the ordinary
  *  case of a reminder that rang while the app was closed: nothing was running to notice it, and the app
  *  will not invent a time it cannot know. */
@@ -142,8 +193,8 @@ export function logState(r: LogRow, now: number): string {
 const ago = (at: number, now: number) => { const d = now - at; return d < 3_600_000 ? `${Math.max(0, Math.round(d / 60_000))} min ago` : d < 86_400_000 ? `${Math.round(d / 3_600_000)} h ago` : `${Math.round(d / 86_400_000)} d ago`; };
 /** The reminder the action test imitates: a real one, with its real entity id, so its buttons do the real
  *  thing. A `start` nudge carries a suffixed id and has no buttons, so it cannot be the subject. */
-export function testTarget(now: number, next: Planned | null, tasks: readonly Task[], testId: string): Planned | null {
+export function testTarget(now: number, next: Planned | null, tasks: readonly Task[], testId: string, h12 = false): Planned | null {
   if (next && planCategory(next.kind)) return next;
   const t = tasks.find((x) => x.status !== 2 && x.dueAt !== null);
-  return t ? { id: testId, kind: 'task', at: now + 10_000, title: t.title, body: `${KIND_WORD.task} · due ${fmtTime(t.dueAt as number)}`, channel: 'tasks', route: 'Tasks', entityId: t.id } : null;
+  return t ? { id: testId, kind: 'task', at: now + 10_000, title: t.title, body: `${KIND_WORD.task} · due ${fmtTime(t.dueAt as number, h12)}`, channel: 'tasks', route: 'Tasks', entityId: t.id } : null;
 }

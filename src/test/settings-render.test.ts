@@ -28,6 +28,7 @@ jest.mock('../services/notifications', () => ({
   sync: async () => ({ added: 0, removed: 0, planned: [] }),
   cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {},
   sendTest: async () => true, sendActionTest: async () => true, TEST_ACTION_ID: 'action-test',
+  applyLockscreenText: async () => {},
   status: async () => mockNotif.status,
   onOpened: () => {}, onReceived: () => {},
 }));
@@ -35,7 +36,7 @@ jest.mock('../services/notifications', () => ({
 /** `jest.mock` is hoisted above the module body, so the phone's answers to Delivery status have to be
  *  reachable from that factory by a name the hoister allows (see the note on `fs` below). */
 const mockNotif: { status: NotifStatus } = {
-  status: { permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, platform: 'test' },
+  status: { permission: 'granted', scheduled: 0, next: null, canAskAgain: false, queueRead: true, lockText: null, platform: 'test' },
 };
 jest.mock('react-native-safe-area-context', () => {
   const R = jest.requireActual<typeof import('react')>('react');
@@ -226,7 +227,7 @@ describe('Delivery status tells the truth about what this phone has actually don
     await act(async () => { set({ settingsPath: ['nstatus'], notifStatus: mockNotif.status, ...patch }); });
     return s;
   };
-  const status = (o: Partial<NotifStatus>): NotifStatus => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: true, queueRead: true, platform: 'test', ...o });
+  const status = (o: Partial<NotifStatus>): NotifStatus => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: true, queueRead: true, lockText: null, platform: 'test', ...o });
 
   it('a queue it could not read is not shown as an empty one', async () => {
     mockNotif.status = status({ scheduled: 0, queueRead: false });
@@ -235,11 +236,15 @@ describe('Delivery status tells the truth about what this phone has actually don
     expect(s.text()).not.toContain('0 reminders queued');
   });
 
-  it('a real count is real, and the next one is absolute and relative', async () => {
+  it('a real count is real, and the next one is a window, never the minute it was planned for', async () => {
     mockNotif.status = status({ scheduled: 18, next: Date.now() + 12 * 60_000 });
     const s = await page({});
     expect(s.text()).toContain('18 reminders queued on this phone');
-    expect(s.text()).toMatch(/Next one rings .+ — in \d+ min\./);
+    expect(s.text()).toMatch(/Next one is planned for around \d\d:\d\d — give or take 5 min — in \d+ min\./);
+    // W5 D1: nothing in the installed dependencies exposes `canScheduleExactAlarms()`, so the page says
+    // it cannot know rather than printing "rings at 17:47" and hoping.
+    expect(s.text()).toContain('will not tell the app whether exact alarms are allowed');
+    expect(s.text()).not.toContain('Next one rings');
   });
 
   it('an alarm whose time has passed says so instead of a negative wait', async () => {
@@ -270,6 +275,26 @@ describe('Delivery status tells the truth about what this phone has actually don
     mockNotif.status = status({ permission: 'unavailable', queueRead: false });
     const s = await page({});
     expect(s.text()).toContain('would not give the app its notification module');
+    // W5 D6: the same build also says, once, that alarms need the development build.
+    expect(s.text()).toContain('This build has no notification module');
+    expect(s.text()).toContain('ringing reminders need the development build on a phone');
+  });
+
+  /* W5 D4. The setting is a wish; the channel is the truth. This renders the disagreement, because a
+     phone that ignores the visibility change must not be told its text is hidden when it is not. */
+  it('prints the channel the phone reports, not the setting it was given (D4)', async () => {
+    mockNotif.status = status({ platform: 'android', lockText: 'private' });
+    const s = await page({ settings: { ...getState().settings, notif: { ...getState().settings.notif, lockText: false } } });
+    expect(s.text()).toContain('set to stay hidden until you unlock');
+    expect(s.text()).toContain('hides the text on a secure lock screen');
+    expect(s.text()).toContain('the channel wins');
+  });
+
+  it('and agrees with the phone when the channel did take the change', async () => {
+    mockNotif.status = status({ platform: 'android', lockText: 'secret' });
+    const s = await page({ settings: { ...getState().settings, notif: { ...getState().settings.notif, lockText: false } } });
+    expect(s.text()).toContain("and this phone's channel hides even that a reminder arrived");
+    expect(s.text()).not.toContain('the channel wins');
   });
 
   it('a reminder that rang while the app was closed is shown as opened and never seen', async () => {
@@ -302,6 +327,42 @@ describe('Delivery status tells the truth about what this phone has actually don
     expect(s.text()).toContain('Test the buttons');
     expect(s.text()).toContain('really marks it'); // the cost is stated before the button is pressed
     expect(s.text()).toContain('Test in 10 s'); // …and the old plain-tap test is still there
+  });
+});
+
+/* W5 D4/D6 on the page where the toggle actually lives. The toggle is a wish; Delivery status one push
+ * deeper is where the phone's own channel is read back, which is why the two belong together. */
+describe('Settings → Reminders (W5)', () => {
+  const reminders = async () => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: ['notifications'] }); });
+    return s;
+  };
+
+  it('offers the lock-screen text toggle above Delivery status, and says what Off does', async () => {
+    const s = await reminders();
+    const t = s.text();
+    expect(t).toContain('Show reminder text on the lock screen');
+    expect(t).toContain('When off, it still rings but the text stays hidden until you unlock');
+    expect(t.indexOf('Show reminder text on the lock screen')).toBeLessThan(t.indexOf('Delivery status'));
+  });
+
+  it('the Reminders row carries the short version, next to the clock hint it already had (D6)', async () => {
+    const s = await mount();
+    await act(async () => { set({ notifStatus: { permission: 'unavailable', scheduled: 0, next: null, canAskAgain: false, queueRead: false, lockText: null, platform: 'test' } }); });
+    const t = s.text();
+    expect(t).toContain('min before class'); // W4's clock-bearing hint is still there…
+    expect(t).toContain('alarms need the development build'); // …with the honest addendum beside it
+  });
+
+  it('the toggle round-trips through the store, which is what re-applies the channels', async () => {    const s = await reminders();
+    expect(getState().settings.notif.lockText).toBe(true);
+    const toggle = s.r.root.findAll((n) => (n.props as { testID?: string; onPressIn?: unknown }).testID === 'show-reminder-text-on-the-lock-screen' && typeof (n.props as { onPressIn?: unknown }).onPressIn === 'function')[0];
+    expect(toggle).toBeDefined();
+    await act(async () => { toggle!.props.onPressIn(); });
+    expect(getState().settings.notif.lockText).toBe(false);
+    await act(async () => { toggle!.props.onPressIn(); });
+    expect(getState().settings.notif.lockText).toBe(true);
   });
 });
 

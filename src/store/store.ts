@@ -111,7 +111,7 @@ export function resync(delay = 700) {
   syncTimer = setTimeout(async () => {
     syncTimer = null;
     const s = state; if (!s.ready) return;
-    const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif });
+    const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12 });
     let perm = await notifs.ensurePermission(false);
     if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
     if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); for (const p of r.planned) schedNotif(p.id, p.kind, p.at); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
@@ -123,7 +123,7 @@ export function resync(delay = 700) {
     const ns = await notifs.status();
     const p = state.plan, pn = state.notifStatus;
     const planSame = p !== null && planSig(p) === planSig(info);
-    const nsSame = pn !== null && pn.permission === ns.permission && pn.scheduled === ns.scheduled && pn.next === ns.next && pn.canAskAgain === ns.canAskAgain && pn.queueRead === ns.queueRead && pn.platform === ns.platform;
+    const nsSame = pn !== null && pn.permission === ns.permission && pn.scheduled === ns.scheduled && pn.next === ns.next && pn.canAskAgain === ns.canAskAgain && pn.queueRead === ns.queueRead && pn.lockText === ns.lockText && pn.platform === ns.platform;
     if (!planSame || !nsSame) set({ plan: planSame && p ? p : info, notifStatus: nsSame && pn ? pn : ns });
     await refreshNotifLog();
   }, delay);
@@ -172,9 +172,16 @@ export const act = {
 
   setSettings(patch: Partial<Settings>) {
     set((s) => ({ settings: { ...s.settings, ...patch } })); configureFx(state.settings); void persist(R().putSettings(patch));
+    // The 12/24-hour choice reaches the notification BODIES the planner writes (`PlanInput.hour12`), so
+    // flipping it has to rebuild the queue; every other display setting leaves the plan identical.
+    if (patch.hour12 !== undefined) resync(400);
   },
   setNotif(patch: Partial<NotifSettings>) {
-    const notif = { ...state.settings.notif, ...patch }; set((s) => ({ settings: { ...s.settings, notif } })); void persist(R().putSettings({ notif })); resync(500);
+    const notif = { ...state.settings.notif, ...patch }; set((s) => ({ settings: { ...s.settings, notif } })); void persist(R().putSettings({ notif }));
+    // D4: the channels are the truth for lock-screen text, so the toggle re-applies them rather than
+    // trusting the setting alone. Nothing is awaited here — a refusal is read back by `status()`.
+    if (patch.lockText !== undefined) void notifs.applyLockscreenText(notif.lockText);
+    resync(500);
   },
 
   saveTask(t: Task) {

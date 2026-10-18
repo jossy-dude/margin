@@ -1,9 +1,13 @@
 import { Platform } from 'react-native';
 import * as N from './notifApi';
 import type { Plan, Planned } from '../domain/reminders';
-import { DEFAULT_ACTION, NOTIF_CATEGORIES, onceGuard, planCategory, responseKey, resolveAction, type Opened } from '../domain/notifActions';
+import { DEFAULT_ACTION, NOTIF_CATEGORIES, onceGuard, planCategory, responseKey, resolveAction, type ChannelVisibility, type Opened } from '../domain/notifActions';
 
-export interface NotifStatus { permission: 'granted' | 'denied' | 'undetermined' | 'unavailable'; scheduled: number; next: number | null; canAskAgain: boolean; queueRead: boolean; platform: string }
+export interface NotifStatus { permission: 'granted' | 'denied' | 'undetermined' | 'unavailable'; scheduled: number; next: number | null; canAskAgain: boolean; queueRead: boolean; platform: string;
+  /** D4 read-back: what this phone's own `classes` channel does with text on the lock screen, or null
+   *  when there is no channel yet / the phone would not answer. The setting is the wish; this is the
+   *  truth, and Delivery status prints this, not the wish. */
+  lockText: ChannelVisibility | null }
 const CH = { classes: 'classes', tasks: 'tasks', focus: 'focus' } as const;
 const TEST = 'test';
 /** Exported so Delivery status can say a row is the test it sent, rather than passing a real
@@ -11,11 +15,22 @@ const TEST = 'test';
 export const TEST_ACTION_ID = 'action-test';
 const RESERVED = new Set(['focus-end', TEST, TEST_ACTION_ID]);
 
+type ChanCfg = Parameters<typeof N.setNotificationChannelAsync>[1];
+/** The three channels, parameterised by the D4 choice so boot and the toggle build them the same way.
+ *  ON means "platform default" — nothing is set, so Android's own choice stands. OFF pins
+ *  `lockscreenVisibility: SECRET` on the two reminder channels. The `focus` channel is not reminder
+ *  text (it says a round ended), so D4 does not reach it. */
+const channelConfigs = (lockText: boolean): Record<'classes' | 'tasks' | 'focus', ChanCfg> => ({
+  classes: { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true, ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
+  tasks: { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true, ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
+  focus: { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120] },
+});
+
 let configured = false;
 /** Each step is guarded on its own. One try/catch used to cover all of them, so an Expo Go build
  *  that refused a category registration silently skipped the channels as well — and on Android a
  *  notification with no channel is dropped, with nothing anywhere to say so. */
-export async function configureNotifications() {
+export async function configureNotifications(lockText = true) {
   if (configured) return; configured = true;
   try {
     N.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
@@ -26,15 +41,28 @@ export async function configureNotifications() {
     for (const cat of NOTIF_CATEGORIES) await N.setNotificationCategoryAsync(cat.identifier, cat.actions);
   } catch { /* a refused category costs the buttons on that kind, not the delivery of the reminder */ }
   /** One channel this phone refuses must not cost the others, and must not escape either. */
-  const chan = async (id: string, cfg: Parameters<typeof N.setNotificationChannelAsync>[1]) => {
+  const chan = async (id: string, cfg: ChanCfg) => {
     try { await N.setNotificationChannelAsync(id, cfg); } catch { /* this phone said no to that one */ }
   };
   if (Platform.OS === 'android') {
-    await chan(CH.classes, { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true });
-    await chan(CH.tasks, { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true });
-    await chan(CH.focus, { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120] });
+    const cfgs = channelConfigs(lockText);
+    await chan(CH.classes, cfgs.classes);
+    await chan(CH.tasks, cfgs.tasks);
+    await chan(CH.focus, cfgs.focus);
   }
 }
+/** D4: re-apply the two reminder channels when the lock-screen text toggle changes. Boot already built
+ *  them once and Android keeps a channel's settings, so a toggle that only wrote a setting would leave
+ *  the phone doing the old thing. The focus channel is deliberately untouched. Whatever the phone does
+ *  with the change is read back by `status().lockText` and printed as-is. */
+export async function applyLockscreenText(lockText: boolean) {
+  if (Platform.OS !== 'android') return;
+  const chan = async (id: string, cfg: ChanCfg) => { try { await N.setNotificationChannelAsync(id, cfg); } catch { /* this phone said no to that one */ } };
+  const cfgs = channelConfigs(lockText);
+  await chan(CH.classes, cfgs.classes);
+  await chan(CH.tasks, cfgs.tasks);
+}
+
 export async function ensurePermission(ask = true): Promise<NotifStatus['permission']> {
   try {
     let p = await N.getPermissionsAsync();
@@ -42,13 +70,31 @@ export async function ensurePermission(ask = true): Promise<NotifStatus['permiss
     return p.status === 'granted' ? 'granted' : p.status === 'denied' ? 'denied' : 'undetermined';
   } catch { return 'unavailable'; }
 }
+/** What the phone's own `classes` channel is doing with text on the lock screen, in the app's words.
+ *  `null` = no channel yet (never configured), `null` from the module, or the phone refusing to answer.
+ *  This is the D4 read-back: the setting says what the user asked for, this says what the phone does. */
+async function readLockscreen(): Promise<ChannelVisibility | null> {
+  try {
+    const ch = await N.getNotificationChannelAsync(CH.classes);
+    if (!ch) return null;
+    switch (ch.lockscreenVisibility) {
+      case N.AndroidNotificationVisibility.PUBLIC: return 'public';
+      case N.AndroidNotificationVisibility.PRIVATE: return 'private';
+      case N.AndroidNotificationVisibility.SECRET: return 'secret';
+      default: return 'unknown';
+    }
+  } catch { return null; }
+}
 export async function status(): Promise<NotifStatus> {
   const permission = await ensurePermission(false);
   // `queueRead` is what separates "nothing is queued" from "this phone would not tell us": a zero read
   // off a failed query is a plausible-looking lie, and Delivery status must not print one.
   let scheduled = 0, next: number | null = null, canAskAgain = true, queueRead = false;
   try { const all = await N.getAllScheduledNotificationsAsync(); scheduled = all.length; const ts = all.map((x) => (x.trigger && 'value' in x.trigger && typeof x.trigger.value === 'number' ? x.trigger.value : (x.trigger as { date?: number } | null)?.date ?? 0)).filter(Boolean); next = ts.length ? Math.min(...ts) : null; canAskAgain = (await N.getPermissionsAsync()).canAskAgain; queueRead = true; } catch { /* unavailable */ }
-  return { permission, scheduled, next, canAskAgain, queueRead, platform: Platform.OS };
+  // Channels are Android-only; on iOS the module's getter answers null without a native call, but there
+  // is no channel concept to read at all, so it is not asked.
+  const lockText = Platform.OS === 'android' ? await readLockscreen() : null;
+  return { permission, scheduled, next, canAskAgain, queueRead, lockText, platform: Platform.OS };
 }
 /** `at` rides along so the delivery log knows when the reminder was *for* without the store having to
  *  re-derive it — and so it survives a reinstall, when the log is empty and the queue is not. */

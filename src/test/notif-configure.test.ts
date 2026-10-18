@@ -12,6 +12,10 @@ const mockState = {
   handler: [] as unknown[],
   categories: [] as string[],
   channels: [] as { id: string; cfg: Record<string, unknown> }[],
+  /** What `getNotificationChannelAsync` answers per channel id. An absent id is the module's own
+   *  `null`, which is what a phone that has never created the channel does. */
+  readChannels: {} as Record<string, { lockscreenVisibility: number } | undefined>,
+  readFails: false,
 };
 /** The factory is hoisted above the module body, so it may only *close over* `mockState` — every read
  *  happens inside a function the test calls, never while the mock is being built. */
@@ -19,7 +23,10 @@ jest.mock('../services/notifApi', () => ({
   setNotificationHandler: (h: unknown) => { if (mockState.fail.handler) throw new Error('handler refused'); mockState.handler.push(h); },
   setNotificationCategoryAsync: async (id: string) => { if (mockState.fail.category) throw new Error('category refused'); mockState.categories.push(id); },
   setNotificationChannelAsync: async (id: string, cfg: Record<string, unknown>) => { if (mockState.fail.channel === id) throw new Error('channel refused'); mockState.channels.push({ id, cfg }); },
+  getNotificationChannelAsync: async (id: string) => { if (mockState.readFails) throw new Error('channel unreadable'); return mockState.readChannels[id] ?? null; },
   AndroidImportance: { HIGH: 4, DEFAULT: 3, MIN: 1, LOW: 2, MAX: 5 },
+  /** The expo encoding, copied from `NotificationVisibility.java` (`SECRET` is the JS value 3). */
+  AndroidNotificationVisibility: { UNKNOWN: 0, PUBLIC: 1, PRIVATE: 2, SECRET: 3 },
   SchedulableTriggerInputTypes: { DATE: 'date', TIME_INTERVAL: 'timeInterval' },
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
   getAllScheduledNotificationsAsync: async () => [],
@@ -40,6 +47,7 @@ type N = typeof import('../services/notifications');
 const reset = (fail: Partial<Fail> = {}) => {
   mockState.fail = { handler: false, category: false, channel: null, ...fail };
   mockState.handler = []; mockState.categories = []; mockState.channels = [];
+  mockState.readChannels = {}; mockState.readFails = false;
 };
 /** The module under test is not mocked (its *dependency* is), so `requireActual` — inside the
  *  isolated registry, which is what gives `configured` its fresh false. */
@@ -51,7 +59,7 @@ const load = (onPlatform?: (p: { OS: string }) => void): N => {
   });
   return m;
 };
-const boot = async (platform?: { OS: string }) => { const m = load(platform && ((p) => { p.OS = platform.OS; })); await m.configureNotifications(); return m; };
+const boot = async (platform?: { OS: string }, lockText?: boolean) => { const m = load(platform && ((p) => { p.OS = platform.OS; })); await m.configureNotifications(lockText); return m; };
 const behaves = async () => await (mockState.handler[0] as { handleNotification: () => Promise<unknown> }).handleNotification();
 const channels = () => Object.fromEntries(mockState.channels.map((c) => [c.id, c.cfg]));
 
@@ -111,5 +119,70 @@ describe('configureNotifications', () => {
     await boot({ OS: 'ios' });
     expect(mockState.channels).toHaveLength(0);
     expect({ handler: mockState.handler.length, categories: mockState.categories.length }).toEqual({ handler: 1, categories: 2 });
+  });
+
+  /* D4. ON means "platform default", which is expressed by *not* setting the key: Android's own choice
+     then stands, and the app never claims to have picked a visibility it did not pick. OFF pins
+     `lockscreenVisibility: SECRET` (the JS value 3) on the two reminder channels only. */
+  it('leaves lock-screen visibility at the platform default when text is on', async () => {
+    reset();
+    await boot(undefined, true);
+    const c = channels();
+    expect([c.classes!.lockscreenVisibility, c.tasks!.lockscreenVisibility, c.focus!.lockscreenVisibility]).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('puts SECRET on the two reminder channels when the toggle is off, and not on the focus channel', async () => {
+    reset();
+    await boot(undefined, false);
+    const c = channels();
+    expect([c.classes!.lockscreenVisibility, c.tasks!.lockscreenVisibility]).toEqual([3, 3]);
+    expect(c.focus!.lockscreenVisibility).toBeUndefined();
+  });
+});
+
+describe('applyLockscreenText (the D4 toggle re-applying the channels)', () => {
+  it('re-applies exactly the two reminder channels, and nothing else, after boot has already run', async () => {
+    reset();
+    const m = await boot();
+    mockState.channels = []; mockState.handler = []; mockState.categories = [];
+    await m.applyLockscreenText(false);
+    expect(mockState.channels.map((c) => c.id)).toEqual(['classes', 'tasks']);
+    expect(mockState.channels.map((c) => c.cfg.lockscreenVisibility)).toEqual([3, 3]);
+    // The handler and categories are boot's business; re-applying a toggle must not re-register them.
+    expect({ handler: mockState.handler.length, categories: mockState.categories.length }).toEqual({ handler: 0, categories: 0 });
+    // …and turning it back on returns the channels to the platform default rather than to some other pin.
+    mockState.channels = [];
+    await m.applyLockscreenText(true);
+    expect(mockState.channels.map((c) => c.cfg.lockscreenVisibility)).toEqual([undefined, undefined]);
+  });
+
+  it('on iOS the toggle writes nothing — there are no channels to write', async () => {
+    reset();
+    const m = await boot({ OS: 'ios' });
+    await m.applyLockscreenText(false);
+    expect(mockState.channels).toHaveLength(0);
+  });
+});
+
+describe('status reads the lock-screen visibility back off the phone', () => {
+  it('reports what the classes channel actually does, not what the setting asked for', async () => {
+    reset();
+    const m = await boot();
+    mockState.readChannels = { classes: { lockscreenVisibility: 3 } };
+    expect((await m.status()).lockText).toBe('secret');
+    mockState.readChannels = { classes: { lockscreenVisibility: 1 } };
+    expect((await m.status()).lockText).toBe('public');
+    mockState.readChannels = { classes: { lockscreenVisibility: 2 } };
+    expect((await m.status()).lockText).toBe('private');
+    mockState.readChannels = { classes: { lockscreenVisibility: 0 } };
+    expect((await m.status()).lockText).toBe('unknown');
+  });
+
+  it('says null — never a guess — when there is no channel yet or the phone refuses to answer', async () => {
+    reset();
+    const m = await boot();
+    expect((await m.status()).lockText).toBeNull(); // no channel has ever been created
+    mockState.readChannels = { classes: { lockscreenVisibility: 3 } }; mockState.readFails = true;
+    expect((await m.status()).lockText).toBeNull(); // the read itself failed
   });
 });

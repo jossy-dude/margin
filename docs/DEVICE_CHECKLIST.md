@@ -342,6 +342,110 @@ the steps above are only the phone watching it happen live.
 
 ---
 
+## W5 — reminders that actually ring (Android): exact timing, lock-screen text
+
+Changed: `android/app/src/main/AndroidManifest.xml` + `app.json` (two new permissions), then JS only —
+`src/domain/notifActions.ts`, `src/domain/reminders.ts`, `src/domain/types.ts`, `src/domain/defaults.ts`,
+`src/services/notifApi.ts`, `src/services/notifications.ts`, `src/store/store.ts`,
+`src/sheets/Settings.tsx`, `src/App.tsx`. No Gradle or Java change.
+
+**The APK must be rebuilt and reinstalled** — the two permissions are compiled into the manifest, so a
+Metro reload of an already-installed build does not carry them. Use `npx expo run:android` as in "How to
+get the build" above; `adb install -r` over the old APK is enough (no uninstall needed).
+
+Already proven headless by `tools/w5-assert.mjs` (web, 412×915): a build with no notification module
+says so once on the Reminders row, on the Reminders page and on Delivery status; and the
+**Show reminder text on the lock screen** switch round-trips through the store (turned Off, then leaving
+the page and returning shows Off — so it is the app's setting, not a slider's private state). This
+section is only what the phone alone can say.
+
+**Look at:** Settings → Reminders, then Settings → Reminders → Delivery status, then the lock screen.
+
+### W5.1 — a reminder lands in a window, and says so
+
+- **W5.1a** With notifications allowed and reminders queued, read the Delivery status line under the
+  count: it reads `Next one is planned for around HH:MM — give or take 5 min — in N min.`, and the line
+  under it says the phone will not tell the app whether exact alarms are allowed. There is no
+  `Next one rings at …` anywhere on the page. (The web assert pins the wording; this is the same page
+  with a real queue behind it.)
+  **PASS / FAIL: ______**
+- **W5.1b** On Android 12+, open the phone's **Settings → Apps → Special app access → Alarms & reminders**
+  and find Marginalia. A fresh install targeting Android 13+ starts **not** allowed. With it **allowed**,
+  let a class heads-up fire (set one subject's lead time to 10 min and wait) and note how close it lands
+  to the `HH:MM` the app planned. Then turn the access **off** and repeat: the reminder may now arrive a
+  few minutes late — which is exactly why the app quotes a window and never the minute.
+  **PASS / FAIL: ______**
+- **W5.1c** Plan a reminder a few minutes out, then `adb reboot`. After the phone comes back (do **not**
+  open Marginalia first) the reminder still fires at the planned time. This is `expo-notifications`' own
+  boot re-arm (`RECEIVE_BOOT_COMPLETED` in the module's manifest); W5 added nothing to it and this check
+  exists so a regression in the module or the manifest is caught rather than assumed.
+  **PASS / FAIL: ______**
+- **W5.1d** `adb shell dumpsys package app.marginalia.planner | grep -i "SCHEDULE_EXACT_ALARM"` — the
+  installed package lists the permission. (If it does not, the APK was not rebuilt after the manifest
+  change, and W5.1b above will be inexact no matter what the phone's setting says.)
+  **PASS / FAIL: ______**
+
+### W5.2 — the lock-screen text switch is real (D4)
+
+Where: Settings → Reminders → **Show reminder text on the lock screen** (ships **ON**) and the Delivery
+status page directly below it.
+
+- **W5.2a** Turn the switch **OFF**. The Delivery status page prints one sentence naming both the setting
+  and what the phone's own `classes` channel reports (`…and this phone's channel hides even that a
+  reminder arrived.`) — or, if the phone would not take the change, `…but this phone's channel hides the
+  text on a secure lock screen — the channel wins until Android recreates it.` Read which one it says and
+  write it down; a lie here is the whole failure this line exists to catch.
+  **PASS / FAIL: ______**
+- **W5.2b** With the switch **OFF**, lock the phone and let a reminder fire. It still rings/alerts (the
+  notification is not silenced), but **no text** appears on the lock screen. Unlock, pull the shade: the
+  reminder is there, with its text.
+  **PASS / FAIL: ______**
+- **W5.2c** Turn the switch **ON**, lock, and repeat: the reminder's text is now on the lock screen. If it
+  is not, the channel kept its old visibility — that is a phone behaviour, not a bug in the app, and
+  W5.2a's sentence should already be saying so.
+  **PASS / FAIL: ______**
+- **W5.2d** `adb shell dumpsys notification_manager | grep -A6 -i "channel.*classes"` (or Android
+  Settings → Apps → Marginalia → Notifications → **Classes**) and confirm the `classes` channel's own
+  lock-screen setting agrees with what W5.2a printed. `tasks` follows the same switch; the `Focus timer`
+  channel is deliberately untouched by it.
+  **PASS / FAIL: ______**
+
+### W5.3 — the reminder's own text is in the app's clock (h12)
+
+- **W5.3a** Settings → Look & feel → **24-hour clock OFF**. Send **Test in 10 s** from Delivery status
+  (it copies a real task's reminder) and read the notification's body: `due 10:00 AM`, not `due 10:00`.
+  **PASS / FAIL: ______**
+- **W5.3b** Switch it back **ON** and send the test again: the body reads `due 10:00`. Same for a class
+  heads-up's `room · teacher · time` line.
+  **PASS / FAIL: ______**
+
+### W5.4 — no false sentence on a real build
+
+- **W5.4a** On this development build, the sentence **"This build has no notification module…"** must
+  appear **nowhere** — not on the Reminders row, not on the Reminders page, not on Delivery status. If it
+  appears, the notification module is missing from the installed APK and every check above is
+  meaningless; report that instead.
+  **PASS / FAIL: ______**
+
+### W5b — pending DECISIONS D9
+
+**Nothing here can pass on this build.** `expo-notifications` never calls `setFullScreenIntent`
+(`reports/w5-d0-mechanism.md` §2), so a reminder cannot take over the screen, and W5a only *declared*
+`USE_FULL_SCREEN_INTENT` so the grant is possible once the native module exists. Run these after W5b.
+
+- **W5b.1** Android 14+: the phone's **Settings → Apps → Special app access → Full screen notifications**
+  lists Marginalia and can be turned on; with it off, a reminder while the screen is off does not open
+  full-screen.
+  **PASS / FAIL: ______**
+- **W5b.2** With the screen off and locked, a reminder opens the app on top of the lock screen (the
+  calling/alarm use case) and tapping it lands on the thing it is about.
+  **PASS / FAIL: ______**
+- **W5b.3** While the phone is **in use**, the same reminder appears as a heads-up instead of taking the
+  screen (Android's own rule for a full-screen intent).
+  **PASS / FAIL: ______**
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

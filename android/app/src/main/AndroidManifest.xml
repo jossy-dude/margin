@@ -1,8 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <!-- W5 (D9 a). `SCHEDULE_EXACT_ALARM` is what lets expo-notifications' own DATE trigger take the
+       exact branch (`canScheduleExactAlarms()` -> `setExactAndAllowWhileIdle`); without the
+       declaration that branch is unreachable on Android 12+ and every reminder lands in the inexact
+       window the app honestly quotes. `USE_FULL_SCREEN_INTENT` is declared now so the intent is
+       grantable, but nothing sets a full-screen intent yet — full-screen ringing is W5b's (D9 b),
+       and an undeclared permission could not be granted later without a manifest change + reinstall.
+       The module itself declares neither (see reports/w5-d0-mechanism.md §2). -->
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <queries>

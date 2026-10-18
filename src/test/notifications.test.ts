@@ -6,8 +6,9 @@ import type { Settings } from '../domain/types';
 import {
   applyAction, CAT_ATT, CAT_TASK, DEFAULT_ACTION, dispatchOpened, logState, NOTIF_CATEGORIES, onceGuard,
   planCategory, resolveAction, responseKey, statusHint, testTarget, type NotifData, type NotifEffects,
+  EXACT_ALARM_UNKNOWN, INEXACT_WINDOW_MIN, inexactWindow, lockTextLine, nextRingLine, NO_MODULE_HINT, NO_MODULE_LINE, noModuleNote,
 } from '../domain/notifActions';
-import { relFire } from '../domain/time';
+import { fmtTime, relFire } from '../domain/time';
 
 /** `jest.mock` is hoisted above the module body, so the fake OS's mutable state has to live in a name the
  *  hoister lets the factory close over (see the note in settings-render.test.ts). */
@@ -362,5 +363,71 @@ describe('Delivery status says what the phone can actually prove', () => {
     const t = testTarget(NOW, start, tasks, 'action-test');
     expect({ id: t!.id, entityId: t!.entityId, kind: t!.kind }).toEqual({ id: 'action-test', entityId: 't1', kind: 'task' });
     expect(testTarget(NOW, start, [], 'action-test')).toBeNull();
+  });
+
+  /* W5 D7 (h12). The notification body is a wall clock the user reads; `settings.hour12` has to reach
+     it, or a 12-hour app sends a body that contradicts its own screens. */
+  it('the action test speaks the clock the app is set to', () => {
+    const tasks = [{ id: 't1', title: 'Problem set', courseId: null, kind: 'assignment' as const, dueAt: NOW + 7_200_000, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status: 0 as const, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false }];
+    expect(testTarget(NOW, null, tasks, 'action-test', false)!.body).toBe('task · due 10:00');
+    expect(testTarget(NOW, null, tasks, 'action-test', true)!.body).toBe('task · due 10:00 AM');
+  });
+});
+
+/* W5 deliverables 1 and 6, as copy rules. The brief's point is that these are lines the app is *allowed
+   to say*, so each one is pinned to the exact sentence a wrong phone state would make a lie. */
+describe('W5: what the app is allowed to promise about timing', () => {
+  it('quotes the plan as a window, never as the minute it will ring', () => {
+    const at = NOW + 25 * 60_000; // 08:25 — the exact minute the planner picked
+    const line = nextRingLine(at, (ms) => fmtTime(ms, false), (ms) => relFire(ms, NOW));
+    expect(line).toBe('Next one is planned for around 08:25 — give or take 5 min — in 25 min.');
+  });
+
+  it('names a wider window when the caller says so, and a five-minute one by default', () => {
+    expect(INEXACT_WINDOW_MIN).toBe(5);
+    expect(inexactWindow()).toBe('give or take 5 min');
+    expect(inexactWindow(15)).toBe('give or take 15 min');
+    expect(nextRingLine(NOW, (ms) => fmtTime(ms, false), (ms) => relFire(ms, NOW), 15)).toBe('Next one is planned for around 08:00 — give or take 15 min — due now.');
+  });
+
+  it('says out loud that it cannot read whether exact alarms are allowed, instead of guessing', () => {
+    expect(EXACT_ALARM_UNKNOWN).toMatch(/will not tell the app whether exact alarms are allowed/);
+    expect(EXACT_ALARM_UNKNOWN).toMatch(/windows, not promises/);
+  });
+
+  it('one sentence for a build with no module at all, and silence on a phone that has one', () => {
+    expect(noModuleNote('web', null)).toBe(NO_MODULE_LINE);
+    expect(noModuleNote('android', 'unavailable')).toBe(NO_MODULE_LINE);
+    expect(noModuleNote('android', 'granted')).toBeNull();
+    // Not read yet is not the same as missing: a slow boot must not print "no alarms here".
+    expect(noModuleNote('android', null)).toBeNull();
+    expect(noModuleNote('ios', 'denied')).toBeNull();
+    expect(NO_MODULE_LINE).toContain('development build');
+    expect(NO_MODULE_HINT).toBe('alarms need the development build');
+  });
+});
+
+describe('W5 D4: Delivery status prints the channel, not the wish', () => {
+  it('agrees with the phone when the two line up', () => {
+    expect(lockTextLine(false, 'secret')).toContain('set to stay hidden until you unlock');
+    expect(lockTextLine(false, 'secret')).toContain('hides even that a reminder arrived');
+    expect(lockTextLine(true, 'private')).toContain('set to show on the lock screen');
+    expect(lockTextLine(true, 'public')).toContain('shows its full text');
+  });
+
+  it('says the channel wins when the phone did not take the change', () => {
+    const off = lockTextLine(false, 'private');
+    expect(off).toContain('set to stay hidden until you unlock');
+    expect(off).toContain('hides the text on a secure lock screen');
+    expect(off).toContain('the channel wins');
+    const on = lockTextLine(true, 'secret');
+    expect(on).toContain('set to show on the lock screen');
+    expect(on).toContain('hides even that a reminder arrived');
+  });
+
+  it('never invents a visibility the phone would not report', () => {
+    expect(lockTextLine(true, null)).toBe('Reminder text is set to show on the lock screen. This phone would not say what its channels actually do.');
+    expect(lockTextLine(false, null)).toContain('This phone would not say what its channels actually do.');
+    expect(lockTextLine(false, 'unknown')).toContain('will not say what it does');
   });
 });

@@ -17,6 +17,8 @@ export const DEFAULT_NOTIF: NotifSettings = {
   activeDays: [true, true, true, true, true, true, true], activeFrom: '07:00', activeTo: '22:00',
   quietEnabled: true, quietFrom: '22:00', quietTo: '07:00', weekend: 'normal', duringClass: 'defer',
   homeAt: '16:30', effortBuffer: 0.25,
+  // D4/W5. ON is the platform default; OFF is a SECRET channel (text hidden until unlock).
+  lockText: true,
 };
 
 export const DEFAULT_SETTINGS: Settings = {

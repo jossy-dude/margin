@@ -74,6 +74,11 @@ Gate for every workstream: builder implements → I re-run `npm run check` + rea
   "needs the development build" banner in Expo Go/web. DeepSeek builders only. **D4 (resolved):
   lock-screen text setting** — toggle "Show reminder text on the lock screen", default ON; OFF →
   channel `lockscreenVisibility: SECRET` on classes + tasks channels; onboarding asks it (W8).
+  **(2026-10-17 re-scope after the D0 mechanism check — dossier `reports/w5-d0-mechanism.md`): the
+  library already does exact timing + boot re-arm, so W5 ships as W5a (JS-honest: window wording + the
+  "won't tell us" state, D4 toggle with channel read-back, dev-build banner, h12 bodies, manifest
+  declarations, boot proven not re-added) + W5b (the small native hook for full-screen + permission
+  reads), pending `DECISIONS.md` D9.**
 - **W6** — trips: start/stop + manual entry, route label; average + last 7 in Stats; average hint in
   the alarm form. New `trip` table comes from W1's migration.
 - **W7** — Stats marks chart (axes, value labels, %, points, weighted contribution, trend, goal line,

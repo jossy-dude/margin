@@ -194,7 +194,7 @@ export default function App() {
            fresh, and neither is native. */
         const repo = await openRepository();
         await hydrate(repo);
-        await configureNotifications();
+        await configureNotifications(getState().settings.notif.lockText);
         initAudio();
         preloadAudio();
         wireLifecycle();

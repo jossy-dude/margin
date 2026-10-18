@@ -145,6 +145,39 @@ wrong; the device probe is the part we can't check from here.
 
 **Answer:** _(awaiting Jossy — "D8: a" keeps what is shipped; "D8: b" switches to follow-device later)_
 
+## D9 — W5's full-screen ringing: which native shape, and what ships first
+
+The W5 mechanism investigation (dossier: `reports/w5-d0-mechanism.md`, verdict in `STATE.md`) found two
+of the three mechanisms already inside `expo-notifications@57.0.21` — exact `DATE` triggers
+(`setExactAndAllowWhileIdle` when `canScheduleExactAlarms()`, else the honest inexact window) and boot
+re-arm (the module's own `BOOT_COMPLETED` receiver → `setupScheduledNotifications`) — but **full-screen
+is absent**: zero `fullscreen` citations in the library and its poster never calls
+`setFullScreenIntent`. The two phone-side permission states (`canScheduleExactAlarms()`,
+`canUseFullScreenIntent()`) also have no JS path (the permission bundle exposes only
+`{importance, interruptionFilter}`). So "full-screen, honestly" cannot ship without native work; the fork:
+
+- **a (default, being implemented now — W5a):** the honest JS slice — exact-alarm + full-screen-intent
+  declarations in the Android manifest (the latter inert until (b)/(c) code exists), the window /
+  "this phone won't tell us" wording, boot left as the library's (proven, not re-added), the D4
+  lock-screen text toggle with channel read-back, the dev-build banner, h12 bodies. Full-screen ringing
+  is an explicit exclusion and its UI rows do not appear yet. Provable on web + unit tests today.
+- **b (W5b):** (a) + a small app-level Kotlin hook (~40–60 lines): subclass
+  `ExpoPresentationDelegate` / `NotificationsService` to put `fullScreenIntent` on the existing
+  notifications and add the two permission reads. Keeps the library's scheduler and boot receiver;
+  touches the component that delivers every reminder, so it needs its own slice + device pass. Not
+  buildable in this environment (no Android SDK) — it would land UNVERIFIED-ON-DEVICE.
+- **c:** the brief's named path — a full local Expo module with its own `AlarmManager.setAlarmClock`
+  stack (own queue, receiver, boot re-arm, presenter). Alarm-clock-grade exactness, but a second
+  scheduler that contradicts W5 deliverables 1/3 ("leave the library's scheduler and boot receiver
+  alone") — a workstream of its own.
+
+**Recommendation: (a) now; (b) as the follow-up slice.** (a) cannot lie and is provable here; (b) is the
+smallest way to make the ringing screen real with its risk contained to presentation; (c) only if you
+want `setAlarmClock` semantics as a deliberate project.
+
+**Answer:** _(awaiting Jossy — "D9: a" keeps the honest slice; "D9: b" adds the small native hook;
+"D9: c" green-lights the local-module scheduler)_
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._

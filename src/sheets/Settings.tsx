@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Linking, Pressable, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
 import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
@@ -17,7 +17,7 @@ import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshot
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
 import { DW, fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
 import { nudgeWord } from '../domain/timer';
-import { logState, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
+import { EXACT_ALARM_UNKNOWN, lockTextLine, logState, nextRingLine, noModuleNote, NO_MODULE_HINT, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
 import { play, type SoundName } from '../services/audio';
 import { fx } from '../services/fx';
@@ -108,6 +108,10 @@ export function SettingsSheet() {
   const { c } = useTheme();
   const st = { notifStatus, plan, courses };
   const page = path[path.length - 1] ?? 'root', n = s.notif;
+  /* W5 deliverable 6: web, or a native build the phone would not give the notification module to,
+     cannot schedule anything. One sentence says so on the Reminders pages; the row's own hint appends
+     the short form rather than replacing the clock-bearing hint W4 pinned. */
+  const noModule = noModuleNote(Platform.OS, notifStatus?.permission ?? null);
   /* A `settings.bar` persisted by an older build can name a bar in neither `BAR_KINDS` nor
      `INSTRUMENTS`. Drawing is safe — `DayBar` falls back to Sight glass — but this sheet read the raw
      id, so the Progress bar page showed an empty hint and no selected chip: it claimed nothing was
@@ -148,7 +152,7 @@ export function SettingsSheet() {
         that name forever. Blank is allowed: Today drops the name and just says "Good morning". */}
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette} · ${FACES.find((f) => f.id === s.clock)?.n}`} to="appearance" />
-    <Nav icon="bell" label="Reminders" hint={n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'} to="notifications" />
+    <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester from ${s.semesterStart} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
@@ -200,11 +204,17 @@ export function SettingsSheet() {
   </>);
   if (page === 'pen') body = <Seg value={s.pen} opts={[['warm', 'Warm sienna'], ['graphite', 'Graphite (original)'], ['red', 'Red pencil'], ['blue', 'Blue pencil']]} onChange={(v) => set({ pen: v })} />;
   if (page === 'notifications') body = (<>
+    {/* W5 deliverable 6: no module, no alarms. Stated once at the top of the page rather than leaving
+        toggles that look like they schedule something. */}
+    {noModule ? <Txt f="serif" s={15.5} c="warn">{noModule}</Txt> : null}
     <Toggle label="Reminders" hint="The master switch for every notification" value={n.enabled} onChange={(v) => act.setNotif({ enabled: v })} />
     <Nav icon="week" label="Classes" hint={`${n.classSoon ? n.classLeadMin + ' min before' : 'no heads-up'} · ${n.classEnded ? 'ask when it ends' : 'no end prompt'}`} to="ncls" />
     <Nav icon="tasks" label="Tasks & exams" hint={`${n.taskReminders ? 'on' : 'off'} · start-by ${n.startBy ? 'on' : 'off'}`} to="ntask" />
     <Nav icon="clock" label="Hours & quiet time" hint={`${fmtHM(n.activeFrom, s.hour12)}–${fmtHM(n.activeTo, s.hour12)} · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'} · weekends ${n.weekend}`} to="nhours" />
     <Nav icon="grad" label="Per-subject lead time" hint="Warn earlier for the classes you tend to be late to" to="ncourse" />
+    {/* D4, directly above Delivery status: the toggle is the wish, and Delivery status prints what the
+        phone's own channel actually does about it (including when the two disagree). */}
+    <Toggle label="Show reminder text on the lock screen" hint="When off, it still rings but the text stays hidden until you unlock" value={n.lockText} onChange={(v) => act.setNotif({ lockText: v })} />
     <Nav icon="bell" label="Delivery status" hint={statusHint(st.notifStatus)} to="nstatus" />
   </>);
   if (page === 'ncls') body = (<>
@@ -231,16 +241,23 @@ export function SettingsSheet() {
   if (page === 'ncourse') body = st.courses.length === 0
     ? <Empty icon="grad" text="No subjects yet. Add one and it gets its own lead time here." />
     : <>{st.courses.map((co) => <Labelled key={co.id} label={co.name}><Stepper label={co.name} value={n.courseLead[co.id] ?? n.classLeadMin} min={0} max={60} step={5} fmt={(v) => `${v} min`} onChange={(v) => act.setNotif({ courseLead: { ...n.courseLead, [co.id]: v } })} /></Labelled>)}</>;
-  if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan, target = testTarget(now, pl?.next ?? null, tasks, notifs.TEST_ACTION_ID); body = (<>
+  if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan, target = testTarget(now, pl?.next ?? null, tasks, notifs.TEST_ACTION_ID, s.hour12); body = (<>
     {/* The one honest place: every number below is either read off this phone or computed by the
         planner, and the two failure states a phone can be in — blocked, and unable to be asked — are
         named separately because only one of them can still be fixed from here. */}
+    {noModule ? <Txt f="serif" s={15.5} c="warn">{noModule}</Txt> : null}
     <HandBox seed="ns" fill={c.card} style={{ padding: 12, gap: 5 }}>
       {ns ? <Txt f="bold" s={21} c={PERMISSION[ns.permission].tone}>{PERMISSION[ns.permission].line}</Txt> : <Txt f="bold" s={21} c="mut">Asking this phone…</Txt>}
       {ns && ns.permission === 'denied' && !ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone has stopped asking. Only its own settings screen can turn this back on — the button below opens it.</Txt> : null}
       {ns && ns.permission === 'denied' && ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone will still ask once, so the button below is worth a tap.</Txt> : null}
       <Txt f="bold" s={20}>{!ns ? 'Counting what is queued…' : !ns.queueRead ? 'This phone would not say what it has queued, so nothing here can be counted.' : ns.permission === 'granted' ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : `${ns.scheduled} still queued from before, but nothing new can be queued until it is allowed.`}</Txt>
-      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">Next one rings {fmtWhen(ns.next, now, s.hour12)} — {relFire(ns.next, now)}.</Txt> : null}
+      {/* W5 deliverable 2: the planner's minute is a plan, not a promise. The app cannot read
+          `canScheduleExactAlarms()` (see `EXACT_ALARM_UNKNOWN`), so it quotes a window and says why. */}
+      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">{nextRingLine(ns.next, (ms) => fmtTime(ms, s.hour12), (ms) => relFire(ms, now))}</Txt> : null}
+      {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={15} c="mut">{EXACT_ALARM_UNKNOWN}</Txt> : null}
+      {/* D4 read-back. Channels are Android-only, so this line only exists where a channel can be
+          read; the setting is what the user asked for and the phone's answer is printed as-is. */}
+      {ns?.platform === 'android' ? <Txt f="serif" s={15} c="mut">{lockTextLine(n.lockText, ns.lockText)}</Txt> : null}
       {ns?.queueRead && ns.scheduled > 0 && ns.next === null ? <Txt f="serif" s={16} c="mut">Queued, but the phone will not report when any of them fires.</Txt> : null}
       {ns?.queueRead && ns.scheduled === 0 && pl && pl.count > 0 && ns.permission === 'granted' ? <Txt f="serif" s={16} c="mut">The planner has {pl.count} ready, and the phone&rsquo;s queue is empty. A battery saver that stops alarms, or a phone that dropped them on reboot, is the usual reason.</Txt> : null}
       {ns?.queueRead && ns.scheduled === 0 && pl && pl.count === 0 ? <Txt f="serif" s={16} c="mut">{n.enabled ? `Nothing to send in the next 14 days${pl.dropped.length ? `: ${pl.dropped.length} blocked by your hours` : ' inside your active hours'}.` : 'Reminders are switched off above.'}</Txt> : null}
@@ -328,7 +345,7 @@ export function SettingsSheet() {
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Reset to demo set'} onPress={armReset} />
     <Txt f="serif" s={14} c="mut">Marginalia 1.0 · local-first, no account, no network needed.</Txt>
   </>);
-  return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
+  return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 
   /** The one irreversible action, guarded by the same double tap the boot-failure screen uses: the first tap
    *  arms it and the second one, within the window, does it. The timer is owned by an effect so closing the

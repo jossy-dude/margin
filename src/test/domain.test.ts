@@ -135,6 +135,22 @@ describe('reminder planner', () => {
     expect(applyAction(a!, fx)).toBe(true);
     expect(written).toEqual([['2026-10-05|08:30|E', 'p']]);
   });
+
+  /* W5 D7 (h12). The body is the one piece of the planner the user reads on the lock screen, so it has
+     to speak the clock the app's own screens speak. `hour12` is an *input* to the plan rather than a
+     read of the store, which is what keeps `domain/` pure; absent means the shipped 24-hour default. */
+  it('writes its bodies in the clock the app is set to (W5 D7)', () => {
+    const cls = (hour12?: boolean) => planReminders({ ...base, tasks: [], hour12 }).items.find((x) => x.kind === 'class')!;
+    expect(cls(false).body).toContain('08:30');
+    expect(cls(false).body).not.toContain('AM');
+    expect(cls(true).body).toContain('8:30 AM'); // `fmtTime` drops the leading zero in 12-hour form
+    expect(cls(true).body).not.toContain('08:30 AM');
+    expect(cls(undefined).body).toBe(cls(false).body); // no argument = the 24-hour default
+    const due = task({ id: 'h12', dueAt: at(2026, 10, 6, 12, 0), reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 6, 11, 0), label: 'x' }] });
+    const body = (hour12?: boolean) => planReminders({ ...base, tasks: [due], hour12 }).items.find((x) => x.kind === 'task')!.body;
+    expect(body(false)).toContain('due 12:00');
+    expect(body(true)).toContain('due 12:00 PM');
+  });
 });
 
 describe('focus timer', () => {

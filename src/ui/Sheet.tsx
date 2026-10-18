@@ -65,8 +65,9 @@ const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
  *
  *  `closeRef` is how a form reaches its own closer — see `useSheetClose`. It is written during the
  *  first render, before `children` exist, so a button rendered in the same pass already reads a
- *  live callback. */
-export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back, closeRef }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null; closeRef?: React.RefObject<SheetCloser | null> }) {
+ *  live callback. `scrollKey` keys the ScrollView, so a sheet that swaps sub-pages (Settings) opens
+ *  each page at the top instead of inheriting the last page's scroll position. */
+export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back, closeRef, scrollKey }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null; closeRef?: React.RefObject<SheetCloser | null>; scrollKey?: string }) {
   const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c } = useTheme(), reduce = useReduceMotion();
   const variant = useSheetVariant(), panel = variant === 'panel';
   /** One value, two distances. A sheet's travel is the window's own height; a panel's is its own width
@@ -170,7 +171,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
                   <Pressable testID="sheet-close" accessibilityRole="button" accessibilityLabel="Close" onPress={() => close()} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
                 </View>
               </View>
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : 20, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
+              <ScrollView key={scrollKey ?? 's'} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : 20, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
               {footer ? <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14, borderTopWidth: 1.4, borderTopColor: c.rule }}>{footer}</View> : null}
             </HandBox>
           </Animated.View>
@@ -188,7 +189,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
                 </View>
               </View>
             </GestureDetector>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : Math.max(ins.bottom, 12) + 10, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
+            <ScrollView key={scrollKey ?? 's'} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : Math.max(ins.bottom, 12) + 10, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
             {footer ? <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 10) + 6 }}>{footer}</View> : null}
           </HandBox>
         </Animated.View>

@@ -17,6 +17,9 @@ const mockSync = jest.fn(async (_plan: Plan, _accent: string) => ({ added: 0, re
 const mockEnsure = jest.fn(async (ask = false) => { if (ask) mockPerm.read = mockPerm.ask; return mockPerm.read; });
 const mockStatus = jest.fn(async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: true, queueRead: true, platform: 'test' }));
 const mockCancelAll = jest.fn(async () => undefined);
+/** D4: the store must re-apply the channels when the lock-screen toggle moves, and must not touch the
+ *  channels for every other reminder setting. Recorded so both halves can be asserted. */
+const mockLockscreen = jest.fn(async (_lockText: boolean) => undefined);
 /** `wireLifecycle` registers once for the life of the module, so the callbacks are held outside the
  *  per-test call history — clearing them would unregister what the first test wired up. */
 const mockCb: { opened: ((o: Opened) => void) | null; received: ((kind: string, id: string, at: number) => void) | null } = { opened: null, received: null };
@@ -29,6 +32,7 @@ jest.mock('../services/notifications', () => ({
   onReceived: (cb: (kind: string, id: string, at: number) => void) => { mockCb.received = cb; return () => undefined; },
   scheduleFocusEnd: async () => undefined,
   cancelFocusEnd: async () => undefined,
+  applyLockscreenText: (lockText: boolean) => mockLockscreen(lockText),
 }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
 
@@ -42,7 +46,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(MON);
   mockPerm.read = 'granted'; mockPerm.ask = 'granted'; // the state of a phone that has already decided
-  mockSync.mockClear(); mockEnsure.mockClear(); mockStatus.mockClear(); mockCancelAll.mockClear();
+  mockSync.mockClear(); mockEnsure.mockClear(); mockStatus.mockClear(); mockCancelAll.mockClear(); mockLockscreen.mockClear();
   // `mockCb` is deliberately *not* cleared: `wireLifecycle` registers once per module, so its
   // callbacks stay live for every later test in this file.
 });
@@ -112,8 +116,24 @@ describe('the rebuild the store drives', () => {
     expect(plan().items.some((x) => x.kind === 'ended')).toBe(true); // only the heads-up went away
   });
 
-  it('does not hand the plan to the OS when permission is refused', async () => {
-    mockPerm.read = 'denied';
+  /* D4. Android keeps a channel's settings, so writing `lockText` into the settings is not enough — the
+     two reminder channels have to be re-applied. And it must be *only* that toggle: re-applying on
+     every reminder setting would rewrite channels the user may have tuned by hand. */
+  it('re-applies the lock-screen channels when — and only when — that toggle moves', async () => {
+    await boot();
+    act.setNotif({ classSoon: false });
+    await settle(500);
+    expect(mockLockscreen).not.toHaveBeenCalled();
+    act.setNotif({ lockText: false });
+    await settle(500);
+    expect(mockLockscreen.mock.calls).toEqual([[false]]);
+    expect(getState().settings.notif.lockText).toBe(false);
+    act.setNotif({ lockText: true });
+    await settle(500);
+    expect(mockLockscreen.mock.calls).toEqual([[false], [true]]);
+  });
+
+  it('does not hand the plan to the OS when permission is refused', async () => {    mockPerm.read = 'denied';
     await boot();
     expect(mockSync).not.toHaveBeenCalled();
     act.setNotif({ enabled: false });

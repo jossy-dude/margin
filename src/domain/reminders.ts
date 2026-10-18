@@ -10,6 +10,11 @@ export interface Planned {
 export interface PlanInput {
   now: number; courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>;
   dayMarks: Record<string, DayMark>; tasks: Task[]; settings: NotifSettings; horizonDays?: number; cap?: number;
+  /** `settings.hour12` — the one display choice that reaches the notification BODIES the user reads
+   *  (a heads-up that says `due 18:00` while the app prints `6:00 PM` is a lie about this app's own
+   *  clock). It is an argument rather than a read of the store so `domain/` keeps importing nothing but
+   *  `domain/`; absent means the shipped 24-hour default, so every existing call site is unchanged. */
+  hour12?: boolean;
 }
 export interface Plan { items: Planned[]; deferred: number; dropped: { id: string; why: string }[] }
 
@@ -185,7 +190,7 @@ export function planReminders(i: PlanInput): Plan {
     // `key` is both the attendance record key and the notification's `entityId`: the Here/Late/Absent
     // button splits it on `|` and writes under it, so any other spelling marks nothing the grid reads.
     const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = occKey(ymd(o.date), o.meeting);
-    if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${course?.room ?? ''}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
+    if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${course?.room ?? ''}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start, i.hour12)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
     if (s.classEnded && !i.attendance[key]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
   }
   // tasks
@@ -196,7 +201,7 @@ export function planReminders(i: PlanInput): Plan {
       const at = r.mode === 'abs' ? r.at : t.dueAt - r.minutes * MIN;
       if (at < i.now || at > horizon) continue;
       const left = t.dueAt - at;
-      push({ kind: isExam ? 'exam' : 'task', at, title: t.title, body: `${cname} · due ${fmtTime(t.dueAt)}${left > 0 ? ` (in ${fmtDur(Math.round(left / MIN))})` : ''}`, channel: 'tasks', route: 'Tasks', entityId: t.id }, { notAfter: t.dueAt });
+      push({ kind: isExam ? 'exam' : 'task', at, title: t.title, body: `${cname} · due ${fmtTime(t.dueAt, i.hour12)}${left > 0 ? ` (in ${fmtDur(Math.round(left / MIN))})` : ''}`, channel: 'tasks', route: 'Tasks', entityId: t.id }, { notAfter: t.dueAt });
     }
     pushStart(t);
     function pushStart(x: Task) {

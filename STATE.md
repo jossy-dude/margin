@@ -1,7 +1,8 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-17 (W1–W3 + batch 2 committed; **W4 "Today time truth" closed** — gate, assert (7d–7j)
-and both vision rounds green; W5 (D4 lock-screen toggle + alarms) next)_
+_Updated: 2026-10-17 (W1–W4 + batch 2 committed — W4 = `97c1783`; **W5a "alarms honesty + D4 toggle"
+closed** — gate green, assert 9/9 ALL PASS, vision round 1 findings both fixed & re-verified; W5b
+full-screen pending D9 answer; **W6 (transport log) next**)_
 
 ## Git
 
@@ -83,6 +84,10 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 2.16 | **Measured before believing the flag**: the pinned live probe (412 px, settle-time inventory) showed the header row had ZERO free space — the suggested `flex: 1` remedy alone was inert (nothing to absorb). The real fix is five pixel trims — clock bearing 14→8, pill-to-subtitle gap 8→6, subtitle 15→14 pt, R-badge padding 6→4 — verified live at 73 px text in a 72.8 px box (DSF 2, unclipped). The budget is written into the `Today.tsx` comments | orchestrator | `/tmp/opencode/logs/w4-probe-{f,h}.log`, `src/screens/Today.tsx` |
 | 2.17 | **W4 vision round 2** (10 re-shot frames): all four round-1 flags PASS; one NEW surface failed — the 12h when-picker's lone flipping `AM` chip read as a label, not a control. Fixed in-pass into the sheet's own choice-chip pair (`AM` filled, `PM` outlined) + a source pin; the assert grew `[7h]` (walks into the Settings sub-page for the quiet-hours hint) and `[7j]` (widest header state, `Period 1 of 4`) | `vision-critic` + orchestrator | `reports/vision-w4.md`, `tools/w4-assert.mjs` |
 | 2.18 | **W4 gate + vision PASS, committed**: `tools/w4-assert.mjs` ALL PASS (`[7j]`: `Period 1 of 4` 73 px needed / 72.8 px box, unclipped; `[7h]`: `7:00 AM–10:00 PM · quiet 10:00 PM–7:00 AM · weekends normal`); `npm run check` green (52 suites / 830 tests, boundaries clean); vision round 2b re-check of the fixed picker PASS. Committed as the single W4 feat commit this pass | orchestrator | `/tmp/opencode/logs/w4-{recheck6,assert3}.log` |
+| 2.19 | **W5 D0 mechanism verdict (STOP, honest)**: timing is already exact-or-honest-window inside `expo-notifications@57.0.21` (`ExpoSchedulingDelegate.kt:105-121` — it takes `setExactAndAllowWhileIdle` when the permission is granted, and never claims a minute it cannot keep); boot re-arm already exists in the module's own `BOOT_COMPLETED` receiver (add nothing); full-screen presentation **absent** (0 matches) and larger than one slice → builder STOPped per brief. **D9 written**: a) honest JS slice (default) / b) small Kotlin hook (~40–60 lines) / c) full local `modules/` stack; `PLAN.md` W5 row re-scoped to W5a + pending-D9 W5b | `builder` (`opencode/deepseek-v4.1-flash-free`) + orchestrator | `reports/w5-d0-mechanism.md`, `DECISIONS.md` D9, `PLAN.md` |
+| 2.20 | **W5a builder slice delivered** (D9-a): manifest `SCHEDULE_EXACT_ALARM` + `USE_FULL_SCREEN_INTENT` (declared now so W5b's grant is reachable; `app.json` mirror synced); timing honesty (`EXACT_ALARM_UNKNOWN`, `inexactWindow`, `nextRingLine` — `Next one rings` gone); D4 `lockText` toggle → `channelConfigs`/`applyLockscreenText`/`readLockscreen` channel read-back, store-wired; dev-build banner (`noModuleNote` — web / permission-unavailable only); h12 bodies via `PlanInput.hour12` + `setSettings` `resync(400)`. Builder gates: 52 suites / 851 tests, boundaries 201, w5-assert 8/8 | `builder` (`opencode/deepseek-v4.1-flash-free`) | `briefs/W5-alarms.md`, `reports/w5a-slice.md`, `/tmp/opencode/logs/w5a-{check,assert}-final.log` |
+| 2.21 | **W5a orchestrator re-check green + vision round 1**: `npm run check` 52/851 green, diffs spot-read; vision judged 3 frames — items 1/4 PASS, **2 FAIL**: (2) D4 hint led with the state label `Off:` while the toggle renders ON (self-contradiction); (3) Delivery status opened mid-scroll, first verdict line bisected by the sheet edge (the sheet's `ScrollView` inherits the previous sub-page's scroll — the assert's own toggle tap scrolls ~91 px) | orchestrator + `vision-critic` (session `ses_eb63da1dcffegvwKf9XsQ7eJ9d`) | `.shots/w5/*.png`, `reports/w5a-slice.md` §6 |
+| 2.22 | **Both vision FAILs fixed in-pass and re-verified**: (2) hint → state-neutral *"When off, it still rings but the text stays hidden until you unlock"* (pinned in `settings-render.test.ts:346` + assert `[2b]`); (3) `Sheet` gained an optional `scrollKey` that keys its `ScrollView` (default `'s'` — every other sheet caller unchanged) and `SettingsSheet` passes the current page, so each sub-page opens at the top. Assert grew `[4d]`: retained `scrollTop` after nav `[]` + verdict line 78 px clear of the header. Gates re-run: check 52/851 green, **w5-assert 9/9 ALL PASS**, **w4-assert ALL PASS** (shared Sheet regresses nothing), frames re-shoot + inspected | orchestrator | `tools/w5-assert.mjs`, `src/ui/Sheet.tsx`, `src/sheets/Settings.tsx`, `reports/w5a-slice.md` §6 |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -140,6 +145,14 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
     would hurt keyboard use). Both are candidates for a later polish decision.
 15. **W4 dispatch stalled on provider quotas** (2026-10-16, 402/429) and was resumed the next day; the
     roster fallbacks above were applied on resume.
+16. **W5a's scroll fix touches shared chrome** (`src/ui/Sheet.tsx`): the Delivery-status clipping was a
+    `Sheet`-level bug (the `ScrollView` outlives sub-page swaps), so the fix is an optional `scrollKey`
+    prop on `Sheet` itself, keyed by the current settings page. Default `'s'` keeps every other sheet
+    caller behaviour-identical; `tools/w4-assert.mjs` re-run ALL PASS and the new `[4d]` pin guard it.
+17. **W5a's user-tester DOM round was skipped at the owner's request** (session speed — the DeepSeek
+    builder rounds were already slow). Its scope (honesty sentence + y-order, D4 toggle round-trip,
+    honesty copy, W4 12/24h smoke) is fully covered by `w5-assert` + `w4-assert`, both ALL PASS.
+    On-device behaviour stays UNVERIFIED-ON-DEVICE per `reports/w5a-slice.md` §4.
 
 ## UX audit triage (2026-10-16 — report `reports/audit-ux.md`)
 
@@ -159,10 +172,11 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 
 ## Next
 
-- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`, **W4 committed this
-  pass** (single feat commit — the git log is the hash source; a commit cannot know its own). **W5 (D4
-  lock-screen toggle + alarms) next** — brief committed (`briefs/W5-alarms.md`, `5ed8331`); then W6
-  (transport log) → W7 (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production
+- Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`, W4 `97c1783`,
+  **W5a committed this pass** (single feat commit — the git log is the hash source; a commit cannot
+  know its own). **W5b** (full-screen presentation, ~40–60 lines Kotlin) is **pending DECISIONS D9**
+  — not started, checklist §W5b marked pending. **W6 (transport log — `src/services/export.ts` h12
+  included)** next; then W7 (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production
   readiness, absorbs M7/L2/M1).
 - The UX audit is delivered and triaged above; its two environmental one-offs are closed as
   non-reproducing, and UX-4 is verified not real. W8 carries the tour copy (D7).
