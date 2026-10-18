@@ -10,6 +10,10 @@ export interface SqlDb {
   runAsync(sql: string, params?: any[]): Promise<unknown>;
   getAllAsync<T>(sql: string, params?: any[]): Promise<T[]>;
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
+  /** Only the Expo adapter provides this: closes the connection and deletes the database file (and
+   *  with it WAL/SHM). `wipe()` prefers it so a full reset removes the FILE, not its rows; the
+   *  node:sqlite shim omits it and keeps the DELETE-all fallback. */
+  closeAndDelete?(): Promise<void>;
 }
 const q = (c: string) => `"${c}"`;
 const ENTITIES = Object.keys(SPECS) as EntityName[];
@@ -134,7 +138,18 @@ export class SqliteRepository implements Repository {
      sessions were the first two. One transaction, so a half-applied purge cannot leave a sample
      timetable behind its (now gone) sample subjects. */
   async purgeDemo() { await this.ser(() => this.db.withTransactionAsync(async () => { for (const t of ['course', 'meeting', 'notice', 'mark', 'task', 'focus_session']) await this.db.runAsync(`DELETE FROM ${t} WHERE demo=1`); })); }
-  async reset() { await this.ser(() => this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); })); }
+  /* A full reset deletes the FILE when the adapter can (Expo: close + delete, WAL/SHM included), so
+     what a user walks away from "Erase everything" with is genuinely nothing on disk. The queued
+     writes in `ser` finish before the file drops, because the close rides the same queue. Without
+     the hook (tests), the same DELETE-all transaction the old reset ran is the fallback, leaving an
+     open, empty database either way. */
+  async wipe() {
+    await this.ser(async () => {
+      if (this.db.closeAndDelete) { this.closed = true; await this.db.closeAndDelete(); return; }
+      await this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); });
+    });
+  }
+  private closed = false;
   async schedNotif(id: string, kind: string, dueAt: number) { await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
     await this.schedNotif(id, kind, dueAt);

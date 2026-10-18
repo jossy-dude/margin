@@ -17,7 +17,11 @@ export interface Repository {
   putSettings(patch: Partial<Settings>): Promise<void>;
   seed(snapshot: Snapshot): Promise<void>;
   purgeDemo(): Promise<void>;
-  reset(): Promise<void>;
+  /** Erase everything — every entity row, settings and both bookkeeping tables — leaving this
+   *  repository open, empty and usable. The wipe does NOT bring the demo set back anywhere; a
+   *  wiped planner is an empty planner. On SQLite the adapter may realize this by deleting the
+   *  database file itself (the store re-opens a fresh copy right after). */
+  wipe(): Promise<void>;
   logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number): Promise<void>;
   /** Record that a reminder was handed to the OS, before it has rung. `logNotif` can only write a
    *  `shown_at` or an `opened_at`, and inventing one of those to mean "queued" would be a lie in a

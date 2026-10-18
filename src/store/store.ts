@@ -30,6 +30,15 @@ export interface State {
   notifStatus: notifs.NotifStatus | null; plan: PlanInfo | null; notifLog: NotifLogRow[];
   fev: { k: string; at: number } | null;
 }
+/** LIVE demo flag (v0.1 of the data model): the sample semester is a session playground in memory —
+ *  a `MemoryRepository` seeded from `seedSnapshot()`, pointed at by `repo` until the tour is left.
+ *  While this is on, resync schedules NO OS notifications (a demo course must not ring a real bell)
+ *  and nothing the tour does touches the real database. `adoptDemo` writes the rows the user created
+ *  into the real repository and turns it off. */
+let demoMode = false;
+/** The real database behind the demo session. Set at boot, kept even while `repo` points at the demo
+ *  memory repository, so adoption never re-opens or re-migrates. */
+let real: Repository | null = null;
 let repo: Repository | null = null;
 let state: State = {
   ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: withDefaults({}),
@@ -258,10 +267,16 @@ export const act = {
   /** Optimistic half of the repository purge: the same six collections the SQL DELETEs cover, so the
    *  screen cannot keep showing sample rows the database no longer has. */
   async purgeDemo() { await persist(R().purgeDemo()); set((s) => ({ courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Sample data removed'); resync(); },
+  /** The one true "erase everything": wipe every table (on device, the FILE itself — SQLite's close
+   *  + delete, WAL/SHM with it), then re-open a fresh, EMPTY database. No sample semester comes
+   *  back: since v0.1 the demo set is a first-session memory playground, not something the database
+   *  holds, so a full reset leaves a clean planner. */
   async resetAll() {
     try {
-      const r = await ensureRepo();
-      await persist(r.reset()); await persist(r.seed(seedSnapshot())); const snap = await r.load(); applySnapshot(snap); configureFx(state.settings); set({ ready: true, error: null }); toast('Everything is back to the demo set'); resync(300);
+      await ensureRepo().then((r) => persist(r.wipe()));
+      repo = real = await openRepository();
+      const snap = await R().load(); applySnapshot(snap); configureFx(state.settings); demoMode = false;
+      set({ ready: true, error: null }); toast('Everything erased'); resync(300);
     } catch (e) { set({ error: `Couldn't reset: ${String((e as Error)?.message ?? e).slice(0, 80)}` }); }
   },
   /** swap the task shown on the Focus page (only while the dial is still being set) */

@@ -160,7 +160,7 @@ export function SettingsSheet() {
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
     <Nav icon="note" label="Show the tour again" hint={`${toured(onboarded) ? 'Finished — it is replayable' : 'Not seen yet'}`} to="tour" />
-    <Nav icon="trash" label="Reset" hint="Back to the demo set" to="about" />
+    <Nav icon="trash" label="Reset" hint="Erase everything" to="about" />
   </>);
   if (page === 'appearance') body = (<>
     <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
@@ -337,7 +337,7 @@ export function SettingsSheet() {
         finished — notes, grades and focus sessions), so the copy can promise the whole sample
         semester and nothing else. An edit clears the flag (see forms.tsx), so "anything you created
         or edited" is exactly what survives. */}
-    <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history the app starts with. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset replaces the whole demo set with a fresh copy.</Txt>
+    <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset wipes the whole database file.</Txt>
   </>);
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
@@ -346,8 +346,8 @@ export function SettingsSheet() {
     <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You finished build ${TOUR_VERSION} of it. Running it again changes nothing about your data.` : 'You have not seen it yet, so it will run the next time this app opens anyway.'}</Txt>
   </>);
   if (page === 'about') body = (<>
-    <Txt f="serif" s={16} c="mut">This replaces everything with the original demo set and default settings. It cannot be undone, so export first if you care about your data.</Txt>
-    <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Reset to demo set'} onPress={armReset} />
+    <Txt f="serif" s={16} c="mut">This erases the whole database file — subjects, timetable, attendance, tasks, notes, grades, focus history and settings — and hands back a fresh, empty planner. It cannot be undone, so export first if you care about your data.</Txt>
+    <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={armReset} />
     <Txt f="serif" s={14} c="mut">Margin 1.0 · local-first, no account, no network needed.</Txt>
   </>);
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;

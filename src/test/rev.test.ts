@@ -165,15 +165,17 @@ describe('boot recovery', () => {
     expect(() => fresh.R()).toThrow(/not open/i);
     expect(() => fresh.R()).toThrow(/hydrate|resetAll/);
   });
-  it('resetAll re-opens the repository itself, so the fatal-error screen is escapable', async () => {
+  it('resetAll erases everything and hands back a fresh, EMPTY planner — the demo set never returns', async () => {
     mockOpenRepo.mockClear();
     const fresh = neverOpened();
     fresh.set({ ready: true, error: 'openDatabaseAsync failed' }); // exactly what App.tsx leaves behind when openRepository throws
     await fresh.act.resetAll();
-    expect(mockOpenRepo).toHaveBeenCalledTimes(1);
+    expect(mockOpenRepo.mock.calls.length).toBeGreaterThanOrEqual(2); // the re-open itself, after the wipe
     expect(fresh.getState().error).toBeNull(); expect(fresh.getState().ready).toBe(true);
-    expect(fresh.getState().courses.length).toBeGreaterThan(0); expect(fresh.getState().toast?.text).toBe('Everything is back to the demo set');
-    expect(typeof fresh.R().load).toBe('function');
+    expect(fresh.getState().courses).toEqual([]);         // v0.1: a full reset is a wipe, NOT a re-seed
+    expect(fresh.getState().tasks).toEqual([]);
+    expect(fresh.getState().toast?.text).toBe('Everything erased');
+    expect(typeof fresh.R().load).toBe('function');       // writes carry on into the fresh copy
     fresh.act.setAtt('k', 'a'); expect(fresh.getState().attendance.k).toMatchObject({ status: 'a' });
   });
   it('a failing re-open surfaces the reason instead of a swallowed rejection', async () => {

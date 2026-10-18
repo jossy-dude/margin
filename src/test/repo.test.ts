@@ -95,7 +95,19 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
 
     await r.logNotif('n1', 'task', NOW, 'shown', NOW); await r.logNotif('n1', 'task', NOW, 'opened', NOW + 5);
     expect((await r.notifLog())[0]).toMatchObject({ id: 'n1', shownAt: NOW, openedAt: NOW + 5 });
-    await r.reset(); expect((await r.load()).tasks).toHaveLength(0);
+  });
+  it('wipe erases every row and every bit of bookkeeping, and the database stays usable (v0.1 reset)', async () => {
+    const r = await make(); await r.seed(seedSnapshot(NOW));
+    await r.logNotif('w1', 'task', NOW, 'shown', NOW);
+    await r.wipe();
+    const l = await r.load();
+    expect(l.courses).toHaveLength(0); expect(l.tasks).toHaveLength(0);
+    expect(l.settings).toEqual(withDefaults({}));
+    expect(await r.pendingOutbox()).toHaveLength(0);
+    expect(await r.notifLog()).toHaveLength(0);
+    /* the wipe must not break the database: a fresh copy keeps accepting writes */
+    await r.upsert('course', { id: 'new', name: 'n', room: '', teacher: '', goal: null, sort: 0, demo: false });
+    expect((await r.load()).courses.map((c) => c.id)).toEqual(['new']);
   });
   it('seeds attendance, day marks and adjustments (audit L3)', async () => {
     const r = await make();

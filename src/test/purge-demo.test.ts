@@ -14,7 +14,7 @@ afterEach(() => stopResync());
 const NOW = new Date(2026, 9, 5, 8).getTime();
 const settingsCopy = () => {
   const src = readFileSync(join(__dirname, '../sheets/Settings.tsx'), 'utf8');
-  return src.slice(src.indexOf('Remove all sample data'), src.indexOf('Settings → Reset replaces the whole demo set with a fresh copy.') + 'Settings → Reset replaces the whole demo set with a fresh copy.'.length);
+  return src.slice(src.indexOf('Remove all sample data'), src.indexOf('Settings → Reset wipes the whole database file.') + 'Settings → Reset wipes the whole database file.'.length);
 };
 
 async function seeded() {

@@ -96,13 +96,13 @@ function Fatal({ message }: { message: string }) {
             <Txt f="marker" s={26} accessibilityRole="header">The planner could not open your data</Txt>
           </View>
           <Txt f="serif" s={16} c="mut">
-            Everything is still on this phone. Rebuilding the demo set replaces the database with a fresh copy — the only
-            thing here that cannot be undone, which is why it asks twice, exactly like Settings → Reset.
+            Erase everything deletes the database file itself and starts again with an empty planner. It cannot be
+            undone, which is why it asks twice, exactly like Settings → Reset.
           </Txt>
           <HandBox seed="fatal-msg" shadow={false} dashed fill="transparent" style={{ padding: 10 }}>
             <Txt f="type" s={14} c="mut" selectable style={{ lineHeight: 18 }}>{message}</Txt>
           </HandBox>
-          <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Reset to the demo set'} onPress={reset} />
+          <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={reset} />
           <Txt f="serif" s={14} c="mut">The reason is in Settings → Diagnostics.</Txt>
         </HandBox>
       </View>

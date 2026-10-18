@@ -1,5 +1,4 @@
 import { MemoryRepository } from './memory';
-import { seedSnapshot } from './seed';
 import type { Repository } from './repository';
 
 /**
@@ -24,8 +23,5 @@ import type { Repository } from './repository';
  * repository" boundary that `.dependency-cruiser.cjs` draws stays true of the web build too.
  */
 export async function openWebRepository(): Promise<Repository> {
-  const repo = new MemoryRepository();
-  const snap = await repo.load();
-  if (!snap.settings.seededAt) await repo.seed(seedSnapshot());
-  return repo;
+  return new MemoryRepository();
 }
