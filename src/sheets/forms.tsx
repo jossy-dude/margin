@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Btn, Chip, EASE, Field, HandBox, HStrip, Icon, Reveal, Row, STEP, Stepper, Toggle, Txt, Hair } from '../ui/kit';
@@ -167,21 +167,33 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }
    sample subject the user renames or fills with their own grades must not be deleted as sample data. */
 export function CourseSheet({ id }: { id?: string }) {
   const c0 = useStore((s) => s.courses.find((x) => x.id === id)), count = useStore((s) => s.courses.length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => c0?.id ?? uid('c')), [submit] = useState(latch);
-  const [name, setName] = useState(c0?.name ?? ''), [room, setRoom] = useState(c0?.room ?? ''), [teacher, setTeacher] = useState(c0?.teacher ?? ''), [goal, setGoal] = useState(c0?.goal ?? 0);
+  const [name, setName] = useState(c0?.name ?? ''), [teacher, setTeacher] = useState(c0?.teacher ?? ''), [goal, setGoal] = useState(c0?.goal ?? 0);
   return (
-    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), room: room.trim(), teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false }); close(); })} /></Row>}>
-      <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Room" value={room} onChangeText={setRoom} /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
+    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), room: c0?.room ?? '', teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false }); close(); })} /></Row>}>
+      <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
       <Label>Grade goal</Label><Stepper label="goal" value={goal} min={0} max={100} fmt={(v) => (v ? `${v}%` : 'none')} onChange={setGoal} />
     </Sheet>
   );
 }
 export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?: string; weekday?: number }) {
-  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
+  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), all = useStore((s) => s.courses), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId ?? first ?? null), [wd, setWd] = useState(m0?.weekday ?? weekday ?? 0), [a, setA] = useState(hm(m0?.start ?? '09:00')), [b, setB] = useState(hm(m0?.end ?? '09:50'));
+  /* v0.2 — the room is asked here, when you schedule the class, not when you name the subject. It
+     stays bound to `course.room` (a subject has one room), so switching the subject re-seeds the
+     field from that subject's own room rather than carrying the last one typed. */
+  const [room, setRoom] = useState(all.find((x) => x.id === (m0?.courseId ?? courseId ?? first ?? null))?.room ?? ''), roomFor = useRef(cid);
+  useEffect(() => { if (roomFor.current !== cid) { roomFor.current = cid; setRoom(all.find((x) => x.id === cid)?.room ?? ''); } }, [cid, all]);
   const bad = !cid || b <= a;
+  const save = () => submit(() => {
+    act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b), demo: false });
+    const course = all.find((x) => x.id === cid);
+    if (course && course.room !== room.trim()) act.saveCourse({ ...course, room: room.trim() }); // the room belongs to the subject
+    close();
+  });
   return (
-    <Sheet title={m0 ? 'Edit class' : 'Add class'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete class" onPress={() => { act.removeMeeting(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={bad} onPress={() => submit(() => { act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b), demo: false }); close(); })} /></Row>}>
+    <Sheet title={m0 ? 'Edit class' : 'Add class'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" a11y="Delete class" onPress={() => { act.removeMeeting(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={bad} onPress={save} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={setCid} none={null} />
+      <Field label="Room" value={room} onChangeText={setRoom} placeholder="e.g. B-12" />
       <Label>Day</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} on={wd === i} onPress={() => setWd(i)} small />)}</Row>
       <Label>Starts</Label><Stepper label="start" value={a} min={360} max={1320} step={5} fmt={fromMin} onChange={(v) => { setA(v); if (b <= v) setB(v + 50); }} />
       <Label>Ends</Label><Stepper label="end" value={b} min={a + 5} max={1380} step={5} fmt={fromMin} onChange={setB} />

@@ -56,7 +56,7 @@ export function GradesScreen() {
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10 }}>
           <Pressable onPress={() => act.open({ t: 'course', id: course.id })} accessibilityRole="button" accessibilityLabel={`${course.name}. Edit subject.`} onLongPress={() => act.open({ t: 'meeting', courseId: course.id })}>
             <Row style={{ flexWrap: 'nowrap' }}>
-              <View style={{ flex: 1 }}><Txt f="marker" s={24} numberOfLines={2}>{course.name}</Txt><Txt f="serif" s={15} c="mut">{[course.room, course.teacher].filter(Boolean).join(' · ') || 'Tap to add room and teacher'}</Txt></View>
+              <View style={{ flex: 1 }}><Txt f="marker" s={24} numberOfLines={2}>{course.name}</Txt><Txt f="serif" s={15} c="mut">{[course.room, course.teacher].filter(Boolean).join(' · ') || 'Add a class to set its room'}</Txt></View>
               <View style={{ alignItems: 'center', minWidth: 74 }}><Txt f="marker" s={34} c={tot !== null && course.goal && tot < course.goal ? 'warn' : 'ink'}>{tot === null ? '—' : Math.round(tot)}</Txt><Txt f="bold" s={17} c="mut">{letter(tot)}</Txt></View>
             </Row>
           </Pressable>
