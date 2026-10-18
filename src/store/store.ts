@@ -3,9 +3,11 @@ import { Appearance, AppState as RNAppState } from 'react-native';
 import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings, Trip, Alarm } from '../domain/types';
 import type { NotifLogRow, Repository } from '../data/repository';
 import { openRepository } from '../data/sqliteExpo';
+import { MemoryRepository } from '../data/memory';
 import { recordCrash } from '../ui/crashlog';
 import { seedSnapshot } from '../data/seed';
-import { withDefaults } from '../domain/defaults';
+import { toured, withDefaults } from '../domain/defaults';
+import { hasRealRows } from '../domain/rows';
 import { ST } from '../domain/attendance';
 import { dispatchOpened, isPlannedKind } from '../domain/notifActions';
 import { planReminders, type Planned } from '../domain/reminders';
@@ -120,6 +122,9 @@ export function resync(delay = 700) {
   syncTimer = setTimeout(async () => {
     syncTimer = null;
     const s = state; if (!s.ready) return;
+    /* The demo session plans nothing: a sample class must never arrive as a real bell. Leaving the
+       tour calls resync(0) alongside adoption, so the real session starts planning at once. */
+    if (demoMode) return;
     const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12 });
     let perm = await notifs.ensurePermission(false);
     if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
@@ -147,6 +152,29 @@ export async function hydrate(r: Repository) {
     applySnapshot(snap); configureFx(state.settings);
     set({ ready: true, now: Date.now() }); resync(1500);
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
+}
+/** What App.tsx runs to bring the app up — the open-and-decide step v0.1 grew.
+ *
+ *  It opens the REAL database first (and keeps it in `real`), then on a **genuine first run** —
+ *  never onboarded, and no row the user made (`domain/rows.ts`) — hands this session the sample
+ *  semester as a seeded `MemoryRepository` instead of re-pointing the store at the database. The
+ *  tour then runs over data that was never written to the file: what the user taps into existence
+ *  during the tour is written ONLY to that memory copy, `act.adoptDemo()` gives the non-demo rows
+ *  back to the real repository when the tour is left, and until then `resync` schedules nothing,
+ *  because no reminder may ring for a sample class. A device with real rows but no tour yet — an
+ *  upgrade — hydrates from its own database as always and gets the tour without the samples. */
+export async function boot() {
+  const r = await openRepository();
+  real = r;
+  const snap = await r.load();
+  if (!toured(snap.settings.onboarded) && !hasRealRows(snap)) {
+    const d = new MemoryRepository();
+    await d.seed(seedSnapshot());
+    demoMode = true;
+    await hydrate(d);
+  } else {
+    await hydrate(r);
+  }
 }
 function applySnapshot(s: Snapshot) {
   // Computed once: `withDefaults` rebuilds the whole settings object (and `initTimer` reads four of its
@@ -278,6 +306,48 @@ export const act = {
       const snap = await R().load(); applySnapshot(snap); configureFx(state.settings); demoMode = false;
       set({ ready: true, error: null }); toast('Everything erased'); resync(300);
     } catch (e) { set({ error: `Couldn't reset: ${String((e as Error)?.message ?? e).slice(0, 80)}` }); }
+  },
+  /** Called when the tour is left, however it is left (App.tsx maps the finishes: "Get started"
+   *  passes `false`, "Keep exploring" and every skip pass `true`). The demo session's memory copy
+   *  is reconciled into the real database: the rows the USER made — anything whose `demo` flag is
+   *  still set is by definition not theirs — plus attendance, day marks, adjustments, trips, alarms
+   *  and the settings they changed while exploring. The six sample collections never migrate, so
+   *  the promise "the demo data is not inside the actual database" survives every path out of the
+   *  tour. After adoption the store points back at the real database, and `resync(0)` lets the
+   *  real session plan again.
+   *
+   *  `keepSamples` is only about what stays on screen for the rest of THIS session: "Keep
+   *  exploring" means the sample semester continues to be visible; it was never persisted, so the
+   *  next launch opens on the real planner alone. A failed reconciliation write lands in the
+   *  Problems log with a toast (as every save does) and the switch still happens — there is
+   *  nothing better kept for the user in a memory-only copy. */
+  async adoptDemo(keepSamples: boolean) {
+    if (!demoMode) return keepSamples ? undefined : act.purgeDemo();
+    demoMode = false;
+    const session = R();                    // the memory repository everything this session wrote
+    const snap = await session.load();
+    real = real ?? await openRepository();
+    const r = real;
+    await persist((async () => {
+      for (const row of snap.courses) if (!row.demo) await r.upsert('course', row);
+      for (const row of snap.meetings) if (!row.demo) await r.upsert('meeting', row);
+      for (const row of snap.tasks) if (!row.demo) await r.upsert('task', row);
+      for (const row of snap.notices) if (!row.demo) await r.upsert('notice', row);
+      for (const row of snap.marks) if (!row.demo) await r.upsert('mark', row);
+      for (const row of snap.focus) if (!row.demo) await r.upsert('focus', row);
+      for (const a of Object.values(snap.attendance)) await r.upsert('attendance', a);
+      for (const d of Object.values(snap.dayMarks)) await r.upsert('dayMark', d);
+      for (const [courseId, adj] of Object.entries(snap.adjusts)) await r.upsert('adjust', { courseId, adj });
+      for (const t of snap.trips) await r.upsert('trip', t);
+      for (const a of snap.alarms) await r.upsert('alarm', a);
+      const { seededAt: _drop, ...settings } = snap.settings; // a sample-made timestamp never migrates
+      void _drop;
+      await r.putSettings(settings);
+    })());
+    repo = r;
+    set((s: State) => (keepSamples ? s : { courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) }));
+    toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
+    resync(0);
   },
   /** swap the task shown on the Focus page (only while the dial is still being set) */
   timerSwap() {

@@ -10,13 +10,22 @@ import { FS } from '../fit';
 import { STEPS, TOUR_LEN } from './screens';
 import { SHEET_TARGET, cardTop, cutRects, holeBox, measureSlot, sameBox, type CoachBox } from './coach';
 
-export type OnboardFinish = 'done' | 'skipped';
+export type OnboardFinish =
+  /** "Get started": App.tsx adopts the session with `keepSamples = false` — the samples go, the
+      planner the user meets is theirs (and empty, if they made nothing during the tour). */
+  | 'started'
+  /** "Keep exploring" or any other way the last step ends: the samples stay on screen for this
+      session only, and everything the user made is adopted regardless. */
+  | 'done'
+  | 'skipped';
 
 export interface CoachProps {
-  /** Called exactly once, with how the user left. `App.tsx` persists it; this component does not. */
+  /** Called exactly once, with how the user left. `App.tsx` adopts the demo session from it and
+   *  persists `onboarded`; this component does neither. */
   onFinish: (how: OnboardFinish) => void;
   /** A genuine first run — a planner holding nothing the user made. `false` on a replay from Settings
-   *  and on any device with real rows, which is what keeps "Start empty" a one-time offer. */
+   *  and on any device with real rows, which is what keeps the replay's body copy honest. The finale
+   *  buttons themselves are the same on both passes. */
   firstRun?: boolean;
   /** Which step to open on. `Settings → Show the tour again` wants 0, and the tests want any of them. */
   from?: number;
@@ -183,8 +192,12 @@ export function Coach({ onFinish, firstRun = false, from = 0 }: CoachProps) {
             ) : null}
             {step.empty ? (
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                {firstRun ? <Btn flex kind="danger" label="Start empty" a11y="Start empty and remove the sample semester" onPress={() => { void act.purgeDemo().then(() => finish('done')); }} /> : null}
-                <Btn flex kind="primary" label="Keep exploring" a11y="Keep the sample data and finish the tour" onPress={() => finish('done')} />
+                {/* The two ways out, always both (v0.1 after a first-run report): "Get started" is the
+                    primary hand-off — App.tsx adopts the session with the samples put away — and
+                    "Keep exploring" is the soft one. Neither is destructive: with the demo session in
+                    memory, there is nothing here to fear on a replay either. */}
+                <Btn flex kind="primary" label="Get started" a11y="Start your own planner: the sample semester is put away" onPress={() => finish('started')} />
+                <Btn flex kind="ghost" label="Keep exploring" a11y="Keep the sample data and finish the tour" onPress={() => finish('done')} />
               </View>
             ) : (
               <Btn kind="primary" label="Next" icon="chevron" a11y={`Next: ${STEPS[i + 1]!.heading}`} onPress={next} style={{ alignSelf: 'flex-end' }} />

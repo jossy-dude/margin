@@ -85,7 +85,7 @@ afterAll(() => { jest.restoreAllMocks(); });
 
 type Screen = { root: TestRenderer.ReactTestRenderer['root']; done: OnboardFinish[]; text: () => string; labelled: () => string[]; press: (a11y: string) => Promise<void>; unmount: () => Promise<void> };
 
-const mount = async (opts: { from?: number; firstRun?: boolean; seed?: boolean; reduce?: boolean } = {}): Promise<Screen> => {
+const mount = async (opts: { from?: number; firstRun?: boolean; seed?: boolean; reduce?: boolean; wire?: (how: OnboardFinish) => unknown } = {}): Promise<Screen> => {
   await act(async () => { live?.unmount(); });
   live = undefined;
   backs.length = 0;
@@ -97,7 +97,7 @@ const mount = async (opts: { from?: number; firstRun?: boolean; seed?: boolean; 
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     r = TestRenderer.create(React.createElement(ThemeProvider, null,
-      React.createElement(Coach, { onFinish: (how: OnboardFinish) => done.push(how), firstRun: opts.firstRun ?? true, from: opts.from ?? 0 })));
+      React.createElement(Coach, { onFinish: (how: OnboardFinish) => { done.push(how); return opts.wire?.(how); }, firstRun: opts.firstRun ?? true, from: opts.from ?? 0 })));
   });
   live = r;
   const root = r.root;
@@ -148,6 +148,8 @@ describe('the gate: one number, and therefore not two', () => {
   it('App.tsx persists it with the same expression it always has, and covers the app with the tour', () => {
     const app = readFileSync(join(__dirname, '..', 'App.tsx'), 'utf8');
     expect(app).toContain('act.setSettings({ onboarded: TOUR_VERSION })');
+    expect(app).toContain('act.adoptDemo(');      // the v0.1 hand-over: adoption happens on EVERY exit
+    expect(app).toContain('await boot()');        // and boot decides demo-session vs real hydration
     expect(app).toContain('toured(onboarded)');
     // The tour is mounted OVER the shell, not instead of it: the control it points at is the real one.
     expect(app).toContain('<Shell />');
@@ -229,12 +231,14 @@ describe('ten steps, seven of them under the user\'s own finger', () => {
     expect(seen).toContain('a sample semester');                 // new: the hand-over
   });
 
-  it('the last step offers the sample semester only on a genuine first run', async () => {
+  it('the last page always offers both ways to leave: Get started and Keep exploring', async () => {
     const first = await mount({ from: TOUR_LEN - 1, firstRun: true });
-    expect(first.labelled()).toContain('Start empty and remove the sample semester');
+    expect(first.labelled()).toContain('Start your own planner: the sample semester is put away');
+    expect(first.labelled()).toContain('Keep the sample data and finish the tour');
     expect(first.text()).toContain('Nothing of yours is in it');
     const replay = await mount({ from: TOUR_LEN - 1, firstRun: false });
-    expect(replay.labelled()).not.toContain('Start empty and remove the sample semester');
+    expect(replay.labelled()).toContain('Start your own planner: the sample semester is put away');
+    expect(replay.labelled()).toContain('Keep the sample data and finish the tour');
     expect(replay.text()).toContain('Settings → Show the tour again');
   });
 });
@@ -408,7 +412,13 @@ describe('the scrim is exactly as blocking as it looks', () => {
 
 /* ───── first run and the hand-over ───── */
 
-describe('the one destructive thing the tour ever offers', () => {
+describe('the two ways out of the tour', () => {
+  /** The mount helper resolves `onFinish` without doing anything with it, which left the old
+   *  "Start empty" test asserting a store call the Coach itself made. That belongs to App.tsx's
+   *  Gate now (v0.1: the demo session is adopted there), so `wire` re-creates exactly its mapping —
+   *  and these tests are the whole press → signal → adopt story, not two halves of it. */
+  const wired = () => mount({ from: TOUR_LEN - 1, firstRun: true, wire: (how) => storeAct.adoptDemo(how !== 'started') });
+
   it('knows a sample semester from a planner somebody has used', async () => {
     const repo = new MemoryRepository(() => NOW);
     await repo.seed(seedSnapshot(NOW));
@@ -420,24 +430,33 @@ describe('the one destructive thing the tour ever offers', () => {
     expect(hasRealRows()).toBe(true);                                    // the row the user made survived
   });
 
-  it('Start empty removes the sample semester and leaves a working planner', async () => {
-    const s = await mount({ from: TOUR_LEN - 1, firstRun: true });
+  it('Get started puts the sample set away and leaves a working planner', async () => {
+    const s = await wired();
     expect(getState().courses.length).toBeGreaterThan(0);
-    await s.press('Start empty and remove the sample semester');
+    await s.press('Start your own planner: the sample semester is put away');
+    await act(async () => { await new Promise((res) => setTimeout(res, 0)); }); // the adoption lands
     expect(getState().courses.filter((c) => c.demo)).toEqual([]);
     expect(getState().tasks.filter((t) => t.demo)).toEqual([]);
     expect(getState().marks.filter((m) => m.demo)).toEqual([]);
-    expect(getState().toast?.text).toBe('Sample data removed');
-    expect(s.done).toEqual(['done']);
     expect(getState().settings.onboarded).toBeUndefined();               // App.tsx writes it, not the tour
+    expect(s.done).toEqual(['started']);
   });
 
   it('Keep exploring removes nothing', async () => {
-    const s = await mount({ from: TOUR_LEN - 1, firstRun: true });
+    const s = await wired();
     const before = getState().courses.length;
     await s.press('Keep the sample data and finish the tour');
+    await act(async () => { await new Promise((res) => setTimeout(res, 0)); });
     expect(getState().courses.length).toBe(before);
     expect(s.done).toEqual(['done']);
+  });
+
+  it("and a replay's Get started still means \"put the samples away\", never \"erase my data\"", async () => {
+    const s = await mount({ from: TOUR_LEN - 1, firstRun: false, wire: (how) => storeAct.adoptDemo(how !== 'started') });
+    await s.press('Start your own planner: the sample semester is put away');
+    await act(async () => { await new Promise((res) => setTimeout(res, 0)); });
+    expect(getState().courses.filter((c) => c.demo)).toEqual([]);        // the sample rows go
+    expect(getState().tasks.filter((t) => t.demo)).toEqual([]);
   });
 });
 

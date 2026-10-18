@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
+
 import type { View } from 'react-native';
-import { getState, type RouteName, type State } from '../../store/store';
+import { getState, type RouteName, type State, } from '../../store/store';
+import type { Snapshot } from '../../domain/types';
+import { hasRealRows as _hasRealRows } from '../../domain/rows';
 
 /**
  * What the tour is made of: a list of real controls, and the questions the app answers about them.
@@ -152,12 +155,8 @@ export function cardTop(box: CoachBox | null, H: number, cardEst: number, insetT
 
 /** Is there a row here that the user made? — the whole of the first-run test.
  *
- *  `demo: true` is stamped on every row the sample semester seeded (`data/seed.ts`), and is cleared by
- *  the first edit anyone makes to a row (`sheets/forms.tsx`), so "no row without it" means one of two
- *  things and both of them mean the same thing to a person: this planner is empty of anything they
- *  did, and the destructive close of the tour is one they can take. An upgrading device that has been
- *  collecting real marks for a term answers `true` here and is never offered it. */
-export function hasRealRows(s: State = getState()): boolean {
-  return s.courses.some((r) => !r.demo) || s.meetings.some((r) => !r.demo) || s.tasks.some((r) => !r.demo)
-    || s.notices.some((r) => !r.demo) || s.marks.some((r) => !r.demo) || s.focus.some((r) => !r.demo);
-}
+ *  The predicate is the domain's (`domain/rows.ts`), because `boot()` in the store needs the same
+ *  answer about a loaded snapshot: a device that has been collecting real marks for a term never
+ *  gets a demo session over the top of its own data. The one-argument-default wrapper stays here so
+ *  the tour's callers keep reading exactly as they always have. */
+export const hasRealRows = (s: Snapshot = getState()): boolean => _hasRealRows(s);

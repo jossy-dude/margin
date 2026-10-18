@@ -27,8 +27,7 @@ import { FocusScreen } from './screens/Focus';
 import { Coach } from './ui/onboard/Coach';
 import { hasRealRows } from './ui/onboard/coach';
 import { TOUR_VERSION, toured } from './domain/defaults';
-import { getState, hydrate, set, useStore, wireLifecycle, act } from './store/store';
-import { openRepository } from './data/sqliteExpo';
+import { getState, set, useStore, wireLifecycle, act, boot } from './store/store';
 import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudio } from './services/audio';
 
@@ -153,13 +152,18 @@ function Gate() {
   /* A ref cannot be narrowed by the assignment above (it is mutable), so the value crosses into the
      render as a local — which is also the honest shape: this is one frozen decision, not a live read. */
   const first = firstRun.current ?? false;
-  /* Every finish clears the flag, not only `done`. The purge belongs to a device's first-ever pass
-     through the tour, and a skip followed by a replay from Settings in the same session is not one —
-     so the second pass has to find the flag already spent, however the first one ended. */
+  /* Every finish clears the flag, not only `done`. The demo session belongs to the device's first-ever
+     pass through the tour, and a skip followed by a replay from Settings in the same session is not one —
+     so the second pass has to find the flag already spent, however the first one ended.
+  /* "Get started" puts the samples away at once ('started' → keepSamples false); every other way
+     out keeps them on screen for the session. BOTH adopt first, so anything the user made during
+     the tour is written to the real database before the store points back at it, and `onboarded`
+     is then persisted to that same real copy.
+  */
   return (
     <View style={{ flex: 1 }}>
       <Shell />
-      {!done && <Coach firstRun={first} onFinish={() => { firstRun.current = false; act.setSettings({ onboarded: TOUR_VERSION }); }} />}
+      {!done && <Coach firstRun={first} onFinish={(how) => { firstRun.current = false; void act.adoptDemo(how !== 'started').then(() => act.setSettings({ onboarded: TOUR_VERSION })); }} />}
     </View>
   );
 }
@@ -209,12 +213,13 @@ export default function App() {
     let alive = true;
     (async () => {
       try {
-        /* `expo-sqlite`, `expo-notifications` and `expo-audio` are native modules with no web
+        /* `boot()` opens the on-device database and, on a genuine first run, serves the tour's
+           sample semester from a memory-only repository — the file never receives a demo row.
+           `expo-sqlite`, `expo-notifications` and `expo-audio` are native modules with no web
            implementation, so a browser build that called them would throw during boot and never
            reach a screen. `wireLifecycle()` still runs: it is what pumps the timer and keeps `now`
            fresh, and neither is native. */
-        const repo = await openRepository();
-        await hydrate(repo);
+        await boot();
         await configureNotifications(getState().settings.notif.lockText);
         initAudio();
         preloadAudio();

@@ -107,7 +107,7 @@ export const STEPS: TourStep[] = [
     heading: 'That’s Margin.',
     body: [
       'Everything you have been looking at is a sample semester — fake subjects, fake marks, fake history, so that no page opens empty on day one.',
-      'Nothing of yours is in it. Start empty and build the real thing, or keep it and poke around.',
+      'Nothing of yours is in it. Get started and build the real thing, or keep exploring.',
     ],
     replayBody: [
       'Five pages, one + and a gear, and everything on them stays on this phone.',
