@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window background shown before the first React frame paints. `values/colors.xml` hardcodes
+     REFINED.light.paper (#FAF4E6) and splashscreen_background is pure white, so a cold start in dark
+     mode flashed cream/white. These are the REFINED.dark values, which is the app's default palette
+     (Settings -> Look & feel shows "auto · refined"). The Original palette cannot be expressed in a
+     native resource at all; see BUG-001 for the app.json-vs-native-folder ownership question. -->
+<resources>
+  <color name="splashscreen_background">#3C352C</color>
+  <color name="iconBackground">#3C352C</color>
+  <color name="activityBackground">#3C352C</color>
+</resources>

@@ -1,0 +1,306 @@
+import { planReminders, blockedReason, workload, latestStart, freeMinutes } from '../domain/reminders';
+import { DEFAULT_NOTIF, withDefaults } from '../domain/defaults';
+import { applyAction, resolveAction, type NotifEffects } from '../domain/notifActions';
+import { advance, canBreak, endBreak, finish, initTimer, nudgeStep, startBreak, toggle, view, FLOW_OVER_CAP_MS, NUDGE_MS } from '../domain/timer';
+import { needed, total } from '../domain/grades';
+import { effective, nextStatus, occKey } from '../domain/attendance';
+import { doneByHour, level, onTimeStats, streak } from '../domain/analytics';
+import { seedSnapshot } from '../data/seed';
+import type { Meeting, NotifSettings, Task } from '../domain/types';
+
+const at = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
+const NOW = at(2026, 10, 5, 8, 0); // Monday 5 Oct 2026, 08:00
+const snap = seedSnapshot(NOW);
+const base = { now: NOW, courses: snap.courses, meetings: snap.meetings, attendance: {}, dayMarks: {}, settings: DEFAULT_NOTIF };
+const task = (o: Partial<Task>): Task => ({ id: 't', title: 'T', courseId: 'D', kind: 'assignment', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false, ...o });
+
+describe('reminder planner', () => {
+  it('is deterministic and sorted, ids unique', () => {
+    const a = planReminders({ ...base, tasks: snap.tasks }), b = planReminders({ ...base, tasks: snap.tasks });
+    expect(a.items.map((x) => x.id)).toEqual(b.items.map((x) => x.id));
+    expect(new Set(a.items.map((x) => x.id)).size).toBe(a.items.length);
+    for (let i = 1; i < a.items.length; i++) expect(a.items[i]!.at).toBeGreaterThanOrEqual(a.items[i - 1]!.at);
+    expect(a.items.every((x) => x.at > NOW)).toBe(true);
+  });
+  it('class-soon fires lead minutes before and per-course lead overrides the global one', () => {
+    const p = planReminders({ ...base, tasks: [], settings: { ...DEFAULT_NOTIF, courseLead: { E: 20 } } });
+    const first = p.items.find((x) => x.kind === 'class' && x.title.startsWith('Intro to Economics'))!;
+    expect(first.at).toBe(at(2026, 10, 5, 8, 10)); // Mon 08:30 class - 20 min
+    expect(p.items.find((x) => x.kind === 'class' && x.title.startsWith('Discrete'))!.at).toBe(at(2026, 10, 5, 9, 50));
+  });
+  it('a reminder that would ring during a lecture is deferred to when the lecture ends', () => {
+    const t = task({ id: 'x', dueAt: at(2026, 10, 5, 18, 0), reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 5, 10, 15), label: 'x' }] }); // Discrete 10:00-10:50
+    const p = planReminders({ ...base, tasks: [t] }).items.find((x) => x.kind === 'task')!;
+    expect(p.at).toBe(at(2026, 10, 5, 10, 51)); expect(p.why).toBe('during class');
+    const allow = planReminders({ ...base, tasks: [t], settings: { ...DEFAULT_NOTIF, duringClass: 'allow' } }).items.find((x) => x.kind === 'task')!;
+    expect(allow.at).toBe(at(2026, 10, 5, 10, 15));
+  });
+  it('quiet hours move a due-time reminder EARLIER, never past the deadline', () => {
+    const t = task({ id: 'q', dueAt: at(2026, 10, 5, 23, 59), reminders: [{ id: 'r', mode: 'before', minutes: 0, label: 'at due' }] });
+    const p = planReminders({ ...base, tasks: [t] }).items.find((x) => x.kind === 'task')!;
+    expect(p.at).toBeLessThan(t.dueAt!); expect(new Date(p.at).getHours()).toBe(21); expect(p.shiftedFrom).toBe(t.dueAt);
+  });
+  it('weekend off drops class reminders on Sat/Sun and a disabled master switch plans nothing', () => {
+    const wk = planReminders({ ...base, tasks: [], settings: { ...DEFAULT_NOTIF, weekend: 'off' } });
+    expect(wk.items.every((x) => ![0, 6].includes(new Date(x.at).getDay()))).toBe(true);
+    expect(planReminders({ ...base, tasks: snap.tasks, settings: { ...DEFAULT_NOTIF, enabled: false } }).items).toHaveLength(0);
+  });
+  it('cancelled classes produce no reminders and completed tasks neither', () => {
+    const att = { [occKey('2026-10-05', { start: '08:30', courseId: 'E' })]: { key: 'k', status: 'c' as const, at: 1, reason: '' } };
+    const p = planReminders({ ...base, attendance: att, tasks: [task({ id: 'd', status: 2, dueAt: at(2026, 10, 6, 12), reminders: [{ id: 'r', mode: 'before', minutes: 60, label: '' }] })] });
+    expect(p.items.some((x) => x.entityId.includes('2026-10-05|08:30|E'))).toBe(false);
+    expect(p.items.some((x) => x.kind === 'task')).toBe(false);
+  });
+  it('caps the queue and reports how many are deferred', () => {
+    const p = planReminders({ ...base, tasks: snap.tasks, cap: 5 }); expect(p.items).toHaveLength(5); expect(p.deferred).toBeGreaterThan(0);
+  });
+  /* A class stored 23:30–00:30 has BOTH ends stamped on the day it occurs, so its raw end is 23½ h
+     BEFORE its own start. `occEnd` (domain/attendance.ts) is the one helper that knows this, and its
+     contract names exactly these two consumers: a busy interval, and the "just ended" prompt. Both
+     were still reading `meeting.end`, so the prompt fired a day early and the hours after midnight
+     read as free time for a start-by nudge. */
+  it('an overnight class runs into the next day: it blocks after midnight and "ended" rings at its real end', () => {
+    const night: Meeting = { id: 'm-night', courseId: 'E', weekday: 0, start: '23:30', end: '00:30', demo: false };
+    /* Active hours widened across the whole clock so nothing but the class itself can move a
+       reminder — 00:30 is otherwise "before active hours" and the shift would hide the bug. */
+    const s: NotifSettings = { ...DEFAULT_NOTIF, activeFrom: '00:00', activeTo: '23:59', quietEnabled: false, duringClass: 'defer' };
+    const overnight = { ...base, meetings: [night], settings: s };
+    const ended = planReminders({ ...overnight, tasks: [] }).items.find((x) => x.kind === 'ended')!;
+    expect(ended.at).toBe(at(2026, 10, 6, 0, 30));
+    expect(ended.shiftedFrom).toBeUndefined();
+    /* 00:10 is inside the class, so the due-time reminder is deferred to the bell. The 2h-away due
+       date matters: a reminder that may not ring after its deadline would be pulled EARLIER instead,
+       out past the start of the class, and this would not be testing the interval at all. */
+    const t = task({ id: 'n', dueAt: at(2026, 10, 6, 2, 0), reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 6, 0, 10), label: '' }] });
+    const p = planReminders({ ...overnight, tasks: [t] }).items.find((x) => x.kind === 'task')!;
+    expect(p.at).toBe(at(2026, 10, 6, 0, 31)); expect(p.why).toBe('during class');
+  });
+  it('workload: a 3h task due in 2h of free time is flagged tight, with a start-by before the due date', () => {
+    const t = task({ dueAt: at(2026, 10, 5, 12, 0), estimateMin: 180 });
+    const w = workload(t, base)!; expect(w.tight).toBe(true); expect(w.startBy).toBeLessThan(t.dueAt!);
+    const easy = workload(task({ dueAt: at(2026, 10, 9, 12, 0), estimateMin: 60 }), base)!; expect(easy.tight).toBe(false);
+  });
+  it('free minutes exclude classes and sleeping hours; latestStart walks back through them', () => {
+    const ctx = { s: DEFAULT_NOTIF, busy: [] as [number, number][] };
+    expect(freeMinutes(at(2026, 10, 5, 6, 0), at(2026, 10, 5, 8, 0), ctx)).toBe(60); // only 07:00-08:00 is awake
+    expect(latestStart(at(2026, 10, 5, 9, 0), 120, ctx)).toBe(at(2026, 10, 5, 7, 0));
+    expect(blockedReason(at(2026, 10, 5, 3, 0), ctx)?.why).toBe('before active hours');
+  });
+
+  /* The queue only holds what the OS could still deliver: a fire time that has effectively arrived
+     cannot be scheduled, and a time already gone must not be queued as if it were still ahead. */
+  it('a reminder due within five seconds is not queued, while one a minute later is', () => {
+    const near = task({ id: 's', dueAt: NOW + 600_000, reminders: [{ id: 'r', mode: 'abs', at: NOW + 2000, label: 'x' }] });
+    const later = task({ id: 'k', dueAt: NOW + 900_000, reminders: [{ id: 'r', mode: 'abs', at: NOW + 60_000, label: 'x' }] });
+    const p = planReminders({ ...base, tasks: [near, later] });
+    expect(p.items.some((x) => x.entityId === 's')).toBe(false);
+    expect(p.items.some((x) => x.entityId === 'k')).toBe(true);
+  });
+
+  it('a reminder time that is already past is never planned', () => {
+    const t = task({ id: 'p', dueAt: NOW + 3_600_000, reminders: [{ id: 'r', mode: 'abs', at: NOW - 60_000, label: 'x' }] });
+    const p = planReminders({ ...base, tasks: [t] });
+    expect(p.items.some((x) => x.kind === 'task')).toBe(false); // the class reminders are still there
+    expect(p.items.some((x) => x.kind === 'class')).toBe(true);
+  });
+
+  it('with no active days at all the queue is empty and says what it dropped', () => {
+    const off = [false, false, false, false, false, false, false];
+    const p = planReminders({ ...base, tasks: snap.tasks, settings: { ...DEFAULT_NOTIF, activeDays: off } });
+    expect(p.items).toHaveLength(0);
+    expect(p.dropped.length).toBeGreaterThan(0);
+  });
+
+  it('a settings row that only wrote part of the reminder block still gets the rest of it', () => {
+    // The merge runs on every cold start, so an older build's partial `notif` is the live case.
+    const legacy = withDefaults({ notif: { enabled: false } as NotifSettings });
+    expect(legacy.notif).toEqual({ ...DEFAULT_NOTIF, enabled: false });
+    expect(withDefaults({}).notif).toEqual(DEFAULT_NOTIF);
+  });
+
+  /* The contract between the planner and the buttons: `entityId` is the occurrence key, so the
+     Here/Late/Absent action can split it and write the record the timetable grids read back. */
+  it('a class reminder\'s entity id is the key its own buttons write (F-04.2)', () => {
+    const cls = planReminders({ ...base, tasks: [] }).items.find((x) => x.kind === 'class');
+    expect(cls).toBeDefined();
+    expect(cls!.entityId).toBe(occKey('2026-10-05', { start: '08:30', courseId: 'E' }));
+    const a = resolveAction('att.here', { kind: cls!.kind, entityId: cls!.entityId });
+    expect(a).toEqual({ kind: 'att', status: 'p', key: cls!.entityId });
+    const written: [string, string][] = [];
+    const fx: NotifEffects = {
+      tasks: [], meetings: [{ start: '08:30', courseId: 'E' }],
+      setAtt: (k, st) => written.push([k, st]), toggleTask: () => undefined,
+      toast: () => undefined, go: () => undefined, log: () => undefined,
+    };
+    expect(applyAction(a!, fx)).toBe(true);
+    expect(written).toEqual([['2026-10-05|08:30|E', 'p']]);
+  });
+
+  /* W5 D7 (h12). The body is the one piece of the planner the user reads on the lock screen, so it has
+     to speak the clock the app's own screens speak. `hour12` is an *input* to the plan rather than a
+     read of the store, which is what keeps `domain/` pure; absent means the shipped 24-hour default. */
+  it('writes its bodies in the clock the app is set to (W5 D7)', () => {
+    const cls = (hour12?: boolean) => planReminders({ ...base, tasks: [], hour12 }).items.find((x) => x.kind === 'class')!;
+    expect(cls(false).body).toContain('08:30');
+    expect(cls(false).body).not.toContain('AM');
+    expect(cls(true).body).toContain('8:30 AM'); // `fmtTime` drops the leading zero in 12-hour form
+    expect(cls(true).body).not.toContain('08:30 AM');
+    expect(cls(undefined).body).toBe(cls(false).body); // no argument = the 24-hour default
+    const due = task({ id: 'h12', dueAt: at(2026, 10, 6, 12, 0), reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 6, 11, 0), label: 'x' }] });
+    const body = (hour12?: boolean) => planReminders({ ...base, tasks: [due], hour12 }).items.find((x) => x.kind === 'task')!.body;
+    expect(body(false)).toContain('due 12:00');
+    expect(body(true)).toContain('due 12:00 PM');
+  });
+});
+
+describe('focus timer', () => {
+  it('runs, finishes a round in flow mode and keeps counting overtime', () => {
+    let s = toggle(initTimer({ planMin: 25 }), 0).state;
+    expect(view(s, 24 * 60_000).leftMs).toBe(60_000);
+    const r = advance(s, 26 * 60_000); expect(r.events).toContain('roundDone'); expect(r.state.overMs).toBe(60_000); expect(r.state.running).toBe(true);
+  });
+  it('without flow it stops at the end of the round', () => {
+    const s = toggle(initTimer({ planMin: 5, flow: false }), 0).state, r = advance(s, 9 * 60_000);
+    expect(r.state.running).toBe(false); expect(r.state.rounds).toBe(1); expect(r.state.focusElapsedMs).toBe(5 * 60_000);
+  });
+  it('a break pauses the main clock, nudges every 5 minutes, then hands back to focus with the leftover time', () => {
+    let s = toggle(initTimer({ planMin: 50, breakMs: 10 * 60_000 }), 0).state;
+    expect(canBreak(advance(s, 2 * 60_000).state)).toBe(false); // too early
+    s = startBreak(s, 10 * 60_000); expect(s.phase).toBe('break'); expect(s.focusLeftMs).toBe(40 * 60_000);
+    const mid = advance(s, 15 * 60_000 + 1000); expect(mid.events).toEqual(['nudge']); expect(mid.state.focusLeftMs).toBe(40 * 60_000);
+    const end = advance(s, 21 * 60_000); expect(end.events.filter((e) => e === 'breakDone')).toHaveLength(1);
+    expect(end.state.phase).toBe('focus'); expect(end.state.focusLeftMs).toBe(39 * 60_000); expect(end.state.breakDoneMs).toBe(10 * 60_000);
+  });
+  it('breaks are limited per round and can be ended early', () => {
+    let s = toggle(initTimer({ planMin: 50, breaksAllowed: 1, breakMs: 5 * 60_000 }), 0).state;
+    s = startBreak(s, 10 * 60_000); s = endBreak(s, 11 * 60_000); expect(s.phase).toBe('focus'); expect(canBreak(advance(s, 30 * 60_000).state)).toBe(false);
+  });
+  /* The store only commits the timer when an *event* fires, so a plain tick never lands in it. Any UI that
+     read elapsed focus, the remaining minutes or the break gate straight off the store was frozen for the
+     whole round. `view()` is the derived display state, so it has to carry the advanced state with it. */
+  it('view() carries the advanced state so a 1 Hz tick can gate on elapsed focus without a store write', () => {
+    const s = toggle(initTimer({ planMin: 25 }), 0).state;
+    expect(s.focusElapsedMs).toBe(0);                       // the store really is stale here
+    expect(canBreak(s)).toBe(false);
+    const v = view(s, 6 * 60_000);
+    expect(v.state.focusElapsedMs).toBe(6 * 60_000);
+    expect(v.state.focusLeftMs).toBe(19 * 60_000);           // the dial's ring and hand read this
+    expect(v.leftMs).toBe(v.state.focusLeftMs);              // the hub readout and the ring must agree
+    expect(v.progress).toBeCloseTo(6 / 25, 5);
+    // the literal V10c symptom: Dial computes progDeg = (1 - leftMs / (min * 60000)) * 360 from its
+    // `leftMs` prop, and Focus used to hand it the stale store value, so progDeg stayed 0 all round.
+    const progDeg = (1 - v.state.focusLeftMs / (25 * 60_000)) * 360;
+    expect(progDeg).toBeCloseTo(86.4, 1);
+    expect(canBreak(v.state)).toBe(true);                    // the gate opens 5 min in, no pause needed
+  });
+  it('the dial hand sweeps and the last 10 seconds stay visible to the UI', () => {
+    const s = toggle(initTimer({ planMin: 60 }), 0).state;
+    expect(view(s, 30 * 60_000).state.focusLeftMs).toBe(30 * 60_000);
+    expect(view(s, 60 * 60_000 - 8_000).state.focusLeftMs).toBe(8_000); // under the warn10 threshold
+  });
+  /* A fixed 5-minute nudge step can never fire on a 5-minute break, which is the default: the guard
+     `nextNudgeMs < breakTotalMs` is false from the first tick, so the sticker never wiggles. */
+  it('every break length can wiggle mid-break, not only breaks longer than the nudge step', () => {
+    expect(nudgeStep(5 * 60_000)).toBe(60_000);              // the default 5-minute break
+    expect(nudgeStep(10 * 60_000)).toBe(3 * 60_000);
+    expect(nudgeStep(15 * 60_000)).toBe(NUDGE_MS);           // never longer than the old step
+    expect(nudgeStep(60_000)).toBe(60_000);                  // a 1-minute break still gets one nudge slot
+    const s = startBreak(toggle(initTimer({ planMin: 25, breakMs: 5 * 60_000 }), 0).state, 10 * 60_000);
+    expect(s.nextNudgeMs).toBeLessThan(s.breakTotalMs);
+    expect(advance(s, 10 * 60_000 + 60_000).events).toContain('nudge');
+    expect(advance(s, 10 * 60_000 + 4 * 60_000).events.filter((e) => e === 'nudge')).toHaveLength(4);
+    expect(advance(s, 10 * 60_000 + 5 * 60_000).events.filter((e) => e === 'nudge')).toHaveLength(4); // none on the breakDone tick
+  });
+  it('pause keeps the remainder; finish ignores sessions under a minute', () => {
+    let s = toggle(initTimer({ planMin: 25 }), 0).state; s = toggle(s, 10 * 60_000).state;
+    expect(s.running).toBe(false); expect(view(s, 99 * 60_000).leftMs).toBe(15 * 60_000);
+    expect(finish(s, 99 * 60_000)!.focusSec).toBe(600);
+    expect(finish(toggle(initTimer(), 0).state, 30_000)).toBeNull();
+  });
+  /**
+   * W3/D2. `mode` and `completed` are the two columns migration 2 added to `focus_session`; these pin what the
+   * timer is allowed to claim about a saved row. `completed` is read off the timer's own counter (`rounds`
+   * moves only where the focus clock reached zero), so an early end can never be saved as a finished round.
+   */
+  it('a saved row says what actually happened: mode focus, and completed only for a round that ran out', () => {
+    const full = finish(toggle(initTimer({ planMin: 25 }), 0).state, 25 * 60_000)!;
+    expect(full.rounds).toBe(1);
+    expect(full).toMatchObject({ mode: 'focus', completed: true });
+
+    const early = finish(toggle(initTimer({ planMin: 25 }), 0).state, 10 * 60_000)!;
+    expect(early.rounds).toBe(0);
+    expect(early).toMatchObject({ mode: 'focus', completed: false });
+
+    // flow overtime is still a completed round, not a second one
+    const flowed = finish(toggle(initTimer({ planMin: 25, flow: true }), 0).state, 30 * 60_000)!;
+    expect(flowed).toMatchObject({ mode: 'focus', completed: true }); expect(flowed.rounds).toBe(1);
+
+    // one full round and then an early end is still a completed session
+    let s = toggle(initTimer({ planMin: 25, flow: false }), 0).state; s = toggle(s, 25 * 60_000).state;
+    expect(s.focusLeftMs).toBe(25 * 60_000); // "Next round" re-arms the clock and keeps the count
+    expect(finish(s, 40 * 60_000)).toMatchObject({ rounds: 1, completed: true, focusSec: 900 });
+  });
+  it('flow overtime stops at the cap instead of billing focus that never happened', () => {
+    expect(FLOW_OVER_CAP_MS).toBe(15 * 60_000);
+    const s = toggle(initTimer({ planMin: 25 }), 0).state;
+    expect(advance(s, 25 * 60_000 + 10 * 60_000).state.overMs).toBe(10 * 60_000); // under the cap: still counts
+    expect(advance(s, 26 * 60_000).state.overMs).toBe(60_000); // one tick past the round, unaffected
+    const capped = advance(s, 25 * 60_000 + FLOW_OVER_CAP_MS).state;
+    expect(capped.overMs).toBe(FLOW_OVER_CAP_MS); expect(capped.running).toBe(true);
+    for (const away of [30 * 60_000, 3 * 60 * 60_000, 12 * 60 * 60_000]) { const a = advance(s, 25 * 60_000 + FLOW_OVER_CAP_MS + away).state; expect(a.overMs).toBe(FLOW_OVER_CAP_MS); expect(a.focusElapsedMs).toBe(25 * 60_000 + FLOW_OVER_CAP_MS); }
+  });
+  it('a session abandoned in flow can never exceed the nominal duration plus the cap', () => {
+    const sum = finish(toggle(initTimer({ planMin: 25 }), 0).state, 12 * 60 * 60_000)!;
+    expect(sum.focusSec).toBe((25 * 60_000 + FLOW_OVER_CAP_MS) / 1000); expect(sum.overSec).toBe(FLOW_OVER_CAP_MS / 1000);
+    expect(finish(toggle(initTimer({ planMin: 50 }), 0).state, 9 * 60 * 60_000)!.focusSec).toBeLessThanOrEqual((50 * 60_000 + FLOW_OVER_CAP_MS) / 1000);
+    expect(finish(toggle(initTimer({ planMin: 5, flow: false }), 0).state, 9 * 60 * 60_000)!.overSec).toBe(0);
+  });
+});
+
+describe('grades, attendance, analytics', () => {
+  const m = (score: number | null, weight: number, on = true) => ({ id: String(Math.random()), courseId: 'E', name: 'm', score, weight, on, sort: 0, demo: false });
+  it('weighted total ignores unscored and switched-off marks and clamps the adjustment', () => {
+    expect(total([m(80, 10), m(90, 10), m(null, 40), m(0, 40, false)])).toBe(85);
+    expect(total([m(98, 10)], 5)).toBe(100); expect(total([m(null, 10)])).toBeNull();
+  });
+  it('needed: what the rest must average to hit a goal', () => {
+    const n = needed([m(80, 50), m(null, 50)], 85)!; expect(n.need).toBeCloseTo(90); expect(n.feasible).toBe(true);
+    expect(needed([m(50, 50), m(null, 50)], 90)!.feasible).toBe(false); expect(needed([m(80, 50), m(70, 50)], 70)).toBeNull();
+  });
+  it('attendance: explicit beats day mark beats inferred; future is empty; cycle wraps', () => {
+    const mt = snap.meetings.find((x) => x.weekday === 0 && x.courseId === 'E')!, d = new Date(2026, 9, 5);
+    expect(effective(d, mt, {}, {}, at(2026, 10, 5, 7)).status).toBeNull();
+    expect(effective(d, mt, {}, {}, at(2026, 10, 5, 12))).toMatchObject({ status: 'p', inferred: true });
+    expect(effective(d, mt, {}, { '2026-10-05': { date: '2026-10-05', status: 's', at: 1, reason: '' } }, at(2026, 10, 5, 12)).status).toBe('s');
+    expect(effective(d, mt, { [occKey('2026-10-05', mt)]: { key: 'x', status: 'a', at: 1, reason: '' } }, {}, at(2026, 10, 5, 12)).status).toBe('a');
+    expect(nextStatus('c')).toBe('p'); expect(nextStatus(null)).toBe('p');
+  });
+  it('attendance: a tap on any unmarked or inferred cell records Here — never Late on the first tap', () => {
+    const mt = snap.meetings.find((x) => x.weekday === 0 && x.courseId === 'E')!, d = new Date(2026, 9, 5), att = {}, days = {}, noon = at(2026, 10, 5, 12);
+    const e = effective(d, mt, att, days, noon);
+    expect(e).toMatchObject({ status: 'p', inferred: true }); // a class that ended with no record resolves to an inferred Here
+    expect(e.inferred ? nextStatus(e.status) : 'p').toBe('p'); // exactly what Grades.tsx:29 computes for the first tap
+    expect(nextStatus('p')).toBe('p'); // an explicit Here is a fixed point too, so no path can escalate to Late
+    const future = effective(d, mt, att, days, at(2026, 10, 5, 7));
+    expect(future.status && future.inferred ? nextStatus(future.status) : 'p').toBe('p');
+  });
+  it('attendance: tapping an inferred cell does not corrupt the record it did not mean to change', () => {
+    const mt = snap.meetings.find((x) => x.weekday === 0 && x.courseId === 'E')!, d = new Date(2026, 9, 5), noon = at(2026, 10, 5, 12);
+    const seen = { key: '', status: 'p' as const, at: 1, reason: '' }; // BUG 1 repro: the old cycle wrote 'l' here
+    const e = effective(d, mt, { [occKey('2026-10-05', mt)]: seen }, {}, noon);
+    expect(e.inferred).toBe(false); // it was an explicit record, so the tap writes Here
+    const written = e.status && e.inferred ? nextStatus(e.status) : 'p';
+    expect(written).toBe('p'); expect(seen.status).toBe('p');
+  });
+  it('attendance: the cycle still advances once a class is Here, so Late→Absent→Sick→Cancelled keeps working', () => {
+    expect(nextStatus('l')).toBe('a'); expect(nextStatus('a')).toBe('s'); expect(nextStatus('s')).toBe('c'); expect(nextStatus('c')).toBe('p');
+    expect(nextStatus('n')).toBe('p'); expect(nextStatus('t')).toBe('p');
+  });
+  it('analytics helpers', () => {
+    const t = (h: number, due: number) => task({ status: 2, completedAt: new Date(2026, 9, 1, h).getTime(), dueAt: due });
+    const done = [t(9, at(2026, 10, 2)), t(9, at(2026, 10, 1, 8))];
+    expect(doneByHour(done)[9]).toBe(2); expect(onTimeStats(done)).toMatchObject({ onTime: 1, late: 1, pct: 0.5 });
+    expect(streak([0, 1, 1, 0, 1, 1, 1])).toEqual({ current: 3, best: 3 }); expect(streak([1, 1, 0])).toEqual({ current: 2, best: 2 });
+    expect(level(0, 10)).toBe(0); expect(level(1, 10)).toBe(1); expect(level(10, 10)).toBe(4);
+  });
+});

@@ -1,0 +1,19 @@
+node_modules
+.expo
+dist
+*.log
+android/.gradle
+android/build
+android/app/build
+android/.cxx
+ios/Pods
+ios/build
+qa/shots/*.tmp
+.shots/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# sound scratch directory (audit M8)
+assets/sounds-candidates/
