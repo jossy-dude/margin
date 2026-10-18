@@ -39,12 +39,17 @@ function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: nu
   const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(tight ? 1 : 0);
   useEffect(() => { k.set(reduce ? (tight ? 1 : 0) : withTiming(tight ? 1 : 0, { duration: STEP, easing: EASE })); }, [tight, reduce, k]);
   const comfortable = useAnimatedStyle(() => ({ opacity: interpolate(k.get(), [0, 1], [1, 0]) })), tightStyle = useAnimatedStyle(() => ({ opacity: interpolate(k.get(), [0, 1], [0, 1]) }));
+  /* v0.2 — the two crossfading boxes used to BOTH be `position:absolute`, so neither took layout
+     height: the only in-flow child was the "Latest start" line, which therefore started at the top
+     of the container and sat directly under the floating boxes (Jossy's screenshot). The comfortable
+     box — the longer string, so it wraps at least as far — is now in NORMAL flow and reserves the
+     height; only the tight box floats on top. Everything after the hint flows below it. */
   return (
     <View>
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, comfortable]}>
+      <Animated.View pointerEvents="none" style={comfortable}>
         <HandBox seed="wl" shadow={false} fill={c.card} stroke={c.ink} style={{ padding: 10 }}><Txt f="bold" s={19}>Comfortable: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
       </Animated.View>
-      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, tightStyle]}>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, tightStyle]}>
         <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19}>Tight: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
       </Animated.View>
       <Txt f="serif" s={15} c="mut">Latest start: {startBy} (classes, sleep and quiet hours already excluded)</Txt>
