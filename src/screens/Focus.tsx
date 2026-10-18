@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Platform, Pressable, View, useWindowDimensions, type View as RNView } from 'react-native';
+import { BackHandler, Image, Platform, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { handPath } from '../ui/hand';
 import { hexA } from '../tokens/theme';
 import { useCoachSlot } from '../ui/onboard/coach';
 
-const PAGE = require('../../assets/images/journal-page.jpg');
+const PAGE = require('../../assets/images/page.jpg');
 function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { children?: React.ReactNode; style?: object; seed: string; fill?: string; sw?: number; shadow?: boolean }) {
   const { c } = useTheme();
   return <HandBox seed={seed} fill={fill ?? c.card} sw={sw} amp={1.5} shadow={shadow} style={style}>{children}</HandBox>;
@@ -292,17 +292,31 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
   const breakGate = canBreak(g) ? '' : g.phase === 'break' ? 'Already on a break.' : g.phase !== 'focus' ? 'Start a round first.' : !g.running ? 'Paused — resume the round to take a break.' : g.breaksUsed >= g.breaksAllowed ? 'No breaks left this round.' : `Breaks unlock after ${Math.round(MIN_BREAK_AFTER_MS / 60_000)} min of focus.`;
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
+      {/* The page fills the screen; only the content is in the fixed 440×1001 frame the dial is laid out in.
+          The photograph used to live *inside* that frame, so any phone whose proportions differ from
+          440:1001 showed a band of bare paper along its edges — which is every phone.
+
+          It is given the window's own dimensions rather than `StyleSheet.absoluteFill`: a box pinned by
+          left/right/top/bottom has no definite size to crop against, and React Native Web then leaves the
+          image at its intrinsic 841×1870 — which draws the top-left scrap of collage across a third of the
+          screen and pushes the rest of the page off the bottom. `cover` crops rather than letterboxing, and
+          the collage it has to keep is in the corners, where a few pixels of crop at the sides cost nothing. */}
+      <Image source={PAGE} style={{ position: 'absolute', left: 0, top: 0, width, height }} resizeMode="cover" />
+      {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
+          luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos and the dial's feather veil
+          (both painted in `desk` in dark) had nothing to match and the page read as the light one with the
+          brightness pulled down. Two layers
+          off the theme's own desk do the work instead: a deep scrim that takes the page to a ground ink can be
+          read on, then a thin lift of the theme's paper so the photograph's own relief survives as a plate
+          rather than disappearing into a brown. */}
+      {dark && (
+        <>
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.desk, opacity: 0.82 }]} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.paper, opacity: 0.07 }]} />
+        </>
+      )}
       <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
         <View style={{ width: 440, height: 1001, transformOrigin: '0% 0%', transform: [{ scale: s }] }}>
-          <Image source={PAGE} style={{ position: 'absolute', width: 440, height: 1001 }} />
-          {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
-              luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos and the dial's feather veil
-              (both painted in `desk` in dark) had nothing to match and the page read as the light one with the
-              brightness pulled down. Two layers
-              off the theme's own desk do the work instead: a deep scrim that takes the page to a ground ink can be
-              read on, then a thin lift of the theme's paper so the photograph's own relief survives as a plate
-              rather than disappearing into a brown. */}
-          {dark && <><View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.desk, opacity: 0.82 }} /><View pointerEvents="none" style={{ position: 'absolute', width: 440, height: 1001, backgroundColor: c.paper, opacity: 0.07 }} /></>}
           <Box seed="rnd" style={{ position: 'absolute', left: 32, top: 6 + topOff, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8, transform: [{ rotate: '-1.5deg' }] }}>
             <Txt f="bold" s={19} accessibilityLiveRegion="polite">Round {rn} · {phaseLabel}</Txt>
             <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1, 2, 3].map((i) => <View key={i} style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.6, borderColor: c.ink, backgroundColor: i < t.rounds % 4 || (t.rounds > 0 && t.rounds % 4 === 0) ? c.ink : 'transparent' }} />)}</View>
