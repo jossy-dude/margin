@@ -446,6 +446,48 @@ status page directly below it.
 
 ---
 
+## W6 — the coach-mark tour: the hole, the touch, and the ring
+
+The tour is an overlay over the live app: a scrim with a rectangle cut out of it, a ring round that
+rectangle, and a card that says what the control under it does. Everything it claims can be checked by
+reading the code except the four things Android decides for itself, which are here.
+
+- **W6.1** The scrim is really blocking. On any step with a ring (start with the `+`), tap the dim
+  paper well away from the hole — on the tab bar, on the page behind, on the card's shadow side.
+  Nothing happens at all: no page change, no sheet, no sound. `[uncertain]` — RNW and the Android
+  renderer disagree about what a plain `View` does with a touch, and only the device settles it.
+  **PASS / FAIL: ______**
+- **W6.2** The hole is really live. On the same step, tap the `+` **through** the hole. The Add sheet
+  comes up on the first tap, the tour advances to the sheet step, and the ring is now round the ✕.
+  A tap that lands on the hole's edge and does nothing means the hole is drawn one layer too high.
+  **PASS / FAIL: ______**
+- **W6.3** A screen reader can still take the tour. With TalkBack on: the scrim and the ring are not
+  spoken, the card is (step number first, politely), and double-tapping the focused `+` while the tour
+  is up activates the real button — an accessibility activation reaches the focused node rather than
+  being hit-tested through the overlay. If the last part fails, the tour is unusable without sight.
+  `[uncertain]`
+  **PASS / FAIL: ______**
+- **W6.4** The ring lands on the control on the first frame of a step, not the one after. The step to
+  watch is *Five pages, one bar* → *Tap once, then hold*: the tour moves the app to Week itself, and
+  `measureInWindow` answers after layout. A ring that appears a frame late on a page that just swapped
+  is a device-side measurement lag, not a layout bug.
+  **PASS / FAIL: ______**
+- **W6.5** Back walks the tour, and never the app. Hardware back steps to the previous step; on the
+  first step it ends the tour (and the app is left on Today, not exited). `[uncertain]` — the handler
+  is registered by the overlay while the navigator is mounted underneath it, and which of the two
+  Android routes the event to is the question.
+  **PASS / FAIL: ______**
+- **W6.6** The dial can still be dragged with the tour on top of it. On *The dial is a real dial*, drag
+  the ring through the hole: the round changes, the callout's own `5 min less` / `5 min more` do the
+  same, and the coach ring stays on the dial while it moves. `[uncertain]` — the pan is a gesture-
+  handler recognizer on a page that the overlay sits over, and only the device proves the two coexist.
+  **PASS / FAIL: ______**
+- **W6.7** At Android's 1.3× and 2.0× font scale the callout's body scrolls instead of clipping, the
+  card never grows over the ring, and every button on it stays a 44 dp target.
+  **PASS / FAIL: ______**
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

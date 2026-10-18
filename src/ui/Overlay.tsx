@@ -10,20 +10,24 @@ import { AddSheet, CourseSheet, MarkSheet, MeetingSheet, NoticeSheet, StatusShee
 import { SettingsSheet } from '../sheets/Settings';
 import { fx } from '../services/fx';
 import { FAB_GAP, TOAST_CLEAR, navHeight, navInset, toastBottom } from './fit';
+import { useCoachSlot } from './onboard/coach';
 
 /** The + button. A floating target with nothing under it to give, so it gets the deepest press in the
  *  app — 0.94, not the 0.97 a `Btn` gets — because a 62 dp cut square has no label to carry the press
  *  and only the silhouette can say it was touched. It deliberately does NOT fade in and out as sheets
  *  open: it holds `Pressable` + a hand-drawn `Svg`, so an `exiting` animation on it risks leaving a ghost
- *  button over a sheet, which is a worse outcome than a button that appears in one frame. */
+ *  button over a sheet, which is a worse outcome than a button that appears in one frame.
+ *
+ *  `tour` is the first stop of the tour: the ring goes round this button, and this button is what ends
+ *  the step. One hook call and one `ref` is the whole of the tour's footprint in this file. */
 function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1);
+  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), tour = useCoachSlot('fab');
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   /* The sheet opens on the down frame, like every other control — a sheet that waits for the lift is
      a sheet that waits for the user's own hold time. */
   const [actIn, actLift] = usePressIn(onPress);
   return (
-    <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={actLift}
+    <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={actLift} ref={tour}
       onPressIn={() => { actIn(); s.set(reduce ? 1 : withTiming(0.94, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.7 }))}
       style={{ position: 'absolute', right: 18, bottom: navHeight(bottom) + FAB_GAP }}>
       <Animated.View style={[{ width: 62, height: 62 }, face]}>

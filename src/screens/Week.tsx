@@ -12,6 +12,7 @@ import { effective, isCancelled, occEnd, occKey, occurrencesOn } from '../domain
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
+import { useCoachSlot } from '../ui/onboard/coach';
 
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
@@ -22,6 +23,10 @@ export function WeekScreen() {
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
   const due = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= mon && t.dueAt < mon + 7 * 86_400_000);
   const nowY = ((now - startOfDay(now)) / 60_000 - start) * PX;
+  /* The tour's attendance step rings the first block of the week — Monday's first class — which is the
+     block it says "tap once, then hold" about. It is a ref on a control that already exists; the tour
+     never opens this page for its own sake and never marks anything. */
+  const tourCell = useCoachSlot('week-class');
   /* Turning the week.
    *
    * The header buttons already play `fx.swipe()` — a paper rustle — and the whole grid used to swap in
@@ -69,13 +74,13 @@ export function WeekScreen() {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
             return (
               <View key={i} style={{ width: cw, height: H }}>
-{occ.map(({ date, meeting }) => {
+{occ.map(({ date, meeting }, oi) => {
               // A class stored 23:30–00:30 has negative raw minutes; it ends the NEXT day, so its column is
               // the height of the remainder of that first day. Without this it collapses to a 20dp stub at
               // the top of the column — see `periodsOn`, which applies the same rule to a `Period`.
               const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, mins = hm(meeting.end) - hm(meeting.start), h = (mins > 0 ? mins : mins + 24 * 60) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
                   return (
-                    <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
+                    <Pressable key={key} ref={i === 0 && oi === 0 ? tourCell : undefined} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
                       style={{ position: 'absolute', left: 2, right: 2, top, height: Math.max(20, h - 2) }}>
                       <HandBox seed={key} fill={x ? c.paper : hexA(c.acc, 0.2)} stroke={x ? c.mut : c.acc} shadow={false} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
