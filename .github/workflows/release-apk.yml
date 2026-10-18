@@ -42,10 +42,13 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Built from the committed android/ folder — no `expo prebuild`. The debug keystore in
-      # android/app/debug.keystore is what signs this, so it installs as a debug build.
+      # Built from the committed android/ folder — no `expo prebuild`. A debug build is a DEV CLIENT:
+      # it boots Expo's "start a server" screen and loads the app from a laptop. A release build bundles
+      # the JS inside the APK and boots straight into the app — that is the deliverable. It is signed
+      # with the debug keystore committed in android/app/debug.keystore, so it installs over a debug
+      # install without a signature conflict.
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+        run: cd android && ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Name the APK
         id: name
@@ -55,7 +58,7 @@ jobs:
           else
             VERSION="v$(node -p "require('./app.json').expo.version")"
           fi
-          SRC=android/app/build/outputs/apk/debug/app-debug.apk
+          SRC=android/app/build/outputs/apk/release/app-release.apk
           DST="margin-${VERSION}-android.apk"
           cp "$SRC" "$DST"
           echo "file=${DST}" >> "$GITHUB_OUTPUT"
