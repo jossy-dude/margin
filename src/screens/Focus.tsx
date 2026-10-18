@@ -73,19 +73,39 @@ const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
    with its 60 ticks and four outer numerals were dropped with the dial redesign: the teeth
    read as red dots and the ring as clutter, and the face itself had to be the dial — integrated, feathered
    at its edge, not a photograph pasted inside a mechanism. Motion stays where it still says something: the
-   pointer's per-second jolt, the slip's tick wash, the last-ten-seconds red pen border round that slip, and
+   pointer's sweep, the slip's tick wash, the last-ten-seconds red pen border round that slip, and
    the rim ring that shows elapsed time where a sector inside the face never could be read. Nothing on the face
-   scales — the numeral is the thing being read. */
+   scales — the numeral is the thing being read.
 
-function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { min: number; phase: string; leftMs: number; running: boolean; editable: boolean; onChange: (m: number, vel: number) => void; flowing: boolean }) {
+   The pointer's *per-second jolt* went with the countdown fix. It was a 1.6° kick every whole second,
+   and the thing it was meant to decorate moved 0.1° a second — sixteen times smaller — so the kick
+   landed forward and retreated past its own starting point. What the eye caught was that retreat: a
+   hand that twitched back and forth and appeared never to decrease. The tick survives where it is
+   actually legible, as the slip's paper flash and the sound; the hand now carries only the countdown. */
+
+function Dial({ min, phase, leftMs, editable, onChange }: { min: number; phase: string; leftMs: number; editable: boolean; onChange: (m: number, vel: number) => void }) {
   const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), focused = useScreenLive(), reduce = useReduceMotion();
-  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0), jolt = useSharedValue(0);
+  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0);
   /* The tour's dial step rings this same node — the one `measure` uses to find the dial's own centre, so
      the ring and the drag agree about where the control is without a second measurement of it. */
   useCoachSlot('focus-dial', ref);
   const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
-  const live = phase !== 'set', mins = live ? leftMs / 60_000 : min, ang = (mins >= 60 ? mins % 60 || 60 : mins) * 6;
-  const wholeSec = Math.floor(leftMs / 1000);
+  /* Where the hand points, and it has meant two different things in the two states the dial has.
+
+     **Setting** — the chosen duration on a 60-minute dial: 6° a minute, so the drag that changes it is
+     read in the same units as the number it is changing, and 90 min wraps to 30, the angle it shares
+     with every hour and a half. This mapping is untouched and the drag still drives it directly.
+
+     **Running** — the leading edge of the elapsed ring, not a minute mark. One clockwise revolution per
+     round whatever the round's length, from 12 back to 12.
+
+     Running used the same 6°-a-minute mapping as setting, which meant a 25-minute round travelled
+     150° and wound *backwards*, from V to XII — a third of the dial, in reverse, at 0.1° a second:
+     far too slow to read as motion and never arriving anywhere. Tied to the ring instead, the hand
+     sweeps the whole dial exactly once per round and sits at the far edge of the arc that says how far
+     into the round you are, so the two never disagree about the same quantity. */
+  const live = phase !== 'set';
+  const ang = live ? (1 - leftMs / (min * 60_000 || 1)) * 360 : (min >= 60 ? min % 60 || 60 : min) * 6;
   /* The dial has always been `accessibilityRole="adjustable"` with an `accessibilityValue` and
      increment/decrement actions, and TalkBack has always read it. The web build did not: React Native Web
      0.21 maps the four `aria-*` value props (and the flat `accessibilityValueNow`-style ones) and reads
@@ -109,8 +129,10 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
       ? { tabIndex: 0, onKeyDown: (e) => { const d = e.key === 'ArrowUp' ? 5 : e.key === 'ArrowDown' ? -5 : 0; if (!d) return; e.preventDefault?.(); onChange(Math.max(dialMin, Math.min(dialMax, min + d)), 300); } }
       : {};
   useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
-  useEffect(() => { if (drag.value) return; hand.value = reduce || live ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
-  useEffect(() => { if (running && !flowing) jolt.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 140 })); }, [wholeSec, running, flowing, jolt]);
+  /* Always a glide, running and setting alike — a 220 ms ease over an angle that moves 0.24° a second is
+     what makes a per-second step read as a continuous sweep instead of a tick. Reduce-motion is the
+     instant path, so the sweep is the thing being removed rather than the countdown behind it. */
+  useEffect(() => { if (drag.value) return; hand.value = reduce ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
   const pan = Gesture.Pan().enabled(editable).minDistance(0)
     .onBegin((e) => { drag.value = 1; last.value = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; })
     .onUpdate((e) => {
@@ -120,13 +142,15 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
       if (snap !== cur.value) { cur.value = snap; runOnJS(onChange)(snap, Math.abs(e.velocityX) + Math.abs(e.velocityY)); } else if ((raw.value === 5 || raw.value === 240) && before !== raw.value) runOnJS(onChange)(snap, -1);
     })
     .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
-  const handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value + jolt.value * 1.6}deg` }] }));
+  const handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value}deg` }] }));
   /** labels sit on the torn photograph, so their halo has to be the colour of what is actually behind them — the
    *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing.
    *  The feather veil is painted in the same halo for the same reason: it is what lets the face's circular clip
    *  edge dissolve into the page in both themes instead of reading as a pasted photograph. */
   const halo = dark ? c.desk : c.paper, ink = c.ink;
-  const progDeg = !live ? 0 : (1 - leftMs / (min * 60_000 || 1)) * 360, prog = progDeg / 360;
+  /* The ring is the same quantity as the hand — one formula, so the arc and its leading edge can never
+     be made to disagree by someone changing one of them. It is 0 while the dial is only being set. */
+  const progDeg = live ? ang : 0, prog = progDeg / 360;
   /** Per-instance, and sanitised. `useId()` is the right source of uniqueness — it is what `PaperBg` and
    *  `HStrip` already use — but React's ids can contain characters that are not legal in an XML name, and this
    *  markup is parsed as XML. A bare element id resolving another element's `url(#…)` is
@@ -156,7 +180,7 @@ function Dial({ min, phase, leftMs, running, editable, onChange, flowing }: { mi
           <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={hexA(ink, 0.16)} strokeWidth={PROG_W} />
           {prog > 0 && <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={c.acc} strokeWidth={PROG_W} strokeLinecap="round" strokeDasharray={`${PROG_C * prog} ${PROG_C}`} transform={`rotate(-90 ${C0} ${C0})`} />}
         </Svg>
-        <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
+        <Animated.View testID="focus-hand" pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
       </View>
     </GestureDetector>
   );
@@ -334,7 +358,7 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
               is the right number in both phases and the dial never restarts behind the break sticker.
               It comes from the advanced state, not the store: the store only commits on events, so the
               ring, the pointer hand and the last-10-seconds ring all froze if they read `t`. */}
-          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} running={t.running && t.phase === 'focus'} editable={editable} flowing={v.flowing}
+          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} editable={editable}
             onChange={(m, vel) => { if (vel < 0) { fx.bump(); return; } if (m !== t.planMin) { act.timerSetMin(m); fx.detent(vel); } }} />
           {/* the readout, off the face and onto the page: a slip below the dial's edge, clear of the face circle */}
           <TimeLabel readout={bigText} warnOn={warnOn} tick={tickSV} wash={wash} />

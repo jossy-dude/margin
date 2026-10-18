@@ -216,10 +216,12 @@ describe('C. the countdown still never pulses, and never burns frames it does no
     expect(clock).toContain('frame.setActive(ticking)');
     // and the static path never builds a frame loop at all
     expect(clock).toContain('if (!live && !hands && !fixed)');
-    // the Focus dial itself owns no frame loop any more: the escapement that needed one left with the redesign,
-    // and the jolt it kept is a 1 Hz effect on values, not a frame callback
+    // the Focus dial itself owns no frame loop any more: the escapement that needed one left with the
+    // redesign, and the per-second jolt it kept has since gone with the countdown fix — nothing on the
+    // dial is keyed to a tick now except the hand's own glide to wherever the readout has got to
     const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
     expect(focus).not.toContain('useFrameCallback');
+    expect(focus).not.toContain('jolt.value'); // the 1.6° kick drowned a hand that moves 0.24° a second
     // the host takes "am I on screen" from the navigator's focus context, never from a store-route
     // subscription: every page stays mounted, so watching `s.route` would re-render them on every tap
     for (const host of ['Today', 'Focus']) {
@@ -393,5 +395,41 @@ describe('E. the hand angles take the timezone offset as an argument', () => {
     // and it really does re-read: an AppState resume plus a poll while the loop runs
     expect(src).toMatch(/AppState\.addEventListener\('change'/);
     expect(src).toMatch(/setInterval\(read, 60_000\)/);
+  });
+
+  it('the countdown hand sweeps the whole dial exactly once per round, and only ever forwards', () => {
+    // Reported against a real device as "it just moves back and forth". It wasn't an oscillation — it was
+    // two separate faults stacking: the hand's real progress was 0.1° a second while a per-second kick of
+    // 1.6° fired over it, landing forward and retreating *past* its own start, so the only motion the eye
+    // caught was the retreat; and the hand's angle was a 6°-a-minute minute mark, so a 25-minute round
+    // travelled 150° and wound backwards from V to XII instead of sweeping the dial.
+    const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
+
+    // running: the leading edge of the elapsed ring — 0 at Start, 360 at the end, any round length
+    expect(focus).toContain('const ang = live ? (1 - leftMs / (min * 60_000 || 1)) * 360 : (min >= 60 ? min % 60 || 60 : min) * 6;');
+    // setting: untouched, because the drag maps to it directly and to the minutes it is changing
+    expect(focus).toContain('(min >= 60 ? min % 60 || 60 : min) * 6;');
+    // one formula behind both the arc and its leading edge, so the two cannot be made to disagree
+    expect(focus).toContain('const progDeg = live ? ang : 0');
+    // the hand carries nothing but the countdown now, and the props whose only job was the kick went with it
+    expect(focus).toContain('rotate: `${hand.value}deg`');
+    expect(focus).not.toContain('jolt.value');
+    expect(focus).not.toContain('jolt = useSharedValue');
+    expect(focus).toContain('function Dial({ min, phase, leftMs, editable, onChange }');
+
+    const ang = (min: number, leftMs: number) => (1 - leftMs / (min * 60_000 || 1)) * 360;
+    for (const min of [5, 25, 45, 90, 240]) {
+      const total = min * 60_000;
+      expect(ang(min, total)).toBeCloseTo(0, 6);        // Start: at 12
+      expect(ang(min, total / 2)).toBeCloseTo(180, 6);  // halfway: opposite 12, whatever the round's length
+      expect(ang(min, 0)).toBeCloseTo(360, 6);          // the end: back at 12, having gone right round once
+      let prev = -1;
+      for (let f = 0; f <= 10; f++) {
+        const a = ang(min, total - (total * f) / 10);
+        expect(a).toBeCloseTo((360 * f) / 10, 6);
+        expect(a).toBeGreaterThanOrEqual(prev);         // never backwards — that is the reported symptom
+        prev = a;
+      }
+    }
   });
 });

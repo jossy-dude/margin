@@ -73,11 +73,16 @@ describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not 
     expect(line).toContain(DIRECTIVE);
   });
 
-  it('the audit verdict on all eight: each names a deliberate omission, and the seventh still holds', () => {
-    // Each of the eight, with the reason it is not a silenced failure, restated here so the verdict
+  it('the audit verdict on all seven: each names a deliberate omission, and the workload one still holds', () => {
+    // Each of the seven, with the reason it is not a silenced failure, restated here so the verdict
     // lives with the code rather than only in qa/BUGS.md.
+    //
+    // There were eight. The first — the Focus pointer's per-second jolt — left with the countdown fix,
+    // and it had already outlived the directive it claimed to justify: the effect was keyed on `wholeSec`,
+    // a const of its own, so there was no `Math.floor(leftMs/1000)` left for a suppression to be "on
+    // purpose" about. A verdict recording a silence that does not exist is worse than a missing one —
+    // it is the exact failure this list is here to prevent — so it went rather than being reworded.
     const verdicts = [
-      'Focus.tsx:43  per-second jolt, keyed on Math.floor(leftMs/1000) on purpose',
       'Focus.tsx:100 sticker fall, keyed on [falling] so it runs once per fall',
       'Focus.tsx:137/147 fev event block: discrete timer events, not derived state',
       'Focus.tsx:143 the same block, [st.fev]',
@@ -86,12 +91,12 @@ describe('BUG-017 audit: the eighth suppression is a deliberate dep choice, not 
       'Book.tsx:41  navigator→store, keyed on [cur] so a BACK writes the store',
       'forms.tsx:61 workload memo, keyed on the four fields workload() actually reads',
     ];
-    expect(verdicts).toHaveLength(8);
+    expect(verdicts).toHaveLength(7);
     for (const v of verdicts) expect(v.length).toBeGreaterThan(20); // each names its reason
-    // the eighth is the one the audit was asked about: it must still be keyed on [cur]
+    // the navigator→store verdict is the one the audit was asked about: it must still be keyed on [cur]
     const bookLine = readFileSync(join(__dirname, '../navigation/Book.tsx'), 'utf8').split('\n').find((l) => l.includes('toStore('))!;
     expect(bookLine).toContain('}, [cur])');
-    // the seventh is the one BUG-017 called "latent risk": workload() must still read nothing but the
+    // the workload memo is the one BUG-017 called "latent risk": workload() must still read nothing but the
     // four memoised fields, or the memo is silently stale and the suppression hides it.
     const reminders = readFileSync(join(__dirname, '../domain/reminders.ts'), 'utf8');
     const body = reminders.slice(reminders.indexOf('export function workload'));
