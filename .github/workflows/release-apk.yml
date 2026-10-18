@@ -1,0 +1,78 @@
+name: Release APK
+
+# On demand only: by hand from the Actions tab, or when a v* tag is pushed.
+# Not on every push.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    # A wedged Gradle run must fail visibly instead of burning six hours of Actions time.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # RN 0.86 / AGP 8.x / Gradle 9 want JDK 17.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Toolchain versions
+        run: |
+          echo "== java =="; java -version
+          echo "== node =="; node --version
+          echo "== ANDROID_HOME = ${ANDROID_HOME:-unset} (runner-preinstalled SDK)"
+          ls "${ANDROID_HOME:-/nonexistent}/platforms" 2>/dev/null || true
+          chmod +x android/gradlew
+          echo "== gradle =="
+          (cd android && ./gradlew --version --no-daemon)
+
+      - name: Install
+        run: npm ci
+
+      # Built from the committed android/ folder — no `expo prebuild`. The debug keystore in
+      # android/app/debug.keystore is what signs this, so it installs as a debug build.
+      - name: Build APK
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Name the APK
+        id: name
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="v$(node -p "require('./app.json').expo.version")"
+          fi
+          SRC=android/app/build/outputs/apk/debug/app-debug.apk
+          DST="margin-${VERSION}-android.apk"
+          cp "$SRC" "$DST"
+          echo "file=${DST}" >> "$GITHUB_OUTPUT"
+          ls -l "$DST"
+
+      # Always uploaded, so a workflow_dispatch run can be downloaded without a tag.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: margin-android-apk
+          path: margin-*-android.apk
+          if-no-files-found: error
+
+      - name: Create release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: margin-*-android.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: true
