@@ -70,14 +70,29 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     const l = await r.load(); expect(l.settings.name).toBe('Sam'); expect(l.settings.soundOn).toBe(false); expect(l.settings.hapticsOn).toBe(true);
   });
   it('every mutation lands in the outbox in order, and ack drains it (sync-ready boundary)', async () => {
-    const r = await make(); await r.upsert('course', { id: 'X', name: 'X', room: '', teacher: '', goal: null, sort: 0 }); await r.remove('course', 'X'); await r.restore('course', 'X');
+    const r = await make(); await r.upsert('course', { id: 'X', name: 'X', room: '', teacher: '', goal: null, sort: 0, demo: false }); await r.remove('course', 'X'); await r.restore('course', 'X');
     const ob = await r.pendingOutbox(); expect(ob.map((o) => o.op)).toEqual(['put', 'del', 'restore']);
     await r.ackOutbox(ob[1]!.seq); expect((await r.pendingOutbox()).map((o) => o.op)).toEqual(['restore']);
   });
-  it('purgeDemo removes only demo history; reset empties everything; notif log tracks shown/opened', async () => {
+  it('purgeDemo removes the sample set from all six tables, and leaves the user\'s own rows alone', async () => {
     const r = await make(); await r.seed(seedSnapshot(NOW));
+    /* One row of each purgeable kind that the user created (`demo: false`, exactly what the forms
+       write). The seed itself is now flagged whole, so after the purge these six are what remains. */
+    await r.upsert('course', { id: 'mine-c', name: 'Real course', room: '', teacher: '', goal: null, sort: 9, demo: false });
+    await r.upsert('meeting', { id: 'mine-m', courseId: 'mine-c', weekday: 0, start: '09:00', end: '09:50', demo: false });
+    await r.upsert('notice', { id: 'mine-n', courseId: null, text: 'Bring it', dueAt: NOW, priority: 0, demo: false });
+    await r.upsert('mark', { id: 'mine-k', courseId: 'mine-c', name: 'Quiz', score: 80, weight: 10, on: true, sort: 0, demo: false });
+    await r.upsert('task', { ...task('mine-t'), demo: false });
+    await r.upsert('focus', { id: 'mine-f', taskId: null, courseId: 'mine-c', startedAt: NOW, endedAt: NOW + 600_000, focusSec: 600, breakSec: 0, overSec: 0, rounds: 1, planMin: 25, mode: 'focus', completed: true, demo: false });
+
     await r.purgeDemo(); const l = await r.load();
-    expect(l.tasks.some((t) => t.demo)).toBe(false); expect(l.focus).toHaveLength(0); expect(l.tasks.some((t) => t.id === 'seed-task-1')).toBe(true);
+    expect(l.courses.map((c) => c.id)).toEqual(['mine-c']);
+    expect(l.meetings.map((m) => m.id)).toEqual(['mine-m']);
+    expect(l.notices.map((n) => n.id)).toEqual(['mine-n']);
+    expect(l.marks.map((m) => m.id)).toEqual(['mine-k']);
+    expect(l.tasks.map((t) => t.id)).toEqual(['mine-t']);
+    expect(l.focus.map((f) => f.id)).toEqual(['mine-f']);
+
     await r.logNotif('n1', 'task', NOW, 'shown', NOW); await r.logNotif('n1', 'task', NOW, 'opened', NOW + 5);
     expect((await r.notifLog())[0]).toMatchObject({ id: 'n1', shownAt: NOW, openedAt: NOW + 5 });
     await r.reset(); expect((await r.load()).tasks).toHaveLength(0);
@@ -178,23 +193,25 @@ describe('repository transactions are serialised (audit C1)', () => {
  * repair. `IF NOT EXISTS` plus one transaction per migration is the fix; these are its three states.
  */
 describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
-  it('a fresh database reaches version 2 with both new tables and the focus columns', async () => {
+  it('a fresh database reaches version 3 with the new tables, the focus columns and the demo columns', async () => {
     const { sql, raw } = rawDb(); await new SqliteRepository(sql, () => NOW).init();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 2 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
     const cols = (t: string) => (raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name);
     expect(cols('trip')).toEqual(expect.arrayContaining(['id', 'started_at', 'ended_at', 'route', 'note']));
     expect(cols('alarm')).toEqual(expect.arrayContaining(['id', 'at', 'label', 'enabled', 'kind', 'task_id']));
     expect(cols('focus_session')).toEqual(expect.arrayContaining(['mode', 'completed']));
+    // migration 3's four columns, on exactly the four content tables it names
+    for (const t of ['course', 'meeting', 'notice', 'mark']) expect(cols(t)).toContain('demo');
   });
 
-  it('a v1 database keeps its rows, reaches version 2, and a second init is a no-op', async () => {
+  it('a v1 database keeps its rows, reaches version 3, and a second init is a no-op', async () => {
     const { sql, raw } = rawDb();
     raw.exec(MIGRATIONS[0] as string); raw.exec('PRAGMA user_version = 1');
     raw.run(`INSERT INTO task(${TASK_COLS}) VALUES('t1','Old task',NULL,'other',NULL,NULL,NULL,0,'',0,?,NULL,'[]','[]',0)`, [NOW]);
     raw.run("INSERT INTO focus_session(id,task_id,course_id,started_at,ended_at,focus_sec,break_sec,over_sec,rounds,plan_min,demo) VALUES('f1',NULL,NULL,?,?,600,0,0,1,25,0)", [NOW, NOW + 600_000]);
 
     const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op…
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 2 }]); // …and neither throw
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]); // …and neither throw
     const l = await r.load();
     expect(l.tasks.map((t) => t.id)).toEqual(['t1']); // the old row survived the ALTER
     expect(l.focus[0]).toMatchObject({ id: 'f1', focusSec: 600, planMin: 25, mode: 'focus', completed: false });
@@ -202,12 +219,40 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     expect(raw.all('SELECT mode, completed FROM focus_session')).toEqual([{ mode: 'focus', completed: 0 }]);
   });
 
+  /* Migration 3 is the one that touches tables the user's own data already lives in, so its upgrade
+     path is pinned separately: a database at version 2 gains the four `demo` columns, every
+     pre-existing row reads back as "not sample", and a purge leaves those rows untouched. */
+  it('a v2 database gains the demo columns with default 0, and a purge keeps its pre-existing rows', async () => {
+    const { sql, raw } = rawDb();
+    raw.exec(MIGRATIONS[0] as string); raw.exec(MIGRATIONS[1] as string); raw.exec('PRAGMA user_version = 2');
+    // rows written by a user before the flag existed — the exact shape migration 3 must not disturb
+    raw.run("INSERT INTO course(id,name,room,teacher,goal,sort) VALUES('c1','Real course','B-12','Hale',NULL,0)");
+    raw.run("INSERT INTO meeting(id,course_id,weekday,start_t,end_t) VALUES('m1','c1',0,'08:30','09:20')");
+    raw.run("INSERT INTO notice(id,course_id,body,due_at,priority) VALUES('n1','c1','Bring it',?,0)", [NOW]);
+    raw.run("INSERT INTO mark(id,course_id,name,score,weight,on_,sort) VALUES('k1','c1','Quiz',80,10,1,0)");
+
+    const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
+    // the columns appear, and every pre-existing row defaults to 0 — "not sample"
+    for (const t of ['course', 'meeting', 'notice', 'mark']) {
+      expect((raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name)).toContain('demo');
+      expect(raw.all(`SELECT demo FROM ${t}`)).toEqual([{ demo: 0 }]);
+    }
+
+    await r.purgeDemo();
+    const l = await r.load(); // …so the purge touches nothing the user owned
+    expect(l.courses.map((c) => c.id)).toEqual(['c1']);
+    expect(l.meetings.map((m) => m.id)).toEqual(['m1']);
+    expect(l.notices.map((n) => n.id)).toEqual(['n1']);
+    expect(l.marks.map((m) => m.id)).toEqual(['k1']);
+  });
+
   it('a database whose schema committed but whose version did not heals instead of rejecting forever', async () => {
     const { sql, raw } = rawDb();
     raw.exec(MIGRATIONS[0] as string); // the v0 kill window: the tables exist…
     expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 0 }]); // …and the marker says otherwise
     await expect(new SqliteRepository(sql, () => NOW).init()).resolves.toBeUndefined();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 2 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
   });
 });
 

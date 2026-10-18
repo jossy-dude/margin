@@ -31,7 +31,8 @@ export class MemoryRepository implements Repository {
     for (const [courseId, adj] of Object.entries(s.adjusts)) await this.upsert('adjust', { courseId, adj });
     await this.putSettings(s.settings);
   }
-  async purgeDemo() { for (const e of ['task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }
+  /** Same six tables as the SQLite adapter, same rows: the contract test runs both against one expectation. */
+  async purgeDemo() { for (const e of ['course', 'meeting', 'notice', 'mark', 'task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }
   async reset() { this.t.clear(); this.set = {}; this.ob = []; this.nl.clear(); }
   async schedNotif(id: string, kind: string, dueAt: number) { if (!this.nl.has(id)) this.nl.set(id, { id, kind, dueAt, shownAt: null, openedAt: null }); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) { await this.schedNotif(id, kind, dueAt); const r = this.nl.get(id)!; if (event === 'shown') r.shownAt = at; else r.openedAt = at; }

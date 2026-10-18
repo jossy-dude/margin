@@ -6,16 +6,16 @@ export interface Spec { table: string; pk: string; pkProp: string; fields: Field
 const f = (p: string, k: Kind, nullable = false, c?: string): Field => ({ p, k, nullable, c: c ?? p.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()) });
 
 export const SPECS: Record<EntityName, Spec> = {
-  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int')] },
-  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t')] },
+  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool')] },
+  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool')] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool')] },
   /* No `read` field: the flag was written and never read anywhere, so the object, the export column
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
-  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int')] },
-  mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int')] },
+  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int'), f('demo', 'bool')] },
+  mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int'), f('demo', 'bool')] },
   adjust: { table: 'adjust', pk: 'course_id', pkProp: 'courseId', fields: [f('courseId', 'text'), f('adj', 'real')] },
   /* `mode`/`completed` are bound here from W3 on: migration 2 (W1) added the columns, and until the finish
      path wrote them they were dead weight — a row loaded with the schema's own defaults and was exported
@@ -73,4 +73,14 @@ export const MIGRATIONS: string[] = [
    CREATE TABLE IF NOT EXISTS alarm(id TEXT PRIMARY KEY, at INTEGER NOT NULL, label TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1, kind TEXT NOT NULL DEFAULT 'leave', task_id TEXT, updated_at INTEGER, deleted_at INTEGER, rev INTEGER DEFAULT 0);
    ALTER TABLE focus_session ADD COLUMN mode TEXT NOT NULL DEFAULT 'focus';
    ALTER TABLE focus_session ADD COLUMN completed INTEGER NOT NULL DEFAULT 0;`,
+   /* Migration 3. `demo` marks the rows the first-run sample set seeded, so "Remove all sample data"
+      can delete exactly those and nothing else. It lands here as plain ALTERs and deliberately NOT in
+      migration 0's CREATE TABLEs: a fresh database runs every migration in order, so by the time these
+      ALTERs run the column would already exist if 0 declared it too, and the statement would fail with
+      "duplicate column". `DEFAULT 0` is the safety half: every row written before this migration is
+      the user's own, reads back as "not sample" and survives the purge untouched. */
+  `ALTER TABLE course ADD COLUMN demo INTEGER DEFAULT 0;
+   ALTER TABLE meeting ADD COLUMN demo INTEGER DEFAULT 0;
+   ALTER TABLE notice ADD COLUMN demo INTEGER DEFAULT 0;
+   ALTER TABLE mark ADD COLUMN demo INTEGER DEFAULT 0;`,
 ];

@@ -60,7 +60,7 @@ describe('reminder planner', () => {
      were still reading `meeting.end`, so the prompt fired a day early and the hours after midnight
      read as free time for a start-by nudge. */
   it('an overnight class runs into the next day: it blocks after midnight and "ended" rings at its real end', () => {
-    const night: Meeting = { id: 'm-night', courseId: 'E', weekday: 0, start: '23:30', end: '00:30' };
+    const night: Meeting = { id: 'm-night', courseId: 'E', weekday: 0, start: '23:30', end: '00:30', demo: false };
     /* Active hours widened across the whole clock so nothing but the class itself can move a
        reminder — 00:30 is otherwise "before active hours" and the shift would hide the bug. */
     const s: NotifSettings = { ...DEFAULT_NOTIF, activeFrom: '00:00', activeTo: '23:59', quietEnabled: false, duringClass: 'defer' };
@@ -258,7 +258,7 @@ describe('focus timer', () => {
 });
 
 describe('grades, attendance, analytics', () => {
-  const m = (score: number | null, weight: number, on = true) => ({ id: String(Math.random()), courseId: 'E', name: 'm', score, weight, on, sort: 0 });
+  const m = (score: number | null, weight: number, on = true) => ({ id: String(Math.random()), courseId: 'E', name: 'm', score, weight, on, sort: 0, demo: false });
   it('weighted total ignores unscored and switched-off marks and clamps the adjustment', () => {
     expect(total([m(80, 10), m(90, 10), m(null, 40), m(0, 40, false)])).toBe(85);
     expect(total([m(98, 10)], 5)).toBe(100); expect(total([m(null, 10)])).toBeNull();

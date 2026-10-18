@@ -2,8 +2,12 @@ export type AttStatus = 'p' | 'l' | 'n' | 'a' | 's' | 'c' | 't';
 export type DayStatus = 'p' | 'a' | 's' | 'c';
 export type TaskKind = 'assignment' | 'exam' | 'reading' | 'project' | 'lab' | 'deadline' | 'other';
 
-export interface Course { id: string; name: string; room: string; teacher: string; goal: number | null; sort: number }
-export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string }
+/** `demo` marks a row the first-run sample set seeded, so Settings can remove the sample semester
+ *  without touching the user's own data (Task and FocusSession already carry it). The rule: anything
+ *  the user creates or edits is written with `demo: false` — you touched it, it's yours — and only
+ *  `seed.ts` sets it to `true`. */
+export interface Course { id: string; name: string; room: string; teacher: string; goal: number | null; sort: number; demo: boolean }
+export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean }
 export interface AttRecord { key: string; status: AttStatus; at: number; reason: string }
 export interface DayMark { date: string; status: DayStatus; at: number; reason: string }
 /** A reminder is either an absolute moment, or an offset before the due date. */
@@ -18,8 +22,8 @@ export interface Task {
   createdAt: number; completedAt: number | null;
   reminders: ReminderSpec[]; subtasks: Subtask[]; demo: boolean;
 }
-export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3 }
-export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number }
+export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean }
+export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number; demo: boolean }
 export interface Adjust { courseId: string; adj: number }
 /** A saved study session. `mode`/`completed` are the two columns DECISIONS D2 added to `focus_session`
  *  instead of forking a `study_sessions` table (W1's migration 2). Like `Alarm.kind` below, `mode` is a free

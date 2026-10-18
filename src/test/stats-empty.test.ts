@@ -26,11 +26,14 @@ async function windowTotals(snap: { focus: FocusSession[]; tasks: Task[] }) {
   };
 }
 
-/** The dataset after Settings → Data & export → Clear demo history, through the real purge path. */
+/** The dataset after Settings → Data & export → Remove all sample data, through the real purge path.
+ *  The one finished task that survives is the user's own (`demo: false`, what a form save writes) —
+ *  with the whole seed flagged, that row is the only kind the purge now leaves behind. */
 async function afterPurge() {
   const repo = new MemoryRepository(() => NOW);
   await hydrate(repo);
   await repo.seed(seedSnapshot(NOW));
+  await repo.upsert('task', { id: 'mine-t', title: 'Real task', courseId: null, kind: 'assignment', dueAt: NOW - DAY, startAt: null, estimateMin: null, priority: 0, notes: '', status: 2, createdAt: NOW - 2 * DAY, completedAt: NOW - DAY, reminders: [], subtasks: [], demo: false });
   await repo.purgeDemo();
   const s = await repo.load();
   return {
@@ -41,7 +44,7 @@ async function afterPurge() {
 }
 
 describe('the Stats empty-state hint actually fires (BUG-024)', () => {
-  it('after Clear demo history — the exact state the device run photographed', async () => {
+  it('after Remove all sample data — the exact state the device run photographed', async () => {
     const s = await afterPurge();
     // the shipped state: every demo focus session gone, one non-demo finished task surviving
     expect(s.focusSessions).toBe(0);
@@ -61,7 +64,7 @@ describe('the Stats empty-state hint actually fires (BUG-024)', () => {
     expect(statsEmptyHint({ focusMinutes: s.focusMinutes, finished: s.finished })).not.toBe(null);
   });
 
-  it('a genuinely empty database gets V13\'s exact wording', () => {
+  it('a genuinely empty database gets the exact empty-state wording', () => {
     expect(statsEmptyHint({ focusMinutes: 0, finished: 0 })).toBe('Finish a task or a focus session and the charts fill in.');
   });
 

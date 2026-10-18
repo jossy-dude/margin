@@ -158,7 +158,7 @@ export const act = {
    *  `open({ t: 'settings' })` then `settingsPush('clock')` — but each is its own `set()`, and a
    *  `set()` is a synchronous broadcast to every `useStore` subscriber in the app plus its own sound.
    *  Two chained calls therefore cost two full broadcasts and two haptics on one tap: the clock face
-   *  on Today does exactly this to reach Clock face, which is the press the owner reports as "very
+   *  on Today does exactly this to reach Clock face, which is the press users report as "very
    *  slow and low response" between the finger-down and the sheet appearing.
    *
    *  React batches the *renders* these two writes cause, so the visible symptom was never a wrong
@@ -255,7 +255,9 @@ export const act = {
   timerPump(now: number) {
     const t = state.timer; if (!t.running) return; const r = advance(t, now); if (r.events.length) { set({ timer: r.state }); applyEvents(r.events); }
   },
-  async purgeDemo() { await persist(R().purgeDemo()); set((s) => ({ tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Demo history cleared'); resync(); },
+  /** Optimistic half of the repository purge: the same six collections the SQL DELETEs cover, so the
+   *  screen cannot keep showing sample rows the database no longer has. */
+  async purgeDemo() { await persist(R().purgeDemo()); set((s) => ({ courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Sample data removed'); resync(); },
   async resetAll() {
     try {
       const r = await ensureRepo();

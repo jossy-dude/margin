@@ -16,7 +16,7 @@ it('INSERT OR REPLACE keeps incrementing rev (needed for sync conflict detection
   const db = new DatabaseSync(':memory:');
   const sql: SqlDb = { execAsync: async (s) => { db.exec(s); }, runAsync: async (s, p = []) => db.prepare(s).run(...p), getAllAsync: async <T,>(s: string, p: any[] = []) => db.prepare(s).all(...p) as T[], withTransactionAsync: async (f) => { db.exec('BEGIN'); await f(); db.exec('COMMIT'); } };
   const r = new SqliteRepository(sql, () => 1); await r.init();
-  const c = { id: 'X', name: 'a', room: '', teacher: '', goal: null, sort: 0 };
+  const c = { id: 'X', name: 'a', room: '', teacher: '', goal: null, sort: 0, demo: false };
   await r.upsert('course', c); await r.upsert('course', { ...c, name: 'b' }); await r.upsert('course', { ...c, name: 'c' });
   expect((await sql.getAllAsync<{ rev: number }>("SELECT rev FROM course WHERE id='X'"))[0]?.rev).toBe(3);
   await r.remove('course', 'X'); expect((await sql.getAllAsync<{ rev: number }>("SELECT rev FROM course WHERE id='X'"))[0]?.rev).toBe(4);

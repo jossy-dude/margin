@@ -42,8 +42,9 @@ export function streak(values: number[]): { current: number; best: number } {
  * Which empty state Stats should show, or `null` when there is data to look at.
  *
  * The two halves are independent, and the guard used to `&&` them, so it needed *both* to be empty at
- * once. Nothing in the app can reach that state: "Clear demo history" removes every demo focus
- * session but keeps your own finished tasks, so two focus charts sat permanently blank with no
+ * once. The app reaches the half-empty state easily: "Remove all sample data" takes the sample history
+ * with it, leaving whatever mix of your own finished tasks and focus sessions you actually have — which
+ * can be one half and not the other, and used to leave two focus charts permanently blank with no
  * explanation. Each half is measured over the 105-day window the heatmaps actually draw, not over the
  * whole table — a session from last year is not data the chart can show.
  */

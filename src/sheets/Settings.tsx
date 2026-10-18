@@ -70,7 +70,7 @@ const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: st
 const Seg = <T extends string>({ value, opts, onChange }: { value: T; opts: [T, string][]; onChange: (v: T) => void }) => <Row>{opts.map(([v, l]) => <Chip key={v} label={l} on={value === v} onPress={() => onChange(v)} small />)}</Row>;
 /** A caption and a stepper on one non-wrapping row. The caption gets `flex: 1` + `minWidth: 0` so it takes the
  *  space the fixed-width stepper leaves and wraps to a second line instead of pushing the stepper off the edge
- *  — a 166 dp stepper plus an unshrinkable "“When I get home”" overflowed a 320 dp sheet by ~30 dp (V2, V20). */
+ *  — a 166 dp stepper plus an unshrinkable "“When I get home”" overflowed a 320 dp sheet by ~30 dp. */
 const Labelled = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
     <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0 }} numberOfLines={2}>{label}</Txt>
@@ -122,7 +122,7 @@ export function SettingsSheet() {
    *  the paragraph explaining it are gone, and `toured()` still reads `undefined` as "not seen" — which is
    *  what a settings row written before the tour existed holds. */
   const onboarded = s.onboarded, replay = (v: number) => act.setSettings({ onboarded: v });
-  const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false), [surePurge, setSurePurge] = useState(false);
   /* The action test really writes — that is the point of it — so it asks twice, like Reset and the
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
    * to fire against an unmounted component. */
@@ -135,6 +135,7 @@ export function SettingsSheet() {
      cleared, so the count stays live without ever polling. */
   const crashes = useSyncExternalStore(subscribeCrashes, crashCount, crashCount);
   useEffect(() => { if (!sure) return; const t = setTimeout(() => setSure(false), 4000); return () => clearTimeout(t); }, [sure]);
+  useEffect(() => { if (!surePurge) return; const t = setTimeout(() => setSurePurge(false), 4000); return () => clearTimeout(t); }, [surePurge]);
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 4000); return () => clearTimeout(t); }, [armed]);
   /* The greeting field used to `set({name})` on EVERY keystroke — a whole-store write that re-rendered every
      screen while you typed. It now edits locally and commits after 400 ms of quiet (and on unmount, so closing
@@ -147,9 +148,9 @@ export function SettingsSheet() {
   const doExport = async (f: ExportFormat, tg: ExportTarget) => { setBusy(`${f}${tg}`); try { const r = await runExport(f, tg, snapshotOf(getState())); toast(r.ok ? `Exported ${r.name}` : 'Sharing is not available on this device'); } catch (e) { const m = String((e as Error)?.message ?? e); if (!/cancel/i.test(m)) toast(`Export failed: ${m.slice(0, 70)}`); } setBusy(null); };
   let body: React.ReactNode = null;
   if (page === 'root') body = (<>
-    {/* `settings.name` is what Today greets the user with. It ships as the developer's own first name in
-        domain/defaults.ts (not editable from here), so without this field the app would greet every user by
-        that name forever. Blank is allowed: Today drops the name and just says "Good morning". */}
+    {/* `settings.name` is what Today greets the user with. It ships blank in domain/defaults.ts, so a
+        new install gets the bare greeting until this field supplies a name. Blank stays allowed: Today
+        drops the name and just says "Good morning". */}
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette} · ${FACES.find((f) => f.id === s.clock)?.n}`} to="appearance" />
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
@@ -264,7 +265,7 @@ export function SettingsSheet() {
     </HandBox>
     {/* Buttons above the fold: this is a bottom sheet, so anything below them is a scroll away. */}
     <Row>
-      {ns?.permission === 'denied' && !ns.canAskAgain ? <Btn small icon="gear" label="Open phone settings" a11y="Open this phone's app settings, where notifications for Marginalia can be turned back on" onPress={() => { void Linking.openSettings().catch(() => toast('This phone would not open its settings')); }} />
+      {ns?.permission === 'denied' && !ns.canAskAgain ? <Btn small icon="gear" label="Open phone settings" a11y="Open this phone's app settings, where notifications for Margin can be turned back on" onPress={() => { void Linking.openSettings().catch(() => toast('This phone would not open its settings')); }} />
         : <Btn small icon="bell" label="Allow notifications" disabled={ns?.permission === 'granted' || ns?.permission === 'unavailable'} a11y={ns?.permission === 'granted' ? 'Allow notifications. Already allowed.' : 'Ask this phone for permission to send notifications'} onPress={async () => { const got = await notifs.ensurePermission(true); await refreshNotifStatus(); toast(got === 'granted' ? 'Allowed.' : got === 'denied' ? 'Blocked. Only the phone&rsquo;s settings can undo that.' : 'The phone has not answered yet.'); }} />}
       <Btn small kind="ghost" label="Rebuild queue" onPress={async () => {
         toast('Rebuilding the reminder queue…');
@@ -328,11 +329,15 @@ export function SettingsSheet() {
     {(['xlsx', 'csv', 'json'] as ExportFormat[]).map((f) => (
       <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
         <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
-    <Hair /><Btn kind="ghost" icon="trash" label="Clear demo history" onPress={() => void act.purgeDemo()} />
-    {/* Only the *history* is flagged as demo: the subjects, timetable, notes and open tasks that ship
-        with the app carry no such flag, so "your own data stays" would read as "there is no demo left"
-        on a fresh install, where everything visible is still the sample set. Name what stays. */}
-    <Txt f="serif" s={14.5} c="mut">Removes the sample finished tasks and focus sessions that make the Stats charts look alive on day one. Your own data stays — and so do the sample subjects, timetable, notes and open tasks, which are the app&rsquo;s starting point. Settings → Reset replaces the whole demo set.</Txt>
+    {/* The purge arming is separate from Reset's: sharing one flag would make whichever button you
+        armed second fire on its very first tap. Both disarm on their own timer, so closing the sheet
+        mid-countdown cannot leave either armed. */}
+    <Hair /><Btn kind={surePurge ? 'danger' : 'ghost'} icon="trash" label={surePurge ? 'Tap again to remove the sample data' : 'Remove all sample data'} onPress={armPurge} />
+    {/* The flag lives on every row the sample set seeds (subjects, timetable, tasks — open and
+        finished — notes, grades and focus sessions), so the copy can promise the whole sample
+        semester and nothing else. An edit clears the flag (see forms.tsx), so "anything you created
+        or edited" is exactly what survives. */}
+    <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history the app starts with. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset replaces the whole demo set with a fresh copy.</Txt>
   </>);
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
@@ -343,7 +348,7 @@ export function SettingsSheet() {
   if (page === 'about') body = (<>
     <Txt f="serif" s={16} c="mut">This replaces everything with the original demo set and default settings. It cannot be undone, so export first if you care about your data.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Reset to demo set'} onPress={armReset} />
-    <Txt f="serif" s={14} c="mut">Marginalia 1.0 · local-first, no account, no network needed.</Txt>
+    <Txt f="serif" s={14} c="mut">Margin 1.0 · local-first, no account, no network needed.</Txt>
   </>);
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 
@@ -355,6 +360,12 @@ export function SettingsSheet() {
     setSure(false);
     void act.resetAll();
     act.settingsPop();
+  }
+  /** The purge gets the same two-tap guard as Reset, on its own flag: one tap destroys nothing. */
+  function armPurge() {
+    if (!surePurge) { setSurePurge(true); return; }
+    setSurePurge(false);
+    void act.purgeDemo();
   }
 }
 const clearSettingsPath = () => { while (getState().settingsPath.length) act.settingsPop(); };
@@ -376,7 +387,7 @@ const DEMO_TOTAL = 50 * 60_000, DEMO_P = 30 / 50;
  * bar would show nothing at all. `isBarKind` is the app's own discriminator, so exactly one row takes
  * the live path plus whichever instrument is selected: two live previews, not seventeen.
  *
- * On ids (prompt.md R11): this page is exactly where a shared SVG id would collide, and A2's answer was
+ * On ids: this page is exactly where a shared SVG id would collide, and the fix chosen was
  * to remove the need — the instruments emit no gradients, no clips and no patterns, so there is nothing
  * to make unique. `bars.test.ts` asserts that across all 16 instruments.
  */

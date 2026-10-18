@@ -15,10 +15,10 @@ beforeEach(() => jest.useFakeTimers()); // the store's resync/toast timers would
 afterEach(() => jest.useRealTimers());
 
 const task = (id: string): Task => ({ id, title: 'Problem set 6', courseId: null, kind: 'assignment', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false });
-const course = (id: string): Course => ({ id, name: 'Organic Chemistry', room: 'B-12', teacher: 'Hale', goal: null, sort: 0 });
-const meeting = (id: string): Meeting => ({ id, courseId: 'E', weekday: 0, start: '09:00', end: '09:50' });
-const mark = (id: string): Mark => ({ id, courseId: 'E', name: 'Quiz 3', score: 70, weight: 10, on: true, sort: 0 });
-const notice = (id: string): Notice => ({ id, courseId: null, text: 'Bring the sources', dueAt: NOW, priority: 0 });
+const course = (id: string): Course => ({ id, name: 'Organic Chemistry', room: 'B-12', teacher: 'Hale', goal: null, sort: 0, demo: false });
+const meeting = (id: string): Meeting => ({ id, courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
+const mark = (id: string): Mark => ({ id, courseId: 'E', name: 'Quiz 3', score: 70, weight: 10, on: true, sort: 0, demo: false });
+const notice = (id: string): Notice => ({ id, courseId: null, text: 'Bring the sources', dueAt: NOW, priority: 0, demo: false });
 
 /** One case per create-form, driven the way a fast double-tap drives it: the same record saved twice,
  *  before the sheet's ~200 ms close animation has finished. */

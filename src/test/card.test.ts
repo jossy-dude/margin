@@ -34,10 +34,10 @@ const TUE_CLASSES: Period[] = [
   { start: at('13:15'), end: at('14:05'), label: 'Database Systems', cancelled: false },
 ];
 const COURSES: Course[] = [
-  { id: 'C', name: 'Computer Programming', room: 'C-4', teacher: 'Reyes', goal: null, sort: 0 },
-  { id: 'E', name: 'Intro to Economics', room: 'B-12', teacher: 'Hale', goal: null, sort: 1 },
-  { id: 'B', name: 'Database Systems', room: 'L-4', teacher: 'Nkemi', goal: null, sort: 2 },
-  { id: 'X', name: 'Personal Seminar', room: '', teacher: '', goal: null, sort: 3 },
+  { id: 'C', name: 'Computer Programming', room: 'C-4', teacher: 'Reyes', goal: null, sort: 0, demo: false },
+  { id: 'E', name: 'Intro to Economics', room: 'B-12', teacher: 'Hale', goal: null, sort: 1, demo: false },
+  { id: 'B', name: 'Database Systems', room: 'L-4', teacher: 'Nkemi', goal: null, sort: 2, demo: false },
+  { id: 'X', name: 'Personal Seminar', room: '', teacher: '', goal: null, sort: 3, demo: false },
 ];
 
 /* ── the model of `deckOf` in src/screens/Today.tsx ───────────────────────────
@@ -153,7 +153,7 @@ describe('time remaining in the active class, from the derivation that ships', (
 describe('a class that runs past midnight', () => {
   /** 23:30 → 00:30, the way the app's own data model stores it. */
   const late: Period = { start: at('23:30'), end: at('00:30'), label: 'Evening Seminar', cancelled: false };
-  const LATE_OCC: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-late', courseId: 'X', weekday: 1, start: '23:30', end: '00:30' } }];
+  const LATE_OCC: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-late', courseId: 'X', weekday: 1, start: '23:30', end: '00:30', demo: false } }];
 
   it('raw, the pair IS inverted — atTime stamps both ends on the day it occurs', () => {
     expect(late.end).toBeLessThan(late.start);
@@ -171,7 +171,7 @@ describe('a class that runs past midnight', () => {
   });
 
   it('an ordinary same-day class is untouched by that rule', () => {
-    const ok: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-ok', courseId: 'X', weekday: 1, start: '09:00', end: '10:00' } }];
+    const ok: Occurrence[] = [{ date: new Date(TUE), meeting: { id: 'm-ok', courseId: 'X', weekday: 1, start: '09:00', end: '10:00', demo: false } }];
     const p = periodsOn(ok, COURSES, {}, {})[0]!;
     expect(p.end - p.start).toBe(60 * 60_000);
   });
@@ -300,7 +300,7 @@ describe('nothing to show is still a card, not a gap', () => {
   });
 
   it('a course with no room is named without a dangling separator', () => {
-    const occ = occurrencesAt(TUE).concat([{ date: new Date(TUE), meeting: { id: 'm-x', courseId: 'X', weekday: 1, start: '14:00', end: '14:50' } }]);
+    const occ = occurrencesAt(TUE).concat([{ date: new Date(TUE), meeting: { id: 'm-x', courseId: 'X', weekday: 1, start: '14:00', end: '14:50', demo: false } }]);
     const periods = TUE_CLASSES.concat([{ start: at('14:00'), end: at('14:50'), label: 'Personal Seminar', cancelled: false }]);
     expect(afterOf(periods, COURSES, occ, 2)).toBe('Personal Seminar');
   });
@@ -337,7 +337,7 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('<DayBar kind={bar} periods={periods}');
   });
 
-  it('the countdown ticks at 1 Hz only while Today is on screen (prompt.md V17)', () => {
+  it('the countdown ticks at 1 Hz only while Today is on screen', () => {
     expect(src).toContain('const t = useNow(live ? 1000 : 60_000);');
     expect(src).toContain('live={focused}'); // the navigator's focus context, never a store-route sub
   });
@@ -475,9 +475,9 @@ describe('RunningTimer on Today — the page you land on after leaving Focus', (
 let _seed: Snapshot | null = null;
 const seed = () => (_seed ??= seedSnapshot(at('09:24')));
 function occurrencesAt(day: number): Occurrence[] {
-  return [{ date: new Date(day), meeting: { id: 'm-1-09:00-C', courseId: 'C', weekday: 1, start: '09:00', end: '09:50' } },
-    { date: new Date(day), meeting: { id: 'm-1-10:55-E', courseId: 'E', weekday: 1, start: '10:55', end: '11:45' } },
-    { date: new Date(day), meeting: { id: 'm-1-13:15-B', courseId: 'B', weekday: 1, start: '13:15', end: '14:05' } }];
+  return [{ date: new Date(day), meeting: { id: 'm-1-09:00-C', courseId: 'C', weekday: 1, start: '09:00', end: '09:50', demo: false } },
+    { date: new Date(day), meeting: { id: 'm-1-10:55-E', courseId: 'E', weekday: 1, start: '10:55', end: '11:45', demo: false } },
+    { date: new Date(day), meeting: { id: 'm-1-13:15-B', courseId: 'B', weekday: 1, start: '13:15', end: '14:05', demo: false } }];
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -514,8 +514,8 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     const s = src();
     // the three lines the clock row is made of, in order. The clock now lives inside the
     // `periods.length > 0` branch and is taped to the deck's corner, so the slice runs to the
-    // card it is taped to. Its tag is the subscribing `HeaderClock` leaf (lag-diagnosis-2026-10-14,
-    // F2), which is what keeps a clock-face write from re-rendering this page at all.
+    // card it is taped to. Its tag is the subscribing `HeaderClock` leaf (F2),
+    // which is what keeps a clock-face write from re-rendering this page at all.
     const clock = s.slice(s.indexOf('<HeaderClock size={CLOCK}'), s.indexOf('<ActiveCard'));
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
     // the time line is the one that survives: a wall clock, which the deck's duration is not. W4 threads

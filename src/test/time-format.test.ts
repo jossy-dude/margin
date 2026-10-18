@@ -185,10 +185,10 @@ describe('deckOf (source) — the W4 shape, cross-checked against card.test.ts\'
 
 describe('a class that runs past midnight, from the shipped dayBlock that feeds deckOf', () => {
   /** Mon 23:50 → Tue 00:10, the way the app stores it: both ends stamped on the Mon occurrence. */
-  const NIGHT: Meeting = { id: 'm-night', courseId: 'X', weekday: 0, start: '23:50', end: '00:10' };
-  const MORNING: Meeting = { id: 'm-morn', courseId: 'X', weekday: 1, start: '09:00', end: '09:50' };
+  const NIGHT: Meeting = { id: 'm-night', courseId: 'X', weekday: 0, start: '23:50', end: '00:10', demo: false };
+  const MORNING: Meeting = { id: 'm-morn', courseId: 'X', weekday: 1, start: '09:00', end: '09:50', demo: false };
   const MEETINGS = [NIGHT, MORNING];
-  const COURSES: Course[] = [{ id: 'X', name: 'Evening Seminar', room: '', teacher: '', goal: null, sort: 0 }];
+  const COURSES: Course[] = [{ id: 'X', name: 'Evening Seminar', room: '', teacher: '', goal: null, sort: 0, demo: false }];
 
   it('the night class ends 20 minutes into the next day, not "before it starts"', () => {
     const p = periodsOn(occurrencesOn(new Date(MON), MEETINGS), COURSES, {}, {})[0]!;

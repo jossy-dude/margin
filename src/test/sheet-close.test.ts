@@ -277,6 +277,29 @@ describe('a form that writes its row also dismisses itself', () => {
 });
 
 /**
+ * "You touched it, it's yours": every form save writes `demo: false`, so a sample row the user edits
+ * survives "Remove all sample data". The seed flags these rows `demo: true`, so each case below proves
+ * the flip on the real save path — the store write the shipped button makes, not a source string.
+ */
+describe('editing a sample row makes it the user\'s own (the flag clears on save)', () => {
+  const cases: [string, Parameters<typeof open>[0], string, () => { demo?: boolean } | undefined][] = [
+    ['subject', { t: 'course', id: 'E' }, 'Save', () => getState().courses.find((c) => c.id === 'E')],
+    ['class', { t: 'meeting', id: 'm-0-08:30-E' }, 'Save', () => getState().meetings.find((m) => m.id === 'm-0-08:30-E')],
+    ['mark', { t: 'mark', courseId: 'E', id: 'seed-mark-E-0' }, 'Save', () => getState().marks.find((m) => m.id === 'seed-mark-E-0')],
+    ['note', { t: 'notice', id: 'seed-note-1' }, 'Pin it', () => getState().notices.find((n) => n.id === 'seed-note-1')],
+    ['task', { t: 'task', id: 'seed-task-2' }, 'Save', () => getState().tasks.find((t) => t.id === 'seed-task-2')],
+  ];
+  for (const [name, sheet, button, row] of cases) {
+    it(`the ${name} form: the row arrives flagged as sample and leaves as the user's own`, async () => {
+      const s = await open(sheet);
+      expect(row()?.demo).toBe(true); // what the seed set…
+      await s.press(button);
+      expect(row()?.demo).toBe(false); // …and what one save through the form clears
+    });
+  }
+});
+
+/**
  * The wiring assertion, because a rendering test cannot see WHY it failed. `useSheet()` is a
  * context read and `Sheet` is the provider, so the only correct arrangement is for the body to stop
  * reaching through context for its own closer at all.

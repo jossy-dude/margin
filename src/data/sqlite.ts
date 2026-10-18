@@ -130,7 +130,10 @@ export class SqliteRepository implements Repository {
       for (const [k, v] of Object.entries(s.settings)) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
     }));
   }
-  async purgeDemo() { await this.ser(() => this.db.withTransactionAsync(async () => { await this.db.runAsync('DELETE FROM task WHERE demo=1'); await this.db.runAsync('DELETE FROM focus_session WHERE demo=1'); })); }
+  /* All six demo-bearing tables. The four content tables came with migration 3; tasks and focus
+     sessions were the first two. One transaction, so a half-applied purge cannot leave a sample
+     timetable behind its (now gone) sample subjects. */
+  async purgeDemo() { await this.ser(() => this.db.withTransactionAsync(async () => { for (const t of ['course', 'meeting', 'notice', 'mark', 'task', 'focus_session']) await this.db.runAsync(`DELETE FROM ${t} WHERE demo=1`); })); }
   async reset() { await this.ser(() => this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); })); }
   async schedNotif(id: string, kind: string, dueAt: number) { await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
