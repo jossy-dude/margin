@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { MemoryRepository } from '../data/memory';
 import { hydrate, getState, set, stopResync } from '../store/store';
 import { nudgeStep, nudgeWord } from '../domain/timer';
+import { APP_VERSION } from '../domain/version';
 import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
 import { clearCrashes, recordCrash, type CrashEntry } from '../ui/crashlog';
@@ -436,5 +437,129 @@ describe('a save or a data problem names what the app was doing, not an invented
     expect(s.text()).toContain('While saving');
     expect(s.text()).toContain('On Today');
     expect(s.text()).not.toContain('On task');
+  });
+});
+
+/* ───── v0.3.1: the semester range and the import/safety rows ───── */
+/** The old editor had month/day steppers only, so the year was unchangeable and there was no end date
+ *  at all. These render the page and drive the controls the way a thumb would. */
+describe('Settings → Attendance & semester carries both dates and a year (v0.3.1)', () => {
+  const press = async (r: TestRenderer.ReactTestRenderer, label: string) => {
+    const n = r.root.findAll((x) => (x.props as { accessibilityLabel?: string }).accessibilityLabel === label && typeof (x.props as { onPress?: unknown }).onPress === 'function')[0];
+    if (!n) throw new Error(`no control labelled "${label}"`);
+    await act(async () => { (n.props as { onPress: () => void }).onPress(); });
+  };
+  const tap = async (r: TestRenderer.ReactTestRenderer, testID: string) => {
+    const n = r.root.findAll((x) => (x.props as { testID?: string }).testID === testID && typeof (x.props as { onPressIn?: unknown }).onPressIn === 'function')[0];
+    if (!n) throw new Error(`no switch with testID "${testID}"`);
+    await act(async () => { (n.props as { onPressIn: () => void }).onPressIn(); });
+  };
+  const attendance = async () => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: ['attendance'] }); });
+    return s;
+  };
+
+  it('shows a year, month and day for the start, and hides the end until it is switched on', async () => {
+    const s = await attendance();
+    const t = s.text();
+    expect(t).toContain('Semester starts');
+    expect(t).toContain('No end date');
+    expect(t).toContain('from 7 Sep 2026'); // the label, generated from the stored range
+    expect(t).not.toContain('Semester ends');
+    // the three start steppers exist, by their own accessible names
+    for (const label of ['start year', 'start month', 'start day']) {
+      expect(s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === `Increase ${label}`)).not.toHaveLength(0);
+    }
+  });
+
+  it('the year stepper really moves the year — the defect the old month/day-only editor had', async () => {
+    const s = await attendance();
+    expect(getState().settings.semesterStart).toBe('2026-09-07');
+    await press(s.r, 'Increase start year');
+    expect(getState().settings.semesterStart).toBe('2027-09-07');
+    expect(getState().settings.semesterEnd).toBe(''); // still open-ended
+    expect(s.text()).toContain('from 7 Sep 2027');
+  });
+
+  it('the day prints two digits, while the stored date stays YYYY-MM-DD', async () => {
+    const s = await attendance();
+    const day = s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === 'Set start day by typing')[0];
+    expect(day).toBeDefined();
+    const text = (n: TestRenderer.ReactTestInstance): string => n.children.map((c) => (typeof c === 'string' ? c : text(c))).join('');
+    expect(text(day!)).toBe('07'); // a lone 7 reads as "?" in the numerals face
+    expect(getState().settings.semesterStart).toBe('2026-09-07'); // display only, never the stored value
+  });
+
+  it('turning "No end date" off seeds a term, not a one-day semester', async () => {
+    const s = await attendance();
+    await tap(s.r, 'no-end-date');
+    expect(getState().settings.semesterEnd).toBe('2026-12-21'); // start + 15 weeks
+    const t = s.text();
+    expect(t).toContain('Semester ends');
+    expect(t).toContain('7 Sep – 21 Dec 2026');
+    expect(t).not.toContain('7 Sep – 7 Sep 2026'); // the seed is later than the start, by more than a day
+    expect(getState().settings.semesterEnd > getState().settings.semesterStart).toBe(true);
+  });
+
+  it('an end before the start is a hint and is not written, never silently clamped', async () => {
+    const s = await attendance();
+    await tap(s.r, 'no-end-date'); // end = 2026-12-21
+    await press(s.r, 'Increase start year'); // start would become 2027, past the end
+    expect(getState().settings.semesterStart).toBe('2026-09-07'); // nothing saved
+    expect(getState().settings.semesterEnd).toBe('2026-12-21');
+    expect(s.text()).toContain('The end date is before the start, so nothing is saved yet.');
+  });
+});
+
+describe('Settings → Data has the import door and the safety-copy row (v0.3.1)', () => {
+  const data = async () => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: ['data'] }); });
+    return s;
+  };
+
+  it('offers Import, and says what a safety copy is', async () => {
+    const s = await data();
+    const t = s.text();
+    expect(t).toContain('Import');
+    expect(t).toContain('Paste a JSON export, or a compact file an AI wrote');
+    expect(t).toContain('Safety copies');
+    // jest has no document directory (the mock has no Directory), so the honest fallback is shown
+    expect(t).toContain('No safety copies yet');
+    expect(t).toContain('keeps the newest three');
+  });
+
+  it('the Import page is a page with a paste box, not a dead row', async () => {
+    const s = await data();
+    await act(async () => { set({ settingsPath: ['data', 'import'] }); });
+    const t = s.text();
+    expect(t).toContain('JSON'); // the field's label
+    expect(t).toContain('Import only adds rows');
+    const field = s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === 'JSON to import')[0];
+    expect(field).toBeDefined();
+  });
+
+  it('the Import preview counts a one-of-each file in the singular', async () => {
+    const s = await data();
+    await act(async () => { set({ settingsPath: ['data', 'import'] }); });
+    await s.type(JSON.stringify({
+      courses: [{ name: 'Maths', meetings: [{ weekday: 1, start: '08:30', end: '10:00' }] }],
+      days: [{ date: '2026-09-14', status: 'c' }],
+      tasks: [{ title: 'Read the chapter', course: 'Maths' }],
+      marks: [{ course: 'Maths', name: 'Quiz 1', score: 8, weight: 1 }],
+    }));
+    const check = s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === 'Check' && typeof (n.props as { onPress?: unknown }).onPress === 'function')[0];
+    expect(check).toBeDefined();
+    await act(async () => { (check!.props as { onPress: () => void }).onPress(); });
+    const t = s.text();
+    expect(t).toContain('1 subject · 1 class · 1 task · 1 day mark · 1 mark');
+    expect(t).not.toContain('1 subjects');
+  });
+
+  it('About prints the one version string', async () => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: ['about'] }); });
+    expect(s.text()).toContain(`Margin ${APP_VERSION}`);
   });
 });

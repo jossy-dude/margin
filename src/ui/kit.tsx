@@ -129,7 +129,7 @@ const ICONS: Record<string, string> = {
   timer: 'M12 8v5l3 2M9 2h6M12 4a8.5 8.5 0 100 17 8.5 8.5 0 000-17z', gear: 'M12 9a3 3 0 100 6 3 3 0 000-6zM12 4.7a7.3 7.3 0 100 14.6 7.3 7.3 0 000-14.6zM12 4.7V1.9M17.1 6.9L19.1 4.9M19.3 12h2.8M17.1 17.1l2 2M12 19.3v2.8M6.9 17.1l-2 2M4.7 12H1.9M6.9 6.9L4.9 4.9',
   back: 'M15 5l-7 7 7 7', pencil: 'M4 20l1-4L16 5l3 3L8 19zM14 7l3 3', play: 'M7 4l13 8-13 8z', pause: 'M7 4h3.5v16H7zM13.5 4H17v16h-3.5z', coffee: 'M4 9h12v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM16 10h2a2 2 0 010 4h-2M7 3c0 2 2 2 2 4M11 3c0 2 2 2 2 4',
   flag: 'M6 21V4M6 4h11l-2 4 2 4H6', book: 'M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1zM12 6v14', note: 'M5 4h14v12l-5 5H5zM14 21v-5h5M8 9h8M8 13h5', chevron: 'M9 5l7 7-7 7',
-  focus: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8a4 4 0 100 8 4 4 0 000-8z', export: 'M12 15V3M7 8l5-5 5 5M4 15v5h16v-5', palette: 'M12 3a9 9 0 100 18c1.5 0 2-1 1.5-2.2-.6-1.4.3-2.8 1.8-2.8H17a4 4 0 004-4c0-4.4-4-9-9-9zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01', sound: 'M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7',
+  focus: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8a4 4 0 100 8 4 4 0 000-8z', export: 'M12 15V3M7 8l5-5 5 5M4 15v5h16v-5', import: 'M12 3v12M7 10l5 5 5-5M4 19h16', palette: 'M12 3a9 9 0 100 18c1.5 0 2-1 1.5-2.2-.6-1.4.3-2.8 1.8-2.8H17a4 4 0 004-4c0-4.4-4-9-9-9zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01', sound: 'M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7',
   clock: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3.5 2', exam: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5', lab: 'M9 3h6M10 3v6L5 19a1.5 1.5 0 001.4 2h11.2A1.5 1.5 0 0019 19l-5-10V3M8 15h8', grad: 'M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5',
 };
 export function Icon({ name, size = 22, color, sw = 1.8 }: { name: keyof typeof ICONS | string; size?: number; color?: string; sw?: number }) {
@@ -307,7 +307,7 @@ function StepBtn({ t, onPress, dis, a }: { t: string; onPress: () => void; dis: 
  * digits travelling continuously out of and back into place instead of strobing through zero ten
  * times. `dir` is a shared value rather than a ref because the UI thread has to read it.
  */
-export function Stepper({ value, onChange, min, max, step = 1, fmt, label }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; fmt?: (v: number) => string; label?: string }) {
+export function Stepper({ value, onChange, min, max, step = 1, fmt, label, compact }: { value: number; onChange: (v: number) => void; min: number; max: number; step?: number; fmt?: (v: number) => string; label?: string; compact?: boolean }) {
   const { c } = useTheme(), reduce = useReduceMotion(), k = useSharedValue(0), dir = useSharedValue(-1), last = useRef(value);
   const dec = () => onChange(Math.max(min, value - step)), inc = () => onChange(Math.min(max, value + step));
   /* v0.2 — the value itself is tappable. A 0–100 grade goal settable only by tapping "+" is a
@@ -329,12 +329,15 @@ export function Stepper({ value, onChange, min, max, step = 1, fmt, label }: { v
     k.set(withSequence(withTiming(1, { duration: 60, easing: EASE }), withSpring(0, { duration: 180, dampingRatio: 0.7 })));
   }, [value, reduce, k, dir]);
   const nudge = useAnimatedStyle(() => ({ transform: [{ translateY: dir.get() * -3.5 * k.get() }, { scale: interpolate(k.get(), [0, 1], [1, 0.93]) }] }));
+  /* `compact` only narrows the value box (74 → 64), which is enough for two steppers to share a 360 dp
+     row without shrinking the 46 dp buttons or the 22 pt value. Nothing else about the control changes. */
+  const vw = compact ? 64 : 74;
   return (
     <HandBox seed={`st${label}`} shadow={false} corners={RS} style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
       <StepBtn t="−" onPress={dec} dis={value <= min} a={`Decrease ${label ?? ''}`} />
       {editing
-        ? <TextInput value={draft} onChangeText={setDraft} onSubmitEditing={commit} onEndEditing={commit} onBlur={commit} keyboardType="numeric" returnKeyType="done" autoFocus accessibilityLabel={`Set ${label ?? ''} by typing`} style={{ minWidth: 74, textAlign: 'center', fontSize: 22, fontWeight: 'bold', color: c.ink, padding: 0 }} />
-        : <Animated.View style={[{ minWidth: 74, alignItems: 'center' }, nudge]} accessibilityLiveRegion="polite">
+        ? <TextInput value={draft} onChangeText={setDraft} onSubmitEditing={commit} onEndEditing={commit} onBlur={commit} keyboardType="numeric" returnKeyType="done" autoFocus accessibilityLabel={`Set ${label ?? ''} by typing`} style={{ minWidth: vw, textAlign: 'center', fontSize: 22, fontWeight: 'bold', color: c.ink, padding: 0 }} />
+        : <Animated.View style={[{ minWidth: vw, alignItems: 'center' }, nudge]} accessibilityLiveRegion="polite">
             <Pressable onPress={openEdit} accessibilityRole="button" accessibilityLabel={`Set ${label ?? ''} by typing`}><Txt f="bold" s={22}>{fmt ? fmt(value) : String(value)}</Txt></Pressable>
           </Animated.View>}
       <StepBtn t="+" onPress={inc} dis={value >= max} a={`Increase ${label ?? ''}`} />

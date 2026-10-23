@@ -31,6 +31,18 @@ export class MemoryRepository implements Repository {
     for (const [courseId, adj] of Object.entries(s.adjusts)) await this.upsert('adjust', { courseId, adj });
     await this.putSettings(s.settings);
   }
+  /** The import path, mirrored: same rows as the SQLite adapter, same outbox discipline (`upsert`). */
+  async importSnapshot(s: Partial<Snapshot>) {
+    for (const c of s.courses ?? []) await this.upsert('course', c);
+    for (const m of s.meetings ?? []) await this.upsert('meeting', m);
+    for (const t of s.tasks ?? []) await this.upsert('task', t);
+    for (const n of s.notices ?? []) await this.upsert('notice', n);
+    for (const m of s.marks ?? []) await this.upsert('mark', m);
+    for (const a of Object.values(s.attendance ?? {})) await this.upsert('attendance', a);
+    for (const d of Object.values(s.dayMarks ?? {})) await this.upsert('dayMark', d);
+    for (const [courseId, adj] of Object.entries(s.adjusts ?? {})) await this.upsert('adjust', { courseId, adj });
+    if (s.settings) await this.putSettings(s.settings);
+  }
   /** Same six tables as the SQLite adapter, same rows: the contract test runs both against one expectation. */
   async purgeDemo() { for (const e of ['course', 'meeting', 'notice', 'mark', 'task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }
   async wipe() { this.t.clear(); this.set = {}; this.ob = []; this.nl.clear(); }

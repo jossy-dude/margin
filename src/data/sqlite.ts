@@ -134,6 +134,23 @@ export class SqliteRepository implements Repository {
       for (const [k, v] of Object.entries(s.settings)) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
     }));
   }
+  /* The import path's write: the same discipline as `seed()` — one queued transaction, one `put` per
+     row, so every imported row carries a `rev` and an outbox `put` for a future sync. Settings are
+     written as raw KV rows INSIDE that transaction rather than through `putSettings`, which would
+     re-enter `ser` from inside a queued job and deadlock. */
+  async importSnapshot(s: Partial<Snapshot>) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      for (const c of s.courses ?? []) await this.put('course', c);
+      for (const m of s.meetings ?? []) await this.put('meeting', m);
+      for (const t of s.tasks ?? []) await this.put('task', t);
+      for (const n of s.notices ?? []) await this.put('notice', n);
+      for (const m of s.marks ?? []) await this.put('mark', m);
+      for (const a of Object.values(s.attendance ?? {})) await this.put('attendance', a);
+      for (const d of Object.values(s.dayMarks ?? {})) await this.put('dayMark', d);
+      for (const [courseId, adj] of Object.entries(s.adjusts ?? {})) await this.put('adjust', { courseId, adj });
+      for (const [k, v] of Object.entries(s.settings ?? {})) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
+    }));
+  }
   /* All six demo-bearing tables. The four content tables came with migration 3; tasks and focus
      sessions were the first two. One transaction, so a half-applied purge cannot leave a sample
      timetable behind its (now gone) sample subjects. */

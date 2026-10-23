@@ -16,6 +16,11 @@ export interface Repository {
   restore(entity: EntityName, id: string): Promise<void>;
   putSettings(patch: Partial<Settings>): Promise<void>;
   seed(snapshot: Snapshot): Promise<void>;
+  /** The import path's write half: add or overwrite exactly the rows a plan carries, in one
+   *  transaction, with the same discipline as `seed()` (a `put` per row, so every row gets a `rev`
+   *  and an outbox entry). Nothing is deleted — an import can only add a row or overwrite the one
+   *  with the same id. */
+  importSnapshot(snapshot: Partial<Snapshot>): Promise<void>;
   purgeDemo(): Promise<void>;
   /** Erase everything — every entity row, settings and both bookkeeping tables — leaving this
    *  repository open, empty and usable. The wipe does NOT bring the demo set back anywhere; a

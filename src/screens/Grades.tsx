@@ -8,15 +8,16 @@ import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
 import { total, needed, letter } from '../domain/grades';
 import { effective, nextStatus, occKey, occurrencesBetween, attendanceRate } from '../domain/attendance';
-import { DW, atTime, parseYmd, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
+import { DW, atTime, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
+import { semesterFirstDay, semesterLabel } from '../domain/semester';
 import type { Course } from '../domain/types';
 
 function AttendanceGrid({ course }: { course: Course }) {
-  const locked = useStore((s) => s.settings.lockAttendance), semesterStart = useStore((s) => s.settings.semesterStart), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
+  const locked = useStore((s) => s.settings.lockAttendance), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
   /* The grid's own clock, frozen while this page is not the one on screen (audit M5) — an inferred
      "Here" only appears once a class has ended, so the tick is only useful under the finger. */
   const live = useScreenLive();
-  const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = parseYmd(semesterStart).getTime();
+  const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = semesterFirstDay(settings, now);
   const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id)), [sem, now, meetings, course.id]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).
@@ -44,7 +45,7 @@ function AttendanceGrid({ course }: { course: Course }) {
   );
 }
 export function GradesScreen() {
-  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), semesterStart = useStore((s) => s.settings.semesterStart);
+  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings);
   const st = { courses, marks, adjusts };
   const { c } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
@@ -71,7 +72,7 @@ export function GradesScreen() {
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}
-      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance counts from {semesterStart}. Change it in Settings → Attendance.</Txt></Row></Section>}
+      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change it in Settings → Attendance.</Txt></Row></Section>}
     </Page>
   );
 }

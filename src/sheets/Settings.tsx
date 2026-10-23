@@ -23,11 +23,16 @@ import { play, type SoundName } from '../services/audio';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { runExport, type ExportFormat, type ExportTarget } from '../services/exportFile';
+import { safetyInfo, shareNewestSafetyCopy, type SafetyInfo } from '../services/safety';
 import { crashCount, subscribeCrashes } from '../ui/crashlog';
 import { DiagnosticsPage } from './Diagnostics';
+import { ImportPage } from './Import';
+import { SemesterRange } from '../ui/SemesterRange';
+import { semesterLabel } from '../domain/semester';
+import { APP_VERSION } from '../domain/version';
 import type { Settings, SoundGroup } from '../domain/types';
 
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', diagnostics: 'Diagnostics', tour: 'The tour', about: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'Reset' };
 const SAMPLE: Record<SoundGroup, SoundName> = { paper: 'place', stamp: 'stamp-here', done: 'done', notify: 'notify', toggle: 'toggle-on', dial: 'detent-3', clock: 'tick', break: 'tape-peel' };
 
 /**
@@ -78,6 +83,21 @@ const Labelled = ({ label, children }: { label: string; children: React.ReactNod
   </Row>
 );
 const MinStep = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <Labelled label={label}><Stepper label={label} value={hm(value)} min={0} max={1425} step={15} fmt={fromMin} onChange={(m) => onChange(fromMin(m))} /></Labelled>;
+
+/* ───── Safety copies ───── */
+/** The backup folder is read ONCE, in this component's lazy initial state — the component mounts when
+ *  the Data page is entered and unmounts when it is left, so a page visit costs one directory listing
+ *  and the greeting field's keystrokes cost none. Doing the read in an effect would have been a second
+ *  render on every visit; doing it in the parent's render would have been a blocking read per keystroke. */
+function SafetyCopies({ now, h12 }: { now: number; h12: boolean }) {
+  const [info] = useState<SafetyInfo>(safetyInfo);
+  if (Platform.OS === 'web') return <Txt f="serif" s={15.5} c="mut">Not on web: the browser build keeps its data in memory for the session, so there is no database file to copy.</Txt>;
+  return (<>
+    <Txt f="bold" s={19}>{info.count ? `${info.count} ${info.count === 1 ? 'copy' : 'copies'} kept` : 'No safety copies yet'}</Txt>
+    <Txt f="serif" s={14.5} c="mut">{info.count && info.newest !== null ? `Newest ${fmtWhen(info.newest, now, h12)}. ` : ''}Before an update changes the database, the app writes the whole thing here and keeps the newest three. Nothing here is read unless something has gone wrong.</Txt>
+    <Row><Btn small kind="ghost" icon="export" label="Share newest" disabled={!info.count} onPress={() => { void shareNewestSafetyCopy().then((ok) => toast(ok ? 'Shared the newest safety copy' : 'Sharing is not available on this device')); }} /></Row>
+  </>);
+}
 
 /* ───── Delivery status ───── */
 /** The one honest place: every number on that page is either read off this phone or computed by the
@@ -155,7 +175,7 @@ export function SettingsSheet() {
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette} · ${FACES.find((f) => f.id === s.clock)?.n}`} to="appearance" />
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
-    <Nav icon="week" label="Attendance & semester" hint={`Semester from ${s.semesterStart} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
+    <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
@@ -310,7 +330,7 @@ export function SettingsSheet() {
   if (page === 'attendance') body = (<>
     <Toggle label="Lock attendance grid" hint="Nothing can change until you unlock it" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
     <Txt f="serif" s={15.5} c="mut">When unlocked: tap an empty cell once to mark it. After that, long-press to change it.</Txt>
-    <Label>Semester starts</Label><Row><Stepper label="semester month" value={Number(s.semesterStart.slice(5, 7))} min={1} max={12} fmt={(v) => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][v - 1] ?? ''} onChange={(v) => set({ semesterStart: `${s.semesterStart.slice(0, 5)}${String(v).padStart(2, '0')}-${s.semesterStart.slice(8)}` })} /><Stepper label="semester day" value={Number(s.semesterStart.slice(8))} min={1} max={28} fmt={(v) => String(v)} onChange={(v) => set({ semesterStart: `${s.semesterStart.slice(0, 8)}${String(v).padStart(2, '0')}` })} /></Row>
+    <SemesterRange start={s.semesterStart} end={s.semesterEnd} onChange={(p) => set(p)} />
     <Row><Btn small kind="ghost" icon="plus" label="Add class" onPress={() => act.open({ t: 'meeting' })} /><Btn small kind="ghost" icon="plus" label="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>
   </>);
   if (page === 'focus') body = (<>
@@ -329,6 +349,11 @@ export function SettingsSheet() {
     {(['xlsx', 'csv', 'json'] as ExportFormat[]).map((f) => (
       <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
         <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
+    <Hair />
+    <Nav icon="import" label="Import" hint="Paste a JSON export, or a compact file an AI wrote" to="import" />
+    <Section title="Safety copies">
+      <SafetyCopies now={now} h12={s.hour12} />
+    </Section>
     {/* The purge arming is separate from Reset's: sharing one flag would make whichever button you
         armed second fire on its very first tap. Both disarm on their own timer, so closing the sheet
         mid-countdown cannot leave either armed. */}
@@ -339,6 +364,7 @@ export function SettingsSheet() {
         or edited" is exactly what survives. */}
     <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset wipes the whole database file.</Txt>
   </>);
+  if (page === 'import') body = <ImportPage />;
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
     <Txt f="serif" s={16} c="mut">The tour runs the first time this app opens, over the app itself rather than instead of it: it rings the real +, the real sheet close, the real gear, the tab bar, a timetable block, a task row and the real Focus dial — which it waits for you to drag. Every step has a Next and a Skip, and nothing on it changes your data.</Txt>
@@ -348,7 +374,7 @@ export function SettingsSheet() {
   if (page === 'about') body = (<>
     <Txt f="serif" s={16} c="mut">This erases the whole database file — subjects, timetable, attendance, tasks, notes, grades, focus history and settings — and hands back a fresh, empty planner. It cannot be undone, so export first if you care about your data.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={armReset} />
-    <Txt f="serif" s={14} c="mut">Margin 1.0 · local-first, no account, no network needed.</Txt>
+    <Txt f="serif" s={14} c="mut">Margin {APP_VERSION} · local-first, no account, no network needed.</Txt>
   </>);
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 

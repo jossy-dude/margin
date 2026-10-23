@@ -146,6 +146,55 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     await r.logNotif('n2', 'ended', NOW, 'opened', NOW + 120_000);
     expect((await r.notifLog())[0]).toMatchObject({ dueAt: NOW, shownAt: null, openedAt: NOW + 120_000 });
   });
+  it('importSnapshot adds rows and settings and deletes nothing already there', async () => {
+    const r = await make(); await r.seed(seedSnapshot(NOW));
+    const before = await r.load();
+    await r.importSnapshot({
+      courses: [{ id: 'imp-c', name: 'Imported', room: 'B1', teacher: '', goal: null, sort: 9, demo: false }],
+      meetings: [{ id: 'imp-m', courseId: 'imp-c', weekday: 1, start: '08:30', end: '10:00', demo: false }],
+      tasks: [task('imp-t', { courseId: 'imp-c' })],
+      attendance: { '2026-10-05|08:30|imp-c': { key: '2026-10-05|08:30|imp-c', status: 'a', at: NOW, reason: '' } },
+      dayMarks: { '2026-10-06': { date: '2026-10-06', status: 'c', at: NOW, reason: 'holiday' } },
+      marks: [{ id: 'imp-k', courseId: 'imp-c', name: 'Quiz', score: 12, weight: 10, on: true, sort: 0, demo: false }],
+      adjusts: { 'imp-c': 1.5 },
+      settings: { semesterStart: '2026-09-07', semesterEnd: '2026-12-20' },
+    });
+    const after = await r.load();
+    // nothing seeded was deleted: the import is additive, by contract
+    expect(after.courses.map((c) => c.id)).toEqual(expect.arrayContaining(before.courses.map((c) => c.id)));
+    expect(after.tasks.map((t) => t.id)).toEqual(expect.arrayContaining(before.tasks.map((t) => t.id)));
+    expect(after.courses).toHaveLength(before.courses.length + 1);
+    expect(after.meetings).toHaveLength(before.meetings.length + 1);
+    expect(after.tasks).toHaveLength(before.tasks.length + 1);
+    expect(after.marks).toHaveLength(before.marks.length + 1);
+    expect(after.attendance['2026-10-05|08:30|imp-c']).toMatchObject({ status: 'a' });
+    expect(after.dayMarks['2026-10-06']?.status).toBe('c');
+    expect(after.adjusts['imp-c']).toBe(1.5);
+    // the semester lands, and the other settings are untouched
+    expect(after.settings.semesterStart).toBe('2026-09-07');
+    expect(after.settings.semesterEnd).toBe('2026-12-20');
+    expect(after.settings.name).toBe(before.settings.name);
+    expect(after.settings.seededAt).toBe(before.settings.seededAt);
+  });
+
+  it('importing the same snapshot twice produces no duplicate rows', async () => {
+    const r = await make();
+    const snap = {
+      courses: [{ id: 'imp-c', name: 'Imported', room: '', teacher: '', goal: null, sort: 0, demo: false }],
+      tasks: [task('imp-t', { courseId: 'imp-c' })],
+      dayMarks: { '2026-10-06': { date: '2026-10-06', status: 'c' as const, at: NOW, reason: '' } },
+    };
+    await r.importSnapshot(snap);
+    const first = await r.load();
+    await r.importSnapshot(snap);
+    const second = await r.load();
+    expect(second.courses.map((c) => c.id)).toEqual(first.courses.map((c) => c.id));
+    expect(second.tasks.map((t) => t.id)).toEqual(first.tasks.map((t) => t.id));
+    expect(Object.keys(second.dayMarks)).toEqual(['2026-10-06']);
+    // each write went through the same `put` discipline as `seed()`, so a sync boundary sees it
+    const puts = (await r.pendingOutbox(500)).filter((o) => o.op === 'put');
+    expect(puts.length).toBeGreaterThanOrEqual(6); // three rows, written twice
+  });
 });
 
 /** A fully-populated task, so a fixture row only has to say what it changes. */

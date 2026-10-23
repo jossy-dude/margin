@@ -1,7 +1,9 @@
 import type { Snapshot } from '../domain/types';
-import { fmtTime, pad, parseYmd, ymd } from '../domain/time';
+import { fmtTime, pad, ymd } from '../domain/time';
 import { effective, occurrencesBetween } from '../domain/attendance';
 import { total } from '../domain/grades';
+import { clampToSemester, inSemester, semesterFirstDay, semesterLabel } from '../domain/semester';
+import { APP_VERSION } from '../domain/version';
 
 export type Cell = string | number | boolean | null;
 export interface Table { name: string; header: string[]; rows: Cell[][]; date?: number[] }
@@ -15,8 +17,8 @@ const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export function buildTables(s: Snapshot, now: number): Table[] {
   const cn = (id: string | null) => s.courses.find((c) => c.id === id)?.name ?? '';
   const st = s.settings as Record<string, unknown>;
-  const first = s.settings.semesterStart ? parseYmd(s.settings.semesterStart).getTime() : now - 90 * 86_400_000;
-  const occ = occurrencesBetween(first, now, s.meetings);
+  const first = semesterFirstDay(s.settings, now);
+  const occ = occurrencesBetween(first, clampToSemester(now, s.settings), s.meetings).filter((o) => inSemester(o.date, s.settings));
   const tables: Table[] = [
     { name: 'Courses', header: ['id', 'name', 'room', 'teacher', 'goal', 'total'], rows: s.courses.map((c) => [c.id, c.name, c.room, c.teacher, c.goal, total(s.marks.filter((m) => m.courseId === c.id), s.adjusts[c.id] ?? 0)]) },
     { name: 'Timetable', header: ['course', 'weekday', 'start', 'end', 'room'], rows: s.meetings.map((m) => [cn(m.courseId), WD[m.weekday] ?? '', m.start, m.end, s.courses.find((c) => c.id === m.courseId)?.room ?? '']) },
@@ -35,7 +37,7 @@ export function buildTables(s: Snapshot, now: number): Table[] {
     { name: 'Alarms', header: ['id', 'at', 'label', 'enabled', 'kind', 'task'], rows: s.alarms.map((a) => [a.id, iso(a.at), a.label, a.enabled, a.kind, a.taskId]) },
     { name: 'Settings', header: ['key', 'value'], rows: Object.entries(st).map(([k, v]): Cell[] => [k, typeof v === 'object' ? JSON.stringify(v) : (v as Cell)]) },
   ];
-  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', 'Margin 1.0'], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
+  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', `Margin ${APP_VERSION}`], ['semester', semesterLabel(s.settings)], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
   return tables;
 }
 export const toJson = (s: Snapshot, now: number) => JSON.stringify({ app: 'margin', version: 1, exportedAt: isoUtc(now), ...Object.fromEntries(buildTables(s, now).filter((t) => t.name !== 'Summary').map((t) => [t.name, t.rows.map((r) => Object.fromEntries(t.header.map((h, i) => [h, r[i] ?? null])))])), raw: s }, null, 2);

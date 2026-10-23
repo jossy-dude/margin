@@ -8,6 +8,7 @@ import { hexA } from '../../tokens/theme';
 import { fx } from '../../services/fx';
 import { FS } from '../fit';
 import { STEPS, TOUR_LEN } from './screens';
+import { SemesterRange } from '../SemesterRange';
 import { SHEET_TARGET, cardTop, cutRects, holeBox, measureSlot, sameBox, type CoachBox } from './coach';
 
 export type OnboardFinish =
@@ -74,10 +75,22 @@ export function Coach({ onFinish, firstRun = false, from = 0 }: CoachProps) {
   /** What the dial was set to when the tour mounted: the dial step is over when the user has moved it
    *  from *this*, not from some value written into the step. */
   const startPlan = useRef(getState().timer.planMin).current;
+  /** The semester chosen on the last step. A ref, not state: changing it must not re-render the tour
+   *  (the card would re-measure under the finger), and only the exit reads it. */
+  const semester = useRef<{ semesterStart: string; semesterEnd: string } | null>(null);
   /* Both selectors return primitives, so a write that leaves them alone re-renders nothing. */
   const route = useStore((s) => s.route), sheetT = useStore((s) => (s.sheet ? s.sheet.t : '')), planMin = useStore((s) => s.timer.planMin);
 
-  const finish = useCallback((how: OnboardFinish) => { if (gone.current) return; gone.current = true; onFinish(how); }, [onFinish]);
+  const finish = useCallback((how: OnboardFinish) => {
+    if (gone.current) return;
+    gone.current = true;
+    /* The hand-over's dates are the only thing the tour writes. They go through the same settings path
+       every other preference does, so they are adopted with the rest of the session and never touch a
+       demo row. */
+    const chosen = semester.current, cur = getState().settings;
+    if (chosen && (chosen.semesterStart !== cur.semesterStart || chosen.semesterEnd !== cur.semesterEnd)) act.setSettings(chosen);
+    onFinish(how);
+  }, [onFinish]);
   const next = useCallback(() => { if (last) finish('done'); else { fx.page(); setI((v) => v + 1); } }, [last, finish]);
   /** Android back walks the tour back; on the first step it ends it, rather than falling through to the
    *  OS and leaving the app half-toured. Either way the press is consumed, so the app is never left
@@ -191,14 +204,22 @@ export function Coach({ onFinish, firstRun = false, from = 0 }: CoachProps) {
               </View>
             ) : null}
             {step.empty ? (
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {/* The two ways out, always both (v0.1 after a first-run report): "Get started" is the
-                    primary hand-off — App.tsx adopts the session with the samples put away — and
-                    "Keep exploring" is the soft one. Neither is destructive: with the demo session in
-                    memory, there is nothing here to fear on a replay either. */}
-                <Btn flex kind="primary" label="Get started" a11y="Start your own planner: the sample semester is put away" onPress={() => finish('started')} />
-                <Btn flex kind="ghost" label="Keep exploring" a11y="Keep the sample data and finish the tour" onPress={() => finish('done')} />
-              </View>
+              <>
+                {/* The hand-over is where the term is set, per the owner: the user is already deciding
+                    what this planner will be, and the two dates belong to that decision. The fields write
+                    nothing until the tour ends (`finish`), so stepping the year cannot fire a save per
+                    tap. */}
+                <Txt f="serif" s={14.5} c="mut">Set your term while you are here — the attendance grid counts from its first day.</Txt>
+                <SemesterRange start={getState().settings.semesterStart} end={getState().settings.semesterEnd} onChange={(p) => { semester.current = p; }} />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {/* The two ways out, always both (v0.1 after a first-run report): "Get started" is the
+                      primary hand-off — App.tsx adopts the session with the samples put away — and
+                      "Keep exploring" is the soft one. Neither is destructive: with the demo session in
+                      memory, there is nothing here to fear on a replay either. */}
+                  <Btn flex kind="primary" label="Get started" a11y="Start your own planner: the sample semester is put away" onPress={() => finish('started')} />
+                  <Btn flex kind="ghost" label="Keep exploring" a11y="Keep the sample data and finish the tour" onPress={() => finish('done')} />
+                </View>
+              </>
             ) : (
               <Btn kind="primary" label="Next" icon="chevron" a11y={`Next: ${STEPS[i + 1]!.heading}`} onPress={next} style={{ alignSelf: 'flex-end' }} />
             )}

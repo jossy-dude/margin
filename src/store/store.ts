@@ -14,6 +14,7 @@ import { planReminders, type Planned } from '../domain/reminders';
 import { makeTheme } from '../tokens/theme';
 import { advance, endBreak, finish, initTimer, setMinutes, startBreak, toggle as timerToggle, type TimerState } from '../domain/timer';
 import { uid } from '../domain/time';
+import type { ImportPlan } from '../domain/importPlan';
 import { configureFx, fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 
@@ -176,12 +177,31 @@ export async function boot() {
     await hydrate(r);
   }
 }
-function applySnapshot(s: Snapshot) {
+/** Put a snapshot into the store. `keepTimer` is the import path: it must not reset a running focus
+ *  round, so the timer write is skipped entirely rather than being recomputed to the same value — a
+ *  recomputed `initTimer` would lose the seconds already spent in this round. The snapshot's own
+ *  settings win either way; the current ones are the base only so a partial patch cannot blank a
+ *  setting the file did not carry. */
+function applySnapshot(s: Partial<Snapshot>, keepTimer = false) {
   // Computed once: `withDefaults` rebuilds the whole settings object (and `initTimer` reads four of its
   // fields), so calling it per use rebuilt it four times per hydrate (audit M2).
-  const settings = withDefaults(s.settings);
-  set({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, trips: s.trips, alarms: s.alarms, settings,
-    timer: initTimer({ planMin: settings.focusPresetMin, flow: settings.focusFlow, breakMs: settings.breakMin * 60_000, breaksAllowed: settings.breaksPerRound }) });
+  const settings = withDefaults(keepTimer ? { ...state.settings, ...(s.settings ?? {}) } : (s.settings ?? {}));
+  const patch: Partial<State> = { settings };
+  if (s.courses) patch.courses = s.courses;
+  if (s.meetings) patch.meetings = s.meetings;
+  if (s.attendance) patch.attendance = s.attendance;
+  if (s.dayMarks) patch.dayMarks = s.dayMarks;
+  if (s.tasks) patch.tasks = s.tasks;
+  if (s.notices) patch.notices = s.notices;
+  if (s.marks) patch.marks = s.marks;
+  if (s.adjusts) patch.adjusts = s.adjusts;
+  if (s.focus) patch.focus = s.focus;
+  if (s.trips) patch.trips = s.trips;
+  if (s.alarms) patch.alarms = s.alarms;
+  if (!keepTimer) {
+    patch.timer = initTimer({ planMin: settings.focusPresetMin, flow: settings.focusFlow, breakMs: settings.breakMin * 60_000, breaksAllowed: settings.breaksPerRound });
+  }
+  set(patch);
 }
 export const snapshotOf = (s: State = state): Snapshot => ({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, trips: s.trips, alarms: s.alarms, settings: s.settings });
 
@@ -295,6 +315,27 @@ export const act = {
   /** Optimistic half of the repository purge: the same six collections the SQL DELETEs cover, so the
    *  screen cannot keep showing sample rows the database no longer has. */
   async purgeDemo() { await persist(R().purgeDemo()); set((s) => ({ courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Sample data removed'); resync(); },
+  /** The import path's write half. The parser has already refused anything it could not read, so a plan
+   *  with problems is never applied; a plan without them lands in ONE transaction, and the store is then
+   *  reloaded from the repository rather than patched from the file, so what is on screen is exactly what
+   *  is on disk. The timer is deliberately kept (`applySnapshot(..., true)`): importing a term's timetable
+   *  in the middle of a focus round must not end that round. */
+  async importPlan(plan: ImportPlan): Promise<boolean> {
+    if (plan.problems.length) return false;
+    try {
+      await R().importSnapshot(plan.snapshot);
+      applySnapshot(await R().load(), true);
+      configureFx(state.settings);
+      const rows = Object.values(plan.counts).reduce((a, b) => a + b, 0);
+      toast(rows ? `Imported ${rows} row${rows === 1 ? '' : 's'}` : 'Semester saved');
+      resync(0);
+      return true;
+    } catch (e) {
+      recordCrash(e, 'save', 'Import');
+      toast(`Import failed: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+      return false;
+    }
+  },
   /** The one true "erase everything": wipe every table (on device, the FILE itself — SQLite's close
    *  + delete, WAL/SHM with it), then re-open a fresh, EMPTY database. No sample semester comes
    *  back: since v0.1 the demo set is a first-session memory playground, not something the database

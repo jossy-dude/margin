@@ -64,6 +64,10 @@ export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
   pen: 'warm' | 'graphite' | 'red' | 'blue'; palette: 'refined' | 'original'; texture: 'grain' | 'photo' | 'none';
   clock: string; bar: string; semesterStart: string;
+  /** The last day of term, `YYYY-MM-DD`; `''` means open-ended, which is the default. A settings KV
+   *  row written before v0.3.1 has no such key, so `withDefaults` fills the empty string in — no SQL
+   *  migration, exactly like every other display setting here. See `domain/semester.ts`. */
+  semesterEnd: string;
   /** Print every time-of-day as 12-hour ("8:30 AM") instead of 24-hour ("08:30"). Off by default, so
    *  the shipped look is unchanged. It is a plain boolean on `Settings` because that is the one place
    *  the app already keeps per-user display choices; `fmtTime`/`fmtWhen` take it as an argument rather
