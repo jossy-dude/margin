@@ -22,10 +22,27 @@
     </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
-    <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
-    <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
+    <!-- v0.3.1 (D10). This native folder is committed, so `npx expo prebuild` does NOT run on build and
+         `app.json`'s `updates` block never reaches the APK — these five meta-data entries ARE the update
+         configuration. They are what `@expo/config-plugins`' `AndroidConfig.Updates` would write for
+         `updates: { enabled: true, url: …, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0 }`:
+         ENABLED true, CHECK_ON_LAUNCH 'ALWAYS' (that is how ON_LOAD is spelled natively),
+         LAUNCH_WAIT_MS '0' (never block a launch on the network), the project's update URL, and the
+         runtime version by string resource so it can also be overridden per build.
+         `src/test/native-config.test.ts` fails if any of this drifts from `app.json` again — the first
+         version of this file said ENABLED=false with no URL, which is an updater that can never update. -->
+    <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/a1177786-3b71-4f60-89b5-30fc633d3534"/>
+    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
+    <!-- The channel, as a request header — `expo-updates` reads `expo-channel-name` from here
+         (`UpdatesConfiguration.kt`), and an APK built without it asks the update server for no
+         channel and is answered with nothing. EAS Build normally injects this; this project builds a
+         sideloaded APK from the committed native folder, so it is pinned instead of assumed.
+         Keep it equal to the `channel` of the profile being built (`eas.json` → preview). -->
+    <meta-data android:name="expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY" android:value="{&quot;expo-channel-name&quot;:&quot;preview&quot;}"/>
+    <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>

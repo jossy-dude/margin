@@ -199,7 +199,24 @@ The fork that matters is not technical, it is a sequencing fact worth writing do
 - About says where updates are checked instead of offering a button that can only answer
   "unavailable" on web or in a build with updates off.
 
-**Answer:** as built — v0.3.1 installs, v0.3.2 proves; the proof is `docs/DEVICE_CHECKLIST.md` §V031.
+**The part that would have cost a build.** This project has a committed `android/` folder, so it is not
+a CNG project and `npx expo prebuild` never runs: the config plugins that turn `app.json` into native
+configuration are inert. The first version of this slice configured `app.json` correctly and left the
+native project saying `expo.modules.updates.ENABLED = false`, with no update URL, no runtime version and
+no channel — an updater that installs and can never update, while every test passes and About prints the
+right version. It also still said `versionName "0.2.0"` / `versionCode 2`, so Android's app info would
+have named the wrong build during the very test that has to tell one build from another.
+
+The native files are now the truth: enabled, the project's URL, `@string/expo_runtime_version` = `0.3.1`,
+and `expo-channel-name: preview` as a request header (`expo-updates` resolves the channel from that
+header — an APK without it is answered with no update at all, silently). `versionCode` is 3.
+
+`src/test/native-config.test.ts` (in `npm run check`) holds each of those to its `app.json` / `eas.json`
+counterpart and fails if any drifts. It was verified by reintroducing the original bug: two assertions
+went red, then green again.
+
+**Answer:** as built — v0.3.1 installs, v0.3.2 proves; the proof is `docs/DEVICE_CHECKLIST.md` §V031,
+and `docs/BUILD_V031.md` is what to read before making the APK.
 
 ## D11 — Import merges; it never deletes
 

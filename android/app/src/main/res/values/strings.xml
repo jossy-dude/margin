@@ -1,4 +1,8 @@
 <resources>
   <string name="app_name">Margin</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <!-- D10: the runtime version an update is matched against. `runtimeVersion.policy: appVersion` in
+       app.json means this must equal the app's `version` — a mismatch is an update the phone will
+       refuse, and it fails silently. `src/test/native-config.test.ts` holds the two together. -->
+  <string name="expo_runtime_version" translatable="false">0.3.1</string>
 </resources>

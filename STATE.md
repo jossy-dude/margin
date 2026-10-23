@@ -1,9 +1,11 @@
 # STATE — Marginalia v2 improvements
 
 _Updated: 2026-10-23 (**v0.3.1 committed** — A = `5136499` (semester range, bulk import, pre-migration
-safety copies), B = `6f5bb63` (OTA plumbing, warm preview sounds, spiral elapsed ink). Gate 64 suites /
-1021 tests, boundaries clean; browser 25/25, spiral 14/14, tour probe 3/3. **Nothing built, published or
-pushed — the owner builds.** W5b full-screen still pending D9 answer; **v0.3.2 proof pass next**)_
+safety copies), B = `6f5bb63` (OTA plumbing, warm preview sounds, spiral elapsed ink). Gate 65 suites /
+1029 tests, boundaries clean; browser 25/25, spiral 14/14, tour probe 3/3. **The native project, not
+`app.json`, is what ships — see note 22 and `docs/BUILD_V031.md` before building.** Nothing built,
+published or pushed — the owner builds. W5b full-screen still pending D9 answer; **v0.3.2 proof pass
+next**)_
 
 ## Git
 
@@ -182,6 +184,18 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
     preview sounds were never preloaded, so the first tap on Android could play before the asset was
     decoded. If V031.8 still shows silence on a row above zero, instrument `play()`'s return value on
     the device rather than guessing at layout.
+22. **`app.json` is not what ships — the committed `android/` folder is.** Found while auditing the
+    release config the owner is about to build (2026-10-23, after B was committed and reported). The
+    manifest said `expo.modules.updates.ENABLED=false` with no URL, no runtime version and no channel,
+    and `build.gradle` still said `versionName "0.2.0" / versionCode 2` — so the build would have
+    installed as the old version, printed the right number in About, passed every test, and never
+    updated. Fixed in the native files (+ `expo-channel-name: preview`, since `expo-updates` resolves
+    the channel from a request header and EAS Build is not what makes this APK), and
+    `src/test/native-config.test.ts` now holds all of it to `app.json`/`eas.json` in `npm run check`.
+    The guard was proved by reintroducing the bug (2 red) and reverting (green). Also removed two dead
+    SDK-57 keys (`android.splash`, top-level `newArchEnabled` — both inert duplicates, `newArchEnabled`
+    lives in `gradle.properties`). `expo-doctor` is 16/21; the remaining five are documented in
+    `docs/BUILD_V031.md` with why none blocks the build. Gate 65 suites / **1029** tests.
 
 ## UX audit triage (2026-10-16 — report `reports/audit-ux.md`)
 
