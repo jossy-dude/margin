@@ -1,4 +1,4 @@
-import { F, poly, polyLen, sample } from '../geom';
+import { F, poly, sample } from '../geom';
 import type { Build, Shape } from '../types';
 
 /** Group −1: three instruments that read the clock and are correct in any subject. */
@@ -38,23 +38,33 @@ const graduated: Build = (c) => {
   return o;
 };
 
-/** One groove, drawn to the playhead. It reads as a record and the eye follows it the whole way. */
+/** One groove, and the part of it already played printed in a dimmer ink.
+ *
+ *  This replaces the playhead DOT that used to ride the line. A dot says "you are here"; the owner's
+ *  read is the opposite — the record's groove DIMS as it is played, so what the eye finds is the place
+ *  where the ink changes and the boundary itself is the message ("this much is gone"). At p=1 nothing
+ *  is spent and the groove is whole and clean; at p=0 all of it is the spent tone.
+ *
+ *  `p` is the fraction still to run, and the path is generated from its CENTRE outwards, so the part
+ *  still ahead is the first `p` of the points and the part already played is the tail. That makes the
+ *  spent ink grow from the OUTER end inwards, which is the direction a record plays. */
 const spiral: Build = (c) => {
   const cx = c.w / 2, cy = 22, mx = Math.max(14, c.w / 2 - 14), my = 16;
   const pts = sample(200, (t) => {
     const a = t * Math.PI * 8 - Math.PI / 2;
     return [cx + (2 + t * mx) * Math.cos(a), cy + (2 + t * my) * Math.sin(a)] as [number, number];
   });
-  const n = Math.max(2, Math.round(200 * c.p)), head = pts[Math.min(200, n)]!;
-  return [
-    { t: 'run', d: poly(pts), len: polyLen(pts), ink: 'live', sw: 1.6, cap: 'round' },
-    { t: 'c', cx: head[0], cy: head[1], r: 2.4, ink: 'signal', f: true },
-  ];
+  const n = Math.max(0, Math.min(200, Math.round(200 * c.p))), o: Shape[] = [];
+  const ahead = pts.slice(0, n + 1), spent = pts.slice(n);
+  if (ahead.length > 1) o.push({ t: 'p', d: poly(ahead), ink: 'rest', sw: 1.6, cap: 'round' });
+  // Half the resting tone: the same ink and the same weight, only further into the paper.
+  if (spent.length > 1) o.push({ t: 'p', d: poly(spent), ink: 'rest', sw: 1.6, cap: 'round', op: 0.5 });
+  return o;
 };
 
 export const ANY: { id: string; n: string; d: string; build: Build }[] = [
   { id: 'cassette', n: 'Transport', d: 'Supply spool empties, take-up spool fills, and the tape runs the length of the deck.', build: cassette },
   { id: 'graduated', n: 'Gauge glass', d: 'A graduated glass lit to the meniscus, scaled in real minutes. The quietest thing here.', build: graduated },
-  { id: 'spiral', n: 'Spiral', d: 'One groove drawn to the playhead. It reads as a record and the eye follows it across.', build: spiral },
+  { id: 'spiral', n: 'Spiral', d: 'One groove, dimming from the outside in as the record plays. The brighter part is what is still ahead.', build: spiral },
 ];
 

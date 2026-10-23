@@ -11,6 +11,7 @@
  */
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { Path } from 'react-native-svg';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MemoryRepository } from '../data/memory';
@@ -561,5 +562,79 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
     const s = await mount();
     await act(async () => { set({ settingsPath: ['about'] }); });
     expect(s.text()).toContain(`Margin ${APP_VERSION}`);
+  });
+});
+
+/**
+ * The Look & feel page's Progress bar row read its name out of `BAR_KINDS` alone, so once the owner
+ * picked a catalogue instrument (`spiral`, `cassette`, …) the row had no name to print. The app was
+ * drawing a bar while Settings could not say which one — the same class of lie the `bar` resolution
+ * above (:139) already fixed for the picker.
+ */
+describe('the Look & feel row names the Progress bar the app is actually drawing', () => {
+  const appearance = async (bar: string) => {
+    const s = await mount();
+    await act(async () => { set({ settings: { ...getState().settings, bar }, settingsPath: ['appearance'] }); });
+    return s;
+  };
+  /** The row's own accessible name is `${label}. ${hint}` (see `Nav`), so this reads what a screen
+   *  reader announces for that one row instead of searching the whole page for a word. */
+  const row = (s: Awaited<ReturnType<typeof appearance>>): string => {
+    const found = s.r.root.findAll((x) => {
+      const label = (x.props as { accessibilityLabel?: unknown }).accessibilityLabel;
+      return typeof label === 'string' && label.startsWith('Progress bar.');
+    })[0];
+    if (!found) throw new Error('no Progress bar row on the Look & feel page');
+    return (found.props as { accessibilityLabel: string }).accessibilityLabel;
+  };
+
+  it('names a catalogue instrument instead of the literal word "undefined"', async () => {
+    const s = await appearance('spiral');
+    expect(row(s)).toBe('Progress bar. Spiral');
+    expect(s.text()).not.toContain('undefined');
+  });
+
+  it('still names the app’s own day bar, so the original path stays covered', async () => {
+    const s = await appearance('glass');
+    expect(row(s)).toBe('Progress bar. Sight glass');
+    expect(s.text()).not.toContain('undefined');
+  });
+});
+
+/**
+ * The picker draws every preview at one fixed moment — `DEMO_NOW`, 10:20 on 5 Oct 2026, 30 of the
+ * 50 minutes of `DEMO_PERIODS[1]` left, so p = 0.6. The unselected rows bake that into a static
+ * `previewSvg` string. The SELECTED row is a live `DayBar`, and it used to take its phase from
+ * `useNow()` — today's wall clock — which is long past every demo period: `activePeriod` then returns
+ * the last period with `left = 0`, so every selected instrument drew p = 0, the "period over" state.
+ * Spiral is the readable witness: at p = 0.6 it is two paths (the groove still ahead at full strength,
+ * the played part at 0.5), while at p = 0 the "ahead" path has a single point and is not drawn at all.
+ */
+describe('the progress-bar picker previews the demo moment, not today’s clock', () => {
+  const picker = async (bar: string) => {
+    const s = await mount();
+    await act(async () => { set({ settings: { ...getState().settings, bar }, settingsPath: ['bar'] }); });
+    return s;
+  };
+  /** The live preview's own accessible name says the moment it was drawn at: `spiral, 60 percent of
+   *  Discrete remaining`. Only the selected row is live, so this also proves the row is the one. */
+  const preview = (s: Awaited<ReturnType<typeof picker>>): TestRenderer.ReactTestInstance => {
+    const found = s.r.root.findAll((x) => typeof (x.props as { accessibilityLabel?: unknown }).accessibilityLabel === 'string'
+      && /^spiral, /.test((x.props as { accessibilityLabel: string }).accessibilityLabel))[0];
+    if (!found) throw new Error('no live spiral preview on the Progress bar page');
+    return found;
+  };
+  const paths = (n: TestRenderer.ReactTestInstance) => n.findAllByType(Path);
+
+  it('draws the selected spiral at the same 60% as the static previews beside it', async () => {
+    const s = await picker('spiral');
+    const live = preview(s);
+    expect((live.props as { accessibilityLabel: string }).accessibilityLabel).toBe('spiral, 60 percent of Discrete remaining');
+
+    const drawn = paths(live);
+    expect(drawn).toHaveLength(2); // p = 0.6: a groove still to play, and the part already played
+    const opacities = drawn.map((p) => (p.props as { opacity?: number }).opacity);
+    expect(opacities.filter((o) => o === undefined)).toHaveLength(1); // the part still ahead, full strength
+    expect(opacities.filter((o) => typeof o === 'number' && o > 0.2 && o < 0.9)).toHaveLength(1); // the played part
   });
 });

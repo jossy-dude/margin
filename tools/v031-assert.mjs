@@ -79,6 +79,12 @@ const LEAFS = `(() => {
 })()`;
 const leafs = () => p.evaluate(LEAFS);
 const pageText = async () => (await leafs()).map((e) => e.t).join(' | ');
+/** Everything on the shipped page, including what is below the fold (the About page is taller than the
+ *  sheet, and the Updates section sits under the erase button). */
+const fullText = () => p.evaluate(() => [...document.querySelectorAll('div,span')]
+  .filter((el) => !el.children.length && (el.textContent || '').trim())
+  .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.x >= -1; })
+  .map((el) => el.textContent.trim()).join(' | '));
 const has = async (s) => (await pageText()).includes(s);
 const waitFor = async (s, ms = 6000) => {
   const end = Date.now() + ms;
@@ -174,6 +180,11 @@ ok('6a', await has('Semester 7 Sep – 20 Dec 2026'), `the imported semester is 
 await tap('[aria-label^="Reset."]');
 await p.waitForTimeout(1000);
 ok('6b', await has('Margin 0.3.1'), 'About prints 0.3.1');
+/* Updates: a web build cannot update itself, so the page must say so rather than offer a button whose
+   only possible answer is "unavailable". The native row is a phone check (V031.1-7). */
+const about = await fullText();
+ok('6c', about.includes('Updates are checked in the installed app'), 'About says where updates are checked, instead of pretending');
+ok('6d', (await p.locator('[aria-label="Check for updates"]').count()) === 0, 'no Check button on a build that cannot update');
 await p.screenshot({ path: `${OUT}/about-version.png` });
 await back(); // about → root
 await p.waitForTimeout(700);

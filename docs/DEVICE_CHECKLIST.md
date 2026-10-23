@@ -488,6 +488,75 @@ reading the code except the four things Android decides for itself, which are he
 
 ---
 
+## V031 — it updates itself: OTA, the Play button, the spiral
+
+Three surface changes that only a phone can settle: an over-the-air update replacing the JS bundle
+without a reinstall, the per-sound **Play** button being audible (or saying why it is not), and the
+spiral bar dimming its elapsed ink instead of dragging a dot round. Nothing here is judged by a
+command; each step is a look or a listen.
+
+The OTA steps prove the whole chain — `runtimeVersion` policy, channel, `ON_LOAD`, and SQLite surviving
+a bundle swap. A publish only reaches this APK if it carries the **same runtime version (`0.3.1`)** and
+the **same channel (`preview`)** as the build, so a failure in V031.5 is usually a publish mistake, not
+an app bug. Wear the same pair of shoes every run.
+
+- **V031.1** Install the v0.3.1 preview APK, built from the `preview` profile
+  (`eas build -p android --profile preview`), over the previous build. It installs without uninstalling
+  and opens on Today.
+  **PASS / FAIL: ______**
+- **V031.2** Open **Settings → About**. The last line is `Margin 0.3.1 · local-first, no account, no
+  network needed.`; below it an **Updates** section reads `Margin 0.3.1 · runtime 0.3.1 · built in`,
+  then `Checked automatically when the app opens.` and a **Check for updates** button. Tap it with the
+  phone online: the line becomes `You are on the newest version.` (or `An update is downloaded. Restart
+  to use it.` if a newer publish already exists). A browser build instead says only that updates are
+  checked in the installed app.
+  **PASS / FAIL: ______**
+- **V031.3** Change one thing you can see from the outside — e.g. **Look & feel → Paper & texture** to
+  `Rules`, or turn **Clock tick** off. Note it. Do not change anything else, so V031.6 is about *data*,
+  not about this toggle.
+  **PASS / FAIL: ______**
+- **V031.4** Publish a test update to the phone's channel from the build machine:
+  `eas update --branch preview --message "v031 checklist"`. The CLI must report runtime `0.3.1`. If it
+  reports a different runtime, stop: the APK will ignore the update, and that is the policy working,
+  not a bug.
+  **PASS / FAIL: ______**
+- **V031.5** With the phone online, **kill** the app from Android's recents (a background home-press is
+  not enough — `ON_LOAD` checks on a cold start), then reopen it. The download happens on this launch;
+  the running bundle is still the old one, so the change from V031.3 may not be visible yet. Kill it
+  again and reopen once more: now the new bundle is in use. If the change was never published to the
+  `preview` channel, the second launch looks identical — that is the expected no-op, not a failure.
+  **PASS / FAIL: ______**
+- **V031.6** After the update, the planner's **data is intact**: the timetable, a marked attendance
+  row, a task with its notes, and the setting you changed in V031.3 all survive. Nothing is re-seeded,
+  nothing is duplicated, and `Semester` dates are unchanged. This is the one step where a failure is
+  serious: it means the bundle swap touched SQLite.
+  **PASS / FAIL: ______**
+- **V031.7** Back in **Settings → About → Updates**, the version line now ends in an update instead of
+  `built in`, e.g. `Margin 0.3.1 · runtime 0.3.1 · update 3f9a1c2e`. The id is the short form of the
+  publish from V031.4; `runtime 0.3.1` is unchanged. A wrong runtime here means the policy is not doing
+  what the build says.
+  **PASS / FAIL: ______**
+- **V031.8** **Settings → Sound & haptics**, with the media volume up: tap **Play** on all eight rows.
+  Each one is audible and is the sound of the thing named above it (Paper rustles, the stamp thumps, the
+  dial clicks, the clock ticks). Then tap **Paper**’s − until it reads `0%` and tap its **Play**: the
+  tap now says `Paper is at 0% — raise its volume to hear it.` instead of doing nothing. Turn the
+  master sound switch off and tap any **Play**: `Sound is off — turn it on above to hear a preview.`
+  A Play that stays silent while its row is above zero, or a toast that contradicts the slider, is the
+  failure this slice exists to fix.
+  **PASS / FAIL: ______**
+- **V031.9** **Settings → Look & feel → Progress bar**, choose **Spiral** (group *Any subject*). There
+  is **no dot** anywhere on the groove. The picker draws its preview at 30 of 50 minutes, so it already
+  shows two tones: a brighter inner run where time is still ahead and a dimmer outer run already spent,
+  with a clean boundary between them. A real period shows the same, the dim part growing inward as the
+  period runs out, until at the very end the whole groove is the dim tone. Watch it in **light and
+  dark** and at a small and a large system font size. The frames the vision pass must shoot are `p=0`,
+  `p=0.5`, `p=1`, light and dark, at 412×915 — those three states are not reachable from the picker's
+  single demo preview, so they are shot in the browser harness; the phone proves the same drawing in
+  the real band.
+  **PASS / FAIL: ______**
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

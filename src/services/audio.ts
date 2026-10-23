@@ -14,9 +14,34 @@ const SRC = {
   nudge: require('../../assets/sounds/nudge.wav'),
 } as const;
 export type SoundName = keyof typeof SRC;
+/** Every sound this build can load. The Sound page's preview map is checked against it, so a sample
+ *  naming a file nobody bundled is a failing test rather than a tap that does nothing. */
+export const SOUND_NAMES = Object.keys(SRC) as SoundName[];
+/**
+ * The one sound each Sound page row previews. It lives here, next to `SRC` and `groupOf`, because the
+ * preview only tells the truth if three things agree: the row's `SoundGroup` has an entry here, the
+ * entry names a file that is bundled, and the file belongs to that group so the slider next to it is
+ * the volume the preview actually uses. `audio-preview.test.ts` asserts all three.
+ */
+export const SAMPLE: Record<SoundGroup, SoundName> = { paper: 'place', stamp: 'stamp-here', done: 'done', notify: 'notify', toggle: 'toggle-on', dial: 'detent-3', clock: 'tick', break: 'tape-peel' };
+/**
+ * Why a preview tap would be silent, or `null` when it can be heard.
+ *
+ * The Play buttons used to call `play()` and throw the answer away, so a group at 0 % (or the master
+ * switch off) looked exactly like a broken sound: the tap answered with nothing at all. This is the
+ * sentence the control says instead, and it is a pure function so the wording is testable.
+ */
+export function previewSilence(g: SoundGroup, label: string, s: { soundOn: boolean; soundVol: Record<SoundGroup, number> }): string | null {
+  if (!s.soundOn) return 'Sound is off — turn it on above to hear a preview.';
+  if ((s.soundVol[g] ?? 0) <= 0) return `${label} is at 0% — raise its volume to hear it.`;
+  return null;
+}
 /* Durations of the files actually loaded above. Regenerate from manifest.json when the set is promoted. */
 const SECONDS: Record<SoundName, number> = { place: 0.22, shuffle: 0.5, crumple: 0.62, thud: 0.32, flutter: 0.55, tick: 0.05, tock: 0.05, 'stamp-here': 0.22, 'stamp-late': 0.2, 'stamp-absent': 0.36, 'stamp-sick': 0.3, 'stamp-cancel': 0.25, done: 0.85, notify: 1.2, 'toggle-on': 0.06, 'toggle-off': 0.06, 'detent-1': 0.09, 'detent-2': 0.09, 'detent-3': 0.09, 'detent-4': 0.09, bump: 0.18, thunk: 0.24, clack: 0.12, blip: 0.2, 'round-done': 0.95, 'break-start': 0.9, 'tape-peel': 0.66, nudge: 0.2 };
-const GROUP = (n: SoundName): SoundGroup => n.startsWith('stamp') ? 'stamp' : n.startsWith('detent') || ['bump', 'thunk', 'clack', 'blip', 'round-done'].includes(n) ? 'dial' : n === 'tick' || n === 'tock' ? 'clock' : n.startsWith('toggle') ? 'toggle' : n === 'done' ? 'done' : n === 'notify' ? 'notify' : n === 'break-start' || n === 'tape-peel' ? 'break' : 'paper';
+/** Which volume slider governs a sound. Exported because the Sound page's preview must be shown to
+ *  ride the row it sits on — `SAMPLE` maps a group to a sound, and this maps the sound back, so the
+ *  two cannot drift apart silently. */
+export const groupOf = (n: SoundName): SoundGroup => n.startsWith('stamp') ? 'stamp' : n.startsWith('detent') || ['bump', 'thunk', 'clack', 'blip', 'round-done'].includes(n) ? 'dial' : n === 'tick' || n === 'tock' ? 'clock' : n.startsWith('toggle') ? 'toggle' : n === 'done' ? 'done' : n === 'notify' ? 'notify' : n === 'break-start' || n === 'tape-peel' ? 'break' : 'paper';
 /** higher wins when the voice cap is reached; tiny ticks are the first to be dropped */
 const PRIO = (n: SoundName) => (n === 'tick' || n === 'tock' || n.startsWith('detent') ? 1 : n === 'notify' || n === 'round-done' || n === 'done' ? 4 : n.startsWith('toggle') ? 2 : 3);
 
@@ -67,8 +92,19 @@ function pool(n: SoundName): AudioPlayer[] {
   if (!p) { p = Array.from({ length: isDrag(n) ? DRAG_POOL : POOL }, () => createAudioPlayer(SRC[n])); pools.set(n, p); }
   return p;
 }
-/** Warm the small, latency-critical sounds so the first dial detent is not late. */
-export function preloadAudio() { (['detent-1', 'detent-2', 'detent-3', 'detent-4', 'tick', 'tock', 'stamp-here', 'toggle-on', 'toggle-off', 'place'] as SoundName[]).forEach((n) => { try { pool(n); } catch { /* ignore */ } }); }
+/**
+ * What boot warms: the latency-critical dial and stamp sounds, plus every file the Sound page's Play
+ * button can ask for. It is derived from `SAMPLE` instead of being a second hand-written list, because
+ * that list is exactly how `done`, `notify` and `tape-peel` stayed cold — their rows allocated a player
+ * and called `play()` before the asset was decoded, which on Android is a plausible silent first tap.
+ * `audio-preview.test.ts` asserts the cover, so adding a preview cannot reintroduce it.
+ */
+export const PRELOAD: SoundName[] = [...new Set<SoundName>([
+  'detent-1', 'detent-2', 'detent-3', 'detent-4', 'tick', 'tock', 'stamp-here', 'toggle-on', 'toggle-off', 'place',
+  ...Object.values(SAMPLE),
+])];
+/** Warm those sounds so the first dial detent, and the first Play tap, are not late. */
+export function preloadAudio() { PRELOAD.forEach((n) => { try { pool(n); } catch { /* ignore */ } }); }
 
 function stop(pl: AudioPlayer) { seeking.delete(pl); try { pl.pause(); } catch { /* ignore */ } }
 /** pause, await the seek, then play. play() must stay synchronous, so the resume is chained off the
@@ -95,7 +131,7 @@ function start(pl: AudioPlayer, g: number) {
 
 export function play(n: SoundName, gain = 1): boolean {
   if (!master || !vols || !activated) return false;
-  const g = vols[GROUP(n)] * gain; if (g <= 0.01) return false;
+  const g = vols[groupOf(n)] * gain; if (g <= 0.01) return false;
   const now = Date.now();
   if (now - (lastAt.get(n) ?? -1e9) < GUARD(n)) return false;
   active = active.filter((a) => a.end > now);

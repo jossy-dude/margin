@@ -26,13 +26,18 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * `live` is the off-screen gate from A1's handoff: `false` swaps the instrument in instantly instead of
  * animating it, so a bar on a page the user cannot see costs no animation. It defaults to `true`, so
  * no existing call site changes behaviour until its owner passes it.
+ *
+ * `frozen` pins the instrument to the caller's `now` instead of the wall clock. Only the Settings
+ * picker uses it: it previews a fixed demo day, and a tick would compute the phase from today's real
+ * time — past the end of every demo period — so the row you just tapped would jump from "half played"
+ * to "the period is over". Real bars keep the 1 Hz tick.
  */
-export function DayBar({ kind, periods, now, ink, bg, w, h = 58, live = true }: { kind: AnyBarKind; periods: BarPeriod[]; now: number; ink: string; bg: string; w: number; h?: number; live?: boolean }) {
+export function DayBar({ kind, periods, now, ink, bg, w, h = 58, live = true, frozen = false }: { kind: AnyBarKind; periods: BarPeriod[]; now: number; ink: string; bg: string; w: number; h?: number; live?: boolean; frozen?: boolean }) {
   const t0 = periods[0]?.start ?? 0, t1 = periods[periods.length - 1]?.end ?? 1, span = Math.max(1, t1 - t0);
   const day = clamp01((now - t0) / span);
   const id = asInstrument(kind);
   if (!periods.length) return <View style={{ height: h }} />;
-  if (id) return <Period id={id} periods={periods} now={now} ink={ink} bg={bg} w={w} h={h} live={live} />;
+  if (id) return <Period id={id} periods={periods} now={now} ink={ink} bg={bg} w={w} h={h} live={live} frozen={frozen} />;
   return <DayBars periods={periods} ink={ink} w={w} h={h} day={day} X={(ms: number) => ((ms - t0) / span) * (w - 4) + 2} live={live} />;
 }
 
@@ -45,11 +50,14 @@ export function DayBar({ kind, periods, now, ink, bg, w, h = 58, live = true }: 
  *
  * The tick is gated on `live` (A1 PERF #7): Today stays mounted behind the page you went to, so an
  * ungated 1 Hz re-render of the instrument kept burning frames on a screen nobody can see.
+ *
+ * `frozen` is the picker's escape from the tick, not a second clock: the phase comes from the caller's
+ * `now` so a preview of a demo day is drawn at that demo day's moment (see `DayBar`).
  */
-function Period({ id, periods, now, ink, bg, w, h, live }: { id: InstrumentId; periods: BarPeriod[]; now: number; ink: string; bg: string; w: number; h: number; live: boolean }) {
+function Period({ id, periods, now, ink, bg, w, h, live, frozen }: { id: InstrumentId; periods: BarPeriod[]; now: number; ink: string; bg: string; w: number; h: number; live: boolean; frozen: boolean }) {
   const { c } = useTheme(), reduce = useReduceMotion();
   const t = useNow(live ? 1000 : 60_000);
-  const a = activePeriod(periods, t || now);
+  const a = activePeriod(periods, frozen ? now : (t || now));
   const enter = useEnter(a ? `${id}|${a.period.start}` : id, reduce || !live);
   if (!a) return <View style={{ height: h }} />;
   const p = a.phase === 'before' ? 1 : a.left / (a.total || 1);

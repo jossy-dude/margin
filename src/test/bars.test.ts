@@ -290,11 +290,44 @@ describe('every instrument reads true at both ends', () => {
 
   it('no machine degenerates: every instrument draws a real object at every p, at every width', () => {
     for (const it of INSTRUMENTS) for (const w of WIDTHS) for (const p of PS) {
-      // the Spiral is the floor: at p=0 it is its resting groove plus the playhead dot, and nothing else
       const n = it.build(ctx(p, w)).length;
-      expect({ id: it.id, w, p, shapes: n }).toEqual({ id: it.id, w, p, shapes: n });
-      expect(n).toBeGreaterThanOrEqual(2);
+      /* The Spiral is the floor. Its spent ink is drawn OVER the groove — not beside it — so at both
+         ends it is exactly one path: a clean groove at p=1, a fully spent one at p=0. Every other
+         instrument keeps a housing and labels, so the floor there stays two. */
+      const floor = it.id === 'spiral' && (p === 0 || p === 1) ? 1 : 2;
+      expect({ id: it.id, w, p, drew: n >= floor }).toEqual({ id: it.id, w, p, drew: true });
     }
+  });
+
+  it('the spiral spends its ink instead of carrying a playhead: no dot, and the boundary moves', () => {
+    const shapes = (p: number, w = 351) => flat(instrument('spiral')!.build(ctx(p, w)));
+    // p=1 — nothing spent, so the resting groove is ONE path in the resting tone, with no fade of its own
+    const at1 = shapes(1);
+    expect(at1.length).toBe(1);
+    expect(at1[0]).toMatchObject({ t: 'p', ink: 'rest' });
+    expect((at1[0] as { op?: number }).op).toBeUndefined();
+    // p=0 — the period is over, so the whole groove is the spent tone. Still a groove, still no mark on it.
+    const at0 = shapes(0);
+    expect(at0.length).toBe(1);
+    expect((at0[0] as { op?: number }).op).toBeGreaterThan(0);
+    expect((at0[0] as { op?: number }).op).toBeLessThan(1);
+    // between the ends: the two halves of one groove, and only the spent half is dimmed
+    for (const p of [0.05, 0.25, 0.5, 0.75]) {
+      const two = shapes(p);
+      expect(two.length).toBe(2);
+      const ahead = two[0] as { op?: number }, spent = two[1] as { op?: number };
+      expect(two[0]).toMatchObject({ t: 'p', ink: 'rest' });
+      expect(ahead.op).toBeUndefined();
+      expect(two[1]).toMatchObject({ t: 'p', ink: 'rest' });
+      expect(spent.op).toBeGreaterThan(0);
+      expect(spent.op).toBeLessThan(1);
+    }
+    // the old contract's playhead dot is gone at every p and every width — no `c` of any kind
+    for (const p of PS) for (const w of WIDTHS) expect(shapes(p, w).some((s) => s.t === 'c')).toBe(false);
+    // and the boundary MOVES: the less time is left, the longer the spent half gets
+    const spentSegments = (p: number) => (shapes(p).find((s) => (s as { op?: number }).op !== undefined) as { d: string }).d.split('L').length;
+    expect(spentSegments(0.25)).toBeGreaterThan(spentSegments(0.75));
+    expect(spentSegments(0)).toBeGreaterThan(spentSegments(0.25));
   });
 });
 

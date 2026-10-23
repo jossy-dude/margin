@@ -3,6 +3,13 @@
     "name": "Margin",
     "slug": "marginalia",
     "version": "0.3.1",
+    "runtimeVersion": { "policy": "appVersion" },
+    "updates": {
+      "url": "https://u.expo.dev/a1177786-3b71-4f60-89b5-30fc633d3534",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "scheme": "marginalia",
     "userInterfaceStyle": "automatic",

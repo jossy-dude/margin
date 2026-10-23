@@ -19,7 +19,7 @@ import { DW, fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../do
 import { nudgeWord } from '../domain/timer';
 import { EXACT_ALARM_UNKNOWN, lockTextLine, logState, nextRingLine, noModuleNote, NO_MODULE_HINT, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
-import { play, type SoundName } from '../services/audio';
+import { play, previewSilence, SAMPLE } from '../services/audio';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { runExport, type ExportFormat, type ExportTarget } from '../services/exportFile';
@@ -30,10 +30,10 @@ import { ImportPage } from './Import';
 import { SemesterRange } from '../ui/SemesterRange';
 import { semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
-import type { Settings, SoundGroup } from '../domain/types';
+import { applyUpdate, checkForUpdate, otaAvailable, versionLine, type CheckResult } from '../services/ota';
+import type { Settings } from '../domain/types';
 
 const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'Reset' };
-const SAMPLE: Record<SoundGroup, SoundName> = { paper: 'place', stamp: 'stamp-here', done: 'done', notify: 'notify', toggle: 'toggle-on', dial: 'detent-3', clock: 'tick', break: 'tape-peel' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -147,6 +147,9 @@ export function SettingsSheet() {
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
    * to fire against an unmounted component. */
   const [armed, setArmed] = useState(false);
+  /* The Updates row's own state: what the last check said, and nothing else. A check is one network
+   * round-trip, so it is only ever started by a tap — the app checks on launch by itself. */
+  const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>('idle');
   /* The Diagnostics hint used to call `crashCount()` twice *inside the render body*, and
      `crashCount()` is blocking disk I/O: it opens the JSONL file, reads it whole and parses each
      line. `nameDraft` is local state, so every keystroke re-rendered this sheet and re-read the
@@ -183,7 +186,7 @@ export function SettingsSheet() {
     <Nav icon="trash" label="Reset" hint="Erase everything" to="about" />
   </>);
   if (page === 'appearance') body = (<>
-    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
+    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
     {/* The clock format lives here with the other display choices, and the switch is stated as the
         24-hour clock because that is what is true out of the box: it ships ON, so the app a new user
         opens is the app as built. Turning it off is the 12-hour reading — see `fmtTime`. */}
@@ -325,7 +328,7 @@ export function SettingsSheet() {
     <Hair />
     {SOUND_GROUPS.map((g) => (
       <View key={g.id} style={{ gap: 2 }}><Txt f="bold" s={20}>{g.label}</Txt><Txt f="serif" s={14} c="mut">{g.hint}</Txt>
-        <Row style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}><Stepper label={g.label} value={Math.round(s.soundVol[g.id] * 100)} min={0} max={100} step={10} fmt={(v) => `${v}%`} onChange={(v) => set({ soundVol: { ...s.soundVol, [g.id]: v / 100 } })} /><Btn small kind="ghost" icon="play" label="Play" quiet onPress={() => play(SAMPLE[g.id])} /></Row></View>))}
+        <Row style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}><Stepper label={g.label} value={Math.round(s.soundVol[g.id] * 100)} min={0} max={100} step={10} fmt={(v) => `${v}%`} onChange={(v) => set({ soundVol: { ...s.soundVol, [g.id]: v / 100 } })} /><Btn small kind="ghost" icon="play" label="Play" quiet a11y={`Play the ${g.label} preview`} onPress={() => { const why = previewSilence(g.id, g.label, s); if (why) { toast(why); return; } if (!play(SAMPLE[g.id])) toast(`Could not play ${g.label.toLowerCase()} — tap again.`); }} /></Row></View>))}
   </>);
   if (page === 'attendance') body = (<>
     <Toggle label="Lock attendance grid" hint="Nothing can change until you unlock it" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
@@ -375,6 +378,19 @@ export function SettingsSheet() {
     <Txt f="serif" s={16} c="mut">This erases the whole database file — subjects, timetable, attendance, tasks, notes, grades, focus history and settings — and hands back a fresh, empty planner. It cannot be undone, so export first if you care about your data.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={armReset} />
     <Txt f="serif" s={14} c="mut">Margin {APP_VERSION} · local-first, no account, no network needed.</Txt>
+    <Hair />
+    <Section title="Updates">
+      {/* Web and a build with updates switched off both get a sentence instead of a button that could
+          only ever answer "unavailable" — and the sentence names the right reason for each. */}
+      {otaAvailable() ? (<>
+        <Txt f="serif" s={15} c="mut">{versionLine()}</Txt>
+        <Row>
+          <Btn small kind="ghost" label={ota === 'checking' ? 'Checking…' : 'Check for updates'} disabled={ota === 'checking'} onPress={() => void checkOta()} />
+          {ota === 'ready' ? <Btn small label="Restart now" onPress={() => void applyUpdate()} /> : null}
+        </Row>
+        <Txt f="serif" s={14.5} c="mut">{OTA_LINE[ota]}</Txt>
+      </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Updates are checked in the installed app; this browser build cannot update itself.' : 'This build cannot update itself. Updates must be enabled when the app is built.'}</Txt>}
+    </Section>
   </>);
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 
@@ -393,8 +409,24 @@ export function SettingsSheet() {
     setSurePurge(false);
     void act.purgeDemo();
   }
+  /** One check per tap. `checkForUpdate` is total and answers rather than throwing, so there is no
+   *  catch here — the result line is the whole report. */
+  async function checkOta() {
+    if (ota === 'checking') return;
+    setOta('checking');
+    setOta(await checkForUpdate());
+  }
 }
 const clearSettingsPath = () => { while (getState().settingsPath.length) act.settingsPop(); };
+/** What the Updates row says after a check, one line, in the app's own voice. */
+const OTA_LINE: Record<CheckResult | 'idle' | 'checking', string> = {
+  idle: 'Checked automatically when the app opens.',
+  checking: 'Checking…',
+  current: 'You are on the newest version.',
+  ready: 'An update is downloaded. Restart to use it.',
+  error: 'Could not reach the update service. Try again later.',
+  unavailable: 'Updates are switched off in this build.',
+};
 const DEMO_NOW = new Date(2026, 9, 5, 10, 20).getTime(), at = (h: number, m: number) => new Date(2026, 9, 5, h, m).getTime();
 const DEMO_PERIODS = [{ start: at(8, 30), end: at(9, 20), label: 'Economics' }, { start: at(10, 0), end: at(10, 50), label: 'Discrete' }, { start: at(11, 45), end: at(12, 35), label: 'Tech', cancelled: true }, { start: at(14, 0), end: at(14, 50), label: 'Code' }];
 /** DEMO_NOW is 10:20 and DEMO_PERIODS[1] runs 10:00–10:50, so every instrument preview is drawn at
@@ -430,7 +462,7 @@ function BarPick({ id, n, d, on, onPress }: { id: string; n: string; d: string; 
       <HandBox seed={id} fill={c.slab} stroke={on ? c.acc : c.slab} sw={on ? 3 : 1.6} style={{ padding: 10, gap: 2 }}>
         <Txt f="bold" s={19} c={c.slabInk}>{n}{on ? '  ✓' : ''}</Txt><Txt f="serif" s={13.5} c={c.slabMut}>{d}</Txt>
         {on || isBarKind(id)
-          ? <DayBar kind={id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={w} h={52} />
+          ? <DayBar kind={id as BarKind} periods={DEMO_PERIODS} now={DEMO_NOW} ink={c.slabInk} bg={c.slab} w={w} h={52} frozen />
           : <View style={{ height: 44, width: w }}>
               <SvgXml xml={previewSvg(id, { p: DEMO_P, w, ink: c.slabInk, slab: c.slab, acc: c.acc, warn: c.warn, total: DEMO_TOTAL, left: DEMO_P * DEMO_TOTAL })} width={w} height={44} />
             </View>}
