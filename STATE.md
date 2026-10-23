@@ -1,8 +1,9 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-17 (W1–W4 + batch 2 committed — W4 = `97c1783`; **W5a "alarms honesty + D4 toggle"
-closed** — gate green, assert 9/9 ALL PASS, vision round 1 findings both fixed & re-verified; W5b
-full-screen pending D9 answer; **W6 (transport log) next**)_
+_Updated: 2026-10-23 (**v0.3.1 committed** — A = `5136499` (semester range, bulk import, pre-migration
+safety copies), B = `6f5bb63` (OTA plumbing, warm preview sounds, spiral elapsed ink). Gate 64 suites /
+1021 tests, boundaries clean; browser 25/25, spiral 14/14, tour probe 3/3. **Nothing built, published or
+pushed — the owner builds.** W5b full-screen still pending D9 answer; **v0.3.2 proof pass next**)_
 
 ## Git
 
@@ -89,6 +90,12 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 | 2.21 | **W5a orchestrator re-check green + vision round 1**: `npm run check` 52/851 green, diffs spot-read; vision judged 3 frames — items 1/4 PASS, **2 FAIL**: (2) D4 hint led with the state label `Off:` while the toggle renders ON (self-contradiction); (3) Delivery status opened mid-scroll, first verdict line bisected by the sheet edge (the sheet's `ScrollView` inherits the previous sub-page's scroll — the assert's own toggle tap scrolls ~91 px) | orchestrator + `vision-critic` (session `ses_eb63da1dcffegvwKf9XsQ7eJ9d`) | `.shots/w5/*.png`, `reports/w5a-slice.md` §6 |
 | 2.22 | **Both vision FAILs fixed in-pass and re-verified**: (2) hint → state-neutral *"When off, it still rings but the text stays hidden until you unlock"* (pinned in `settings-render.test.ts:346` + assert `[2b]`); (3) `Sheet` gained an optional `scrollKey` that keys its `ScrollView` (default `'s'` — every other sheet caller unchanged) and `SettingsSheet` passes the current page, so each sub-page opens at the top. Assert grew `[4d]`: retained `scrollTop` after nav `[]` + verdict line 78 px clear of the header. Gates re-run: check 52/851 green, **w5-assert 9/9 ALL PASS**, **w4-assert ALL PASS** (shared Sheet regresses nothing), frames re-shoot + inspected | orchestrator | `tools/w5-assert.mjs`, `src/ui/Sheet.tsx`, `src/sheets/Settings.tsx`, `reports/w5a-slice.md` §6 |
 | 2.23 | **Owner: "the clock in the home screen — the centre artifacts are not moving, none of them"** → root-caused and rebuilt. Every ornament read `clock.value`, a timestamp written by the dial's `useFrameCallback`; when that loop does not fire the whole centre freezes and nothing else complains (proved on web by `tools/probe-spin.mjs`: page visible, 59.8 fps counted over the same window, hands static at a fixed angle, ornaments static). Ornaments now **drive themselves** — `SpinView` runs one `withRepeat` per layer on the UI runtime, so the frame loop carries the hands only and can no longer kill the centre. Design pass on all five centres: `c` (Celtic Knot) shipped with **no centre motion at all** (pinned as "a static engraving") → the knot turns +9 dps over a −24 dps collet; `g` −6 → −12 dps **plus one accent jewel at a spoke tip**, because a 12-fold figure rotating by its own 30° repeat is geometrically identical every other second and cannot read as turning at *any* speed; `rb` ±12 → ±16. Masthead `CLOCK` 92 → 129 → **115** (owner's squint test, two rounds). Probe after: rb's two lattices MOVING. `npm run check` 52 suites / **854 tests** green, boundaries clean | orchestrator (Jossy reported) | `src/ui/clock/ClockFace.tsx`, `src/ui/clock/faces.ts`, `tools/probe-spin.mjs`, `tools/faces-sheet.mjs`, `tools/face-zoom.mjs`, `src/test/clock-engine.test.ts` §B |
+| 2.24 | **v0.3.1 scoped and briefed** (owner: "delegate it, don't build"). Six items taken from the Oct 19–22 vault notes, and what was left out said out loud: semester start **+ end**, bulk JSON import, pre-migration safety copies, install `expo-updates`, fix the per-row sound Play, spiral elapsed ink instead of a rotating dot. Excluded with reasons: notification redesign and permission-at-start (needs a design round), focus rebuild (owner designs it in OpenDesign), widget (native Kotlin), card shuffle, Today header, desktop tease. Two briefs written in the repo's contract style (`briefs/v031-A-data.md`, `-B-surface.md`), each with an explicit exclusions list | orchestrator | `briefs/v031-*.md` |
+| 2.25 | **v0.3.1-A delivered** (data): `semesterEnd` in the settings KV (no migration) + pure `domain/semester.ts`; date fields gained the year they never had and the day prints `07`; `domain/importPlan.ts` (both shapes — the app's own `raw` and a compact AI shape, idempotent by derived id, problems instead of throws); `Repository.importSnapshot` in both adapters, one transaction, never deletes; `services/safety.ts` dumps every table before a pending migration and keeps three; one `APP_VERSION`. Builder gate 62 suites / 980 tests | `builder` | `briefs/v031-A-data.md`, this file §2.26 |
+| 2.26 | **A re-checked by the orchestrator, then tested in the browser — which found what jest could not**: `npm run check` re-run 62/980 green, no suppressions/deleted tests/new deps, read the boot path (`dumpBeforeMigration` runs before `init()`, swallows its own failure), the parser and both adapters. `tools/v031-assert.mjs` (412×915) then found **1)** the Import preview printed `1 subjects · 1 classes · 1 tasks`, **2)** the date steppers wrapped 2+1 with an orphaned day whose single glyph reads like `?`, and **3)** proved the sample JSON imports, the toast counts 5 rows, the subject lands on Week, the semester survives the write, About prints 0.3.1. Two failures were my own assertions (wrong selector names; matching a static help sentence) — re-run, not reported as app bugs | orchestrator | `tools/v031-assert.mjs`, `.shots/v031/*.png` |
+| 2.27 | **A fixes + one defect the tour probe found**: singular/plural map; date fields rebuilt as an intentional two-row form (year alone — three steppers cannot share 360 dp at legible size, measured 156/157/318 px) with the day padded; and turning "No end date" off used to seed the **start day itself**, making a one-day semester that read as a term → `suggestEnd` seeds 15 weeks (`7 Sep → 21 Dec`). Gate 62/**987**, browser 23/23, tour probe 3/3. **Committed `5136499`** | `builder` + orchestrator | `.shots/v031/tour/handover-open.png`, `tools/v031-tour-probe.mjs` |
+| 2.28 | **v0.3.1-B delivered** (surface): `expo-updates` with `runtimeVersion` = appVersion, the EAS updates URL, check-on-load, no blocking fallback wait, a channel per profile; `services/ota.ts` total on every path (web/disabled → `unavailable`, throw → `error`, reload only after this session fetched something); Settings → About row; spiral rebuilt as one line whose played part is the same ink at half strength, growing from the outer end inwards; per-row Play now says *why* it is silent instead of discarding the answer | `builder` | `briefs/v031-B-surface.md`, `docs/DEVICE_CHECKLIST.md` §V031 |
+| 2.29 | **B re-checked and measured**: `npm run check` 64/1016 green; `tools/v031-spiral-shot.mjs` at shipping size (380×122 row, light+dark) reads 2 paths, ahead full strength, spent `opacity 0.5`, boundary moving with `p`. Two defects then found and fixed: the Look & feel row had **no hint at all** for a catalogue instrument (a `BarKind` lookup cannot name `spiral`), and **three of the eight previews were never warmed** (`done`, `notify`, `tape-peel`) — the likely native reason the Play buttons "do nothing" while they play on web; `PRELOAD` is now derived from `SAMPLE`. A third: the picker's **selected** preview ignored its demo moment and drew the real clock, so every instrument showed the "period over" state — a fully faded spiral the moment you tapped it (`frozen` prop; Today unchanged). Gate 64/**1021**, browser 25/25, spiral 14/14. **Committed `6f5bb63`** | `builder` + orchestrator | `tools/v031-{assert,spiral-shot,tour-probe}.mjs` |
 | 1.6 | **Owner answered D1–D5** (D1 a + MiMo for vision; D2 a; D3 a; D4 = b+c: toggle "show reminder text on lock screen", default ON, asked in onboarding; D5 a) → DECISIONS resolved, W5/W8 plan amended | Jossy (owner) + orchestrator | `DECISIONS.md` (Resolved lines), `PLAN.md` W5/W8 |
 | 1.7 | W2 brief drafted (native grain tiling investigation + status-bar band + DEVICE_CHECKLIST) | orchestrator | `briefs/W2-native-visuals.md` |
 
@@ -125,7 +132,8 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
 10. **W1 open items for later workstreams**: `sqlite.ts` now imports `ui/crashlog` (a data→ui import;
     boundaries stay green — fold into a cleanup if a later workstream touches it); `pendingOutbox(200)`
     reads the oldest 200 rows while the M4 prune caps the table at 500 — agree the direction when sync
-    lands (likely W6); the export path still has no import counterpart (pre-existing).
+    lands (likely W6); ~~the export path still has no import counterpart~~ — **closed in v0.3.1-A**
+   (`domain/importPlan.ts` + `Repository.importSnapshot`, merge-only by design — D11).
 11. **W4 header budget — the real story** (replacing the first guess): the deck header row has *zero*
     free space at 412 px, so the `flex: 1` on the group (kept — it absorbs if a larger font or screen
     ever gives any) was inert on its own; the fix is the five measured trims in 2.16. `headPad`'s
@@ -154,6 +162,26 @@ Forbidden per brief: `big-pickle`, `space-bunny`, `nemotron-3.5-super-vl` (and t
     builder rounds were already slow). Its scope (honesty sentence + y-order, D4 toggle round-trip,
     honesty copy, W4 12/24h smoke) is fully covered by `w5-assert` + `w4-assert`, both ALL PASS.
     On-device behaviour stays UNVERIFIED-ON-DEVICE per `reports/w5a-slice.md` §4.
+18. **v0.3.1 is code-complete and unbuilt.** The owner builds, so the release artefacts are his to
+    make; `docs/DEVICE_CHECKLIST.md` §V031 is the phone pass, and it is the only place any of the
+    following is settled: the pre-migration safety copy against a real `user_version`, SQLite import
+    atomicity, Android audibility of the preview sounds, and an OTA actually replacing the bundle.
+    **An APK without the updater cannot be updated over the air** — v0.3.1 installs the updater, and
+    the first build from it is the one that can receive updates. v0.3.2 is where the loop is proved.
+19. **Two import rules worth not re-litigating** (D11): the import is **merge-only** — it upserts by
+    id and never deletes, so a paste can add a term but cannot wipe one — and it is **paste-only**
+    (no file picker, no new dependency), because the source is an AI's answer, which is text.
+20. **The spiral's direction is a contract, not a preference.** `p` is the fraction *still to run*
+    (`types.ts:41`), so a fresh period is a whole groove and a finished one is entirely spent; the
+    spent ink grows from the **outer** end inwards, the way a record plays. A future edit that flips
+    either is not a style choice — it inverts what the bar says. D12 records it with the frames.
+21. **The sound bug did not reproduce as an audio failure on web** (measured: `done.wav` at volume
+    0.9, analyst peak 0.72). The honest conclusion is that the web path was never the failing one;
+    what shipped is the reason a failure is now *visible* (the row says "sound is off", "0%", or
+    "could not play — tap again") plus the one native-specific cause the code could show: three
+    preview sounds were never preloaded, so the first tap on Android could play before the asset was
+    decoded. If V031.8 still shows silence on a row above zero, instrument `play()`'s return value on
+    the device rather than guessing at layout.
 
 ## UX audit triage (2026-10-16 — report `reports/audit-ux.md`)
 
@@ -173,12 +201,19 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 
 ## Next
 
+- **v0.3.1 closed** (`5136499` + `6f5bb63`, both local — nothing pushed, nothing built). The owner
+  builds it when the version he wants is ready, so the next step is his: build `0.3.1`, install it,
+  and run `docs/DEVICE_CHECKLIST.md` §V031. That pass is what turns four UNVERIFIED-ON-DEVICE items
+  into facts (safety copy, import atomicity, preview audibility, the OTA loop).
+- **v0.3.2 "proves itself"** — the OTA loop end to end (publish a preview update, cold start twice,
+  data intact), plus the picker's remaining polish and whatever §V031 turns up. **v0.3.3 "feels like an
+  app"** (notifications, focus) and **v0.4 "native frontier"** (widget) stay unstarted until the owner
+  makes the design calls they need.
 - Done: W1 `46c056b`, batch1 `fbdc51a`, W2 `bd26592`, W3 `31d08d3`, batch2 `20f3d02`, W4 `97c1783`,
-  **W5a committed this pass** (single feat commit — the git log is the hash source; a commit cannot
-  know its own). **W5b** (full-screen presentation, ~40–60 lines Kotlin) is **pending DECISIONS D9**
-  — not started, checklist §W5b marked pending. **W6 (transport log — `src/services/export.ts` h12
-  included)** next; then W7 (stats) → W8 (onboarding incl. the D4 ask + the D7 copy) → W9 (production
-  readiness, absorbs M7/L2/M1).
+  W5a (single feat commit — the git log is the hash source). **W5b** (full-screen presentation, ~40–60
+  lines Kotlin) is **pending DECISIONS D9** — not started, checklist §W5b marked pending. **W6
+  (transport log — `src/services/export.ts` h12 included)** next; then W7 (stats) → W8 (onboarding
+  incl. the D4 ask + the D7 copy) → W9 (production readiness, absorbs M7/L2/M1).
 - The UX audit is delivered and triaged above; its two environmental one-offs are closed as
   non-reproducing, and UX-4 is verified not real. W8 carries the tour copy (D7).
 - Gate per workstream: builder → orchestrator re-check + diffstat → vision loop (UI workstreams,

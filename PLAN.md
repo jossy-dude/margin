@@ -96,6 +96,39 @@ Gate for every workstream: builder implements → I re-run `npm run check` + rea
   constraining `TxtProps.c` to `keyof Colors` and spec `Field.p` to real entity properties (fast-worker
   skipped it — call sites pass dynamic colour values, so the strict-TS pass fixes them together).
 
+## Out-of-band: v0.3.1 (2026-10-23) — shipped, not built
+
+W1–W5a are the v2 workstream. v0.3.1 is a separate, smaller release cut from the owner's vault notes
+(Oct 19–22) and the standing rule: **one shippable slice, exclusions named.** Two commits on
+`v2-improvements`, both local — **nothing pushed, tagged, built or published.** The owner builds.
+
+| # | Item | What shipped | Commit |
+|---|---|---|---|
+| 1 | Semester start **and end** | `semesterEnd` in the settings KV (no migration); pure `domain/semester.ts` (`semesterOf`, `inSemester`, `semesterLabel`, `clampToSemester`, `validRange`, `suggestEnd`); Grades, export, Settings and the tour print the range; date fields gained a year and the day prints `07` | A |
+| 2 | Bulk import | `domain/importPlan.ts` accepts the app's own `raw` export or a compact shape an AI produces; idempotent by derived id; problems instead of throws. `Repository.importSnapshot` in both adapters, one transaction, **merge-only** (D11) | A |
+| 3 | Persistence hardening | `services/safety.ts` dumps every user table to `Paths.document/marginalia/backups/` before a pending migration runs, keeps three, never blocks boot; Settings can share the newest | A |
+| 4 | OTA updater installed | `expo-updates`, `runtimeVersion` = appVersion, updates URL, `ON_LOAD`, `fallbackToCacheTimeout: 0`, channels per profile; `services/ota.ts` total on every path; About row that tells the truth on web (D10) | B |
+| 5 | Per-row Play button | Root cause was the button discarding `play()`'s answer; it now says *why* it is silent. Three of the eight previews (`done`, `notify`, `tape-peel`) were never preloaded — `PRELOAD` is now derived from `SAMPLE` | B |
+| 6 | Spiral bar | Playhead dot removed: one groove, played part at half strength, growing outer → inner; picker previews the demo moment instead of the wall clock (`frozen`) (D12) | B |
+
+**Explicitly not in v0.3.1** (each is a real v0.3.x item, none is a "forgot"): notification redesign and
+the permission-at-start ask (needs a design round, D9 still open on full-screen), the focus-mode rebuild
+(owner designs it first), the widget (native Kotlin), card shuffle, the Today header change, desktop
+tease, commute tracker, free-time system.
+
+**Gates:** 64 suites / 1021 tests, dependency boundaries clean, 25 browser assertions
+(`tools/v031-assert.mjs`), 14 spiral frames at shipping size (`tools/v031-spiral-shot.mjs`), 3 tour
+assertions (`tools/v031-tour-probe.mjs`).
+
+**What only the phone can settle:** pre-migration safety copy against a real `user_version`, SQLite
+import atomicity, Android audibility of the preview sounds, the OTA loop actually replacing a bundle,
+and the spiral at arm's length. `docs/DEVICE_CHECKLIST.md` §V031 is that pass.
+
+**Sequencing fact:** an APK built before the updater existed cannot be updated over the air. v0.3.1
+installs the mechanism; **v0.3.2 proves it** — that is the next slice (publish a preview update, cold
+start twice, data intact). Then v0.3.3 "feels like an app" (notifications, focus) and v0.4 "native
+frontier" (widget), both waiting on owner design calls.
+
 ## Risk register
 
 1. Native-only surfaces (grain, alarms, haptics, notifications) cannot run here → reason from docs, mark

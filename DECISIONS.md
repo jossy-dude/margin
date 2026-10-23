@@ -178,6 +178,69 @@ want `setAlarmClock` semantics as a deliberate project.
 **Answer:** _(awaiting Jossy — "D9: a" keeps the honest slice; "D9: b" adds the small native hook;
 "D9: c" green-lights the local-module scheduler)_
 
+## D10 — How an update reaches the phone, and what the first one cannot do
+
+The owner's note (Oct 21): "auto-update without reinstalling". `expo-updates` is now installed and
+configured — `runtimeVersion` pinned to the app version (`appVersion` policy), the EAS updates URL,
+`checkAutomatically: ON_LOAD`, `fallbackToCacheTimeout: 0`, and a channel per build profile
+(`preview`, `production`).
+
+The fork that matters is not technical, it is a sequencing fact worth writing down once:
+
+- **An APK built before the updater existed cannot be updated over the air.** There is no updater in
+  it. So v0.3.1 *installs* the mechanism and **v0.3.2 proves it**; the first build made from v0.3.1 is
+  the oldest build that can ever receive an update.
+- `fallbackToCacheTimeout: 0` means launch never waits on the network: the bundled JS runs immediately,
+  an update downloads in the background and applies on the next start. The alternative (`3000+`) buys
+  "the newest bundle on this launch" for up to three seconds of a student staring at a splash screen —
+  wrong trade for a planner opened in a corridor.
+- `ON_LOAD` (not `WIFI_ONLY`): an update is a few hundred KB; a student who is only ever on mobile data
+  would otherwise never receive one.
+- About says where updates are checked instead of offering a button that can only answer
+  "unavailable" on web or in a build with updates off.
+
+**Answer:** as built — v0.3.1 installs, v0.3.2 proves; the proof is `docs/DEVICE_CHECKLIST.md` §V031.
+
+## D11 — Import merges; it never deletes
+
+A pasted file can be wrong in ways the app cannot see: a stale export, an AI that invented a subject, a
+half-copied JSON. The import therefore:
+
+- **upserts by id and never deletes.** A paste can add a term or correct rows it names; it cannot wipe
+  the timetable. There is no "replace everything" mode — that is what the erase button and a fresh
+  export are for.
+- **is idempotent.** An explicit `id` wins; otherwise the id is derived from the row's natural key, so
+  importing the same file twice produces the same rows rather than duplicates. The sheet says the row
+  count before writing and the toast repeats it after.
+- **blocks on problems, not on warnings.** An unresolvable course name, a bad weekday, an impossible
+  time: the import button stays disabled and the sheet prints the row and the field. Unknown keys are a
+  warning and are ignored, because an AI will always add one.
+- **is paste-only.** No file picker, no new dependency: the source is a language model's answer, which
+  is text on a clipboard.
+
+**Answer:** as built (v0.3.1-A). If a "replace" mode is ever wanted it must be a separate, explicitly
+armed action with its own undo.
+
+## D12 — The spiral: which way the ink goes
+
+`Ctx.p` is the fraction of the active period **still to run** (`types.ts:41`) — `1` has not started,
+`0` is over. The spiral therefore draws one groove and dims the **played** part to half strength,
+growing from the **outer** end inwards, the way a record plays. At `p=1` the groove is whole and bright;
+at `p=0` all of it is spent; in between the boundary — same stroke, same ink, half the weight — is the
+thing the eye finds, which is exactly what the dot used to say and no longer has to.
+
+It replaced a playhead **dot** (owner, Oct 22: "dim instead of a dot rotating"). Two properties are
+contracts, not taste, and `bars.test.ts` pins both: no circle at any `p`, and the spent path's opacity
+strictly between 0 and 1. A future edit that flips the direction, or reintroduces a marker, is
+inverting what the bar says — not restyling it.
+
+The Settings picker draws every instrument at the same demo moment (`DEMO_P = 0.6`). Its **selected**
+row used to ignore that moment and use the wall clock, so tapping an instrument showed it in the
+"period over" state — for the spiral, a fully faded disc. `DayBar` gained `frozen` for that; `Today`
+keeps the 1 Hz tick.
+
+**Answer:** as built (v0.3.1-B), frames in `.shots/v031/spiral-{light,dark}.png`.
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._
