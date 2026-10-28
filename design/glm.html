@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--
+  ══════════════════════════════════════════════════════════════════════════
+  MARGINALIA — FOCUS SCREEN REDESIGN · agent GLM · v1
+  ══════════════════════════════════════════════════════════════════════════
+  DIAGNOSIS of the shipped screen (from Focus.tsx + .shots/w3/*.png):
+
+  · The baked journal-page photo occupies the top ~45% of the screen but is
+    pure decoration; the timer's real instrument (the dial) starts at y=350.
+    Half the page is a picture of a city the timer does nothing with.
+  · The countdown — the one thing this screen exists to show — is the most
+    timid element: a 152×38 slip under the dial, and the status line in 12.5px
+    italic. The hierarchy is inverted: decoration loud, information quiet.
+  · Three identical filled hand-cut tiles (gear/back/sound) crowd the top
+    right; chrome reads louder than content.
+  · The dial's artwork (guilloché + rosettes) drowns: the face sits at 0.86
+    opacity over a photo background, so the engraving reads as haze.
+  · Accent colour is essentially unused (only the progress rim); the page is
+    two-tone. State changes are barely legible across the whole screen.
+  · Bottom third is empty except the baked photo's landscape; vertical rhythm
+    between clusters is arbitrary (6/2px gaps vs. 70px voids).
+
+  WHAT I CHANGED AND WHY:
+
+  · Background is *designed*: stationery dot-grid, a journal margin rule,
+    a pen-sketched landscape (the photo's landscape redrawn as a line sketch)
+    in the bottom band, grain + vignette. No photographs anywhere.
+  · The dial is the hero: bigger (280-unit face), artwork re-engraved as crisp
+    SVG (guilloché weave + two rosette lattices + centre wheel with one accent
+    jewel, rotating only while running, per ClockFace's MOVES convention),
+    feathered edge preserved so the clip seam dissolves into the page.
+  · The readout slip is nearly 1.5× bigger and re-homed as the second voice of
+    the page; tape stays, red-pen warn border stays, per-tick flash stays.
+  · Top-right controls are outline-only stamps (quieter chrome, one visual
+    weight); the round badge keeps its tilt and its four dots.
+  · Task card, presets 25/45/50/90, Flow toggle, Start/Pause, break · 5m,
+    end session/leave, handwritten aside — all kept, restyled, re-spaced on an
+    honest 8-ish unit rhythm; the bottom band gives the sketch room to breathe.
+  · One palette, one accent (#8A4B27): rim progress, rosette jewel, focus ring.
+    Round done = the red rubber stamp; last 10s = red pen round the slip.
+
+  EXCLUDED from v1 (per brief): dark theme, break sticker, real store-timer
+  logic (preview states only), keyboard/drag beyond a demonstrated press,
+  full a11y audit, any change to app source files.
+  ══════════════════════════════════════════════════════════════════════════
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Redesign of the Marginalia Focus timer screen: the hand-cut paper world with a designed background (no photos), the guilloché dial as hero, and a legible countdown slip.">
+<title>Marginalia — Focus screen redesign (GLM)</title>
+<style>
+  /* ── tokens (src/tokens/theme.ts · refined.light) ─────────────────────── */
+  :root{
+    --paper:#FAF4E6; --card:#FFFBF1; --desk:#E9DFC9; --ink:#2A241C;
+    --mut:#665B4B; --acc:#8A4B27; --hl:#F3E3A8; --bad:#9C3322;
+    --deskdark:#241E16; --onyx:#17130F;
+    --s:.9;
+  }
+  @font-face{ font-family:'Caveat'; font-weight:500; src:url(../node_modules/@expo-google-fonts/caveat/500Medium/Caveat_500Medium.ttf) format('truetype'); }
+  @font-face{ font-family:'Caveat'; font-weight:700; src:url(../node_modules/@expo-google-fonts/caveat/700Bold/Caveat_700Bold.ttf) format('truetype'); }
+  @font-face{ font-family:'NewsreaderIt'; font-weight:400; font-style:italic; src:url(../node_modules/@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf) format('truetype'); }
+  @font-face{ font-family:'NewsreaderIt'; font-weight:600; font-style:italic; src:url(../node_modules/@expo-google-fonts/newsreader/600SemiBold_Italic/Newsreader_600SemiBold_Italic.ttf) format('truetype'); }
+  @font-face{ font-family:'Marker'; font-weight:400; src:url(../node_modules/@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf) format('truetype'); }
+  @font-face{ font-family:'Type'; font-weight:400; src:url(../node_modules/@expo-google-fonts/special-elite/400Regular/SpecialElite_400Regular.ttf) format('truetype'); }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    min-height:100dvh; display:flex; flex-direction:column;
+    background:
+      radial-gradient(140% 110% at 50% -10%, rgba(250,244,230,.05), rgba(0,0,0,0) 55%),
+      linear-gradient(180deg, #2A2318 0%, #241E16 45%, #1D1810 100%);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{ font:inherit; background:none; border:0; cursor:pointer; color:inherit; }
+  button, .pill{ transition:translate .12s ease, scale .12s ease, opacity .2s ease; }
+  button:active{ translate:0 1.5px; scale:.965; }
+  button.hb:hover{ translate:0 -1.5px; }
+  ::selection{ background:var(--hl); color:var(--ink); }
+  :focus-visible{ outline:2.5px dashed var(--acc); outline-offset:3px; border-radius:3px; }
+
+  /* ── desk + review controls (outside the frame) ──────────────────────── */
+  .stage{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  #fit{ position:relative; }
+  .phone{
+    position:absolute; left:50%; top:50%;
+    width:464px; height:1025px;
+    translate:-50% -50%;
+    transform:scale(var(--s));
+    background:var(--onyx);
+    border-radius:56px; padding:12px;
+    box-shadow:0 40px 90px rgba(0,0,0,.55), 0 4px 14px rgba(0,0,0,.5),
+      inset 0 0 0 1.5px rgba(250,236,205,.10), inset 0 0 0 5px rgba(250,236,205,.03);
+  }
+  .screen{
+    position:relative; width:440px; height:1001px;
+    background:var(--paper); border-radius:44px; overflow:hidden;
+  }
+  .deskbar{ display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 12px 22px; }
+  .deskcap{
+    font:400 12px 'Type',monospace; letter-spacing:2px; color:rgba(250,244,230,.55);
+    margin-right:6px; text-transform:lowercase;
+  }
+  .pill{
+    font:700 18px 'Caveat'; color:#E9DFC9; padding:5px 16px 7px;
+    border:1.5px solid rgba(233,223,201,.32); border-radius:19px;
+    background:rgba(233,223,201,.05);
+  }
+  .pill[aria-pressed="true"]{ background:rgba(233,223,201,.16); color:#FAF4E6; border-color:rgba(250,244,230,.6); }
+  .pill:hover{ background:rgba(233,223,201,.10); }
+
+  /* ── screen scaffolding ──────────────────────────────────────────────── */
+  .screen main{ position:absolute; inset:0; }
+  .bg, .vig{ position:absolute; inset:0; pointer-events:none; }
+  .vig{ z-index:1; background:radial-gradient(130% 105% at 50% 42%, rgba(0,0,0,0) 58%, rgba(96,68,32,.13) 100%); }
+  .vh{ position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
+  /* hand-cut box shell: injected svg sits under content */
+  .hb{ position:absolute; }
+  .hbs{ position:absolute; left:-4px; top:-4px; pointer-events:none; }
+  .hb>*:not(.hbs){ position:relative; }
+
+  /* ── header ──────────────────────────────────────────────────────────── */
+  .badge{
+    left:30px; top:18px; width:204px; height:48px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    transform:rotate(-1.5deg);
+    font:700 20px/1 'Caveat'; color:var(--ink); white-space:nowrap;
+  }
+  .dots{ display:flex; gap:4px; }
+  .dot{ width:9px; height:9px; border-radius:50%; border:1.6px solid var(--ink); background:transparent; }
+  .dot.filled{ background:var(--ink); }
+  .tops{ position:absolute; left:278px; top:12px; width:148px; height:48px; display:flex; gap:10px; }
+  .tbtn{ position:relative; width:44px; height:44px; display:grid; place-items:center; color:var(--ink); }
+  .tbtn svg{ pointer-events:none; }
+  .tbtn.off{ color:var(--mut); }
+
+  /* ── task card ───────────────────────────────────────────────────────── */
+  .task{
+    left:30px; top:92px; width:380px; height:96px;
+    padding:13px 15px 10px; transform:rotate(-1deg);
+  }
+  .course{
+    font:italic 600 17px/1.1 'NewsreaderIt'; color:var(--ink); width:max-content;
+    border-bottom:1.5px solid var(--ink); padding-bottom:1px;
+  }
+  .mk{ font:400 20px/1.3 'Marker'; color:var(--ink); margin-top:7px; max-width:272px; letter-spacing:.2px; }
+  .swap{
+    position:absolute; right:10px; bottom:10px; height:30px; padding:0 3px;
+    font:700 15px 'Caveat'; color:var(--mut);
+    border-bottom:1.5px dashed var(--mut);
+    transition:opacity .2s ease, translate .12s ease, scale .12s ease;
+  }
+  .swap:active{ translate:0 1.5px; scale:.965; }
+  #page:not(.ready) .swap{ opacity:.4; }
+
+  /* ── the dial ────────────────────────────────────────────────────────── */
+  .dial{ left:80px; top:200px; width:280px; height:280px; }
+  .dial svg{ display:block; }
+  #hand{ position:absolute; inset:0; transform-origin:140px 140px; will-change:transform; }
+  #hand.jolt{ animation:jolt .18s ease-out; }
+  @keyframes jolt{ 0%{ transform:rotate(var(--a)) } 30%{ transform:rotate(calc(var(--a) + 1.6deg)) } 100%{ transform:rotate(var(--a)) } }
+  #art .wheel{ transform-origin:140px 140px; }
+  #art .latOut{ transform-origin:140px 140px; }
+  #art .latIn{ transform-origin:140px 140px; }
+  #page.running #art .wheel{ animation:spin 30s linear infinite; }
+  #page.running #art .latOut{ animation:spin 19s linear infinite; }
+  #page.running #art .latIn{ animation:spin 19s linear infinite reverse; }
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+
+  /* ── handwritten aside + doodles ─────────────────────────────────────── */
+  /* the copy overruns a 76px box anchored 2px from the edge, so the line clipped at x=440
+     (fixed: wider box pulled in from the edge, one notch smaller — the dial's face ends at x=330
+     at this height, so 336 is clear of it). */
+  .aside{
+    position:absolute; z-index:2; right:8px; top:224px; width:96px;
+    font:500 16px/1.05 'Caveat'; color:var(--ink); opacity:.8;
+    transform:rotate(6deg); text-align:left;
+  }
+  .leftnote{
+    position:absolute; z-index:2; left:10px; top:516px; width:70px;
+    font:500 15px/1.02 'Caveat'; color:var(--mut); opacity:.75;
+    transform:rotate(-7deg); text-align:left;
+  }
+
+  /* ── readout slip ────────────────────────────────────────────────────── */
+  .slip{ left:110px; top:502px; width:220px; height:62px; transform:rotate(-1.2deg); }
+  .slip .num{
+    padding-left:26px; height:100%; display:grid; place-items:center;
+    font:400 37px/1 'Type','Courier New',monospace; letter-spacing:-1px;
+    color:var(--ink); font-variant-numeric:tabular-nums;
+  }
+  .slip .flashpath{ opacity:0; }
+  .slip .flashpath.flash{ animation:flashA .22s ease-out; }
+  @keyframes flashA{ 0%{ opacity:.14 } 100%{ opacity:0 } }
+  .slip .warn{
+    opacity:0; animation:none;
+  }
+  body[data-state="warn"] .slip .warn{
+    opacity:1; animation:warnPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes warnPulse{ 0%,100%{ opacity:.55 } 50%{ opacity:1 } }
+  .tape{ position:absolute; pointer-events:none; }
+  .tape svg{ display:block; }
+
+  /* ── status ──────────────────────────────────────────────────────────── */
+  .status{
+    position:absolute; left:40px; top:574px; width:360px; text-align:center;
+    font:italic 600 15px/1.2 'NewsreaderIt'; color:var(--mut);
+  }
+
+  /* ── presets + flow ──────────────────────────────────────────────────── */
+  .presets{
+    position:absolute; left:28px; top:602px; width:384px; height:54px; display:flex; gap:7px;
+    transition:opacity .2s ease;
+  }
+  #page:not(.ready) .preset{ opacity:.55; }
+  .preset{ position:relative; flex:1 1 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+  .preset .n{ font:700 22px/1 'Caveat'; color:var(--ink); }
+  .preset .u{ font:500 11px/1 'Caveat'; color:var(--mut); margin-top:1px; }
+  .preset.sel .n{ color:var(--card); }
+  .preset.sel .u{ color:var(--desk); opacity:.8; }
+  .flow{ position:relative; flex:0 0 112px; display:flex; align-items:center; justify-content:center; gap:7px; }
+  .flow .fdot{ width:9px; height:9px; border-radius:50%; border:1.6px solid var(--ink); background:transparent; }
+  .flow .lbl{ font:700 16px/1 'Caveat'; color:var(--ink); white-space:nowrap; }
+  .flow.on .fdot{ background:var(--card); border-color:var(--card); }
+  .flow.on .lbl{ color:var(--card); }
+
+  /* ── primary ─────────────────────────────────────────────────────────── */
+  .go{
+    left:115px; top:672px; width:210px; height:60px; transform:rotate(-.6deg);
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .go .lbl{ font:700 27px/1 'Caveat'; color:var(--card); }
+  .go .gi{ color:var(--card); display:grid; place-items:center; }
+
+  /* ── bottom row ──────────────────────────────────────────────────────── */
+  .brk{
+    left:36px; top:754px; height:40px; padding:0 13px;
+    display:flex; align-items:center; gap:7px; transform:rotate(-1.5deg);
+    color:var(--ink); transition:opacity .2s ease, translate .12s ease, scale .12s ease;
+  }
+  .brk .t{ font:700 16px/1 'Caveat'; }
+  .brk:disabled{ opacity:.5; cursor:default; }
+  .brk:disabled:hover{ translate:none; }
+  .brk:disabled:active{ translate:none; scale:none; }
+  .leave{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    height:40px; min-width:84px; padding:0 12px;
+    font:700 19px/1 'Caveat'; color:var(--ink);
+  }
+  .leave-slot{ position:absolute; left:296px; top:752px; width:110px; height:44px; transform:rotate(1deg); }
+  .leave-slot .leave{ width:100%; height:100%; }
+
+  /* ── round-done stamp ────────────────────────────────────────────────── */
+  .stamp{
+    position:absolute; left:95px; top:286px; width:250px; height:108px;
+    display:grid; place-content:center; text-align:center; gap:0;
+    border:2.5px solid var(--bad); border-radius:14px;
+    opacity:0; transform:rotate(-11deg) scale(1.7);
+    pointer-events:none; z-index:5;
+    transition:opacity .15s ease, transform .4s ease;
+  }
+  .stamp::after{ content:''; position:absolute; inset:5px; border:2px solid var(--bad); border-radius:9px; }
+  .stamp .t{ font:700 30px/1 'Caveat'; text-transform:uppercase; letter-spacing:1.6px; color:var(--bad); }
+  .stamp .n{ font:400 16px/1 'Type'; letter-spacing:3px; color:var(--bad); margin-top:3px; }
+  body[data-state="done"] .stamp{
+    opacity:1; transform:rotate(-11deg) scale(1);
+    transition:opacity .12s ease, transform .46s cubic-bezier(.2,1.5,.3,1);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{ animation:none !important; transition:none !important; }
+  }
+</style>
+</head>
+<body data-state="ready">
+
+<header class="deskbar" aria-label="Review controls">
+  <span class="deskcap" aria-hidden="true">review&nbsp;controls</span>
+  <button class="pill" data-go="ready" aria-pressed="true">ready</button>
+  <button class="pill" data-go="running" aria-pressed="false">running</button>
+  <button class="pill" data-go="warn" aria-pressed="false">last 10&nbsp;s</button>
+  <button class="pill" data-go="done" aria-pressed="false">round done</button>
+</header>
+
+<main class="stage">
+  <div id="fit">
+    <div class="phone">
+      <div class="screen">
+        <main id="page" class="ready" aria-label="Focus timer screen (design preview)">
+          <h1 class="vh">Focus</h1>
+
+          <!-- ── designed background: stationery dots, margin rule, pen-sketch landscape, grain, tape ghosts ── -->
+          <svg class="bg" viewBox="0 0 440 1001" width="440" height="1001" aria-hidden="true">
+            <defs>
+              <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+                <circle cx="12" cy="12" r="1" fill="#2A241C" fill-opacity=".075"/>
+              </pattern>
+              <filter id="grain" x="0" y="0" width="100%" height="100%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/>
+                <feColorMatrix type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.13  0 0 0 0 0.10  0 0 0 0.05 0"/>
+              </filter>
+              <radialGradient id="featherGrad">
+                <stop offset="0" stop-color="#FAF4E6" stop-opacity="0"/>
+                <stop offset=".93" stop-color="#FAF4E6" stop-opacity="0"/>
+                <stop offset=".985" stop-color="#FAF4E6" stop-opacity="1"/>
+              </radialGradient>
+            </defs>
+            <rect width="440" height="1001" fill="url(#dots)"/>
+            <!-- journal margin rule -->
+            <path d="M30 78 V 950" stroke="#2A241C" stroke-opacity=".10" stroke-width="2"/>
+            <!-- faint collage tape ghosts -->
+            <g fill="#E7D9AE" fill-opacity=".28" stroke="#B8A56E" stroke-opacity=".22" stroke-width="1">
+              <path transform="rotate(48 386 520)" d="M363 513 Q 374 510 386 511 Q 399 510 409 514 L 407 528 Q 396 525 385 526 Q 373 527 364 527 Z"/>
+            </g>
+            <!-- the landscape, redrawn as a margin pen-sketch -->
+            <g fill="none" stroke="#2A241C" stroke-linecap="round" stroke-linejoin="round">
+              <g stroke-opacity=".30" stroke-width="1.5">
+                <path d="M-8 902 C 60 884 122 890 172 902 S 280 926 332 904 S 404 882 448 898"/>
+                <path d="M344 902 V 886 M344 886 L 348 880 L 352 886 M348 880 V 876 M348 888 H 356 M356 888 V 894 M356 888 L 360 884"/>
+              </g>
+              <g stroke-opacity=".24" stroke-width="1.7">
+                <path d="M-8 944 C 42 926 92 930 142 940 S 242 960 312 944 S 398 920 448 934"/>
+              </g>
+              <g stroke-opacity=".26" stroke-width="1.4">
+                <path d="M226 894 q3 -16 1 -24 M231 892 q3 -14 2 -22 M236 894 q3 -15 1 -23"/>
+              </g>
+              <g stroke-opacity=".30" stroke-width="1.4">
+                <path d="M292 858 q4 -4 8 0 M305 864 q4 -4 8 0 M318 855 q4 -4 8 0"/>
+              </g>
+              <g stroke-opacity=".14" stroke-width="1.6">
+                <path d="M22 968 l 13 -8 M 68 974 l 13 -8 M 116 966 l 13 -8 M 164 972 l 13 -8 M 214 966 l 13 -8 M 262 972 l 13 -8 M 312 964 l 13 -8 M 362 970 l 13 -8 M 404 962 l 13 -8"/>
+              </g>
+              <g stroke-opacity=".30" stroke-width="1.4">
+                <path d="M34 990 q2 -10 4 -14 M40 992 q3 -12 7 -16 M28 992 q1 -8 2 -12"/>
+                <path d="M404 986 q2 -10 5 -15 M412 988 q2 -8 5 -12"/>
+              </g>
+            </g>
+            <!-- doodle arrows toward the dial -->
+            <g fill="none" stroke="#2A241C" stroke-opacity=".30" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 358 C 26 350 42 342 58 332 M58 332 l -9 .5 M58 332 l -4 8"/>
+              <path d="M424 344 C 414 362 402 376 388 386 M388 386 l 5 -8 M388 386 l 8 3"/>
+            </g>
+            <rect width="440" height="1001" filter="url(#grain)"/>
+          </svg>
+          <div class="vig"></div>
+
+          <!-- ── round badge + four dots ── -->
+          <div class="hb badge" data-hb="204,48,21" aria-live="polite" role="status">
+            <span id="badgeTxt">Round 1 · ready</span>
+            <span class="dots" aria-hidden="true">
+              <i class="dot filled"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i>
+            </span>
+          </div>
+
+          <!-- ── gear / back / sound ── -->
+          <div class="tops">
+            <button class="tbtn hb" data-hb="44,44,7" aria-label="Settings" id="btnSettings"></button>
+            <button class="tbtn hb" data-hb="44,44,13" aria-label="Back to Today" id="btnBack"></button>
+            <button class="tbtn hb" data-hb="44,44,3" aria-label="Sounds" aria-pressed="true" id="btnSound"></button>
+          </div>
+
+          <!-- ── task card ── -->
+          <div class="hb task" data-hb="380,96,44" style="position:absolute">
+            <span class="toast" style="position:absolute;left:-11px;top:-6px" data-tape="46,-24" aria-hidden="true"></span>
+            <span class="course">Personal</span>
+            <div class="mk">Free focus</div>
+            <button class="swap" id="btnSwap" aria-label="Swap task, now Free focus">swap task</button>
+          </div>
+
+          <!-- ── the dial ── -->
+          <div class="hb dial" id="dial" style="pointer-events:auto" role="slider" tabindex="0"
+               aria-valuemin="5" aria-valuemax="240" aria-valuenow="25" aria-valuetext="25 minutes"
+               aria-label="Focus minutes. Swipe up or down to change.">
+            <div id="art" aria-hidden="true"></div>
+            <svg id="hand" viewBox="0 0 280 280" width="280" height="280" aria-hidden="true">
+              <path d="M140 154 L140 54" stroke="#2A241C" stroke-width="3" stroke-linecap="round"/>
+              <path d="M140 34 L146.5 58 L133.5 58 Z" fill="#2A241C"/>
+              <circle cx="140" cy="140" r="6.5" fill="#2A241C"/>
+            </svg>
+          </div>
+
+          <!-- handwritten aside -->
+          <p class="aside">focus doesn't<br>happen by<br>accident</p>
+          <p class="leftnote" aria-hidden="true">drag the dial<br>to any length</p>
+
+          <!-- ── readout slip ── -->
+          <div class="hb slip" id="slip">
+            <span class="num" id="readout">25 min</span>
+            <span class="tape" data-tape="42,-12" style="left:-14px;top:5px" aria-hidden="true"></span>
+          </div>
+          <p class="status" id="status">ready when you are</p>
+
+          <!-- ── presets + flow ── -->
+          <div class="presets" role="group" aria-label="Round length">
+            <button class="hb preset" data-hb="60,54,251" data-min="25" aria-pressed="true"><span class="n">25</span><span class="u">min</span></button>
+            <button class="hb preset" data-hb="60,54,451" data-min="45" aria-pressed="false"><span class="n">45</span><span class="u">min</span></button>
+            <button class="hb preset" data-hb="60,54,501" data-min="50" aria-pressed="false"><span class="n">50</span><span class="u">min</span></button>
+            <button class="hb preset" data-hb="60,54,901" data-min="90" aria-pressed="false"><span class="n">90</span><span class="u">min</span></button>
+            <button class="hb flow" data-hb="112,54,771" aria-pressed="false" aria-label="Flow mode: keep going after the round ends">
+              <span class="fdot"></span><span class="lbl" id="flowLbl">Flow off</span>
+            </button>
+          </div>
+
+          <!-- ── primary ── -->
+          <button class="hb go" data-hb="210,60,901" data-fill="ink" id="btnGo">
+            <span class="gi" id="goIcon"></span><span class="lbl" id="goLbl">Start</span>
+          </button>
+
+          <!-- ── break + leave ── -->
+          <button class="hb brk" data-hb="150,40,331" data-sw="2" id="btnBrk">
+            <span id="brkIcon"></span><span class="t">break · 5m</span>
+          </button>
+          <div class="leave-slot">
+            <button class="hb leave" data-hb="110,44,555" data-fill="none" data-shadow="0" data-sw="2" id="btnLeave">leave</button>
+          </div>
+
+          <!-- ── round-done stamp ── -->
+          <div class="stamp" aria-hidden="true">
+            <span class="t">Round done</span>
+            <span class="n">1</span>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ═══ helpers ═════════════════════════════════════════════════════════════ */
+
+/* handPath ported from src/ui/hand.ts */
+function scaleRadii(h, v, w, hgt){
+  const f = Math.min(1, ...[[w, h[0]+h[1]],[w, h[2]+h[3]],[hgt, v[0]+v[3]],[hgt, v[1]+v[2]]].map(([side, sum]) => sum ? side/sum : 1));
+  return { h: h.map(x => x*f), v: v.map(x => x*f), f };
+}
+function rnd(seed){ let a = seed>>>0; return () => {
+  a = (a + 0x6d2b79f5)>>>0; let t = a;
+  t = Math.imul(t ^ (t>>>15), t|1); t ^= t + Math.imul(t ^ (t>>>7), t|61);
+  return ((t ^ (t>>>14))>>>0)/4294967296; };
+}
+function outline(w, h, H, V, step=7){
+  const r = scaleRadii(H,V,w,h);
+  const [tlx,trx,brx,blx] = r.h, [tly,try_,bry,bly] = r.v;
+  const pts = [];
+  const arc = (cx,cy,rx,ry,a0,a1) => { const n = Math.max(2, Math.round(Math.max(rx,ry)*Math.abs(a1-a0)/step));
+    for(let i=0;i<n;i++){ const a=a0+((a1-a0)*i)/n; pts.push([cx+rx*Math.cos(a), cy+ry*Math.sin(a)]); } };
+  const line = (x0,y0,x1,y1) => { const n = Math.max(1, Math.round(Math.hypot(x1-x0,y1-y0)/step));
+    for(let i=0;i<n;i++) pts.push([x0+((x1-x0)*i)/n, y0+((y1-y0)*i)/n]); };
+  const P = Math.PI;
+  arc(tlx,tly,tlx,tly,P,1.5*P); line(tlx,0,w-trx,0);
+  arc(w-trx,try_,trx,try_,1.5*P,2*P); line(w,try_,w,h-bry);
+  arc(w-brx,h-bry,brx,bry,0,.5*P); line(w-brx,h,blx,h);
+  arc(blx,h-bly,blx,bly,.5*P,P); line(0,h-bly,0,tly);
+  return pts;
+}
+function handPath(w, h, H, V, seed, amp=1.1){
+  const pts = outline(w,h,H,V), n = pts.length, r = rnd(seed), K = Math.max(6, Math.round(n/9));
+  const ctrl = Array.from({length:K+1}, () => [r()*2-1, r()*2-1]);
+  const at = i => {
+    const u = (i/n)*K, k = Math.floor(u), f = u-k, s = f*f*(3-2*f);
+    const a = ctrl[k%K], b = ctrl[(k+1)%K];
+    return [a[0]+(b[0]-a[0])*s, a[1]+(b[1]-a[1])*s];
+  };
+  let d = '';
+  pts.forEach(([x,y],i) => {
+    const [dx,dy] = at(i);
+    const X = Math.min(w, Math.max(0, x+dx*amp)), Y = Math.min(h, Math.max(0, y+dy*amp));
+    d += `${i?'L':'M'}${X.toFixed(1)} ${Y.toFixed(1)}`;
+  });
+  return d+'Z';
+}
+const RG = { h:[255,14,225,14], v:[14,225,14,255] };
+
+/* hand-cut box painter (MechanBox: shadow path offset (2.4,2.8) @16% ink, fill + ink stroke) */
+const TAP = { card:'#FFFBF1', ink:'#2A241C', paper:'#FAF4E6', desk:'#E9DFC9', none:'none' };
+const hex = t => TAP[t] || t;
+const hbCache = {};
+function pathFor(w,h,seed,amp){ const key=`${w}|${h}|${seed}|${amp}`; return hbCache[key] ?? (hbCache[key]=handPath(w,h,RG.h,RG.v,seed,amp)); }
+function paintHB(el){
+  const [w,h,seed] = el.dataset.hb.split(',').map(Number);
+  const amp = +(el.dataset.amp||1.4), sw = el.dataset.sw ? +el.dataset.sw : 2.5;
+  const raw = (el.dataset.fill || 'card').replace('var(--','').replace(')','').trim();
+  const fill = TAP[raw] || raw;
+  const stroke = TAP[(el.dataset.stroke||'ink').replace('var(--','').replace(')','').trim()] || '#2A241C';
+  const shadow = el.dataset.shadow !== '0';
+  const d = pathFor(w,h,seed,amp);
+  el.querySelector('svg.hbs')?.remove();
+  el.insertAdjacentHTML('afterbegin',
+    `<svg class="hbs" width="${w+8}" height="${h+8}" viewBox="-4 -4 ${w+8} ${h+8}" aria-hidden="true">
+      ${shadow?`<path d="${d}" transform="translate(2.4 2.8)" fill="#2A241C" fill-opacity=".16"/>`:''}
+      <path d="${d}" fill="${fill}" stroke="${stroke==='ink'?'#2A241C':stroke}" stroke-width="${sw}" stroke-linejoin="round"/>
+    </svg>`);
+}
+
+/* tape: torn-end strip */
+function tapeSvg(w, seed){
+  const r = rnd(seed), h = 20;
+  const top=[], bot=[];
+  for(let x=3; x<=w-3; x+=Math.max(5, 6+r()*3)){
+    top.push([x, 2+r()*2.5]); bot.push([x, h-2-r()*2.5]);
+  }
+  const p = (pts) => pts.map(([x,y])=>`${x.toFixed(1)} ${y.toFixed(1)}`).join(' L');
+  const d = `M3 ${h-2-r()*3} L ${p(top)} L ${w-3} ${(r()*3+2).toFixed(1)} L ${w-4} ${h-3-r()*2} L ${p(bot.reverse())} Z`;
+  return `<svg width="${w+4}" height="${h+4}" viewBox="-2 -2 ${w+4} ${h+4}" aria-hidden="true">
+    <path d="${d}" fill="#E7D9AE" fill-opacity=".6" stroke="#B8A56E" stroke-opacity=".33" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M6 5 L ${w-6} 4 M5 14 L ${w-8} 15" stroke="#B8A56E" stroke-opacity=".2" stroke-width="1" transform="translate(${(r()*2-1).toFixed(1)} ${(r()*2-1).toFixed(1)})"/>
+  </svg>`;
+}
+
+/* icons — exact paths from src/ui/kit.tsx ICONS */
+const ICONS = {
+  gear:  'M12 9a3 3 0 100 6 3 3 0 000-6zM12 4.7a7.3 7.3 0 100 14.6 7.3 7.3 0 000-14.6zM12 4.7V1.9M17.1 6.9L19.1 4.9M19.3 12h2.8M17.1 17.1l2 2M12 19.3v2.8M6.9 17.1l-2 2M4.7 12H1.9M6.9 6.9L4.9 4.9',
+  back:  'M15 5l-7 7 7 7',
+  play:  'M7 4l13 8-13 8z',
+  pause: 'M7 4h3.5v16H7zM13.5 4H17v16h-3.5z',
+  coffee:'M4 9h12v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM16 10h2a2 2 0 010 4h-2M7 3c0 2 2 2 2 4M11 3c0 2 2 2 2 4',
+  sound: 'M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7'
+};
+function iconSvg(name, size, sw=1.8){
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
+}
+
+/* ═══ dial artwork ════════════════════════════════════════════════════════ */
+function dialMarkup(){
+  const cx=140, cy=140;
+  let ticks='';
+  for(let i=0;i<60;i++){
+    const a=(i*6-90)*Math.PI/180, c=Math.cos(a), s=Math.sin(a), major=i%5===0;
+    const r1=major?114:119, r2=124;
+    ticks+=`<line x1="${(cx+r1*c).toFixed(1)}" y1="${(cy+r1*s).toFixed(1)}" x2="${(cx+r2*c).toFixed(1)}" y2="${(cy+r2*s).toFixed(1)}" stroke="#2A241C" stroke-opacity="${major?0.55:0.22}" stroke-width="${major?2:1.1}"/>`;
+  }
+  const RN=['XII','I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
+  let nums='';
+  for(let i=0;i<12;i++){
+    const a=(i*30-90)*Math.PI/180;
+    nums+=`<text x="${(cx+92*Math.cos(a)).toFixed(1)}" y="${(cy+92*Math.sin(a)).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-family="'NewsreaderIt'" font-style="italic" font-weight="600" font-size="15.5" fill="#2A241C" fill-opacity=".62">${RN[i]}</text>`;
+  }
+  const weave = Array.from({length:10},(_,i)=>`<ellipse cx="140" cy="140" rx="46" ry="18" transform="rotate(${(i*360/10).toFixed(1)} 140 140)"/>`).join('');
+  const latOut = Array.from({length:9},(_,i)=>`<circle cx="140" cy="114" r="22" transform="rotate(${(i*360/9).toFixed(1)} 140 140)"/>`).join('');
+  const latIn  = Array.from({length:6},(_,i)=>`<circle cx="140" cy="119" r="17" transform="rotate(${(i*360/6+30).toFixed(1)} 140 140)"/>`).join('');
+  const wheel  = Array.from({length:12},(_,i)=>`<line x1="140" y1="130" x2="140" y2="113" transform="rotate(${i*30} 140 140)"/>`).join('');
+  const C = (2*Math.PI*132).toFixed(1);
+  return `<svg viewBox="0 0 280 280" width="280" height="280">
+    <defs>
+      <radialGradient id="fG">
+        <stop offset="0" stop-color="var(--paper)" stop-opacity="0"/>
+        <stop offset=".93" stop-color="var(--paper)" stop-opacity="0"/>
+        <stop offset=".985" stop-color="var(--paper)" stop-opacity="1"/>
+      </radialGradient>
+    </defs>
+    <circle cx="140" cy="140" r="132" fill="none" stroke="#2A241C" stroke-opacity=".13" stroke-width="6"/>
+    <circle id="prog" cx="140" cy="140" r="132" fill="none" stroke="#8A4B27" stroke-width="6"
+            stroke-linecap="round" transform="rotate(-90 140 140)" stroke-dasharray="${C} ${C}" stroke-dashoffset="${C}"/>
+    <circle cx="140" cy="140" r="140" fill="url(#fG)"/>
+    <circle cx="140" cy="140" r="106" fill="#FFFBF1" fill-opacity=".88"/>
+    <circle cx="140" cy="140" r="106" fill="none" stroke="#2A241C" stroke-opacity=".12" stroke-width="1.2"/>
+    ${ticks}${nums}
+    <g fill="none" stroke="#2A241C" stroke-linecap="round">
+      <g class="wave" stroke-opacity=".46" stroke-width="1.1">${weave}</g>
+      <g class="latOut" stroke-opacity=".42" stroke-width="1.05">${latOut}</g>
+      <g class="latIn"  stroke-opacity=".38" stroke-width="1.05">${latIn}</g>
+      <g class="wheel"  stroke-opacity=".62" stroke-width="2">
+        ${wheel}
+        <circle cx="140" cy="140" r="27" stroke-width="1.6" stroke-opacity=".55"/>
+        <circle cx="140" cy="113" r="2.8" fill="#8A4B27" stroke="#2A241C" stroke-opacity=".9" stroke-width=".7"/>
+        <circle cx="140" cy="140" r="2.6" fill="#2A241C" stroke="none"/>
+      </g>
+    </g>
+  </svg>`;
+}
+
+/* ═══ slip ════════════════════════════════════════════════════════════════ */
+function paintSlip(){
+  const el = document.getElementById('slip'), sw=220, sh=62;
+  const H=[13,9,16,10], V=[10,16,9,13];
+  const d = handPath(sw,sh,H,V,6421,1.5);
+  el.querySelector('svg.sleeve')?.remove();
+  el.insertAdjacentHTML('afterbegin',
+    `<svg class="sleeve" width="${sw+4}" height="${sh+4}" viewBox="-2 -2 ${sw+4} ${sh+4}" style="position:absolute;left:-2px;top:-2px" aria-hidden="true">
+      <path d="${d}" transform="translate(2.2 2.8)" fill="#2A241C" fill-opacity=".2"/>
+      <path class="flashpath" d="${d}" fill="#F3E3A8"/>
+      <path d="${d}" fill="#FFFBF1" stroke="#2A241C" stroke-width="2.1" stroke-linejoin="round"/>
+      <path class="warn" d="${d}" fill="none" stroke="#9C3322" stroke-width="2.6" stroke-linejoin="round"/>
+    </svg>`);
+}
+
+/* ═══ state ═══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const bodyEl = document.body, page = $('page');
+let planMin = 25, left = 25*60, total = 25*60, tickId = null;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function fmtClock(s){ s=Math.max(0,Math.round(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function iconOf(){ const st=bodyEl.dataset.state; return (st==='running'||st==='warn')?'pause':'play'; }
+function setIcon(){
+  $('goIcon').innerHTML = iconSvg(iconOf(),24,2.2);
+  $('brkIcon').innerHTML = iconSvg('coffee',17,1.8);
+}
+function updateDial(){
+  const st = bodyEl.dataset.state;
+  const mins = st==='ready' ? planMin : (left/60)%60 || 60;
+  const ang = mins*6;
+  const hand = $('hand');
+  hand.style.setProperty('--a', ang+'deg');
+  hand.style.transform = `rotate(${ang}deg)`;
+  const C = 2*Math.PI*132;
+  const prog = st==='ready' ? 0 : Math.max(0, Math.min(1, 1-left/total));
+  $('prog').style.strokeDashoffset = (C*(1-prog)).toFixed(1);
+}
+function updateUI(){
+  const st = bodyEl.dataset.state;
+  const T = {
+    ready:   { badge:`Round 1 · ready`,    time:`${planMin} min`, status:'ready when you are', go:'Start',      leave:'leave' },
+    running: { badge:`Round 1 · focusing`, time:fmtClock(left),   status:`${Math.max(1, Math.round(planMin - (total-left)/60))}m to go`, go:'Pause', leave:'end session' },
+    warn:    { badge:`Round 1 · focusing`, time:fmtClock(left),   status:'the last ten seconds', go:'Pause', leave:'end session' },
+    done:    { badge:`Round 1 · round done`, time:'00:00',        status:'round complete', go:'Next round', leave:'end session' }
+  }[st];
+  $('badgeTxt').textContent = T.badge;
+  $('readout').textContent = T.time;
+  $('status').textContent = T.status;
+  $('goLbl').textContent = T.go;
+  $('btnLeave').textContent = T.leave;
+  $('btnGo').setAttribute('aria-label', T.go);
+  const started = (st==='running'||st==='warn') ? (total-left) >= 300 : false;
+  const brkOff = st==='ready' || st==='done' || !started;
+  $('btnBrk').disabled = brkOff;
+  $('btnBrk').setAttribute('aria-disabled', String(!brkOff));
+  $('btnBrk').setAttribute('aria-label', brkOff
+    ? 'Take a break. Breaks unlock after 5 min of focus'
+    : 'Take a break, 1 left');
+  $('dial').setAttribute('aria-valuenow', st==='ready'?planMin:Math.ceil(left/60));
+  $('dial').setAttribute('aria-valuetext', st==='ready'?`${planMin} minutes`:`${Math.ceil(left/60)} minutes left`);
+  updateDial(); setIcon();
+}
+
+function startTicker(){ if(tickId) return; tickId = setInterval(tick, 1000); }
+function stopTicker(){ clearInterval(tickId); tickId = null; }
+function tick(){
+  left = Math.max(0, left-1);
+  if(left<=10 && bodyEl.dataset.state==='running' && left>0){
+    bodyEl.dataset.state='warn'; syncPills();
+  }
+  if(left===0){ stopTicker(); setPreview('done'); return; }
+  updateUI();
+  if((bodyEl.dataset.state==='running') && !reduce){
+    const h=$('hand'); h.classList.remove('jolt'); void h.getBoundingClientRect(); h.classList.add('jolt');
+    const fp=document.querySelector('.slip .flashpath');
+    if(fp){ fp.classList.remove('flash'); void fp.getBoundingClientRect(); fp.classList.add('flash'); }
+  }
+}
+function setPreview(st){
+  stopTicker();
+  if(st==='ready'||st==='running'){ left=total=planMin*60; }
+  else if(st==='warn'){ left=9; total=planMin*60; }
+  else if(st==='done'){ left=0; total=planMin*60; }
+  if(st==='running'||st==='warn') startTicker();
+  bodyEl.dataset.state = st; page.className = st==='ready'?'ready':st;
+  syncPills(); updateUI();
+}
+function syncPills(){
+  document.querySelectorAll('.pill').forEach(p => p.setAttribute('aria-pressed', String(p.dataset.go===bodyEl.dataset.state)));
+}
+
+/* ═══ build ═══════════════════════════════════════════════════════════════ */
+$('art').innerHTML = dialMarkup();
+paintSlip();
+
+document.querySelectorAll('[data-hb]').forEach(paintHB);
+document.querySelectorAll('[data-tape]').forEach((el, i) => {
+  const [w, rot] = el.dataset.tape.split(',').map(Number);
+  el.innerHTML = tapeSvg(w, 100+i*17);
+  el.style.transform = `rotate(${rot}deg)`;
+});
+
+$('btnSettings').innerHTML = iconSvg('gear',22);
+$('btnBack').innerHTML = iconSvg('back',22);
+$('btnSound').innerHTML = iconSvg('sound',22);
+
+function refreshPresetSel(){
+  document.querySelectorAll('.preset').forEach(p => {
+    const on = +p.dataset.min === planMin;
+    p.classList.toggle('sel', on);
+    p.setAttribute('aria-pressed', String(on));
+    p.dataset.fill = on ? 'var(--ink)' : 'var(--card)';
+    paintHB(p);
+  });
+}
+refreshPresetSel();
+updateUI();
+
+/* ═══ interactions (demonstrated press; preview states) ══════════════════ */
+document.querySelectorAll('.pill').forEach(p => p.addEventListener('click', () => setPreview(p.dataset.go)));
+document.querySelectorAll('.preset').forEach(p => p.addEventListener('click', () => {
+  if(bodyEl.dataset.state!=='ready') return;
+  planMin = +p.dataset.min; left = total = planMin*60;
+  $('dial').setAttribute('aria-valuenow', planMin);
+  refreshPresetSel(); updateUI();
+}));
+$('btnSound').addEventListener('click', () => {
+  const b=$('btnSound'); const off = b.classList.toggle('off');
+  b.setAttribute('aria-pressed', String(!off));
+});
+$('btnBack').addEventListener('click', () => setPreview('ready'));
+/* Flow toggle */
+let flowOn = false;
+document.querySelector('.flow').addEventListener('click', () => {
+  flowOn = !flowOn;
+  const f = document.querySelector('.flow');
+  f.classList.toggle('on', flowOn);
+  f.setAttribute('aria-pressed', String(flowOn));
+  $('flowLbl').textContent = flowOn ? 'Flow on' : 'Flow off';
+  f.dataset.fill = flowOn ? 'ink' : 'card';
+  paintHB(f);
+});
+
+/* resize: fit the frame to the viewport */
+function fit(){
+  const s = Math.min((innerWidth-60)/464, (innerHeight-140)/1025);
+  document.documentElement.style.setProperty('--s', Math.min(s, 1.05).toFixed(4));
+}
+addEventListener('resize', fit); fit();
+</script>
+<noscript><div style="color:#E9DFC9;padding:20px;text-align:center">This design preview needs JavaScript to build its hand-cut outlines.</div></noscript>
+</body>
+</html>

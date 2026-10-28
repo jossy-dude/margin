@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Focus timer — redesign gallery (v1)</title>
+<meta name="description" content="Three parallel redesigns of the School Planner focus/timer screen: same UI components, no background photograph — the page is designed instead.">
+<style>
+  :root{
+    --bg:#14110D; --bg2:#1E1A14; --line:#3A322A; --line2:#2A241D;
+    --tx:#EDE4D4; --tx2:#9C907C; --tx3:#6E6456; --acc:#D08A56; --acc2:#8A4B27;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(90% 60% at 50% -10%, #221C15 0%, transparent 60%),
+      linear-gradient(180deg,var(--bg2),var(--bg) 45%);
+    color:var(--tx);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100dvh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+
+  .wrap{max-width:1560px;margin:0 auto;padding:44px 32px 72px}
+
+  header.top{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line2);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:clamp(24px,3vw,38px);line-height:1.05;margin:0 0 10px;font-weight:650;letter-spacing:-.02em}
+  h1 em{font-style:normal;color:var(--acc)}
+  .sub{color:var(--tx2);font-size:14.5px;max-width:64ch;line-height:1.55;margin:0}
+  .rules{display:flex;gap:10px;flex-wrap:wrap}
+  .tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);
+    border:1px solid var(--line);border-radius:3px;padding:5px 9px;white-space:nowrap}
+
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(300px,1fr));gap:26px}
+  @media (max-width:1180px){.grid{grid-template-columns:repeat(2,minmax(300px,1fr))}}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+
+  .card{border:1px solid var(--line);border-radius:8px;background:linear-gradient(180deg,#1B1710,#17140F);
+    overflow:hidden;display:flex;flex-direction:column}
+  .card:focus-within{border-color:var(--acc2)}
+  .head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line2)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--acc);flex:none;box-shadow:0 0 0 3px rgba(208,138,86,.16)}
+  .head h2{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .head .file{font-size:11.5px;color:var(--tx3);margin-left:auto}
+  .head a{color:var(--acc);text-decoration:none;border-bottom:1px solid rgba(208,138,86,.4)}
+  .head a:hover{border-bottom-color:var(--acc)}
+
+  .stage{position:relative;background:#100E0A;
+    padding:16px 12px;display:flex;justify-content:center;align-items:flex-start;min-height:420px;flex:none}
+  /* each design page carries its own desk + review pills at its own viewport size; the window
+     crops to (phone + pills) and scales it so all three phones read at the same size. */
+  .win{position:relative;overflow:hidden;flex:none;background:#14110D;box-shadow:0 10px 34px rgba(0,0,0,.45)}
+  .win iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:transparent;
+    pointer-events:auto}
+  .note{padding:14px 16px 16px;border-top:1px solid var(--line2);color:var(--tx2);font-size:13px;line-height:1.55}
+  .note strong{color:var(--tx);font-weight:600}
+  .note ul{margin:8px 0 0;padding-left:16px}
+  .note li{margin:3px 0}
+  .acts{display:flex;gap:8px;padding:0 16px 16px}
+  .btn{font-size:12.5px;color:var(--tx2);border:1px solid var(--line);background:transparent;border-radius:4px;
+    padding:7px 11px;cursor:pointer;transition:background .18s,border-color .18s,color .18s,transform .12s;text-decoration:none;display:inline-block}
+  .btn:hover{background:#221D16;border-color:#4A4136;color:var(--tx)}
+  .btn:active{transform:translateY(1px) scale(.985)}
+  .btn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+  footer{margin-top:40px;border-top:1px solid var(--line2);padding-top:20px;color:var(--tx3);
+    font-size:12.5px;line-height:1.65;max-width:110ch}
+  footer b{color:var(--tx2);font-weight:600}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Focus (timer) — <em>redesign gallery</em></h1>
+      <p class="sub">Three agents, three models, one brief: keep every UI component of the focus
+        screen, drop the baked <span class="mono">journal-page.jpg</span> photograph, and design the
+        page background instead. Light theme, 440 × 1001 screen canvas.</p>
+    </div>
+    <div class="rules">
+      <span class="tag">v1 · one slice</span>
+      <span class="tag">no image assets</span>
+      <span class="tag">same components</span>
+      <span class="tag">offline · local fonts</span>
+    </div>
+  </header>
+
+  <div class="grid" id="grid">
+    <!-- cards injected below by hand so the gallery works with JS disabled -->
+  </div>
+
+  <footer>
+    <b>Shared brief:</b> <span class="mono">design/BRIEF.md</span>.
+    <b>Preview pills</b> (ready / running / last 10 s / round done) sit on the desk outside each phone —
+    they are review controls, not part of the design; click into a phone to use them.
+    <b>Checked by the orchestrator:</b> all four states open in every file with zero console errors and
+    no text overflowing the 440 × 1001 canvas; readouts run honestly per design —
+    <span class="mono">25 min → 24:47 → 00:09 → +1:12</span> (deepseek),
+    <span class="mono">25 min → 17:40 → 1m to go → round complete</span> (mimo),
+    <span class="mono">25 min → 25:00 → 00:09 → 00:00</span> (glm). Three defects were fixed in place —
+    each is listed under its card. MiMo's "1m to go" in the last 10 s matches the live app's own
+    formula (<span class="mono">Focus.tsx:289</span>), not a bug.
+    <b>v1 excludes:</b> dark theme, the break sticker, real store-backed timer logic, and any change to
+    the app's source files.
+  </footer>
+</div>
+
+<script>
+const ENTRIES = [
+  {
+    key:'deepseek', name:'DeepSeek V4.1 Flash', file:'deepseek.html',
+    concept:'A hand-cut instrument seated in a ruled, torn notebook leaf on a desk — the page is drawn, not photographed.',
+    bg:'Ruled page + accent margin rule + punched binding + <span class="mono">feTurbulence</span> grain, a torn bottom edge that reveals the desk, a vector pencil resting on it, one botanical sprig. No image file.',
+    changes:[
+      'Dial rebuilt as a hand-cut disc (ported <span class="mono">handPath</span>) over a recessed porcelain plate, with generated guilloché rosettes, chapter ticks and a progress rim.',
+      'Countdown promoted to the largest type on the page (Special Elite 34, tabular); title second; text halos dropped.',
+      'Start widened to 300 × 64 as the page\'s only ink block, on one 40-unit margin.',
+      'The handwritten aside left the dial\'s right edge (where it collided with it) for the bottom margin.',
+      'Last 10 s: a red pen border draws itself round the readout (instant under reduced motion); round done stamps a hand-torn rubber stamp over the dial.'
+    ],
+    fixed:null
+  },
+  {
+    key:'mimo', name:'MiMo V2.6 Flash', file:'mimo.html',
+    concept:'A hand-cut paper instrument on a designed ledger page — faint ruled field, red-brown margin rule and a rosette watermark the dial sits inside, with the countdown as the hero.',
+    bg:'Ledger rules + margin rule + a large guilloché watermark behind the dial + grain — CSS/SVG only. The accent colour is finally spent: rim, rule, watermark, status line, focus rings.',
+    changes:[
+      'Read order re-set on an 8-unit rhythm: header → task → dial → readout → status → presets → Start → break/leave → note.',
+      'The slip goes 152 × 38 → 256 × 92 and the countdown 27 px → 56 px tabular — the hero it never was.',
+      'Status line moves under the slip, accent-coloured and flanked by hairlines, so number and status read as one fact.',
+      'Preset chips lock to 0.5 opacity only while a round genuinely runs; state stops being carried by opacity alone.',
+      'Marginal note relocated to the empty bottom-right margin.'
+    ],
+    fixed:['Start rendered <b>both</b> play and pause icons — <span class="mono">.go svg.ico</span> (0,2,1) outranked <span class="mono">.go .i-pause</span> (0,2,0). Scope raised to <span class="mono">svg.i-pause</span>.',
+           'The selected <b>25</b> chip had <span class="mono">aria-pressed="true"</span> but never received <span class="mono">is-on</span> on load, so no preset read as chosen.']
+  },
+  {
+    key:'glm', name:'GLM 5.3 Flash', file:'glm.html',
+    concept:'The timer as the page\'s one instrument — the guilloché dial as hero on a designed background (dot grid, margin rule, pen-sketched landscape), with the readout slip as the second voice.',
+    bg:'Stationery dot-grid + journal margin rule + tape ghosts, and the photograph\'s landscape redrawn as a sepia pen sketch with grain and vignette — no images anywhere.',
+    changes:[
+      'Dial enlarged to a 280-unit hero; the artwork re-engraved as crisp SVG (weave, two counter-rotating rosette lattices, centre wheel with one accent jewel). Artwork only spins while a round runs.',
+      'Readout slip ~1.5× bigger with tabular typewriter numerals; tape, red-pen warning border and the per-tick flash all kept.',
+      'Gear / back / sound drop their three identical filled tiles for quiet outline stamps — the header stops competing with the dial.',
+      'Honest vertical rhythm top-to-bottom; the bottom third carries the drawn landscape instead of dead space.'
+    ],
+    fixed:['The handwritten aside was clipped at the right screen edge — a 76 px box anchored 2 px from a 440 px canvas, rotated 6°, overran its own box. Widened to 96 px at <span class="mono">right:8px</span>, type 17 → 16 px.'],
+    extra:'Adds two labels the live screen does not have: a <b>Focus</b> title and a <b>"drag the dial to any length"</b> hint (the hint documents existing behaviour, but it is new copy).'
+  },
+];
+
+const grid = document.getElementById('grid');
+for (const e of ENTRIES){
+  const card = document.createElement('article');
+  card.className = 'card';
+  const li = a => a ? `<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>` : '';
+  card.innerHTML = `
+    <div class="head">
+      <span class="dot"></span>
+      <h2>${e.name}</h2>
+      <span class="file"><a href="${e.file}" target="_blank" rel="noopener">${e.file}</a></span>
+    </div>
+    <div class="stage">
+      <div class="win" data-fit="${e.key}">
+        <iframe src="${e.file}" title="${e.name} — focus screen redesign"
+                loading="lazy" scrolling="no"></iframe>
+      </div>
+    </div>
+    <div class="note" id="note-${e.key}">
+      <p style="margin:0"><strong>Concept —</strong> ${e.concept}</p>
+      <p style="margin:8px 0 0"><strong>Background —</strong> ${e.bg}</p>
+      <ul>${e.changes.map(x=>`<li>${x}</li>`).join('')}</ul>
+      ${e.fixed ? `<p style="margin:8px 0 0;color:var(--acc)"><strong style="color:var(--acc)">Fixed after review —</strong>${li(e.fixed)}</p>` : ''}
+      ${e.extra ? `<p style="margin:8px 0 0"><strong>Flag:</strong> ${e.extra}</p>` : ''}
+    </div>
+    <div class="acts">
+      <a class="btn" href="${e.file}" target="_blank" rel="noopener">Open full size</a>
+      <button class="btn" data-reload>Reload</button>
+    </div>`;
+  grid.appendChild(card);
+}
+
+/* Measured once at an 840 × 1400 viewport for each design page (phone bbox, and the union of the
+   phone + that page's own review pills/caption = the crop). Scaled so every phone is TARGET px wide. */
+const FIT = {
+  deepseek:{ vp:[840,1400], phone:{x:197,y:122,w:447}, crop:{x:122,y:75,w:522,h:1034} },
+  mimo:    { vp:[840,1400], phone:{x:187,y:155,w:466}, crop:{x:187,y:155,w:466,h:1095} },
+  glm:     { vp:[840,1400], phone:{x:176,y:198,w:487}, crop:{x:176,y:14, w:501,h:1260} },
+};
+const TARGET = 380, PAD = 12;
+
+function fit(){
+  const stages=[...document.querySelectorAll('.stage')]; let maxH=0;
+  stages.forEach(stage=>{
+    const win = stage.querySelector('.win'), f = stage.querySelector('iframe');
+    const m = FIT[win.dataset.fit]; if(!m) return;
+    const [vw, vh] = m.vp;
+    let s = TARGET / m.phone.w;
+    let wW = m.crop.w * s + PAD*2, wH = m.crop.h * s + PAD*2;
+    const avail = stage.clientWidth - 24;                 // never wider than the column
+    if (wW > avail){ const k = avail / wW; s *= k; wW *= k; wH *= k; }
+    f.style.width = vw + 'px';  f.style.height = vh + 'px';
+    f.style.transform = `translate(${(PAD - s*m.crop.x).toFixed(2)}px, ${(PAD - s*m.crop.y).toFixed(2)}px) scale(${s.toFixed(4)})`;
+    win.style.width = Math.round(wW) + 'px';
+    win.style.height = Math.round(wH) + 'px';
+    maxH = Math.max(maxH, Math.round(wH));
+  });
+  stages.forEach(st => st.style.height = (maxH + 32) + 'px');   // all three notes start on one line
+}
+window.addEventListener('resize', fit);
+window.addEventListener('load', fit);
+fit();
+
+document.addEventListener('click', ev=>{
+  const b = ev.target.closest('[data-reload]');
+  if (b) b.closest('.card').querySelector('iframe').contentWindow.location.reload();
+});
+</script>
+</body>
+</html>

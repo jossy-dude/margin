@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Focus — timer screen redesign (mimo) · Marginalia</title>
+<meta name="description" content="Redesign of Marginalia's Focus timer screen: a hand-cut paper instrument on a designed ledger page — dial with guilloché face, taped typewriter readout, presets, Flow, Start and break controls, with ready / running / last-10-seconds / round-done previews." />
+
+<!--
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+DIAGNOSIS — the shipped Focus screen (src/screens/Focus.tsx + .shots/w3/*.png), read before drawing:
+
+ 1. The page is a photograph, not a design. Everything the eye lands on — the Venice canal, the pressed
+    daisies, the hill village, the binder holes, the postmark — is baked into assets/images/journal-page.jpg.
+    The composition is set by the picture and the UI is parked wherever the picture leaves a gap. Take the
+    photo away (this brief) and there is nothing underneath it: no structure, no rhythm, no ground of its own.
+ 2. The photo also owns the palette. Sunset orange, canal blue and foliage green are a second, louder
+    palette the cream/ink tokens must fight. The app's own accent (#8A4B27) appears exactly once in the
+    whole screen — the progress rim — so the design has one colour it never spends.
+ 3. Hierarchy is flat. Badge, three icon buttons, task card, four presets, Flow, Start, break, leave: all
+    hand-cut boxes of nearly the same weight, stroke and fill. Nothing leads; the eye zig-zags between the
+    dial and the Start button.
+ 4. The one number the screen exists to show is the smallest thing on it. The countdown is 27 px inside a
+    152 × 38 slip — the same 27 px as the Start label, and smaller than the 21 px marker task title.
+ 5. Readout, status line and presets are three islands with dead paper between them (slip bottom 656 →
+    status 662 → presets 694), so "25 min / ready when you are / 25 min" read as unrelated facts.
+ 6. The dial's hierarchy is inverted at the top: 100+ px of photograph sits between the header and the task
+    card, while the dial is squeezed against the readout — its feathered rim and the slip's tape were
+    measured to the pixel so they would not touch. That is a symptom, not a layout.
+ 7. The decorative marks ("//" strokes, the curved arrow, the birds) sit at photograph coordinates: they
+    annotate nothing, and the handwritten aside hangs off the right edge (left 360 + width 90 > 440).
+ 8. State is carried almost entirely by opacity — disabled presets to 0.55, swap task to 0.4 — so the
+    running screenshot reads as the ready screenshot, slightly broken.
+
+WHAT THIS REDESIGN CHANGES, AND WHY
+
+ · The background is designed rather than photographed: a faint ruled ledger field, a red-brown margin rule
+   down the left (the school notebook this planner is), one large rosette watermark the dial sits inside
+   (the page's ornament echoes the instrument's own engraving), and fibre grain. One ground, one palette,
+   one accent — and nothing that has to be cropped around.
+ · Vertical rhythm is decided by the instrument, not by a torn photo edge: header → task → dial → readout →
+   status → presets → Start → break/leave → marginal note, on an 8 px rhythm, dial centred at (220, 348).
+ · The readout becomes the hero. The taped slip grows to 256 × 92 and the countdown to 56 px of SpecialElite
+   with tabular figures, sitting directly under the dial so the face and the number read as one object.
+ · The status line moves up under the slip and takes the accent, flanked by hairlines, so time → status →
+   preset are one cluster instead of three islands.
+ · Colour is finally spent: accent on the margin rule, the watermark ring, the progress rim, the status
+   line and every focus ring. `bad` red stays reserved for the two events that own it — the last-ten-seconds
+   pen border and the round-done rubber stamp.
+ · Dimmed controls get a reason to be dim (they are locked while a round runs) instead of a uniform 0.55
+   wash across half the screen; the primary button stays the single solid ink block on the page.
+ · The handwritten aside moves to the empty bottom-right margin, where it annotates instead of hanging off
+   the edge.
+ · Every control keeps the app's own vocabulary: handPath outlines (ported from src/ui/hand.ts), the 2.4/2.8
+   offset shadow at 16 % ink, tape bars at −12°, RG corner radii, the Rosette Blanc face drawn from
+   src/ui/clock/faces.ts, the pointer, the rim, the icons from kit.tsx verbatim.
+
+NOT IN V1 (the brief's own out-of-scope list): dark theme, the break sticker, real store-backed timer logic,
+dial drag / arrow-key gestures (the dial carries slider semantics but is not draggable here), an accessibility
+audit beyond roles and labels on the controls drawn, and any change to the app's source files. Light theme only.
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-->
+
+<style>
+/* ── fonts: the app's own faces, from the repo, offline ──────────────────────────────────────────────── */
+@font-face { font-family:'Caveat'; font-weight:500; font-style:normal; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/caveat/500Medium/Caveat_500Medium.ttf') format('truetype'); }
+@font-face { font-family:'Caveat'; font-weight:700; font-style:normal; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/caveat/700Bold/Caveat_700Bold.ttf') format('truetype'); }
+@font-face { font-family:'Newsreader'; font-weight:400; font-style:italic; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf') format('truetype'); }
+@font-face { font-family:'Newsreader'; font-weight:600; font-style:italic; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/newsreader/600SemiBold_Italic/Newsreader_600SemiBold_Italic.ttf') format('truetype'); }
+@font-face { font-family:'PermanentMarker'; font-weight:400; font-style:normal; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/permanent-marker/400Regular/PermanentMarker_400Regular.ttf') format('truetype'); }
+@font-face { font-family:'SpecialElite'; font-weight:400; font-style:normal; font-display:block;
+  src:url('../node_modules/@expo-google-fonts/special-elite/400Regular/SpecialElite_400Regular.ttf') format('truetype'); }
+
+/* ── tokens (src/tokens/theme.ts · refined.light) ─────────────────────────────────────────────────────── */
+:root{
+  --paper:#FAF4E6; --card:#FFFBF1; --desk:#E9DFC9; --ink:#2A241C; --mut:#665B4B;
+  --acc:#8A4B27; --hl:#F3E3A8; --bad:#9C3322; --shadow:rgba(42,36,28,.16);
+  --s:.9;
+  --hand:'Caveat', cursive; --serif:'Newsreader', serif; --marker:'PermanentMarker', cursive; --type:'SpecialElite', monospace;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  min-height:100dvh; background:#12100e; color:#e8e0d0;
+  font-family:var(--type);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+::selection{ background:rgba(192,130,86,.4); color:#fff6e8; }
+
+/* ── the desk ────────────────────────────────────────────────────────────────────────────────────────── */
+.desk{
+  position:relative; min-height:100dvh; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:16px; padding:18px 16px 14px;
+  background:
+    radial-gradient(130% 95% at 50% 22%, #322c26 0%, #221e1a 46%, #141210 100%);
+}
+.desk::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  filter:url(#grainF); opacity:.11;
+}
+.rig{ position:relative; z-index:1; }
+.phone{
+  position:relative; z-index:1;
+  padding:calc(13px * var(--s));
+  border-radius:calc(58px * var(--s));
+  background:linear-gradient(155deg,#43434a 0%,#1c1c20 38%,#2a2a30 72%,#141417 100%);
+  box-shadow:
+    0 calc(34px * var(--s)) calc(70px * var(--s)) rgba(0,0,0,.6),
+    0 calc(6px * var(--s)) calc(18px * var(--s)) rgba(0,0,0,.45),
+    inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.phone::before{ /* earpiece slit in the top bezel */
+  content:''; position:absolute; top:calc(4.5px * var(--s)); left:50%; transform:translateX(-50%);
+  width:calc(58px * var(--s)); height:calc(4px * var(--s)); border-radius:99px; background:rgba(0,0,0,.62);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.stage{
+  position:relative; overflow:hidden;
+  width:calc(440px * var(--s)); height:calc(1001px * var(--s));
+  border-radius:calc(44px * var(--s));
+}
+.screen{
+  position:absolute; top:0; left:0; width:440px; height:1001px;
+  transform:scale(var(--s)); transform-origin:top left;
+  background:var(--paper); color:var(--ink);
+  overflow:hidden; isolation:isolate;
+}
+
+/* ── review chrome (outside the phone, not part of the design) ────────────────────────────────────────── */
+.chrome{ z-index:1; display:flex; flex-direction:column; align-items:center; gap:9px; }
+.chrome-note{ margin:0; font-size:12px; letter-spacing:.09em; color:#9d9384; }
+.pills{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.pill{
+  font-family:var(--type); font-size:13px; letter-spacing:.05em; color:#cfc5b2;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+  border-radius:9px; padding:8px 15px; cursor:pointer;
+  transition:background 160ms ease, border-color 160ms ease, color 160ms ease, transform 90ms ease;
+}
+.pill:hover{ background:rgba(255,255,255,.1); }
+.pill:active{ transform:scale(.97); }
+.pill[aria-pressed="true"]{ background:rgba(192,130,86,.24); border-color:rgba(206,146,96,.6); color:#f6ecdc; }
+.pill:focus-visible{ outline:2px solid #ce9260; outline-offset:3px; }
+
+/* ── the designed page ground ─────────────────────────────────────────────────────────────────────────── */
+.bg{ position:absolute; inset:0; pointer-events:none; }
+.bg-rules{
+  position:absolute; inset:0;
+  background-image:repeating-linear-gradient(180deg, transparent 0 27px, rgba(42,36,28,.05) 27px 28px);
+}
+.bg-margin{
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(180deg, rgba(138,75,39,.30), rgba(138,75,39,.30)),
+    linear-gradient(180deg, rgba(138,75,39,.13), rgba(138,75,39,.13));
+  background-size:1px 100%, 1px 100%;
+  background-position:16px 0, 20px 0;
+  background-repeat:no-repeat;
+}
+.bg-medal{ position:absolute; inset:0; width:440px; height:1001px; }
+.grain{ position:absolute; inset:0; width:440px; height:1001px; opacity:.15; mix-blend-mode:multiply; }
+
+/* ── the hand-cut box (src/ui/hand.ts ported: elliptical RG corners + seeded wobble + offset shadow) ──── */
+.hand{ position:relative; z-index:0; }
+.hand > svg.cut{ position:absolute; left:-1px; top:-1px; z-index:-1; pointer-events:none; overflow:visible; }
+.hfill{ fill:var(--boxfill, var(--card)); }
+.hshadow{ fill:var(--shadow); opacity:var(--hsh, 1); }
+
+/* element-level so every component's own class still wins on padding/border */
+button{
+  appearance:none; -webkit-appearance:none; border:0; background:none; margin:0; padding:0; cursor:pointer;
+  font:inherit; color:inherit; text-align:inherit; line-height:1;
+}
+/* buttons dip 3 % under a finger — src/ui/kit.tsx Btn */
+button.hand, .hand.as-btn{
+  --rot:0deg;
+  transform:rotate(var(--rot)) scale(1);
+  transition:transform 90ms cubic-bezier(.2,.9,.25,1);
+}
+button.hand:active, .hand.as-btn:active{ transform:rotate(var(--rot)) scale(.97); }
+button:focus-visible, .hand:focus-visible{ outline:2px solid var(--acc); outline-offset:3px; border-radius:4px; }
+
+/* ── header ───────────────────────────────────────────────────────────────────────────────────────────── */
+.badge{
+  position:absolute; left:30px; top:25px; --rot:-1.5deg;
+  display:flex; align-items:center; gap:9px; padding:5px 12px 4px;
+  font-family:var(--hand); font-weight:700; font-size:18px; line-height:1.18; color:var(--ink);
+}
+.dots{ display:flex; gap:3px; }
+.dots i{ width:8px; height:8px; border-radius:5px; border:1.6px solid var(--ink); background:transparent; display:block; }
+.dots i.on{ background:var(--ink); }
+
+.icon-btn{ position:absolute; top:18px; width:44px; height:44px; display:grid; place-items:center; color:var(--ink); }
+.icon-btn svg.ico{ width:22px; height:22px; display:block; }
+#btnSet{ right:118px; } #btnBack{ right:66px; } #btnSound{ right:14px; }
+#btnSound[aria-checked="false"]{ color:var(--mut); }
+
+/* ── task card ────────────────────────────────────────────────────────────────────────────────────────── */
+.task{
+  position:absolute; left:30px; top:80px; width:380px; --rot:-1deg;
+  padding:11px 15px 10px; display:flex; flex-direction:column; align-items:flex-start;
+}
+.course{
+  margin:0; font-family:var(--serif); font-weight:600; font-style:italic; font-size:17px; line-height:1.18;
+  border-bottom:1.5px solid var(--ink); padding-bottom:1px;
+}
+.task-title{
+  margin:5px 96px 0 0; font-family:var(--marker); font-size:22px; line-height:1.25; color:var(--ink);
+}
+.swap{
+  position:absolute; right:12px; bottom:8px; min-height:32px; padding:0 2px;
+  display:flex; align-items:center; font-family:var(--hand); font-weight:700; font-size:15px; color:var(--mut);
+  border-bottom:1.5px dashed var(--mut);
+}
+
+/* tape (src/ui/kit.tsx Tape) */
+.tape{
+  position:absolute; height:20px; z-index:3;
+  background:#E7D9AE99; border:.8px solid #B8A56E55; transform:rotate(-12deg); pointer-events:none;
+}
+
+/* ── dial ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.dial{ position:absolute; left:62px; top:190px; width:316px; height:316px; }
+.dial .face{ position:absolute; left:26px; top:26px; width:264px; height:264px; border-radius:50%; overflow:hidden; opacity:.86; }
+.dial .face svg{ display:block; }
+.dial .fx, .dial .pt{ position:absolute; left:0; top:0; width:316px; height:316px; }
+.rim{ stroke-dasharray:var(--circ) var(--circ); stroke-dashoffset:var(--circ); transition:stroke-dashoffset 700ms linear; }
+.lat{ transform-box:fill-box; transform-origin:center; }
+.lat-a{ animation:latA 22.5s linear infinite; }
+.lat-b{ animation:latB 19s linear infinite; }
+@keyframes latA{ to{ transform:rotate(360deg); } }
+@keyframes latB{ to{ transform:rotate(-360deg); } }
+.aim{ transform-box:view-box; transform-origin:158px 158px; transition:transform 240ms cubic-bezier(.22,.61,.36,1); }
+.jolt{ transform-box:view-box; transform-origin:158px 158px; }
+.jolt.kick{ animation:jolt 180ms linear; }
+@keyframes jolt{ 0%{ transform:rotate(0deg); } 22%{ transform:rotate(1.6deg); } 100%{ transform:rotate(0deg); } }
+.nums text{ font-family:var(--serif); }
+
+/* ── readout slip ─────────────────────────────────────────────────────────────────────────────────────── */
+.slip{ position:absolute; left:92px; top:514px; width:256px; height:92px; --rot:-.6deg; }
+.slip .paper{ position:absolute; left:-2px; top:-2px; }
+.slip .time{
+  position:absolute; inset:0; display:grid; place-items:center;
+  font-family:var(--type); font-size:56px; line-height:1; letter-spacing:-.02em; color:var(--ink);
+  font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1;
+  transform:translateY(-1px);
+}
+.slip .wash{ opacity:0; }
+.slip .wash.flash{ animation:wash 200ms linear; }
+@keyframes wash{ 0%{opacity:0} 20%{opacity:.13} 100%{opacity:0} }
+.slip .warn-edge{ opacity:0; transition:opacity 120ms ease; }
+.slip.is-warn .warn-edge{ opacity:.8; }
+.slip.is-warn .warn-edge.flash{ animation:warnIn 400ms ease-out; }
+@keyframes warnIn{ 0%{opacity:.62} 22%{opacity:1} 100%{opacity:.8} }
+.tape-slip{ left:-14px; top:6px; width:44px; }
+
+/* ── status ───────────────────────────────────────────────────────────────────────────────────────────── */
+.status{
+  position:absolute; left:30px; right:30px; top:616px; margin:0;
+  display:flex; align-items:center; justify-content:center; gap:11px;
+  font-family:var(--serif); font-weight:600; font-style:italic; font-size:15.5px; line-height:1.2;
+  color:var(--acc);
+}
+.status .rule{ width:30px; height:1px; background:rgba(138,75,39,.4); flex:0 0 auto; }
+
+/* ── presets + flow ───────────────────────────────────────────────────────────────────────────────────── */
+.presets{ position:absolute; left:36px; top:660px; width:368px; display:flex; gap:8px; align-items:stretch; }
+.pre{
+  flex:1 1 0; min-width:44px; min-height:56px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--ink);
+}
+.pre .n{ font-family:var(--hand); font-weight:700; font-size:21px; line-height:1.05; }
+.pre .u{ font-family:var(--hand); font-weight:500; font-size:11px; line-height:1; color:var(--mut); margin-top:-1px; }
+.pre.is-on{ --boxfill:var(--ink); color:var(--card); }
+.pre.is-on .u{ color:var(--card); }
+.pre.is-on .hshadow{ opacity:1; }
+.pre:not(.is-on) .hshadow{ opacity:0; }
+.pre.flow{ flex:1.6 1 0; flex-direction:row; gap:6px; }
+.pre.flow .dot{ width:9px; height:9px; border-radius:5px; border:1.6px solid var(--ink); flex:0 0 auto; }
+.pre.flow.is-on .dot{ background:var(--card); border-color:var(--card); }
+.pre.flow .lbl{ font-family:var(--hand); font-weight:700; font-size:16px; line-height:1; white-space:nowrap; }
+
+/* locked while a round runs */
+.screen[data-state="running"] .pre, .screen[data-state="warn"] .pre,
+.screen[data-state="done"] .pre, .screen[data-state="paused"] .pre{ opacity:.5; cursor:default; }
+.screen[data-state="running"] .swap, .screen[data-state="warn"] .swap,
+.screen[data-state="done"] .swap, .screen[data-state="paused"] .swap{ opacity:.4; cursor:default; }
+
+/* ── primary ──────────────────────────────────────────────────────────────────────────────────────────── */
+.go{
+  position:absolute; left:97px; top:738px; width:246px; height:66px; --rot:-.6deg; --boxfill:var(--ink);
+  display:flex; align-items:center; justify-content:center; gap:10px; color:var(--card);
+  font-family:var(--hand); font-weight:700; font-size:28px; line-height:1;
+}
+/* specificity note: `.go svg.ico` is (0,2,1) — anything hiding one of the two icons must be
+   equal or heavier, or both icons render side by side (fixed: `.go .i-pause` at (0,2,0) lost). */
+.go svg.ico{ width:26px; height:26px; display:block; }
+.go svg.i-pause{ display:none; }
+.screen[data-state="running"] .go svg.i-play{ display:none; }
+.screen[data-state="running"] .go svg.i-pause{ display:block; }
+
+/* ── break + leave / end session ──────────────────────────────────────────────────────────────────────── */
+.brk{
+  position:absolute; left:40px; top:830px; height:44px; padding:0 14px; --rot:-1.5deg; --hsh:0;
+  display:flex; align-items:center; gap:7px; font-family:var(--hand); font-weight:700; font-size:16px; color:var(--ink);
+}
+.brk svg.ico{ width:18px; height:18px; display:block; }
+.end{
+  position:absolute; right:40px; top:826px; height:46px; padding:0 16px; --rot:1deg; --hsh:0; --boxfill:transparent;
+  display:flex; align-items:center; font-family:var(--hand); font-weight:700; font-size:19px; color:var(--ink);
+}
+.screen[data-state="ready"] .brk, .screen[data-state="done"] .brk{ opacity:.55; }
+.brk:focus-visible, .end:focus-visible{ outline:2px solid var(--acc); outline-offset:3px; }
+
+/* ── the marginal note ────────────────────────────────────────────────────────────────────────────────── */
+.note{
+  position:absolute; left:262px; top:896px; width:172px; margin:0; text-align:right; --rot:-3deg;
+  font-family:var(--hand); font-weight:500; font-size:18px; line-height:1.16; color:rgba(42,36,28,.88);
+}
+
+/* ── round-done rubber stamp ─────────────────────────────────────────────────────────────────────────── */
+.stamp{
+  position:absolute; left:88px; top:263px; width:264px; height:170px;
+  border:2.5px solid var(--bad); border-radius:14px; opacity:0; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  transform:rotate(-11deg);
+}
+.stamp .inner{ position:absolute; inset:5px; border:2.5px solid var(--bad); border-radius:9px; }
+.stamp .t{ margin:0; font-family:var(--hand); font-weight:700; font-size:33px; line-height:1.1; letter-spacing:.05em; color:var(--bad); text-transform:uppercase; }
+.stamp .n{ margin:0; font-family:var(--type); font-size:17px; letter-spacing:.16em; color:var(--bad); }
+.stamp.on{ animation:stampIn 460ms cubic-bezier(.2,1.5,.3,1) forwards; }
+@keyframes stampIn{ 0%{opacity:0; transform:rotate(-11deg) scale(1.7);} 100%{opacity:1; transform:rotate(-11deg) scale(1);} }
+
+.sr-only{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+}
+</style>
+</head>
+
+<body>
+<!-- one filter, used by the page grain and the desk -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="grainF" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+</svg>
+
+<div class="desk">
+  <div class="rig">
+    <div class="phone">
+      <div class="stage">
+        <main class="screen" id="screen" data-state="ready" aria-label="Focus">
+
+          <!-- designed ground: ruled field, margin rule, rosette watermark, grain -->
+          <div class="bg" aria-hidden="true">
+            <div class="bg-rules"></div>
+            <div class="bg-margin"></div>
+            <svg class="bg-medal" id="medal" viewBox="0 0 440 1001"></svg>
+            <svg class="grain" viewBox="0 0 440 1001" preserveAspectRatio="none">
+              <rect width="440" height="1001" filter="url(#grainF)" />
+            </svg>
+          </div>
+
+          <!-- header -->
+          <header>
+            <div class="badge hand" id="badge" data-seed="rnd">
+              <span id="badgeText">Round 1 · ready</span>
+              <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            </div>
+            <button class="icon-btn hand" id="btnSet" data-seed="set" aria-label="Settings">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 9a3 3 0 100 6 3 3 0 000-6zM12 4.7a7.3 7.3 0 100 14.6 7.3 7.3 0 000-14.6zM12 4.7V1.9M17.1 6.9L19.1 4.9M19.3 12h2.8M17.1 17.1l2 2M12 19.3v2.8M6.9 17.1l-2 2M4.7 12H1.9M6.9 6.9L4.9 4.9" />
+              </svg>
+            </button>
+            <button class="icon-btn hand" id="btnBack" data-seed="back" aria-label="Back to Today">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <button class="icon-btn hand" id="btnSound" data-seed="snd" role="switch" aria-checked="true" aria-label="Sounds">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7" />
+              </svg>
+            </button>
+          </header>
+
+          <!-- task -->
+          <section class="task hand" data-seed="task" aria-label="Current task">
+            <span class="tape" style="left:-11px; top:-6px; width:46px; transform:rotate(-24deg)" aria-hidden="true"></span>
+            <p class="course">Personal</p>
+            <p class="task-title">Free focus</p>
+            <button class="swap" id="btnSwap" aria-label="Swap task, now free focus">swap task</button>
+          </section>
+
+          <!-- dial -->
+          <div class="dial" id="dial" role="slider" tabindex="0"
+               aria-label="Focus minutes. Swipe up or down to change."
+               aria-valuemin="5" aria-valuemax="240" aria-valuenow="25" aria-valuetext="25 minutes">
+            <div class="face" id="face"></div>
+            <svg class="fx" viewBox="0 0 316 316" width="316" height="316" aria-hidden="true">
+              <defs>
+                <radialGradient id="feather">
+                  <stop offset="0.934" stop-color="#FAF4E6" stop-opacity="0" />
+                  <stop offset="0.967" stop-color="#FAF4E6" stop-opacity="1" />
+                  <stop offset="1" stop-color="#FAF4E6" stop-opacity="1" />
+                </radialGradient>
+              </defs>
+              <circle cx="158" cy="158" r="136.5" fill="url(#feather)" />
+              <circle cx="158" cy="158" r="151" fill="none" stroke="rgba(42,36,28,.16)" stroke-width="7" />
+              <circle class="rim" id="rim" cx="158" cy="158" r="151" fill="none" stroke="#8A4B27" stroke-width="7" stroke-linecap="round" transform="rotate(-90 158 158)" />
+            </svg>
+            <svg class="pt" viewBox="0 0 316 316" width="316" height="316" aria-hidden="true">
+              <g class="aim" id="aim"><g class="jolt" id="jolt">
+                <path d="M158 173.7V60.5" stroke="#2A241C" stroke-width="3.4" stroke-linecap="round" />
+                <path d="M158 38L165.3 65H150.7Z" fill="#2A241C" />
+                <circle cx="158" cy="158" r="7.3" fill="#2A241C" />
+              </g></g>
+            </svg>
+          </div>
+
+          <!-- readout: a taped slip of paper under the dial -->
+          <div class="slip" id="slip">
+            <svg class="paper" id="slipPaper" width="260" height="96" viewBox="-2 -2 260 96" aria-hidden="true"></svg>
+            <span class="tape tape-slip" aria-hidden="true"></span>
+            <output class="time" id="timeText" for="dial">25 min</output>
+          </div>
+
+          <p class="status" id="status"><span class="rule" aria-hidden="true"></span><span id="statusText">ready when you are</span><span class="rule" aria-hidden="true"></span></p>
+
+          <!-- presets + flow -->
+          <section class="presets" aria-label="Round length">
+            <button class="pre hand is-on" data-seed="op25" data-min="25" aria-pressed="true"><span class="n">25</span><span class="u">min</span></button>
+            <button class="pre hand" data-seed="op45" data-min="45" aria-pressed="false"><span class="n">45</span><span class="u">min</span></button>
+            <button class="pre hand" data-seed="op50" data-min="50" aria-pressed="false"><span class="n">50</span><span class="u">min</span></button>
+            <button class="pre hand" data-seed="op90" data-min="90" aria-pressed="false"><span class="n">90</span><span class="u">min</span></button>
+            <button class="pre flow hand is-on" id="btnFlow" data-seed="flow" role="switch" aria-checked="true" aria-label="Flow mode: keep going after the round ends">
+              <span class="dot" aria-hidden="true"></span><span class="lbl" id="flowLabel">Flow on</span>
+            </button>
+          </section>
+
+          <!-- primary -->
+          <button class="go hand" id="btnGo" data-seed="go" aria-label="Start">
+            <svg class="i-play ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
+            <svg class="i-pause ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h3.5v16H7zM13.5 4H17v16h-3.5z" /></svg>
+            <span id="goLabel">Start</span>
+          </button>
+
+          <!-- break · leave / end session -->
+          <button class="brk hand" data-seed="brk" aria-label="Take a break, 1 left">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h12v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM16 10h2a2 2 0 010 4h-2M7 3c0 2 2 2 2 4M11 3c0 2 2 2 2 4" /></svg>
+            <span>break · 5m</span>
+          </button>
+          <button class="end hand" id="btnEnd" data-seed="end" aria-label="Leave focus">leave</button>
+
+          <p class="note">focus doesn’t<br />happen by<br />accident</p>
+
+          <div class="stamp" id="stamp" aria-hidden="true">
+            <div class="inner"></div>
+            <p class="t">Round done</p>
+            <p class="n">1</p>
+          </div>
+
+          <p class="sr-only" aria-live="polite" id="announce"></p>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <aside class="chrome" aria-label="Review controls">
+    <p class="chrome-note">review controls · not part of the design</p>
+    <div class="pills" role="group" aria-label="Preview state">
+      <button class="pill" data-go="ready" aria-pressed="true">ready</button>
+      <button class="pill" data-go="running" aria-pressed="false">running</button>
+      <button class="pill" data-go="warn" aria-pressed="false">last 10 s</button>
+      <button class="pill" data-go="done" aria-pressed="false">round done</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ── tokens (theme.ts · refined.light) ─────────────────────────────────────────────────────────────── */
+  var INK = '#2A241C', DIALC = '#FFFFFF', CARD = '#FFFBF1', PAPER = '#FAF4E6', ACC = '#8A4B27', HL = '#F3E3A8', BAD = '#9C3322';
+
+  /* ── src/ui/hand.ts, ported: elliptical corners + CSS overflow scaling + seeded wobble ───────────────── */
+  var RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] };
+  function scaleRadii(c, w, h) {
+    var tlx = c.h[0] || 0, trx = c.h[1] || 0, brx = c.h[2] || 0, blx = c.h[3] || 0;
+    var tly = c.v[0] || 0, try_ = c.v[1] || 0, bry = c.v[2] || 0, bly = c.v[3] || 0;
+    var f = Math.min(1,
+      (tlx + trx) ? w / (tlx + trx) : 1, (blx + brx) ? w / (blx + brx) : 1,
+      (tly + bly) ? h / (tly + bly) : 1, (try_ + bry) ? h / (try_ + bry) : 1);
+    return { h: [tlx, trx, brx, blx].map(function (x) { return x * f; }),
+             v: [tly, try_, bry, bly].map(function (x) { return x * f; }), f: f };
+  }
+  function rnd(seed) { var a = seed >>> 0; return function () {
+    a = (a + 0x6d2b79f5) >>> 0; var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function outline(w, h, c, step) {
+    step = step || 7;
+    var r = scaleRadii(c, w, h), tlx = r.h[0], trx = r.h[1], brx = r.h[2], blx = r.h[3];
+    var tly = r.v[0], try_ = r.v[1], bry = r.v[2], bly = r.v[3], pts = [];
+    var line = function (x0, y0, x1, y1) {
+      var n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / step));
+      for (var i = 0; i < n; i++) pts.push([x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n]); };
+    var arc = function (cx, cy, rx, ry, a0, a1) {
+      var n = Math.max(2, Math.round((Math.max(rx, ry) * Math.abs(a1 - a0)) / step));
+      for (var i = 0; i < n; i++) { var a = a0 + (a1 - a0) * i / n; pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]); } };
+    var P = Math.PI;
+    arc(tlx, tly, tlx, tly, P, 1.5 * P); line(tlx, 0, w - trx, 0);
+    arc(w - trx, try_, trx, try_, 1.5 * P, 2 * P); line(w, try_, w, h - bry);
+    arc(w - brx, h - bry, brx, bry, 0, 0.5 * P); line(w - brx, h, blx, h);
+    arc(blx, h - bly, blx, bly, 0.5 * P, P); line(0, h - bly, 0, tly);
+    return pts;
+  }
+  function handPath(w, h, c, seed, amp) {
+    if (w < 2 || h < 2) return '';
+    amp = amp == null ? 1.1 : amp;
+    var pts = outline(w, h, c), n = pts.length, r = rnd(seed), K = Math.max(6, Math.round(n / 9)), i;
+    var ctrl = []; for (i = 0; i <= K; i++) ctrl.push([r() * 2 - 1, r() * 2 - 1]);
+    var at = function (i) { var u = (i / n) * K, k = Math.floor(u), f = u - k, s = f * f * (3 - 2 * f);
+      var a = ctrl[k % K], b = ctrl[(k + 1) % K]; return [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]; };
+    var d = '';
+    pts.forEach(function (p, i) { var q = at(i);
+      var X = Math.min(w, Math.max(0, p[0] + q[0] * amp)), Y = Math.min(h, Math.max(0, p[1] + q[1] * amp));
+      d += (i ? 'L' : 'M') + X.toFixed(1) + ' ' + Y.toFixed(1); });
+    return d + 'Z';
+  }
+  function hashSeed(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+  /* ── one cut box: shadow path at (2.4, 2.8) under fill + ink stroke, exactly like HandBox ───────────── */
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function cutBox(el) {
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (w < 2 || h < 2) return;
+    var d = handPath(w, h, RG, hashSeed(el.dataset.seed || 'x'), 1.5);
+    var svg = el.querySelector('svg.cut');
+    if (!svg) { svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('class', 'cut'); el.insertBefore(svg, el.firstChild); }
+    svg.setAttribute('width', w + 4); svg.setAttribute('height', h + 4);
+    svg.setAttribute('viewBox', '-1 -1 ' + (w + 4) + ' ' + (h + 4));
+    svg.innerHTML =
+      '<path class="hshadow" d="' + d + '" transform="translate(2.4 2.8)"/>' +
+      '<path class="hfill" d="' + d + '" stroke="' + INK + '" stroke-width="' + (el.dataset.sw || 2.5) + '" stroke-linejoin="round"/>';
+  }
+  var cutEls = Array.prototype.slice.call(document.querySelectorAll('.hand'));
+  var ro = new ResizeObserver(function (entries) {
+    entries.forEach(function (e) { cutBox(e.target); });
+  });
+  cutEls.forEach(function (el) { ro.observe(el); });
+
+  /* ── the face: Rosette Blanc, drawn from src/ui/clock/faces.ts (staticSvg + latOut/latIn) ───────────── */
+  function chan(h) { return [1, 3, 5].map(function (i) { return parseInt(h.slice(i, i + 2), 16); }); }
+  function engrave(t) { var a = chan(INK), b = chan(DIALC);
+    return '#' + a.map(function (v, i) { return Math.round(v * t + b[i] * (1 - t)).toString(16).padStart(2, '0'); }).join(''); }
+  function each(n, fn) { return Array.from({ length: n }, function (_, i) { return fn(i); }).join(''); }
+  function f1(v) { return +v.toFixed(1); }
+  function P(r, a) { return [r * Math.sin(a), -r * Math.cos(a)]; }
+
+  function faceSVG() {
+    var rings = [[62, 0.82, 2], [58, 0.72, 1.5]].map(function (r) {
+      return '<circle r="' + r[0] + '" fill="none" stroke="' + engrave(r[1]) + '" stroke-width="' + r[2] + '"/>'; }).join('');
+    var latOut = '<g class="lat lat-a" fill="none" stroke="' + INK + '" stroke-width="1.05" opacity="0.66">' +
+      each(18, function (i) { return '<circle cy="-26" r="22" transform="rotate(' + i * 20 + ')"/>'; }) + '</g>';
+    var latIn = '<g class="lat lat-b" fill="none" stroke="' + INK + '" stroke-width="1.05" opacity="0.58">' +
+      each(12, function (i) { return '<circle cy="-21" r="17" transform="rotate(' + (i * 30 + 15) + ')"/>'; }) + '</g>';
+    var ticks = each(60, function (j) { var maj = j % 5 === 0;
+      return '<line y1="-90.5" y2="' + (maj ? -84 : -87.5) + '" transform="rotate(' + j * 6 + ')" stroke="' + INK + '" stroke-width="' + (maj ? 3 : 1.4) + '"/>'; });
+    var RN = 'XII I II III IV V VI VII VIII IX X XI'.split(' '), ns = 11.5, nr = 75;
+    var nums = each(12, function (j) { var p = P(nr, (j * Math.PI) / 6), x = f1(p[0]), y = f1(p[1]);
+      var rot = j > 3 && j < 9 ? j * 30 + 180 : j * 30;
+      return '<text x="' + x + '" y="' + f1(p[1] + ns * 0.34) + '" font-size="' + ns + '" fill="' + INK +
+        '" text-anchor="middle" transform="rotate(' + (rot === j * 30 ? 0 : rot) + ' ' + x + ' ' + y + ')">' + RN[j] + '</text>'; });
+    return '<svg xmlns="' + SVGNS + '" viewBox="-100 -100 200 200" width="264" height="264">' +
+      '<circle r="99" fill="' + INK + '"/><circle r="97.2" fill="' + DIALC + '"/>' +
+      '<circle r="95.6" fill="none" stroke="' + engrave(0.72) + '" stroke-width="1.3"/>' +
+      rings + latOut + latIn + ticks + '<g font-style="italic" font-weight="600">' + nums + '</g></svg>';
+  }
+  $('#face').innerHTML = faceSVG();
+
+  /* ── the watermark: the same rose-engine language, printed large and faint on the page ──────────────── */
+  (function () {
+    var cx = 220, cy = 348;
+    var ell = each(16, function (i) {
+      return '<ellipse cx="' + cx + '" cy="' + cy + '" rx="186" ry="72" transform="rotate(' + i * 22.5 + ' ' + cx + ' ' + cy + ')"/>'; });
+    $('#medal').innerHTML =
+      '<g fill="none" stroke="rgba(42,36,28,.042)" stroke-width="1">' + ell + '</g>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="196" fill="none" stroke="rgba(138,75,39,.10)" stroke-width="1"/>';
+  })();
+
+  /* ── the slip: one hand-cut shape, four inks (paper / tick wash / overtime / pen border) ────────────── */
+  var SLIP_W = 256, SLIP_H = 92;
+  var SLIP_RAD = { h: [20, 14, 24, 16], v: [14, 24, 14, 20] };
+  (function () {
+    var d = handPath(SLIP_W, SLIP_H, SLIP_RAD, 6421, 1.5);
+    $('#slipPaper').innerHTML =
+      '<path d="' + d + '" transform="translate(2.4 2.8)" fill="rgba(42,36,28,.2)"/>' +
+      '<path d="' + d + '" fill="' + CARD + '" stroke="' + INK + '" stroke-width="2.4" stroke-linejoin="round"/>' +
+      '<path class="wash" d="' + d + '" fill="' + HL + '"/>' +
+      '<path class="warn-edge" d="' + d + '" fill="none" stroke="' + BAD + '" stroke-width="2.8" stroke-linejoin="round"/>';
+  })();
+
+  /* ── progress rim ──────────────────────────────────────────────────────────────────────────────────── */
+  var RIM_R = 151, RIM_C = 2 * Math.PI * RIM_R, rim = $('#rim');
+  rim.style.setProperty('--circ', RIM_C.toFixed(2));
+
+  /* ── state ──────────────────────────────────────────────────────────────────────────────────────────── */
+  var screenEl = $('#screen'), slip = $('#slip'), stamp = $('#stamp'), announce = $('#announce');
+  var S = { mode: 'ready', planMin: 25, flow: true, sound: true, rounds: 0, leftMs: 0, timer: null };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var clock = function (sec) { var s = Math.max(0, Math.round(sec)), h = Math.floor(s / 3600);
+    return (h ? h + ':' + pad(Math.floor(s / 60) % 60) : pad(Math.floor(s / 60))) + ':' + pad(s % 60); };
+  var fmtDur = function (m) { return m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm'; };
+
+  var PHASE = { ready: 'ready', running: 'focusing', warn: 'focusing', done: 'round done', paused: 'paused' };
+
+  function rimTo(prog) { rim.style.strokeDashoffset = (RIM_C * (1 - prog)).toFixed(2); }
+  function aimTo(deg) { $('#aim').style.transform = 'rotate(' + deg + 'deg)'; }
+
+  function render() {
+    var m = S.mode, live = m === 'running' || m === 'warn' || m === 'paused';
+    screenEl.dataset.state = m;
+    $('#badgeText').textContent = 'Round 1 · ' + PHASE[m];
+    var filled = m === 'done' ? 1 : S.rounds % 4 || (S.rounds > 0 && S.rounds % 4 === 0 ? 4 : 0);
+    Array.prototype.forEach.call($('#dots').children, function (d, i) { d.classList.toggle('on', i < filled); });
+
+    var readout, status;
+    if (m === 'ready') { readout = S.planMin + ' min'; status = 'ready when you are'; }
+    else if (m === 'done') { readout = '00:00'; status = 'round complete'; }
+    else {
+      readout = clock(S.leftMs / 1000);
+      if (m === 'paused') status = 'paused';
+      else { var elapsedMin = (S.planMin * 60000 - S.leftMs) / 60000;
+        status = fmtDur(Math.max(1, Math.round(S.planMin - elapsedMin))) + ' to go'; }
+    }
+    $('#timeText').textContent = readout;
+    $('#statusText').textContent = status;
+
+    var goLabel = m === 'ready' ? 'Start' : m === 'paused' ? 'Resume' : m === 'done' ? 'Next round' : 'Pause';
+    $('#goLabel').textContent = goLabel;
+    $('#btnGo').setAttribute('aria-label', goLabel);
+    var end = $('#btnEnd'), endLabel = m === 'ready' ? 'leave' : 'end session';
+    end.textContent = endLabel; end.setAttribute('aria-label', m === 'ready' ? 'Leave focus' : 'End session and save');
+
+    var prog = m === 'ready' ? 0 : m === 'done' ? 1 : Math.max(0, Math.min(1, 1 - S.leftMs / (S.planMin * 60000 || 1)));
+    rimTo(prog);
+    var mins = live ? S.leftMs / 60000 : S.planMin;
+    var ang = m === 'done' ? 0 : ((mins >= 60 ? (mins % 60) || 60 : mins) * 6);
+    aimTo(ang);
+    $('#dial').setAttribute('aria-valuenow', m === 'ready' ? S.planMin : Math.ceil(mins));
+    $('#dial').setAttribute('aria-valuetext', (m === 'ready' ? S.planMin + ' minutes' : Math.ceil(mins) + ' minutes left'));
+
+    slip.classList.toggle('is-warn', m === 'warn');
+    stamp.classList.toggle('on', m === 'done');
+    if (m === 'done' && !reduce.matches) { void stamp.offsetWidth; }
+  }
+
+  function tick() {
+    if (S.mode === 'running') {
+      S.leftMs -= 1000;
+      if (S.leftMs <= 0) { S.leftMs = 0; S.rounds += 1; apply('done', 'Round ' + (S.rounds) + ' done'); return; }
+    } else if (S.mode === 'warn') {
+      S.leftMs -= 1000;
+      if (S.leftMs < 1000) S.leftMs = 10000;
+    } else return;
+    render();
+    if (!reduce.matches) {
+      var w = $('#slipPaper').querySelector('.wash'), j = $('#jolt');
+      w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash');
+      j.classList.remove('kick'); void j.offsetWidth; j.classList.add('kick');
+    }
+  }
+
+  function apply(mode, spoken) {
+    clearInterval(S.timer); S.timer = null;
+    S.mode = mode;
+    if (mode === 'running' && !S.leftMs) S.leftMs = 17 * 60000 + 42000;  // the preview opens mid-round
+    if (mode === 'warn') S.leftMs = 10000;
+    if (mode === 'ready') S.leftMs = 0;
+    if (mode === 'done') S.leftMs = 0;
+    if (mode === 'running' || mode === 'warn') { render(); S.timer = setInterval(tick, 1000); }
+    else render();
+    announce.textContent = spoken || '';
+    document.querySelectorAll('.pill').forEach(function (p) {
+      var on = p.dataset.go === (mode === 'paused' ? 'running' : mode);
+      p.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  /* ── wiring ─────────────────────────────────────────────────────────────────────────────────────────── */
+  document.querySelectorAll('.pill').forEach(function (p) {
+    p.addEventListener('click', function () { S.rounds = 0; S.leftMs = 0; apply(p.dataset.go); });
+  });
+
+  $('#btnGo').addEventListener('click', function () {
+    if (S.mode === 'ready') apply('running');
+    else if (S.mode === 'running') apply('paused');
+    else if (S.mode === 'paused') apply('running');
+    else if (S.mode === 'done') { S.rounds = Math.max(1, S.rounds); S.leftMs = 0; apply('ready'); }
+  });
+
+  document.querySelectorAll('.pre[data-min]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (S.mode !== 'ready') return;
+      S.planMin = +b.dataset.min;
+      document.querySelectorAll('.pre[data-min]').forEach(function (o) {
+        var on = o === b; o.classList.toggle('is-on', on); o.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      render();
+    });
+  });
+
+  $('#btnFlow').addEventListener('click', function () {
+    S.flow = !S.flow;
+    $('#btnFlow').classList.toggle('is-on', S.flow);
+    $('#btnFlow').setAttribute('aria-checked', S.flow ? 'true' : 'false');
+    $('#flowLabel').textContent = S.flow ? 'Flow on' : 'Flow off';
+  });
+
+  $('#btnSound').addEventListener('click', function () {
+    S.sound = !S.sound;
+    $('#btnSound').setAttribute('aria-checked', S.sound ? 'true' : 'false');
+  });
+
+  /* ── fit the 440 × 1001 canvas into the desk ────────────────────────────────────────────────────────── */
+  function fit() {
+    var chrome = 104;
+    var s = Math.min((window.innerWidth - 32) / 466, (window.innerHeight - chrome - 34) / 1027, 1);
+    document.documentElement.style.setProperty('--s', Math.max(0.34, s).toFixed(4));
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  apply('ready');
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { cutEls.forEach(cutBox); });
+})();
+</script>
+</body>
+</html>

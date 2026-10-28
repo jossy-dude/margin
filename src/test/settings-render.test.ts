@@ -11,6 +11,7 @@
  */
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { Linking } from 'react-native';
 import { Path } from 'react-native-svg';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,7 @@ import { nudgeStep, nudgeWord } from '../domain/timer';
 import { APP_VERSION } from '../domain/version';
 import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
+import { AboutPage, SUPPORT_URL } from '../sheets/AboutPage';
 import { clearCrashes, recordCrash, type CrashEntry } from '../ui/crashlog';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -565,6 +567,92 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
   });
 });
 
+/**
+ * The split. `about` used to be titled *Reset* and hold three unrelated things: the erase button, the
+ * version line and the Updates block — so "what build am I on" was a scroll away from the one action
+ * in the app that cannot be undone. Each page must carry its own half and none of the other's, and the
+ * support row's blank-URL state must be *no section at all*, not a button that cannot do anything.
+ */
+describe('About and Reset are two pages, and the support row is absent until its link exists', () => {
+  const page = async (path: string[]) => {
+    const s = await mount();
+    await act(async () => { set({ settingsPath: path }); });
+    return s;
+  };
+  /** A button found by what TalkBack says, and only one that can actually be pressed — `findAll`
+   *  matches the `Pressable` and the host view it renders, so the second copy has no `onPress`. */
+  const pressable = (s: Awaited<ReturnType<typeof page>>, label: string) => {
+    const found = s.r.root.findAll((n) => {
+      const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
+      return p.accessibilityLabel === label && typeof p.onPress === 'function';
+    })[0];
+    if (!found) throw new Error(`no pressable labelled "${label}" on the page`);
+    return found.props as { onPress: () => void };
+  };
+
+  it('About says what this is and what this build is, and carries no erase button', async () => {
+    const t = (await page(['about'])).text();
+    expect(t).toContain(`Margin ${APP_VERSION}`);
+    expect(t).toContain('A school planner in paper and ink, on your phone.');
+    expect(t).toContain('What it holds');
+    expect(t).toContain('Why it looks like this');
+    expect(t).toContain('Who made it');
+    expect(t).toContain('Made by Jossy');
+    expect(t).toContain('Updates');
+    expect(t).not.toContain('Erase everything');
+    expect(t).not.toContain('undefined');
+  });
+
+  it('Reset keeps the destructive action and none of the prose', async () => {
+    const t = (await page(['reset'])).text();
+    expect(t).toContain('Erase everything');
+    expect(t).toContain('This erases the whole database file');
+    expect(t).not.toContain('Why it looks like this');
+    expect(t).not.toContain(`Margin ${APP_VERSION}`); // the version moved off the erase page
+  });
+
+  it('the two-tap guard on Reset survived the move: one tap erases nothing', async () => {
+    const s = await page(['reset']);
+    await act(async () => { pressable(s, 'Erase everything').onPress(); });
+    expect(s.text()).toContain('Tap again to erase everything');
+    expect(getState().settingsPath).toEqual(['reset']); // it armed instead of acting
+  });
+
+  it('SUPPORT_URL ships blank, so the section it controls does not exist', async () => {
+    expect(SUPPORT_URL).toBe('');
+    expect((await page(['about'])).text()).not.toContain('Buy me a coffee');
+    expect((await page(['about'])).text()).not.toContain('Support');
+  });
+
+  it('a pasted support URL adds the row, and the row opens exactly that URL', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => { r = TestRenderer.create(React.createElement(AboutPage, { supportUrl: 'https://buymeacoffee.com/jossy' })); });
+    const btn = r.root.findAll((n) => {
+      const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
+      return p.accessibilityLabel === 'Buy me a coffee' && typeof p.onPress === 'function';
+    })[0];
+    expect(btn).toBeDefined();
+    await act(async () => { (btn!.props as { onPress: () => void }).onPress(); });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith('https://buymeacoffee.com/jossy');
+    open.mockRestore();
+  });
+
+  it('a link this phone cannot open says so instead of rejecting on the tap', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no handler for that scheme'));
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => { r = TestRenderer.create(React.createElement(AboutPage, { supportUrl: 'nope://coffee' })); });
+    const btn = r.root.findAll((n) => {
+      const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
+      return p.accessibilityLabel === 'Buy me a coffee' && typeof p.onPress === 'function';
+    })[0]!;
+    await act(async () => { (btn.props as { onPress: () => void }).onPress(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(getState().toast?.text).toContain('could not be opened');
+    open.mockRestore();
+  });
+});
 /**
  * The Look & feel page's Progress bar row read its name out of `BAR_KINDS` alone, so once the owner
  * picked a catalogue instrument (`spiral`, `cassette`, …) the row had no name to print. The app was

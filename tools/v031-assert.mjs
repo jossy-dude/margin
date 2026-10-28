@@ -177,7 +177,9 @@ await p.screenshot({ path: `${OUT}/import-done.png` });
 await back(); // data → root
 await p.waitForTimeout(900);
 ok('6a', await has('Semester 7 Sep – 20 Dec 2026'), `the imported semester is the stored one ("${(await pageText()).match(/Semester [^|]*/)?.[0]?.trim() ?? ''}")`);
-await tap('[aria-label^="Reset."]');
+/* The version line and the Updates block moved off the destructive page when About was split
+   out of "Reset": they are facts about the build, not about erasing things. */
+await tap('[aria-label^="About."]');
 await p.waitForTimeout(1000);
 ok('6b', await has('Margin 0.3.1'), 'About prints 0.3.1');
 /* Updates: a web build cannot update itself, so the page must say so rather than offer a button whose

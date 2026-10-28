@@ -30,10 +30,13 @@ import { ImportPage } from './Import';
 import { SemesterRange } from '../ui/SemesterRange';
 import { semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
-import { applyUpdate, checkForUpdate, otaAvailable, versionLine, type CheckResult } from '../services/ota';
+import { AboutPage } from './AboutPage';
 import type { Settings } from '../domain/types';
 
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'Reset' };
+/* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
+   erase button, the version line and the Updates block. Splitting them means the id says what the page
+   is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -147,9 +150,6 @@ export function SettingsSheet() {
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
    * to fire against an unmounted component. */
   const [armed, setArmed] = useState(false);
-  /* The Updates row's own state: what the last check said, and nothing else. A check is one network
-   * round-trip, so it is only ever started by a tap — the app checks on launch by itself. */
-  const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>('idle');
   /* The Diagnostics hint used to call `crashCount()` twice *inside the render body*, and
      `crashCount()` is blocking disk I/O: it opens the JSONL file, reads it whole and parses each
      line. `nameDraft` is local state, so every keystroke re-rendered this sheet and re-read the
@@ -183,7 +183,10 @@ export function SettingsSheet() {
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
     <Nav icon="note" label="Show the tour again" hint={`${toured(onboarded) ? 'Finished — it is replayable' : 'Not seen yet'}`} to="tour" />
-    <Nav icon="trash" label="Reset" hint="Erase everything" to="about" />
+    <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />
+    {/* Reset stays last: it is the only row on this page that destroys something, so it must never be
+        the row a thumb lands on while reaching for the row above it. */}
+    <Nav icon="trash" label="Reset" hint="Erase everything" to="reset" />
   </>);
   if (page === 'appearance') body = (<>
     <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={FACES.find((f) => f.id === s.clock)?.n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
@@ -374,24 +377,16 @@ export function SettingsSheet() {
     <Btn kind="ghost" icon="play" label="Run it now" onPress={() => { replay(0); act.close(); }} />
     <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You finished build ${TOUR_VERSION} of it. Running it again changes nothing about your data.` : 'You have not seen it yet, so it will run the next time this app opens anyway.'}</Txt>
   </>);
-  if (page === 'about') body = (<>
+  /* The page used to be `about`, and used to carry the version line and the Updates block as well.
+     Those moved to About, where "what build is this" belongs; what is left is the one action the whole
+     app has that cannot be undone. Its behaviour — the double-tap arm, the 4 s window, the pop after —
+     is unchanged. */
+  if (page === 'reset') body = (<>
     <Txt f="serif" s={16} c="mut">This erases the whole database file — subjects, timetable, attendance, tasks, notes, grades, focus history and settings — and hands back a fresh, empty planner. It cannot be undone, so export first if you care about your data.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={armReset} />
-    <Txt f="serif" s={14} c="mut">Margin {APP_VERSION} · local-first, no account, no network needed.</Txt>
-    <Hair />
-    <Section title="Updates">
-      {/* Web and a build with updates switched off both get a sentence instead of a button that could
-          only ever answer "unavailable" — and the sentence names the right reason for each. */}
-      {otaAvailable() ? (<>
-        <Txt f="serif" s={15} c="mut">{versionLine()}</Txt>
-        <Row>
-          <Btn small kind="ghost" label={ota === 'checking' ? 'Checking…' : 'Check for updates'} disabled={ota === 'checking'} onPress={() => void checkOta()} />
-          {ota === 'ready' ? <Btn small label="Restart now" onPress={() => void applyUpdate()} /> : null}
-        </Row>
-        <Txt f="serif" s={14.5} c="mut">{OTA_LINE[ota]}</Txt>
-      </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Updates are checked in the installed app; this browser build cannot update itself.' : 'This build cannot update itself. Updates must be enabled when the app is built.'}</Txt>}
-    </Section>
+    <Txt f="serif" s={14} c="mut">Data &amp; export writes that copy out before you come here, and a safety copy is kept automatically ahead of any update that changes the database.</Txt>
   </>);
+  if (page === 'about') body = <AboutPage />;
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
 
   /** The one irreversible action, guarded by the same double tap the boot-failure screen uses: the first tap
@@ -409,24 +404,8 @@ export function SettingsSheet() {
     setSurePurge(false);
     void act.purgeDemo();
   }
-  /** One check per tap. `checkForUpdate` is total and answers rather than throwing, so there is no
-   *  catch here — the result line is the whole report. */
-  async function checkOta() {
-    if (ota === 'checking') return;
-    setOta('checking');
-    setOta(await checkForUpdate());
-  }
 }
 const clearSettingsPath = () => { while (getState().settingsPath.length) act.settingsPop(); };
-/** What the Updates row says after a check, one line, in the app's own voice. */
-const OTA_LINE: Record<CheckResult | 'idle' | 'checking', string> = {
-  idle: 'Checked automatically when the app opens.',
-  checking: 'Checking…',
-  current: 'You are on the newest version.',
-  ready: 'An update is downloaded. Restart to use it.',
-  error: 'Could not reach the update service. Try again later.',
-  unavailable: 'Updates are switched off in this build.',
-};
 const DEMO_NOW = new Date(2026, 9, 5, 10, 20).getTime(), at = (h: number, m: number) => new Date(2026, 9, 5, h, m).getTime();
 const DEMO_PERIODS = [{ start: at(8, 30), end: at(9, 20), label: 'Economics' }, { start: at(10, 0), end: at(10, 50), label: 'Discrete' }, { start: at(11, 45), end: at(12, 35), label: 'Tech', cancelled: true }, { start: at(14, 0), end: at(14, 50), label: 'Code' }];
 /** DEMO_NOW is 10:20 and DEMO_PERIODS[1] runs 10:00–10:50, so every instrument preview is drawn at
