@@ -556,7 +556,7 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
     expect(check).toBeDefined();
     await act(async () => { (check!.props as { onPress: () => void }).onPress(); });
     const t = s.text();
-    expect(t).toContain('1 subject · 1 class · 1 task · 1 day mark · 1 mark');
+    expect(t).toContain('1 subject (1 new) · 1 class (1 new) · 1 day mark (1 new) · 1 task (1 new) · 1 mark (1 new)');
     expect(t).not.toContain('1 subjects');
   });
 

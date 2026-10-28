@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Linking, Platform, View } from 'react-native';
-import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
+import { Btn, Hair, Row, Txt } from '../ui/kit';
 import { Section } from '../screens/common';
-import { useTheme } from '../ui/theme-context';
 import { toast } from '../store/store';
 import { APP_VERSION } from '../domain/version';
 import { applyUpdate, checkForUpdate, otaAvailable, versionLine, type CheckResult } from '../services/ota';
@@ -33,7 +32,6 @@ export const SUPPORT_URL = '';
  * own line.
  */
 export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string }) {
-  const { c } = useTheme();
   /* The Updates row's own state: what the last check said, and nothing else. A check is one network
      round-trip, so it is only ever started by a tap — the app checks on launch by itself. */
   const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>('idle');

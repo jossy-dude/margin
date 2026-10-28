@@ -4,9 +4,14 @@ import { Btn, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
 import { useTheme } from '../ui/theme-context';
 import { FONT } from '../tokens/theme';
-import { parseImport, type ImportPlan } from '../domain/importPlan';
+import {
+  DATASETS, detectDataset, detectImportFormat, parseImportFile, planCsv, type DatasetCount, type DatasetKind, type ImportPlan,
+} from '../domain/importPlan';
+import type { Snapshot } from '../domain/types';
+import { parseCsv, type CsvTable } from '../domain/csv';
 import { semesterLabel } from '../domain/semester';
 import { act, useStore } from '../store/store';
+import { pickImportFile } from '../services/pickFile';
 
 /** The compact shape, short enough to read in a placeholder and complete enough to be copied. */
 const SAMPLE = `{
@@ -17,13 +22,47 @@ const SAMPLE = `{
     "course": "DB Systems", "due": "2026-09-20T23:59" }]
 }`;
 
-/** Singular and plural for each count the preview prints: `1 subject`, not `1 subjects`. */
+/** Singular and plural for each count the preview prints: `1 subject`, not `1 subjects`. `variants`
+ *  is absent on purpose: WS2 owns the table, so nothing this page prints may claim one is written. */
 const WORD: Record<string, readonly [string, string]> = {
   courses: ['subject', 'subjects'], meetings: ['class', 'classes'], tasks: ['task', 'tasks'], notices: ['note', 'notes'],
-  attendance: ['attendance mark', 'attendance marks'], dayMarks: ['day mark', 'day marks'], marks: ['mark', 'marks'], adjusts: ['curve', 'curves'],
+  attendance: ['attendance mark', 'attendance marks'], dayMarks: ['day mark', 'day marks'], marks: ['mark', 'marks'],
+  adjusts: ['curve', 'curves'],
 };
 const word = (key: string, n: number) => { const w = WORD[key]; return w ? w[n === 1 ? 0 : 1] : key; };
 const total = (plan: ImportPlan) => Object.values(plan.counts).reduce((a, b) => a + b, 0);
+
+/** One dataset's line: how many rows are written and — only where the plan could look at what is
+ *  already on the phone — how many of those are new and how many replace a row. Where it could not,
+ *  it says "add or update" rather than calling a re-import "new". */
+function describe(key: string, d: DatasetCount): string | null {
+  if (!d.write) return null;
+  const name = `${d.write} ${word(key, d.write)}`;
+  if (d.add === null || d.update === null) return `${name} (add or update)`;
+  const split = [d.add ? `${d.add} new` : '', d.update ? `${d.update} updated` : ''].filter(Boolean).join(', ');
+  return split ? `${name} (${split})` : name;
+}
+
+/** Rows the file carried that this import will not write. Variants are left out on purpose (WS2 owns
+ *  that table); everything else says plainly that it is not being written. */
+const skipped = (plan: ImportPlan) => Object.entries(plan.breakdown)
+  .filter(([k, d]) => k !== 'variants' && d.skip > 0)
+  .map(([k, d]) => `${d.skip} ${word(k, d.skip)}`)
+  .join(' · ');
+
+/** What a plan is built with: the rows already on the phone, so a CSV that names one by id, key or
+ *  date merges over it instead of resetting it, and so the preview can split new from updated. Module
+ *  level, not inside the page, because `Date.now()` in a component's body is an impure call during
+ *  render. */
+const options = (phone: Pick<Snapshot, 'courses' | 'meetings' | 'tasks' | 'attendance' | 'dayMarks' | 'marks'>) => ({
+  courses: phone.courses, meetings: phone.meetings, tasks: phone.tasks,
+  attendance: phone.attendance, dayMarks: phone.dayMarks, marks: phone.marks, now: Date.now(),
+});
+
+/** The tables a CSV may be, printed the way the app names them. */
+const DATASET_LABEL: Record<DatasetKind, string> = {
+  courses: 'Subjects', timetable: 'Timetable', attendance: 'Attendance', dayMarks: 'Day marks', tasks: 'Tasks', marks: 'Marks',
+};
 
 /**
  * Settings → Data → Import.
@@ -32,18 +71,57 @@ const total = (plan: ImportPlan) => Object.values(plan.counts).reduce((a, b) => 
  * problems, and a sheet inside the Settings sheet would put the keyboard, the preview and the Data page's
  * own scroll all in one thumb zone. Check parses; Import is disabled until the parse has no problems, and
  * its label is the row count the user is about to add, so the button never hides the size of the write.
+ *
+ * Two doors, one path. A picked file is put in the box and previewed at once (the person has already
+ * said which file they mean), and pasted text is previewed on Check. Both end in the same plan, the same
+ * preview and the same merge-only commit, so there is no second way for rows to arrive.
  */
 export function ImportPage() {
   const { c } = useTheme();
-  const courses = useStore((s) => s.courses);
+  /* Every table a CSV can name by id, key or date, so a re-import merges over the row already here
+     and the preview can say how many rows are new. Six selectors rather than the whole state so a
+     clock tick elsewhere does not re-render the page. */
+  const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings);
+  const tasks = useStore((s) => s.tasks), attendance = useStore((s) => s.attendance);
+  const dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks);
+  const onPhone = { courses, meetings, tasks, attendance, dayMarks, marks };
   const [text, setText] = useState(''), [plan, setPlan] = useState<ImportPlan | null>(null), [busy, setBusy] = useState(false);
+  /** The picked file's name, and the parsed table when a CSV needs a second pass with the table chosen. */
+  const [name, setName] = useState<string | undefined>(undefined), [csv, setCsv] = useState<CsvTable | null>(null), [pickErr, setPickErr] = useState('');
 
   const rows = plan ? total(plan) : 0;
+  const notWritten = plan ? skipped(plan) : '';
   const semester = plan?.snapshot.settings?.semesterStart;
   const canImport = !!plan && plan.problems.length === 0 && (rows > 0 || !!semester);
   const label = rows ? `Import ${rows} row${rows === 1 ? '' : 's'}` : semester ? 'Save semester' : 'Import';
+  const asksDataset = !!csv && !!plan?.problems.some((p) => p.field === 'dataset');
 
-  const check = () => { setPlan(parseImport(text, { courses, now: Date.now() })); };
+  /* A CSV is planned twice only when the header does not name its table: once to produce the question,
+     then again once the person has answered it — which is why the parsed table is kept here. */
+  const preview = (t: string, n: string | undefined) => {
+    if (detectImportFormat(n, t) === 'csv') {
+      const table = parseCsv(t);
+      setCsv(table);
+      setPlan(planCsv(table.header, table.rows, detectDataset(table.header) ?? undefined, options(onPhone)));
+      return;
+    }
+    setCsv(null);
+    setPlan(parseImportFile(n, t, options(onPhone)));
+  };
+  const choose = (dataset: DatasetKind) => { if (csv) setPlan(planCsv(csv.header, csv.rows, dataset, options(onPhone))); };
+
+  const check = () => preview(text, name);
+  const pick = async () => {
+    setPickErr('');
+    try {
+      const file = await pickImportFile();
+      if (!file) return;
+      setName(file.name); setText(file.text); setPlan(null); setCsv(null);
+      preview(file.text, file.name);
+    } catch (e) {
+      setPickErr(`Couldn't read that file: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    }
+  };
   const run = async () => {
     if (!plan || !canImport) return;
     setBusy(true);
@@ -54,23 +132,40 @@ export function ImportPage() {
 
   return (
     <View style={{ gap: 10 }}>
-      <Txt f="serif" s={15.5} c="mut">Paste a Margin JSON export, or the compact shape an AI can write. Import only adds rows, or overwrites a row that carries the same id — nothing is ever deleted, so the same file twice changes nothing the second time.</Txt>
-      <Label>JSON</Label>
+      <Txt f="serif" s={15.5} c="mut">Import a JSON export or a CSV table, from a file or pasted. Import only adds rows, or overwrites a row that carries the same id — nothing is ever deleted, so the same file twice changes nothing the second time.</Txt>
+      <Row>
+        <Btn small label="Pick file" icon="note" testID="import-pick" disabled={busy} onPress={() => void pick()} />
+        <Txt f="serif" s={15} c="mut" numberOfLines={1} style={{ flexShrink: 1 }}>{name ?? 'or paste below'}</Txt>
+      </Row>
+      {pickErr ? <Txt f="serif" s={14.5} c="bad">{pickErr}</Txt> : null}
+      <Label>JSON or CSV</Label>
       <TextInput
-        value={text} onChangeText={(v) => { setText(v); setPlan(null); }}
+        value={text} onChangeText={(v) => { setText(v); setPlan(null); setName(undefined); setCsv(null); }}
         multiline autoCapitalize="none" autoCorrect={false} spellCheck={false}
         placeholder={SAMPLE} placeholderTextColor={c.mut} accessibilityLabel="JSON to import"
         style={{ fontFamily: FONT.type, fontSize: 13, lineHeight: 18, color: c.ink, minHeight: 150, textAlignVertical: 'top', padding: 8, borderWidth: 1.4, borderColor: c.rule }}
       />
       <Row>
-        <Btn small label="Check" icon="check" disabled={busy || !text.trim()} onPress={check} />
-        <Btn small kind="primary" label={label} disabled={busy || !canImport} onPress={() => void run()} />
+        <Btn small label="Check" icon="check" testID="import-check" disabled={busy || !text.trim()} onPress={check} />
+        <Btn small kind="primary" label={label} testID="import-commit" disabled={busy || !canImport} onPress={() => void run()} />
         {busy ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}
       </Row>
+      {asksDataset ? (
+        <View style={{ gap: 6 }}>
+          <Label>Which table is this?</Label>
+          <Row>
+            {DATASETS.map((d) => (
+              <Btn key={d} small kind="ghost" label={DATASET_LABEL[d]} testID={`import-dataset-${d}`} onPress={() => choose(d)} />
+            ))}
+          </Row>
+        </View>
+      ) : null}
       {plan ? (
         <View style={{ gap: 6 }}>
           <Label>What this file carries</Label>
-          <Txt f="bold" s={19}>{rows ? Object.entries(plan.counts).map(([k, n]) => `${n} ${word(k, n)}`).join(' · ') : 'No rows'}</Txt>
+          <Txt f="bold" s={19}>{rows ? Object.entries(plan.breakdown).map(([k, d]) => describe(k, d)).filter((x) => x !== null).join(' · ') : 'No rows'}</Txt>
+          {notWritten ? <Txt f="serif" s={15} c="mut">Skipped (not written): {notWritten}</Txt> : null}
+          {plan.profileName ? <Txt f="serif" s={15.5} c="mut">Profile {plan.profileName}</Txt> : null}
           {semester ? <Txt f="serif" s={15.5} c="mut">Semester {semesterLabel(plan.snapshot.settings ?? {})}</Txt> : null}
           {plan.problems.length ? (
             <View style={{ gap: 3 }}>

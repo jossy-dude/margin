@@ -557,6 +557,19 @@ an app bug. Wear the same pair of shoes every run.
 
 ---
 
+## V09-WS1 — import: a file picked from the phone
+
+### V09-WS1.1 — the picker opens, and the file's text arrives
+**Look at** Settings → Data & export → Import. Tap **Pick file**.
+- Check: Android's document picker opens. Choosing a `.json` export from Downloads puts the file's name
+  beside the button, fills the box and shows the preview ("N subjects · …") without a second tap;
+  choosing a `.csv` shows the "Which table is this?" buttons, and picking one plans the rows.
+- Backing out of the picker changes nothing and prints no error. A file from cloud storage (Drive)
+  either fills the box the same way or shows one "Couldn't read that file: …" line — never a crash.
+**PASS / FAIL: ______**
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only
