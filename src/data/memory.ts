@@ -17,6 +17,10 @@ export class MemoryRepository implements Repository {
   async remove(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = true; this.log(e, id, 'del'); }
   async restore(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = false; this.log(e, id, 'restore'); }
   async putSettings(p: Partial<Settings>) { Object.assign(this.set, structuredClone(p)); }
+  /* Same KV surface as the SQLite adapter, over the same object `putSettings` writes: a key that is
+     not a `Settings` field (the OTA marker) is stored verbatim and never reaches `withDefaults`. */
+  async getKv(k: string) { const v = this.set[k]; return typeof v === 'string' ? v : null; }
+  async setKv(k: string, value: string | null) { if (value === null) delete this.set[k]; else this.set[k] = value; }
   private all<K extends EntityName>(e: K): EntityMap[K][] { return [...this.tab(e).values()].filter((r) => !r.deleted).map((r) => structuredClone(r.v) as EntityMap[K]); }
   async load(): Promise<Snapshot> {
     return {

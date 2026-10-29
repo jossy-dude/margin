@@ -19,6 +19,7 @@ import { buildSnapshot, newSemester, semesterName } from '../domain/archive';
 import { isYmd, suggestEnd, validRange } from '../domain/semester';
 import { configureFx, fx } from '../services/fx';
 import * as notifs from '../services/notifications';
+import { announceAppliedUpdate, bindOtaKv, checkOnForeground } from '../services/ota';
 
 export type RouteName = 'Today' | 'Week' | 'Tasks' | 'Grades' | 'Stats' | 'Focus';
 export type SheetSpec =
@@ -79,6 +80,17 @@ export function toast(text: string, undo?: () => void) {
   toastTimer = setTimeout(() => { if (state.toast?.id === id) set({ toast: null }); }, undo ? 6000 : 2600);
 }
 export const dismissToast = () => set({ toast: null });
+
+/* ───── self-update (v0.9 WS4) ───────────────────────────────────────────────────────────────────
+ * `services/ota.ts` owns the loop but must not import the store or an adapter (the store imports it to
+ * wire the resume listener — a cycle). It takes the two calls it needs as a port; this binds them to
+ * the open repository's `setting` table. Both directions swallow: an update marker is bookkeeping, and
+ * a boot that could not read it must still reach a screen. A failed write lands in the Problems log
+ * like every other failed write. */
+bindOtaKv({
+  get: async (k) => { try { return await R().getKv(k); } catch { return null; } },
+  set: async (k, v) => { try { await R().setKv(k, v); } catch (e) { recordCrash(e, 'save', state.route); } },
+});
 
 /* ───── notifications: plan → OS queue, debounced ───── */
 /** The OS tints a notification with the app's accent, and `resync` runs from store actions rather than from a
@@ -186,6 +198,11 @@ export async function hydrate(r: Repository) {
     applySnapshot(snap); configureFx(state.settings);
     const rows = await reconcileSemesters();
     set({ ready: true, now: Date.now(), semesters: rows ?? [] }); resync(1500);
+    /* v0.9 WS4, both fire-and-forget: the launch that applied an update says so once, and this launch
+       asks the channel once. Neither is awaited — a check must never sit between the user and the
+       first frame — and both are total, so neither needs a catch at this call site. */
+    void announceAppliedUpdate().then((text) => { if (text) toast(text); });
+    void checkOnForeground();
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
 }
 /** What App.tsx runs to bring the app up — the open-and-decide step v0.1 grew.
@@ -595,7 +612,7 @@ const notifEffects = () => {
 };
 export function wireLifecycle() {
   if (wired) return; wired = true;
-  RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); } });
+  RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); void checkOnForeground(); } });
   notifs.onOpened((o) => dispatchOpened(o, notifEffects()));
   notifs.onReceived((kind, id, at) => { fx.chime(); if (isPlannedKind(kind)) logNotif(id, kind, at, 'shown', Date.now()); });
 }

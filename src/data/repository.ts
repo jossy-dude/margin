@@ -15,6 +15,17 @@ export interface Repository {
   remove(entity: EntityName, id: string): Promise<void>;
   restore(entity: EntityName, id: string): Promise<void>;
   putSettings(patch: Partial<Settings>): Promise<void>;
+  /* ── the setting table as a KV (v0.9) ──────────────────────────────────────────────────────────
+   * Not every stored fact is a user setting: the OTA loop's "this bundle was applied" marker is
+   * bookkeeping, must survive a restart, and has no place on a Settings page (it is not part of the
+   * `Settings` type and no screen writes it). It still belongs in the one key-value table this app
+   * has, so the port exposes that table directly for keys the type does not name. Values are strings,
+   * stored JSON-encoded like every other setting; `null` deletes the key, absent and unreadable are
+   * both `null`. Because `load()` returns every row in that table, the marker rides along in an
+   * exported settings object — harmless: a toast requires the exported id to equal the update id of
+   * the phone that imports it, and no phone runs another phone's bundle. */
+  getKv(key: string): Promise<string | null>;
+  setKv(key: string, value: string | null): Promise<void>;
   seed(snapshot: Snapshot): Promise<void>;
   /** The import path's write half: add or overwrite exactly the rows a plan carries, in one
    *  transaction, with the same discipline as `seed()` (a `put` per row, so every row gets a `rev`

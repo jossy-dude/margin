@@ -7,14 +7,17 @@
  * here is a decision the app makes about what the phone told it.
  */
 import { Platform } from 'react-native';
-import { applyUpdate, checkForUpdate, otaAvailable, versionLine } from '../services/ota';
+import {
+  APPLIED_VERSION_KEY, announceAppliedUpdate, applyUpdate, bindOtaKv, checkForUpdate, checkOnForeground,
+  otaAvailable, resetOtaState, versionLine, type OtaKv,
+} from '../services/ota';
 
 const mockUpdates = {
   isEnabled: true as boolean | undefined,
   runtimeVersion: '0.3.1' as string | null,
   updateId: null as string | null,
   checkForUpdateAsync: jest.fn<Promise<{ isAvailable: boolean }>, []>(),
-  fetchUpdateAsync: jest.fn<Promise<{ isNew: boolean }>, []>(),
+  fetchUpdateAsync: jest.fn<Promise<{ isNew: boolean; manifest?: { id?: string } }>, []>(),
   reloadAsync: jest.fn<Promise<void>, []>(),
 };
 
@@ -24,6 +27,14 @@ const realOS = Platform.OS;
 /** The browser build has no bundle to swap, and jest's platform is neither web nor a phone. */
 const asWeb = (on: boolean) => Object.defineProperty(Platform, 'OS', { value: on ? 'web' : realOS, configurable: true });
 
+/* The app's key-value store, in a Map: the loop's marker lives in the `setting` table on a phone, and
+   every assertion here is about WHEN it is written and WHEN it is consumed, not about SQL. */
+const kvStore = new Map<string, string>();
+const fakeKv: OtaKv = {
+  get: async (k) => kvStore.get(k) ?? null,
+  set: async (k, v) => { if (v === null) kvStore.delete(k); else kvStore.set(k, v); },
+};
+
 beforeEach(() => {
   mockUpdates.isEnabled = true;
   mockUpdates.runtimeVersion = '0.3.1';
@@ -31,9 +42,12 @@ beforeEach(() => {
   mockUpdates.checkForUpdateAsync.mockReset();
   mockUpdates.fetchUpdateAsync.mockReset();
   mockUpdates.reloadAsync.mockReset();
+  kvStore.clear();
+  bindOtaKv(fakeKv);
+  resetOtaState();
 });
 
-afterEach(() => asWeb(false));
+afterEach(() => { asWeb(false); bindOtaKv(null); });
 
 describe('whether this build can update itself at all', () => {
   it('is yes when the native module is present and enabled', () => {
@@ -133,6 +147,166 @@ describe('reloading is the user’s tap, never the app’s', () => {
     asWeb(true);
     await applyUpdate();
     expect(mockUpdates.reloadAsync).not.toHaveBeenCalled();
+  });
+
+  /* The restart is downstream of a completed download, so a publish the phone could not fetch must
+     leave the app exactly where it was — no reload into a bundle nobody has. */
+  it('does not restart when the download failed', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true });
+    mockUpdates.fetchUpdateAsync.mockRejectedValue(new Error('offline'));
+    expect(await checkForUpdate()).toBe('error');
+    await applyUpdate();
+    expect(mockUpdates.reloadAsync).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * v0.9 WS4: the check that runs by itself when the app comes back to the foreground.
+ *
+ * It has to be cheap (one round-trip per five minutes, not one per resume), total (every answer the
+ * manual check gives is still an answer, plus the throttled no-op) and quiet (it never throws at the
+ * call site, because the caller is a lifecycle listener, not a screen with a catch).
+ */
+describe('checking on the way back into the app', () => {
+  const NOW = 1_000_000;
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(NOW); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  it('does one real check per throttle window', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    expect(await checkOnForeground()).toBe('current');
+    expect(await checkOnForeground()).toBe('throttled');
+    expect(mockUpdates.checkForUpdateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults to the five-minute window the design pins', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    await checkOnForeground();
+    jest.setSystemTime(NOW + 300_000 - 1);
+    expect(await checkOnForeground()).toBe('throttled');
+    jest.setSystemTime(NOW + 300_000);
+    expect(await checkOnForeground()).toBe('current');
+    expect(mockUpdates.checkForUpdateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('honours a caller-supplied window', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    await checkOnForeground(60_000);
+    jest.setSystemTime(NOW + 59_999);
+    expect(await checkOnForeground(60_000)).toBe('throttled');
+    jest.setSystemTime(NOW + 60_000);
+    expect(await checkOnForeground(60_000)).toBe('current');
+  });
+
+  it('reports `current` when the channel has nothing newer', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    expect(await checkOnForeground(0)).toBe('current');
+  });
+
+  it('reports `ready` once the silent download landed', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true });
+    mockUpdates.fetchUpdateAsync.mockResolvedValue({ isNew: true });
+    expect(await checkOnForeground(0)).toBe('ready');
+  });
+
+  it('reports `error` rather than throwing when the network fails', async () => {
+    mockUpdates.checkForUpdateAsync.mockRejectedValue(new Error('offline'));
+    await expect(checkOnForeground(0)).resolves.toBe('error');
+  });
+
+  it('reports `unavailable` on web without a round-trip', async () => {
+    asWeb(true);
+    expect(await checkOnForeground(0)).toBe('unavailable');
+    expect(mockUpdates.checkForUpdateAsync).not.toHaveBeenCalled();
+  });
+
+  it('reports `unavailable` when the build has updates switched off', async () => {
+    mockUpdates.isEnabled = false;
+    expect(await checkOnForeground(0)).toBe('unavailable');
+    expect(mockUpdates.checkForUpdateAsync).not.toHaveBeenCalled();
+  });
+
+  /* A resume while the previous check is still in flight must not start a second one: the timestamp
+     is written BEFORE the await for exactly this case. */
+  it('does not start a second check while the first is still running', async () => {
+    let land: (v: { isAvailable: boolean }) => void = () => undefined;
+    mockUpdates.checkForUpdateAsync.mockReturnValue(new Promise((r) => { land = r; }));
+    const first = checkOnForeground();
+    expect(await checkOnForeground()).toBe('throttled');
+    land({ isAvailable: false });
+    expect(await first).toBe('current');
+    expect(mockUpdates.checkForUpdateAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * v0.9 WS4: the sentence that proves the update actually landed.
+ *
+ * `expo-updates` cannot report the version of a bundle that is not running yet, so the marker records
+ * the one identity a downloaded update already has — its update id — and the next launch compares it
+ * with the id of the bundle that is now running. A relaunch into the same old bundle (a reload the
+ * platform refused, an emergency launch) must NOT announce anything, and the marker is consumed on the
+ * announcement so the sentence appears once per applied update and never again.
+ */
+describe('the update that was applied says so, once', () => {
+  /** Download an update the way the About row does, then leave its id in the KV. */
+  const downloaded = async (id = 'update-2') => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true });
+    mockUpdates.fetchUpdateAsync.mockResolvedValue({ isNew: true, manifest: { id } });
+    await checkForUpdate();
+  };
+
+  it('records the applied update only after the download landed', async () => {
+    await downloaded();
+    expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2');
+  });
+
+  it('records nothing when the channel had nothing newer', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    await checkForUpdate();
+    expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
+  });
+
+  it('records nothing when the download failed', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true });
+    mockUpdates.fetchUpdateAsync.mockRejectedValue(new Error('offline'));
+    await checkForUpdate();
+    expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
+  });
+
+  it('announces the running update exactly once', async () => {
+    await downloaded();
+    mockUpdates.updateId = 'update-2';
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    expect(await announceAppliedUpdate()).toBeNull();
+    expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
+  });
+
+  it('says nothing while the bundle that applied it is not the one running', async () => {
+    await downloaded();
+    mockUpdates.updateId = null;
+    expect(await announceAppliedUpdate()).toBeNull();
+    expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2');
+  });
+
+  it('says nothing on a launch with no update waiting to be announced', async () => {
+    mockUpdates.updateId = 'update-2';
+    expect(await announceAppliedUpdate()).toBeNull();
+  });
+
+  it('says nothing on web', async () => {
+    await downloaded();
+    mockUpdates.updateId = 'update-2';
+    asWeb(true);
+    expect(await announceAppliedUpdate()).toBeNull();
+  });
+
+  it('keeps the marker rather than losing the announcement when the KV cannot be written', async () => {
+    await downloaded();
+    mockUpdates.updateId = 'update-2';
+    const readOnly: OtaKv = { get: fakeKv.get, set: async () => { throw new Error('disk full'); } };
+    bindOtaKv(readOnly);
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
   });
 });
 

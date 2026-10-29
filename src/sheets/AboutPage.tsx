@@ -32,8 +32,10 @@ export const SUPPORT_URL = '';
  * own line.
  */
 export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string }) {
-  /* The Updates row's own state: what the last check said, and nothing else. A check is one network
-     round-trip, so it is only ever started by a tap — the app checks on launch by itself. */
+  /* The Updates row's own state: what the last check said, and nothing else. A check from this page is
+     one network round-trip only ever started by a tap; the app also checks by itself on launch and on
+     resume (throttled, see `checkOnForeground`), and that result is deliberately not mirrored here —
+     this row reports what IT asked for, and a background check landing mid-visit cannot rewrite it. */
   const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>('idle');
   /** One check per tap. `checkForUpdate` is total and answers rather than throwing, so there is no
    *  catch here — the result line is the whole report. */
@@ -80,7 +82,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
           <Txt f="serif" s={15} c="mut">{versionLine()}</Txt>
           <Row>
             <Btn small kind="ghost" label={ota === 'checking' ? 'Checking…' : 'Check for updates'} disabled={ota === 'checking'} onPress={() => void check()} />
-            {ota === 'ready' ? <Btn small label="Restart now" onPress={() => void applyUpdate()} /> : null}
+            {ota === 'ready' ? <Btn small label="Update now (restart)" onPress={() => void applyUpdate()} /> : null}
           </Row>
           <Txt f="serif" s={14.5} c="mut">{OTA_LINE[ota]}</Txt>
         </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Updates are checked in the installed app; this browser build cannot update itself.' : 'This build cannot update itself. Updates must be enabled when the app is built.'}</Txt>}
@@ -106,7 +108,7 @@ const OTA_LINE: Record<CheckResult | 'idle' | 'checking', string> = {
   idle: 'Checked automatically when the app opens.',
   checking: 'Checking…',
   current: 'You are on the newest version.',
-  ready: 'An update is downloaded. Restart to use it.',
+  ready: 'Update available — downloaded and ready to install.',
   error: 'Could not reach the update service. Try again later.',
   unavailable: 'Updates are switched off in this build.',
 };

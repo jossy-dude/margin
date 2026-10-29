@@ -134,6 +134,24 @@ export class SqliteRepository implements Repository {
   async putSettings(patch: Partial<Settings>) {
     await this.ser(() => this.db.withTransactionAsync(async () => { for (const [k, v] of Object.entries(patch)) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]); }));
   }
+  /* The `setting` table, reached directly for keys that are not `Settings` fields (the OTA marker).
+     Queued like `load()` so a read cannot land between the two halves of a compound write, and JSON
+     encoded like every other row there — a raw string would make `ensureActiveSemester`'s parse fail
+     for a key it does not own. A value that is absent or does not parse reads as `null`: the caller
+     only ever asks "was this recorded?", never "what exactly". */
+  async getKv(k: string) {
+    return this.ser(async () => {
+      const row = (await this.db.getAllAsync<{ v: string }>('SELECT v FROM setting WHERE k=?', [k]))[0];
+      if (!row) return null;
+      try { const v: unknown = JSON.parse(row.v); return typeof v === 'string' ? v : null; } catch { return null; }
+    });
+  }
+  async setKv(k: string, value: string | null) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      if (value === null) await this.db.runAsync('DELETE FROM setting WHERE k=?', [k]);
+      else await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(value)]);
+    }));
+  }
   private async rows<K extends EntityName>(e: K): Promise<EntityMap[K][]> {
     const s = SPECS[e], rows = await this.db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${s.table} WHERE deleted_at IS NULL`);
     const out: EntityMap[K][] = [];

@@ -67,7 +67,10 @@ describe('a failed write is still there tomorrow (W1/C · audit H1)', () => {
 
   it('both bookkeeping arms report; the old silent `.catch(() => undefined)` is gone', () => {
     const src = readFileSync(join(__dirname, '..', 'store', 'store.ts'), 'utf8');
-    expect(src.match(/recordCrash\(e, 'save', state\.route\)/g)).toHaveLength(3); // persist + logNotif + schedNotif
+    // persist + logNotif + schedNotif + the OTA update marker's write (v0.9 WS4). The last one is a
+    // fourth write that must not vanish: a marker that fails to save means the post-reload sentence is
+    // never shown, and the Problems log is the only place that can say why.
+    expect(src.match(/recordCrash\(e, 'save', state\.route\)/g)).toHaveLength(4);
     expect(src).not.toContain('.catch(() => undefined)');
   });
 });
