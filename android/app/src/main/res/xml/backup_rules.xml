@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v0.9 (WS3) — what Android Auto Backup copies, for devices on API 30 and below.
+
+  Those devices read this file through `android:fullBackupContent`; API 31+ reads
+  `data_extraction_rules.xml` instead. The two files must say the same thing, and
+  `src/test/native-config.test.ts` checks that they do.
+
+  The planner keeps everything in one SQLite database (`marginalia.db`, created by
+  `expo-sqlite` in `databases/`) plus, in the `file` domain, the pre-migration safety
+  copies under `Paths.document/marginalia/backups`. Those three includes are the whole
+  of the app's own data. There is no account and no server copy: this file is the only
+  thing that lets a reinstall come back with the term intact, so an omission here is
+  data loss on the owner's phone, not a preference.
+
+  Include-only semantics: once an <include> is present, Auto Backup copies the listed
+  domains and nothing else, which is also why the cache directory cannot be picked up.
+  The <exclude> is belt and braces: it keeps a future, wider include set from starting
+  to upload cache (share-sheet exports are written there and then deleted).
+-->
+<full-backup-content>
+  <include domain="database" path="." />
+  <include domain="sharedpref" path="." />
+  <include domain="file" path="." />
+  <exclude domain="root" path="cache" />
+</full-backup-content>

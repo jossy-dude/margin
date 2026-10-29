@@ -29,6 +29,7 @@ const appJson = JSON.parse(readFileSync(join(ROOT, 'app.json'), 'utf8')) as {
   expo: {
     version: string;
     runtimeVersion?: { policy?: string } | string;
+    android?: { allowBackup?: boolean };
     updates?: {
       enabled?: boolean;
       url?: string;
@@ -128,5 +129,105 @@ describeIfNative('the native project agrees with app.json', () => {
     expect(Number.isInteger(code)).toBe(true);
     // Equal codes install over each other and make "did the update land?" unanswerable on the phone.
     expect(code).toBeGreaterThan(SHIPPED_VERSION_CODE);
+  });
+});
+
+/**
+ * Android Auto Backup, v0.9 (WS3).
+ *
+ * Uninstall is the one action that deletes the planner, and the app cannot intercept it — Android has no
+ * "keep the data?" dialog an app can raise. What an app CAN do is tell the platform to copy its private
+ * data to the user's backup, and restore it on the next install: `allowBackup` plus a rules file. That
+ * only works if the rules actually name the database, which is exactly the kind of file nothing else in
+ * the repo looks at — so it is pinned here, next to the updater keys, for the same reason.
+ *
+ * The two attributes are not interchangeable: devices on API 31+ read `dataExtractionRules`, devices on
+ * API 30 and below read `fullBackupContent`. Declaring only one leaves half the installed base with the
+ * platform default instead of these rules, which is a silent difference on a phone and invisible here.
+ */
+describeIfNative('Android Auto Backup carries the planner to a new install', () => {
+  const manifest = read('app', 'src', 'main', 'AndroidManifest.xml');
+  /** The `<application …>` start tag — where every backup attribute lives. */
+  const appTag = /<application\b[^>]*>/.exec(manifest)?.[0] ?? '';
+  const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(appTag)?.[1];
+  /** A rules file, or '' when it does not exist — a missing file should fail an assertion with a readable
+   *  message, not throw ENOENT out of the whole suite. */
+  const rulesFile = (name: string) => (existsSync(join(ANDROID, 'app', 'src', 'main', 'res', 'xml', name))
+    ? read('app', 'src', 'main', 'res', 'xml', name)
+    : '');
+  /** `<include domain="database" path="."/>` → [{ domain, path }]. Both rules formats use these tags. */
+  const tags = (doc: string, tag: 'include' | 'exclude') =>
+    (doc.match(new RegExp(`<${tag}\\b[^>]*/>`, 'g')) ?? []).map((t) => ({
+      domain: /domain="([^"]*)"/.exec(t)?.[1] ?? '',
+      path: /path="([^"]*)"/.exec(t)?.[1] ?? '',
+    }));
+  const files = ['backup_rules.xml', 'data_extraction_rules.xml'];
+
+  it('turns Auto Backup on in both places, the manifest being the one that ships', () => {
+    // `@expo/config-plugins`' AllowBackup plugin writes `config.android.allowBackup ?? true`, so true is
+    // the default — but it is stated in app.json too, because a later `allowBackup: false` there would
+    // otherwise be a promise the APK does not keep.
+    expect(cfg.android?.allowBackup ?? true).toBe(true);
+    expect(attr('android:allowBackup')).toBe('true');
+  });
+
+  it('points the manifest at a rules file for both API levels, and both files exist', () => {
+    expect(attr('android:dataExtractionRules')).toBe('@xml/data_extraction_rules'); // API 31+
+    expect(attr('android:fullBackupContent')).toBe('@xml/backup_rules');           // API 30 and below
+    for (const f of files) expect(rulesFile(f).trim()).not.toBe('');
+  });
+
+  it('back-ups the SQLite database and the shared preferences, at both API levels', () => {
+    for (const f of files) {
+      const inc = tags(rulesFile(f), 'include');
+      expect({
+        file: f,
+        // `marginalia.db` and its -wal/-shm siblings live in `databases/`; path "." covers the directory.
+        databases: inc.some((t) => t.domain === 'database' && t.path === '.'),
+        // Expo/React Native keep app-level flags here; a restore that drops them drops the semester.
+        prefs: inc.some((t) => t.domain === 'sharedpref' && t.path === '.'),
+      }).toEqual({ file: f, databases: true, prefs: true });
+    }
+  });
+
+  it('keeps the app’s own files, where the pre-migration safety copies are written', () => {
+    // `services/safety.ts` writes under `Paths.document/marginalia/backups`, which is the `file` domain.
+    // Leaving it out would restore the database but silently drop the copies made to protect it.
+    for (const f of files) {
+      expect({ file: f, files: tags(rulesFile(f), 'include').some((t) => t.domain === 'file') }).toEqual({ file: f, files: true });
+    }
+  });
+
+  it('excludes the cache and nothing the planner actually stores', () => {
+    for (const f of files) {
+      const ex = tags(rulesFile(f), 'exclude');
+      // "Excluded" is the only way data ever stops being backed up, so every exclusion must be a cache
+      // path — a stray `<exclude domain="database"/>` would look like a working backup and restore an
+      // empty planner.
+      expect({ file: f, onlyCache: ex.every((t) => t.path.startsWith('cache')) }).toEqual({ file: f, onlyCache: true });
+      expect({ file: f, keepsData: ex.every((t) => !['database', 'sharedpref', 'file'].includes(t.domain)) })
+        .toEqual({ file: f, keepsData: true });
+    }
+  });
+
+  it('declares device transfer as well as cloud backup on API 31+', () => {
+    // `dataExtractionRules` has two sections. Only `<cloud-backup>` is backed up to Google's servers; a
+    // phone-to-phone migration reads `<device-transfer>`. A rules file with one section silently exempts
+    // the other, so each is checked for the database include on its own.
+    const doc = rulesFile('data_extraction_rules.xml');
+    const section = (name: 'cloud-backup' | 'device-transfer') => {
+      const at = doc.indexOf(`<${name}`);
+      const end = doc.indexOf(`</${name}>`);
+      return at >= 0 && end > at ? doc.slice(at, end) : '';
+    };
+    for (const name of ['cloud-backup', 'device-transfer'] as const) {
+      const body = section(name);
+      const inc = tags(body, 'include');
+      expect({
+        section: name,
+        databases: inc.some((t) => t.domain === 'database'),
+        prefs: inc.some((t) => t.domain === 'sharedpref'),
+      }).toEqual({ section: name, databases: true, prefs: true });
+    }
   });
 });

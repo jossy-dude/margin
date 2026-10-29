@@ -21,7 +21,16 @@
       <data android:scheme="https"/>
     </intent>
   </queries>
-  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
+  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="@xml/backup_rules" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
+    <!-- v0.9 (WS3). Uninstalling is the one action that deletes the planner, and Android has no dialog an
+         app can raise to keep its data — so survival is Auto Backup, declared here. `allowBackup="true"`
+         alone is not enough: it inherits the platform default, which backs up "everything not obviously
+         transient" and is not a promise about this app's database. The two rule files name the data
+         explicitly, and both are referenced because the platform reads exactly one of them:
+         `dataExtractionRules` on API 31+, `fullBackupContent` on API 30 and below. Declaring only one
+         leaves the other half of the installed base on defaults, which looks identical from here.
+         `src/test/native-config.test.ts` pins the attributes, both files, and their includes — the same
+         pattern as the updater keys below, and for the same reason: nothing else in the repo reads them. -->
     <!-- v0.3.1 (D10). This native folder is committed, so `npx expo prebuild` does NOT run on build and
          `app.json`'s `updates` block never reaches the APK — these five meta-data entries ARE the update
          configuration. They are what `@expo/config-plugins`' `AndroidConfig.Updates` would write for

@@ -76,6 +76,30 @@ const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: st
     </Pressable>
   );
 };
+/**
+ * v0.9 (WS3). Uninstalling deletes the database, and Android has no dialog an app can raise to keep its
+ * data — the v0.9 plan names that explicitly (V4), so this page must not imply one exists. What the app
+ * can do is hand over a copy first, and the copy has to be the export that already exists: the same
+ * `runExport` the Data page calls, in the one format Import can read back. A second, uninstall-specific
+ * writer would drift from the tested one, and "the backup is unreadable" is the worst way to find out.
+ *
+ * Shaped like `Nav` but with no chevron: the row acts, it does not navigate, and the arrow would say
+ * otherwise. `busy` is the Data page's own flag, so a second tap during a slow share sheet cannot start a
+ * second file.
+ */
+const UNINSTALL_HINT = 'Uninstalling erases what is on this phone, and Auto Backup only restores it if the phone had backed it up. Tap for a JSON copy you can import again.';
+const ExportRow = ({ disabled, onPress }: { disabled: boolean; onPress: () => void }) => {
+  const { c } = useTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Export before uninstalling. ${UNINSTALL_HINT}`} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} android_ripple={{ color: c.rule }} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: c.rule }}>
+      <Icon name="export" size={24} color={c.acc} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Txt f="bold" s={22} numberOfLines={2}>Export before uninstalling</Txt>
+        <Txt f="serif" s={14.5} c="mut">{UNINSTALL_HINT}</Txt>
+      </View>
+    </Pressable>
+  );
+};
 const Seg = <T extends string>({ value, opts, onChange }: { value: T; opts: [T, string][]; onChange: (v: T) => void }) => <Row>{opts.map(([v, l]) => <Chip key={v} label={l} on={value === v} onPress={() => onChange(v)} small />)}</Row>;
 /** A caption and a stepper on one non-wrapping row. The caption gets `flex: 1` + `minWidth: 0` so it takes the
  *  space the fixed-width stepper leaves and wraps to a second line instead of pushing the stepper off the edge
@@ -183,6 +207,9 @@ export function SettingsSheet() {
     <Nav icon="week" label="Semesters" hint="The active term, its dates, and the terms you kept" to="semesters" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
+    {/* Directly under the page it duplicates on purpose: the export exists behind Data & export, this is
+        the one-tap version for the moment somebody is about to uninstall. */}
+    <ExportRow disabled={!!busy} onPress={() => void doExport('json', 'share')} />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
     <Nav icon="note" label="Show the tour again" hint={`${toured(onboarded) ? 'Finished — it is replayable' : 'Not seen yet'}`} to="tour" />
     <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />

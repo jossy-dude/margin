@@ -104,6 +104,12 @@ jest.mock('expo-file-system', () => {
   return { File, Paths: { document: 'doc' }, __state: state };
 });
 jest.mock('expo-constants', () => ({ default: { expoConfig: { version: '1.0.0', sdkVersion: '57.0.0' } } }));
+/** v0.9 (WS3). The uninstall row must reach the *existing* export path, so the seam under test is the
+ *  module the Data page already calls: if a second implementation were added, this mock would not see
+ *  the tap and the assertion below would fail. */
+jest.mock('../services/exportFile', () => ({
+  runExport: jest.fn(async () => ({ ok: true, where: 'file:///cache/margin-2026-10-29.json', name: 'margin-2026-10-29.json' })),
+}));
 
 const fs = (jest.requireMock('expo-file-system') as typeof import('expo-file-system') & { __state: { reads: number; exists: boolean; entries: string[] } }).__state;
 const mockReads = () => fs.reads;
@@ -732,5 +738,67 @@ describe('the progress-bar picker previews the demo moment, not today’s clock'
     const opacities = drawn.map((p) => (p.props as { opacity?: number }).opacity);
     expect(opacities.filter((o) => o === undefined)).toHaveLength(1); // the part still ahead, full strength
     expect(opacities.filter((o) => typeof o === 'number' && o > 0.2 && o < 0.9)).toHaveLength(1); // the played part
+  });
+});
+
+/* ───── v0.9 (WS3): a copy you hold, before an uninstall you cannot undo ───── */
+/**
+ * Uninstalling deletes the database, and Android has no dialog an app can raise to keep its data — the
+ * plan for v0.9 says so explicitly (V4), so the app must not imply otherwise. What it can do is hand the
+ * person a copy first. That copy has to be the *same* export the Data & export page produces: a second
+ * code path would drift from it, and a JSON file is the one format Import can read back.
+ */
+describe('the uninstall row exports the planner instead of promising a keep-data dialog', () => {
+  const runExport = (jest.requireMock('../services/exportFile') as { runExport: jest.Mock }).runExport;
+  beforeEach(() => { runExport.mockClear(); });
+
+  /** The row's accessible name is `${label}. ${hint}` (see `Nav`), and `findAll` also matches the host
+   *  view the `Pressable` renders — only the `Pressable` copy has `onPress`. */
+  const row = (s: Awaited<ReturnType<typeof mount>>) => {
+    const found = s.r.root.findAll((n) => {
+      const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
+      return typeof p.accessibilityLabel === 'string'
+        && p.accessibilityLabel.startsWith('Export before uninstalling')
+        && typeof p.onPress === 'function';
+    })[0];
+    if (!found) throw new Error('no "Export before uninstalling" row on the Settings root');
+    return found.props as { accessibilityLabel: string; onPress: () => void };
+  };
+
+  it('sits on the Settings root, says what uninstalling costs, and offers the export', async () => {
+    const s = await mount();
+    const t = s.text();
+    expect(t).toContain('Export before uninstalling');
+    // the cost, in the app's own words: uninstalling erases the copy on this phone
+    expect(t).toContain('Uninstalling erases');
+    // …and the one thing that can bring it back, named as Auto Backup rather than as magic
+    expect(t).toContain('Auto Backup');
+    // the offer itself: a JSON copy, importable by the Import page that already exists
+    expect(t).toContain('JSON');
+  });
+
+  it('never claims the phone will offer to keep the data — no such dialog exists', async () => {
+    const t = (await mount()).text();
+    expect(t).not.toMatch(/keep your data/i);
+    expect(t).not.toMatch(/ask you (whether )?to keep/i);
+    expect(t).not.toMatch(/will (still )?be (here|there) after you uninstall/i);
+  });
+
+  it('one tap runs the existing JSON export, and does not just navigate somewhere', async () => {
+    const s = await mount();
+    await act(async () => { row(s).onPress(); });
+    expect(runExport).toHaveBeenCalledTimes(1);
+    // format and target are the ones the Data page uses: JSON, through the system share sheet
+    expect(runExport.mock.calls[0].slice(0, 2)).toEqual(['json', 'share']);
+    expect(getState().settingsPath).toEqual([]); // it exported, it did not push a page
+    // the existing flow's own feedback is what the person sees
+    expect(getState().toast?.text).toBe('Exported margin-2026-10-29.json');
+  });
+
+  it('the row’s accessible name carries the warning, so a screen reader hears it too', async () => {
+    const s = await mount();
+    const label = row(s).accessibilityLabel;
+    expect(label).toContain('Export before uninstalling');
+    expect(label).toContain('Uninstalling erases');
   });
 });

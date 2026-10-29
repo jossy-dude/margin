@@ -25,6 +25,7 @@
     },
     "android": {
       "package": "app.marginalia.planner",
+      "allowBackup": true,
       "permissions": [
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",

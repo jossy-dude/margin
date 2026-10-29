@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v0.9 (WS3) — what Android Auto Backup and device transfer copy, for devices on API 31+.
+
+  API 31 replaced the single `fullBackupContent` rules with two sections: `<cloud-backup>`
+  is what goes to the user's Google backup, `<device-transfer>` is what moves directly
+  from an old phone to a new one during setup. They are separate on purpose and an app
+  can exempt one from the other, so both list the same data here: a semester that
+  survives reinstall but not a phone upgrade would be a strange kind of safe.
+
+  The data itself is the same as in `backup_rules.xml` (the API 30 and below file, which
+  this one must agree with — `src/test/native-config.test.ts` checks both):
+    database    — `marginalia.db` and its -wal/-shm siblings: subjects, timetable,
+                  attendance, tasks, marks, notes, focus history, settings, semesters.
+    sharedpref  — app-level flags the platform and React Native keep outside SQLite.
+    file        — the pre-migration safety copies under `Paths.document/marginalia/backups`.
+
+  Include-only semantics again: only the listed domains are copied, so the cache is not
+  and cannot be. The <exclude> states that policy rather than leaving it implied.
+-->
+<data-extraction-rules>
+  <cloud-backup>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="." />
+    <exclude domain="root" path="cache" />
+  </cloud-backup>
+  <device-transfer>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="." />
+    <exclude domain="root" path="cache" />
+  </device-transfer>
+</data-extraction-rules>
