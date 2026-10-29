@@ -126,7 +126,13 @@ const mount = async (crashes = 0) => {
   await act(async () => { live?.unmount(); });
   live = undefined;
   mockReset(crashes);
-  await hydrate(new MemoryRepository(() => NOW));
+  /* The term is seeded rather than left to the repository's heal: `hydrate` now READS the active term
+     (the row is authoritative over the settings mirror), and a repository with no terms heals to
+     today — a date that moves with the clock. These tests are about the editor, so they pin the
+     shipped default range the labels below are written against. */
+  const repo = new MemoryRepository(() => NOW);
+  await repo.putSettings({ semesterStart: '2026-09-07' });
+  await hydrate(repo);
   set({ settingsPath: [] });
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => { r = TestRenderer.create(React.createElement(SettingsSheet)); });
@@ -447,15 +453,15 @@ describe('a save or a data problem names what the app was doing, not an invented
 /** The old editor had month/day steppers only, so the year was unchangeable and there was no end date
  *  at all. These render the page and drive the controls the way a thumb would. */
 describe('Settings → Attendance & semester carries both dates and a year (v0.3.1)', () => {
-  const press = async (r: TestRenderer.ReactTestRenderer, label: string) => {
-    const n = r.root.findAll((x) => (x.props as { accessibilityLabel?: string }).accessibilityLabel === label && typeof (x.props as { onPress?: unknown }).onPress === 'function')[0];
-    if (!n) throw new Error(`no control labelled "${label}"`);
-    await act(async () => { (n.props as { onPress: () => void }).onPress(); });
-  };
   const tap = async (r: TestRenderer.ReactTestRenderer, testID: string) => {
     const n = r.root.findAll((x) => (x.props as { testID?: string }).testID === testID && typeof (x.props as { onPressIn?: unknown }).onPressIn === 'function')[0];
     if (!n) throw new Error(`no switch with testID "${testID}"`);
     await act(async () => { (n.props as { onPressIn: () => void }).onPressIn(); });
+  };
+  const type = async (r: TestRenderer.ReactTestRenderer, testID: string, text: string) => {
+    const n = r.root.findAll((x) => (x.props as { testID?: string }).testID === testID && typeof (x.props as { onChangeText?: unknown }).onChangeText === 'function')[0];
+    if (!n) throw new Error(`no field with testID "${testID}"`);
+    await act(async () => { (n.props as { onChangeText: (v: string) => void }).onChangeText(text); });
   };
   const attendance = async () => {
     const s = await mount();
@@ -470,16 +476,19 @@ describe('Settings → Attendance & semester carries both dates and a year (v0.3
     expect(t).toContain('No end date');
     expect(t).toContain('from 7 Sep 2026'); // the label, generated from the stored range
     expect(t).not.toContain('Semester ends');
-    // the three start steppers exist, by their own accessible names
-    for (const label of ['start year', 'start month', 'start day']) {
-      expect(s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === `Increase ${label}`)).not.toHaveLength(0);
+    // v0.9 / R1: three numeric keypad fields, not steppers — a date is typed, not stepped.
+    for (const id of ['semester-start-year', 'semester-start-month', 'semester-start-day']) {
+      const field = s.r.root.findAll((n) => (n.props as { testID?: string }).testID === id && typeof (n.props as { onChangeText?: unknown }).onChangeText === 'function')[0];
+      expect(field).toBeDefined();
+      expect((field!.props as { keyboardType?: string }).keyboardType).toBe('numeric');
     }
+    expect(s.r.root.findAll((n) => String((n.props as { accessibilityLabel?: string }).accessibilityLabel ?? '').startsWith('Increase start '))).toHaveLength(0);
   });
 
-  it('the year stepper really moves the year — the defect the old month/day-only editor had', async () => {
+  it('the year field really moves the year — the defect the old month/day-only editor had', async () => {
     const s = await attendance();
     expect(getState().settings.semesterStart).toBe('2026-09-07');
-    await press(s.r, 'Increase start year');
+    await type(s.r, 'semester-start-year', '2027');
     expect(getState().settings.semesterStart).toBe('2027-09-07');
     expect(getState().settings.semesterEnd).toBe(''); // still open-ended
     expect(s.text()).toContain('from 7 Sep 2027');
@@ -487,10 +496,9 @@ describe('Settings → Attendance & semester carries both dates and a year (v0.3
 
   it('the day prints two digits, while the stored date stays YYYY-MM-DD', async () => {
     const s = await attendance();
-    const day = s.r.root.findAll((n) => (n.props as { accessibilityLabel?: string }).accessibilityLabel === 'Set start day by typing')[0];
+    const day = s.r.root.findAll((n) => (n.props as { testID?: string }).testID === 'semester-start-day' && typeof (n.props as { onChangeText?: unknown }).onChangeText === 'function')[0];
     expect(day).toBeDefined();
-    const text = (n: TestRenderer.ReactTestInstance): string => n.children.map((c) => (typeof c === 'string' ? c : text(c))).join('');
-    expect(text(day!)).toBe('07'); // a lone 7 reads as "?" in the numerals face
+    expect((day!.props as { value?: string }).value).toBe('07'); // a lone 7 reads as "?" in the numerals face
     expect(getState().settings.semesterStart).toBe('2026-09-07'); // display only, never the stored value
   });
 
@@ -508,7 +516,7 @@ describe('Settings → Attendance & semester carries both dates and a year (v0.3
   it('an end before the start is a hint and is not written, never silently clamped', async () => {
     const s = await attendance();
     await tap(s.r, 'no-end-date'); // end = 2026-12-21
-    await press(s.r, 'Increase start year'); // start would become 2027, past the end
+    await type(s.r, 'semester-start-year', '2027'); // start would become 2027, past the end
     expect(getState().settings.semesterStart).toBe('2026-09-07'); // nothing saved
     expect(getState().settings.semesterEnd).toBe('2026-12-21');
     expect(s.text()).toContain('The end date is before the start, so nothing is saved yet.');

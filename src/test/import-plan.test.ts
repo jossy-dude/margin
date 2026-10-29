@@ -408,13 +408,14 @@ const FULL = `{
 describe('the full-dataset JSON shape', () => {
   const plan = parse(FULL);
 
-  it('counts every dataset it writes, and does not count a dataset it cannot write yet', () => {
+  it('counts every dataset it writes, variants included', () => {
     expect(plan.problems).toEqual([]);
     expect(plan.warnings).toEqual([]);
-    // `variants` is in the file and stays in `plan.variants`, but WS2 owns the table: the preview,
-    // the button and the toast must never claim it as a written row.
-    expect(plan.counts).toEqual({ courses: 1, meetings: 1, attendance: 1, dayMarks: 1, tasks: 1, marks: 1 });
-    expect(plan.breakdown.variants).toEqual({ write: 0, skip: 1, add: null, update: null });
+    // v0.9's migration gave variants a table, so the preview, the button and the toast count them:
+    // a count that excluded a row the import really writes is the same lie as one that invented it.
+    expect(plan.counts).toEqual({ courses: 1, meetings: 1, attendance: 1, dayMarks: 1, tasks: 1, marks: 1, variants: 1 });
+    expect(plan.breakdown.variants).toEqual({ write: 1, skip: 0, add: null, update: null });
+    expect(plan.snapshot.variants).toEqual(plan.variants); // the preview and the write are one list
   });
 
   it('carries the profile name, and writes it with the semester range', () => {

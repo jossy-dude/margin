@@ -9,7 +9,7 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, set, stopResync } from '../store/store';
+import { getState, hydrate, set, stopResync } from '../store/store';
 import type { Course } from '../domain/types';
 import { ImportPage } from '../sheets/Import';
 import { pickImportFile } from '../services/pickFile';
@@ -19,6 +19,7 @@ jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, de
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
 jest.mock('../services/notifications', () => ({
   ensurePermission: async () => 'granted',
+  status: async () => ({ permission: 'granted', scheduled: 0, next: null, canAskAgain: true, queueRead: true, platform: 'android', lockText: null }),
   sync: async () => ({ added: 0, removed: 0, planned: [] }),
   cancelAll: async () => {}, cancelFocusEnd: async () => {}, scheduleFocusEnd: async () => {},
   sendTest: async () => true, sendActionTest: async () => true, TEST_ACTION_ID: 'action-test',
@@ -181,18 +182,24 @@ describe('the import page', () => {
     expect(s.text()).toContain('Import 2 rows');
   });
 
-  /* F1 round 4: the subject row itself now writes (it merges over C1), so this file no longer offers
-     "no rows" — but the variant is still WS2's, and must never be printed as written or skipped. */
-  it('a file whose subject is on the phone offers that row, and never claims its variants', async () => {
+  /* F1 round 4 / v0.9: the subject row merges over C1, and the variant now has a table of its own —
+     so the preview must claim BOTH rows, because both are really written (WS2 wired the write). */
+  it('a file whose subject is on the phone offers that row and its variant, and both are really written', async () => {
     const s = await mount(); // "DB Systems" is already on the phone as C1
     const field = s.r.root.findAll((n) => n.props?.accessibilityLabel === 'JSON to import')[0]!;
     const onlyVariants = JSON.stringify({ courses: [{ name: 'DB Systems', variants: [{ name: 'Lab' }] }] });
     await act(async () => { (field.props as { onChangeText: (v: string) => void }).onChangeText(onlyVariants); });
     await s.press('import-check');
     expect(s.text()).toContain('1 subject (1 updated)');
-    expect(s.text()).not.toContain('variant');
+    expect(s.text()).toContain('1 variant (1 new)'); // the phone had no variants before this file
+    expect(s.text()).toContain('Import 2 rows');
     const commit = s.r.root.findAll((n) => n.props?.testID === 'import-commit' && typeof n.props?.onPressIn === 'function')[0]!;
     expect((commit.props as { disabled?: boolean }).disabled).toBe(false);
+
+    // the count the button promised is the count the database got — the whole point of the re-enable
+    await s.press('import-commit');
+    expect(getState().variants!.map((v) => v.name)).toEqual(['Lab']);
+    expect(getState().toast?.text).toBe('Imported 2 rows');
   });
 
   /* F2 round 4: a compact file can carry an occurrence that has not finished (`status: null`, the

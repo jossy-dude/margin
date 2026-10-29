@@ -7,7 +7,7 @@ const f = (p: string, k: Kind, nullable = false, c?: string): Field => ({ p, k, 
 
 export const SPECS: Record<EntityName, Spec> = {
   course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool')] },
-  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool')] },
+  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id')] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool')] },
@@ -27,6 +27,10 @@ export const SPECS: Record<EntityName, Spec> = {
      one guessing them. */
   trip: { table: 'trip', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('startedAt', 'int'), f('endedAt', 'int', true), f('route', 'text'), f('note', 'text')] },
   alarm: { table: 'alarm', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('at', 'int'), f('label', 'text'), f('enabled', 'bool'), f('kind', 'text'), f('taskId', 'text', true)] },
+  /* v0.9/WS8: a subject taught in more than one room, or by more than one teacher. Bound here (not
+     read by the UI yet) so the import path writes a variant with the standard `put` — a `rev` and an
+     outbox row in the same transaction — instead of a hand-rolled INSERT that would skip both. */
+  variant: { table: 'subject_variants', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('subjectId', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('note', 'text'), f('ord', 'int')] },
 };
 export const toSql = (fl: Field, v: unknown): string | number | null => {
   if (v === undefined || v === null) return null;
@@ -83,4 +87,17 @@ export const MIGRATIONS: string[] = [
    ALTER TABLE meeting ADD COLUMN demo INTEGER DEFAULT 0;
    ALTER TABLE notice ADD COLUMN demo INTEGER DEFAULT 0;
    ALTER TABLE mark ADD COLUMN demo INTEGER DEFAULT 0;`,
+  /* Migration 4 — the release's only migration (v0.9/WS2). Three storage objects in one bump:
+     `semesters` (the live term, plus one row per archived term frozen as `snapshot_json`),
+     `subject_variants` (a subject's alternate room/teacher) and `meetings.variant_id` (which of a
+     subject's variants a class belongs to; NULL means "the subject's own"). `semesters` deliberately
+     has no `updated_at`/`deleted_at`/`rev`: it is history, not a synced entity — an archived row's
+     snapshot is immutable bytes, and a `put` must never renumber it. `subject_variants` does carry
+     the housekeeping three, because it is an entity and the adapter writes all three on every put.
+     `ALTER TABLE ... ADD COLUMN` is the one statement here SQLite cannot make conditional, which is
+     exactly why `init()` commits each migration's DDL and its `user_version` in one transaction:
+     this text runs once per database, never twice. */
+  `CREATE TABLE IF NOT EXISTS semesters(id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', start TEXT NOT NULL DEFAULT '', end TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 0, snapshot_json TEXT, created_at TEXT NOT NULL DEFAULT '', archived_at TEXT);
+   CREATE TABLE IF NOT EXISTS subject_variants(id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', room TEXT NOT NULL DEFAULT '', teacher TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', ord INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, deleted_at INTEGER, rev INTEGER DEFAULT 0);
+   ALTER TABLE meeting ADD COLUMN variant_id TEXT;`,
 ];

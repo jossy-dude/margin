@@ -1,5 +1,7 @@
-import type { Settings, Snapshot } from '../domain/types';
+import type { SemesterRow, Settings, Snapshot } from '../domain/types';
 import { withDefaults } from '../domain/defaults';
+import { newSemester, semesterName } from '../domain/archive';
+import { isYmd } from '../domain/semester';
 import { recordCrash } from '../ui/crashlog';
 import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository } from './repository';
 import { fromSql, MIGRATIONS, SPECS, toSql } from './specs';
@@ -57,6 +59,52 @@ export class SqliteRepository implements Repository {
        future sync needs to replay; 200 reminder rows is more than the 12 Delivery status can show. */
     await this.db.runAsync('DELETE FROM outbox WHERE seq <= (SELECT MAX(seq) FROM outbox) - 500');
     await this.db.runAsync('DELETE FROM notif_log WHERE rowid NOT IN (SELECT rowid FROM notif_log ORDER BY rowid DESC LIMIT 200)');
+    await this.ensureActiveSemester();
+  }
+
+  /* ── the active term ────────────────────────────────────────────────────────────────────────────
+   * `settings.semesterStart`/`semesterEnd` predate the `semesters` table and are still what Grades,
+   * export and the Settings summary read, so the row and the settings must not disagree on first boot.
+   * The guard is "is there an active row" rather than "are there rows": `init()` runs on every launch,
+   * and a user who archived a term and started another already has history — a second boot must add
+   * nothing. No active term means one of exactly two things, and both need a term to run the app:
+   *   · a fresh or wiped install — nothing to lose, so `settings.semesterStart/End` is CARRIED verbatim
+   *     (including a deliberately open-ended end, because inventing a 15-week end would hide attendance
+   *     the user is still marking);
+   *   · a roll-over killed after archiving but before activating — the archived row's snapshot is
+   *     frozen, so it must not be resurrected; the new term starts today and the settings follow it,
+   *     because they still point at the term that was just closed.
+   * A start that does not parse is treated as absent (`semesterOf` already ignores it), and bytes that
+   * do not parse are never written over (audit H3): the row gets a usable range, the corrupt value
+   * stays on disk where a later fix can read it. Settings are stored JSON-encoded, hence the parse. */
+  private async ensureActiveSemester() {
+    const n = async (sql: string) => (await this.db.getAllAsync<{ n: number }>(sql))[0]?.n ?? 0;
+    if ((await n('SELECT COUNT(*) AS n FROM semesters WHERE active=1')) > 0) return;
+    const hasHistory = (await n('SELECT COUNT(*) AS n FROM semesters')) > 0;
+    const kv = await this.db.getAllAsync<{ k: string; v: string }>("SELECT k, v FROM setting WHERE k IN ('semesterStart','semesterEnd')");
+    const stored = new Map(kv.map((r) => [r.k, r.v]));
+    /** `undefined` for absent OR unreadable — the two cases differ only in whether the key may be filled. */
+    const read = (k: string): string | undefined => {
+      const raw = stored.get(k);
+      if (raw === undefined) return undefined;
+      try { const v: unknown = JSON.parse(raw); return typeof v === 'string' ? v : undefined; } catch { return undefined; }
+    };
+    const carried = hasHistory ? undefined : read('semesterStart');
+    const fresh = newSemester(this.clock());
+    const row: SemesterRow = isYmd(carried)
+      ? { ...fresh, start: carried, end: read('semesterEnd') ?? '', name: semesterName(carried) }
+      : fresh;
+    /* A key that exists but cannot be read is left alone; a key that parses is ours to mirror, so a
+       history-only database's stale range is replaced by the new term's (and a carried range rewrites
+       its own identical bytes, which is a no-op in content). */
+    const mirror = [['semesterStart', row.start], ['semesterEnd', row.end]] as const;
+    const writable = mirror.filter(([k]) => stored.get(k) === undefined || read(k) !== undefined);
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        'INSERT INTO semesters(id,name,start,end,active,snapshot_json,created_at,archived_at) VALUES(?,?,?,?,?,?,?,?)',
+        [row.id, row.name, row.start, row.end, row.active ? 1 : 0, row.snapshotJson, row.createdAt, row.archivedAt]);
+      for (const [k, v] of writable) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
+    });
   }
   private async outbox(entity: string, id: string, op: OutboxRow['op']) { await this.db.runAsync('INSERT INTO outbox(entity,id,op,at) VALUES(?,?,?,?)', [entity, id, op, this.clock()]); }
   private async put<K extends EntityName>(e: K, v: EntityMap[K]) {
@@ -67,11 +115,15 @@ export class SqliteRepository implements Repository {
     await this.outbox(e, id, 'put');
   }
   async upsert<K extends EntityName>(e: K, v: EntityMap[K]) { await this.ser(() => this.db.withTransactionAsync(async () => { await this.put(e, v); })); }
+  /* The tombstone half of `remove`, without the queue: `clearActiveSchedule` runs a whole term's
+     deletions in ONE queued transaction, and calling the public `remove` from inside it would re-enter
+     `ser` on a job that is itself waiting — the same deadlock `importSnapshot` avoids for settings. */
+  private async markDeleted(e: EntityName, id: string) {
+    await this.db.runAsync(`UPDATE ${SPECS[e].table} SET deleted_at=?, updated_at=?, rev=rev+1 WHERE ${q(SPECS[e].pk)}=?`, [this.clock(), this.clock(), id]);
+    await this.outbox(e, id, 'del');
+  }
   async remove(e: EntityName, id: string) {
-    await this.ser(() => this.db.withTransactionAsync(async () => {
-      await this.db.runAsync(`UPDATE ${SPECS[e].table} SET deleted_at=?, updated_at=?, rev=rev+1 WHERE ${q(SPECS[e].pk)}=?`, [this.clock(), this.clock(), id]);
-      await this.outbox(e, id, 'del');
-    }));
+    await this.ser(() => this.db.withTransactionAsync(() => this.markDeleted(e, id)));
   }
   async restore(e: EntityName, id: string) {
     await this.ser(() => this.db.withTransactionAsync(async () => {
@@ -99,7 +151,7 @@ export class SqliteRepository implements Repository {
   }
   async load(): Promise<Snapshot> {
     return this.ser(async () => {
-      const [courses, meetings, att, days, tasks, notices, marks, adj, focus, trips, alarms] = await Promise.all(ENTITIES.map((e) => this.rows(e)));
+      const [courses, meetings, att, days, tasks, notices, marks, adj, focus, trips, alarms, variants] = await Promise.all(ENTITIES.map((e) => this.rows(e)));
       const st = await this.db.getAllAsync<{ k: string; v: string }>('SELECT k, v FROM setting'), settings: Record<string, unknown> = {};
       for (const r of st) {
         /* A setting that will not parse is left OUT of the returned settings (so the default applies
@@ -115,6 +167,7 @@ export class SqliteRepository implements Repository {
         tasks: tasks as EntityMap['task'][], notices: notices as EntityMap['notice'][], marks: marks as EntityMap['mark'][],
         adjusts: Object.fromEntries((adj as EntityMap['adjust'][]).map((x) => [x.courseId, x.adj])), focus: focus as EntityMap['focus'][],
         trips: trips as EntityMap['trip'][], alarms: alarms as EntityMap['alarm'][], settings: withDefaults(settings as Partial<Settings>),
+        variants: (variants as EntityMap['variant'][]).sort((a, b) => a.ord - b.ord),
       };
     });
   }
@@ -128,6 +181,7 @@ export class SqliteRepository implements Repository {
       for (const f of s.focus) await this.put('focus', f);
       for (const t of s.trips) await this.put('trip', t);
       for (const a of s.alarms) await this.put('alarm', a);
+      for (const v of s.variants ?? []) await this.put('variant', v);
       for (const a of Object.values(s.attendance)) await this.put('attendance', a);
       for (const d of Object.values(s.dayMarks)) await this.put('dayMark', d);
       for (const [courseId, adj] of Object.entries(s.adjusts)) await this.put('adjust', { courseId, adj });
@@ -147,6 +201,7 @@ export class SqliteRepository implements Repository {
       for (const m of s.marks ?? []) await this.put('mark', m);
       for (const a of Object.values(s.attendance ?? {})) await this.put('attendance', a);
       for (const d of Object.values(s.dayMarks ?? {})) await this.put('dayMark', d);
+      for (const v of s.variants ?? []) await this.put('variant', v);
       for (const [courseId, adj] of Object.entries(s.adjusts ?? {})) await this.put('adjust', { courseId, adj });
       for (const [k, v] of Object.entries(s.settings ?? {})) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
     }));
@@ -163,10 +218,72 @@ export class SqliteRepository implements Repository {
   async wipe() {
     await this.ser(async () => {
       if (this.db.closeAndDelete) { this.closed = true; await this.db.closeAndDelete(); return; }
-      await this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); });
+      await this.db.withTransactionAsync(async () => { for (const t of [...ENTITIES.map((e) => SPECS[e].table), 'semesters', 'setting', 'notif_log', 'outbox']) await this.db.runAsync(`DELETE FROM ${t}`); });
     });
   }
   private closed = false;
+
+  /* ── semesters (v0.9) ─────────────────────────────────────────────────────────────────────────── */
+  /* A term read as the app sees it. The columns are snake_case and `active` is an INTEGER; one place
+     does that translation, so a field added to the row later cannot be picked up by some readers and
+     silently dropped by others. */
+  private static term(r: Record<string, unknown>): SemesterRow {
+    return {
+      id: String(r.id), name: String(r.name ?? ''), start: String(r.start ?? ''), end: String(r.end ?? ''),
+      active: r.active === 1, snapshotJson: r.snapshot_json == null ? null : String(r.snapshot_json),
+      createdAt: String(r.created_at ?? ''), archivedAt: r.archived_at == null ? null : String(r.archived_at),
+    };
+  }
+  /* Queued like every other write: it may create the healing term, and an `ORDER BY active DESC` read
+     made alongside a roll-over must not observe the half-applied state. */
+  async listSemesters() {
+    return this.ser(async () => {
+      await this.ensureActiveSemester();
+      const rows = await this.db.getAllAsync<Record<string, unknown>>('SELECT * FROM semesters ORDER BY active DESC, start DESC, created_at DESC');
+      return rows.map((r) => SqliteRepository.term(r));
+    });
+  }
+  async saveSemester(row: SemesterRow) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        'INSERT OR REPLACE INTO semesters(id,name,start,end,active,snapshot_json,created_at,archived_at) VALUES(?,?,?,?,?,?,?,?)',
+        [row.id, row.name, row.start, row.end, row.active ? 1 : 0, row.snapshotJson, row.createdAt, row.archivedAt]);
+    }));
+  }
+  /* One transaction, so "exactly one active term" is never observable as two or none, and the settings
+     mirror is written beside the flags: the range the rest of the app prints is the range that just
+     became active, or the two would disagree until the next launch healed them. An unknown id throws
+     rather than clearing the flags — a silent no-op would leave a page saying a term is current when
+     nothing is. */
+  async setActiveSemester(id: string) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      const found = (await this.db.getAllAsync<Record<string, unknown>>('SELECT * FROM semesters WHERE id=?', [id]))[0];
+      if (!found) throw new Error(`No semester with id "${id}" — nothing was made active.`);
+      const row = SqliteRepository.term(found);
+      await this.db.runAsync('UPDATE semesters SET active=0 WHERE id<>?', [id]);
+      await this.db.runAsync('UPDATE semesters SET active=1 WHERE id=?', [id]);
+      for (const [k, v] of [['semesterStart', row.start], ['semesterEnd', row.end]] as const) {
+        await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
+      }
+    }));
+  }
+  /* The destructive half of a roll-over, in one transaction and through `markDeleted`, so each cleared
+     row keeps a `rev` bump and an outbox `del` (undo of a partly-cleared term is then possible, and a
+     future sync sees exactly what went). Subjects and variants survive by design: they are what the
+     next term inherits. */
+  async clearActiveSchedule(keepAttendance: boolean) {
+    const entities: EntityName[] = keepAttendance
+      ? ['meeting', 'task', 'notice', 'dayMark', 'mark']
+      : ['meeting', 'task', 'notice', 'dayMark', 'mark', 'attendance'];
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      for (const e of entities) {
+        const s = SPECS[e];
+        const ids = await this.db.getAllAsync<Record<string, unknown>>(`SELECT ${q(s.pk)} AS id FROM ${s.table} WHERE deleted_at IS NULL`);
+        for (const r of ids) await this.markDeleted(e, String(r.id));
+      }
+    }));
+  }
+
   async schedNotif(id: string, kind: string, dueAt: number) { await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
     await this.schedNotif(id, kind, dueAt);

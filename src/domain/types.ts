@@ -7,7 +7,18 @@ export type TaskKind = 'assignment' | 'exam' | 'reading' | 'project' | 'lab' | '
  *  the user creates or edits is written with `demo: false` — you touched it, it's yours — and only
  *  `seed.ts` sets it to `true`. */
 export interface Course { id: string; name: string; room: string; teacher: string; goal: number | null; sort: number; demo: boolean }
-export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean }
+/** A subject's alternate identity — the same course under another room/teacher, for a timetable that
+ *  differs per group (v0.9/WS8). It is a separate table rather than fields on `Course` because a
+ *  subject may have several, and a meeting points at exactly one by `variantId`.
+ *
+ *  `ord` is the display order inside the subject, like `Course.sort` is for subjects. The three
+ *  housekeeping columns every entity shares (`updated_at`, `deleted_at`, `rev`) live in SQL only, so
+ *  a variant written by the import path gets the same `rev`/outbox discipline as any other row. */
+export interface SubjectVariant { id: string; subjectId: string; name: string; room: string; teacher: string; note: string; ord: number }
+/** `variantId` is nullable on purpose: every meeting written before v0.9 has none, and that is the
+ *  meaning ("the subject's own room/teacher"). Optional in the type so existing fixtures that name a
+ *  meeting without it keep compiling; the adapter binds it, so a reload reports the column's null. */
+export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean; variantId?: string | null }
 export interface AttRecord { key: string; status: AttStatus; at: number; reason: string }
 export interface DayMark { date: string; status: DayStatus; at: number; reason: string }
 /** A reminder is either an absolute moment, or an offset before the due date. */
@@ -89,5 +100,20 @@ export interface Snapshot {
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
   tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[];
   trips: Trip[]; alarms: Alarm[];
+  /** Subject variants (v0.9). Optional, because a snapshot written before the table existed has none
+   *  and every other shape of this object (an import file, a test fixture) may legitimately omit it. */
+  variants?: SubjectVariant[];
   settings: Partial<Settings>;
+}
+
+/**
+ * A term as stored: the one active row, plus one row per archived term. `snapshotJson` is the frozen
+ * envelope `domain/archive.ts` writes (`{ v: 9, datasets }`); it is only ever set together with
+ * `archivedAt`, so a row with a snapshot is history and a row without one is live. `active` is the
+ * single owner of "which term is running now" — the DDL carries the column for that reason, and the
+ * settings range is a mirror of it for the screens that print a range, never a second pointer.
+ */
+export interface SemesterRow {
+  id: string; name: string; start: string; end: string; active: boolean;
+  snapshotJson: string | null; createdAt: string; archivedAt: string | null;
 }

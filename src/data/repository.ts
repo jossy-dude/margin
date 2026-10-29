@@ -1,6 +1,6 @@
-import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, Adjust, Trip, Alarm } from '../domain/types';
+import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, Task, Adjust, Trip, Alarm, SubjectVariant } from '../domain/types';
 
-export interface EntityMap { course: Course; meeting: Meeting; attendance: AttRecord; dayMark: DayMark; task: Task; notice: Notice; mark: Mark; adjust: Adjust; focus: FocusSession; trip: Trip; alarm: Alarm }
+export interface EntityMap { course: Course; meeting: Meeting; attendance: AttRecord; dayMark: DayMark; task: Task; notice: Notice; mark: Mark; adjust: Adjust; focus: FocusSession; trip: Trip; alarm: Alarm; variant: SubjectVariant }
 export type EntityName = keyof EntityMap;
 export interface OutboxRow { seq: number; entity: string; id: string; op: 'put' | 'del' | 'restore'; at: number }
 export interface NotifLogRow { id: string; kind: string; dueAt: number; shownAt: number | null; openedAt: number | null }
@@ -35,6 +35,24 @@ export interface Repository {
   notifLog(): Promise<NotifLogRow[]>;
   pendingOutbox(limit?: number): Promise<OutboxRow[]>;
   ackOutbox(upToSeq: number): Promise<void>;
+  /* ── semesters (v0.9) ──────────────────────────────────────────────────────────────────────────
+   * Four methods, not an `EntityName`: a term is not a synced row and must not be tombstoned or
+   * renumbered by a `put`. `saveSemester` inserts or overwrites by id, and `setActiveSemester` owns
+   * the one-active invariant — including mirroring the row's range into `settings.semesterStart/End`,
+   * because that pair is what Grades, export and Settings print. `clearActiveSchedule` is the
+   * roll-over's destructive half and goes through `remove()`, so every cleared row lands in the outbox
+   * with a `del` like any other deletion. */
+  /** Every term: the active one first, then history newest-first. Never empty — a repository with no
+   *  active term (a fresh install, a wipe, or a roll-over killed between archiving and activating)
+   *  heals by creating one from today. */
+  listSemesters(): Promise<SemesterRow[]>;
+  saveSemester(row: SemesterRow): Promise<void>;
+  setActiveSemester(id: string): Promise<void>;
+  /** Clear the day-to-day schedule of the term that just ended: meetings, tasks, notices, day marks
+   *  and marks. Attendance is the user's choice — kept, it is the term's record; wiped, it goes with
+   *  everything else. Subjects and their variants are never touched: they are what the next term
+   *  inherits. */
+  clearActiveSchedule(keepAttendance: boolean): Promise<void>;
 }
 export const pkOf = (e: EntityName, v: unknown): string => {
   const o = v as Record<string, unknown>;

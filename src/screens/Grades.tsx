@@ -72,7 +72,7 @@ export function GradesScreen() {
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}
-      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change it in Settings → Attendance.</Txt></Row></Section>}
+      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change it in Settings → Semesters.</Txt></Row></Section>}
     </Page>
   );
 }

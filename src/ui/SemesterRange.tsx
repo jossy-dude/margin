@@ -1,22 +1,45 @@
-import React, { useState } from 'react';
-import { View } from 'react-native';
-import { Row, Stepper, Toggle, Txt } from './kit';
+import React, { useEffect, useRef, useState } from 'react';
+import { TextInput, View } from 'react-native';
+import { Row, Toggle, Txt } from './kit';
 import { Label } from './Sheet';
-import { daysInMonth, isYmd, semesterLabel, suggestEnd, validRange } from '../domain/semester';
-import { pad } from '../domain/time';
+import { isYmd, semesterLabel, suggestEnd, validRange } from '../domain/semester';
+import { useTheme } from './theme-context';
+import { FONT } from '../tokens/theme';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+type Part = 'y' | 'm' | 'd';
+type DateDraft = Record<Part, string>;
 
-/** One part of a `YYYY-MM-DD` value replaced outright, with the day clamped to the month it lands in.
- *  `stepYmd` moves a part by a delta; the steppers here set it, and a value read off a stepper is
- *  already in range, so this is the honest primitive for them. */
-function atPart(v: string, part: 'y' | 'm' | 'd', value: number): string {
-  const base = isYmd(v) ? v : '1970-01-01';
-  const [y, m, d] = base.split('-').map(Number) as [number, number, number];
-  if (part === 'y') return `${String(value).padStart(4, '0')}-${pad(m)}-${pad(Math.min(d, daysInMonth(value, m)))}`;
-  if (part === 'm') return `${String(y).padStart(4, '0')}-${pad(value)}-${pad(Math.min(d, daysInMonth(y, value)))}`;
-  return `${String(y).padStart(4, '0')}-${pad(m)}-${pad(value)}`;
+/** A stored `YYYY-MM-DD` as the three boxes it is edited in; an absent or damaged value is three empty
+ *  boxes, not 1970 — the user is typing a real date, so there is nothing to fabricate. */
+function split(v: string): DateDraft {
+  if (!isYmd(v)) return { y: '', m: '', d: '' };
+  const [y, m, d] = v.split('-') as [string, string, string];
+  return { y, m, d };
 }
+
+/** Is this a real calendar day, not just the right shape? `isYmd` is a strict pattern, but
+ *  `2026-02-31` is well-shaped and impossible; `Date` rolls it over, so the round-trip is the test. */
+function real(v: string): boolean {
+  if (!isYmd(v)) return false;
+  const [y, m, d] = v.split('-').map(Number) as [number, number, number];
+  const at = new Date(y, m - 1, d);
+  return at.getFullYear() === y && at.getMonth() === m - 1 && at.getDate() === d;
+}
+
+/** The boxes as a `YYYY-MM-DD`, or `''` until every box is filled: a half-typed year must not be
+ *  turned into a date by padding, because the UI then has a value the user never entered. */
+const joined = (p: DateDraft): string =>
+  /^\d{4}$/.test(p.y) && /^\d{1,2}$/.test(p.m) && /^\d{1,2}$/.test(p.d)
+    ? `${p.y}-${p.m.padStart(2, '0')}-${p.d.padStart(2, '0')}`
+    : '';
+
+const draftOf = (start: string, end: string) => ({
+  start: split(start),
+  // With no end, the end boxes wait on the `suggestEnd` seed rather than on an empty date, so turning
+  // "No end date" off lands on a day to edit instead of on three blank boxes.
+  end: split(end || suggestEnd(start)),
+  noEnd: !end,
+});
 
 export interface SemesterRangeProps {
   start: string;
@@ -28,76 +51,126 @@ export interface SemesterRangeProps {
 }
 
 /**
- * The semester's two dates: year, month and day for each, plus the "No end date" switch.
+ * The semester's two dates: year, month and day for each, as numeric keypad fields.
  *
- * This is one control rather than two copies because it is asked for in two places — Settings →
- * Attendance & semester and the tour's hand-over — and the rule that matters (an end before the start
- * is not saved) has to be the same rule in both. The draft is local: a stepper press re-renders the
- * three numbers at once, and committing only when the pair is valid is what keeps the stored setting
- * from ever holding a range the UI would refuse to show.
+ * These were steppers. A term date is not a quantity: reaching 2027 from 2026 was one press, but the way
+ * to a term that starts on 14 September was eleven month-steps and a day-step, every year. A date is
+ * typed, so the fields are three small `TextInput`s per date and the keypad opens on the part the user
+ * touches. The pair is still committed only when it is a real range (`validRange`), which is what keeps a
+ * half-typed date out of the setting every screen reads.
+ *
+ * This is one control rather than two copies because it is asked for in three places — Settings →
+ * Attendance, the Semesters page, and the tour's last step — and each writes through a different door:
+ * the first two commit and let the store write the active row and its settings mirror (`setActiveRange`,
+ * `setSemesterRange`), while the tour keeps its answer in a ref and writes nothing until the tour ends.
+ * The store reconciles a settings-only write back to the row on the next term read, so a writer that
+ * touches the mirror alone cannot leave the two disagreeing.
+ * The draft is local so a keystroke does not re-render the page; it resyncs from the props whenever the
+ * stored range changes while no field has focus (a roll-over, an import, another page's edit).
  */
 export function SemesterRange({ start, end, onChange }: SemesterRangeProps) {
-  const [startDraft, setStartDraft] = useState(start);
-  const [endDraft, setEndDraft] = useState(end);
-  const [noEnd, setNoEnd] = useState(!end);
+  const [draft, setDraft] = useState(() => draftOf(start, end));
+  const focused = useRef(0);
 
-  const commit = (s: string, e: string) => { if (validRange(s, e)) onChange({ semesterStart: s, semesterEnd: e }); };
-  const edit = (which: 'start' | 'end', part: 'y' | 'm' | 'd', value: number) => {
-    if (which === 'start') {
-      const next = atPart(startDraft, part, value);
-      setStartDraft(next);
-      commit(next, noEnd ? '' : endDraft);
-    } else {
-      const next = atPart(endDraft || startDraft, part, value);
-      setEndDraft(next);
-      commit(startDraft, next);
-    }
+  useEffect(() => {
+    if (focused.current > 0) return; // never rewrite the box under the cursor
+    setDraft(draftOf(start, end));
+  }, [start, end]);
+
+  const s = joined(draft.start), e = joined(draft.end);
+  const noEnd = draft.noEnd;
+
+  const commit = (nextStart: string, nextEnd: string) => {
+    if (!real(nextStart)) return;
+    if (nextEnd !== '' && !real(nextEnd)) return;
+    if (!validRange(nextStart, nextEnd)) return;
+    if (nextStart === start && nextEnd === end) return;
+    onChange({ semesterStart: nextStart, semesterEnd: nextEnd });
+  };
+  const onPart = (which: 'start' | 'end', part: Part, text: string) => {
+    const digits = text.replace(/\D/g, '').slice(0, part === 'y' ? 4 : 2);
+    const next = { ...draft, [which]: { ...draft[which], [part]: digits } };
+    setDraft(next);
+    if (which === 'start') commit(joined(next.start), next.noEnd ? '' : joined(next.end));
+    else if (!next.noEnd) commit(joined(next.start), joined(next.end));
   };
   const setNoEndDate = (v: boolean) => {
-    setNoEnd(v);
-    if (v) { setEndDraft(''); commit(startDraft, ''); return; }
-    // Turning the end back on needs a day to stand on. Seeding it with the start made a one-day
-    // semester that read as a term; 15 weeks does not. An end the user already set is never replaced.
-    const e = endDraft && validRange(startDraft, endDraft) ? endDraft : suggestEnd(startDraft);
-    setEndDraft(e);
-    commit(startDraft, e);
+    const nextStart = joined(draft.start);
+    if (v) {
+      setDraft({ ...draft, noEnd: true });
+      commit(nextStart, '');
+      return;
+    }
+    // Turning the end back on needs a day to stand on. An end the user already set and can still keep
+    // is never replaced; otherwise 15 weeks, the same seed the domain uses everywhere.
+    const kept = real(joined(draft.end)) && validRange(nextStart, joined(draft.end)) ? joined(draft.end) : suggestEnd(nextStart);
+    setDraft({ ...draft, noEnd: false, end: split(kept) });
+    commit(nextStart, kept);
   };
-  const part = (v: string, which: 'start' | 'end', p: 'y' | 'm' | 'd') => {
-    const base = isYmd(v) ? v : startDraft;
-    const [y, m, d] = (isYmd(base) ? base : '1970-01-01').split('-').map(Number) as [number, number, number];
-    const word = which === 'start' ? 'start' : 'end';
-    if (p === 'y') return <Stepper compact label={`${word} year`} value={y} min={2000} max={2100} fmt={(n) => String(n)} onChange={(n) => edit(which, 'y', n)} />;
-    if (p === 'm') return <Stepper compact label={`${word} month`} value={m} min={1} max={12} fmt={(n) => MONTHS[n - 1] ?? ''} onChange={(n) => edit(which, 'm', n)} />;
-    return <Stepper compact label={`${word} day`} value={Math.min(d, daysInMonth(y, m))} min={1} max={daysInMonth(y, m)} fmt={pad} onChange={(n) => edit(which, 'd', n)} />;
-  };
-  /* Three steppers cannot share a 360 dp row without either 34 dp buttons or a 13 pt year — the year
-     alone is 40 px wide at the app's 22 pt numerals, and two 46 dp buttons plus the value box are 156.
-     So the wrap is made intentional instead of ragged: the year gets its own labelled line, and the
-     month and day share the next one (2 × 156 + 6 = 318, inside the 328 dp a 360 dp page leaves). */
-  const field = (label: string, control: React.ReactNode) => (
-    <View style={{ gap: 2 }}>
-      <Txt f="serif" s={14} c="mut">{label}</Txt>
-      {control}
-    </View>
+
+  const part = (which: 'start' | 'end', p: Part) => (
+    <DatePart
+      key={`${which}-${p}`}
+      which={which}
+      part={p}
+      value={draft[which][p]}
+      width={p === 'y' ? 78 : 50}
+      maxLength={p === 'y' ? 4 : 2}
+      onChangeText={(v) => onPart(which, p, v)}
+      onFocus={() => { focused.current += 1; }}
+      onBlur={() => { focused.current = Math.max(0, focused.current - 1); }}
+    />
   );
-  const dates = (v: string, which: 'start' | 'end') => (
-    <View style={{ gap: 6 }}>
-      {field('Year', part(v, which, 'y'))}
-      <Row gap={6}>{field('Month', part(v, which, 'm'))}{field('Day', part(v, which, 'd'))}</Row>
-    </View>
+  const dates = (which: 'start' | 'end') => (
+    <Row gap={6}>{part(which, 'y')}{part(which, 'm')}{part(which, 'd')}</Row>
   );
+  const hint = !real(s)
+    ? 'A start date is saved once the year, month and day make a real day.'
+    : !noEnd && !real(e)
+      ? 'The end date is incomplete, so nothing is saved yet.'
+      : !noEnd && !validRange(s, e)
+        ? 'The end date is before the start, so nothing is saved yet.'
+        : null;
 
   return (
     <View style={{ gap: 8 }}>
       <Label>Semester starts</Label>
-      {dates(startDraft, 'start')}
+      {dates('start')}
       <Toggle label="No end date" hint="The term is open-ended until you set its last day" value={noEnd} onChange={setNoEndDate} />
       {!noEnd && <>
         <Label>Semester ends</Label>
-        {dates(endDraft, 'end')}
-        {!validRange(startDraft, endDraft) ? <Txt f="serif" s={14.5} c="warn">The end date is before the start, so nothing is saved yet.</Txt> : null}
+        {dates('end')}
+        {hint ? <Txt f="serif" s={14.5} c="warn">{hint}</Txt> : null}
       </>}
-      <Txt f="serif" s={14.5} c="mut">{semesterLabel({ semesterStart: startDraft, semesterEnd: noEnd ? '' : endDraft })}</Txt>
+      <Txt f="serif" s={14.5} c="mut">{semesterLabel({ semesterStart: s, semesterEnd: noEnd ? '' : e })}</Txt>
+    </View>
+  );
+}
+
+/** One box of a date. The visible label is the word ("Year"), the spoken one names which date it is
+ *  ("semester start year"), because six boxes with the same label would be six identical stops. */
+function DatePart({ which, part, value, width, maxLength, onChangeText, onFocus, onBlur }: {
+  which: 'start' | 'end'; part: Part; value: string; width: number; maxLength: number;
+  onChangeText: (v: string) => void; onFocus: () => void; onBlur: () => void;
+}) {
+  const { c } = useTheme();
+  const word = part === 'y' ? 'Year' : part === 'm' ? 'Month' : 'Day';
+  return (
+    <View style={{ gap: 2 }}>
+      <Txt f="serif" s={14} c="mut">{word}</Txt>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        keyboardType="numeric"
+        returnKeyType="done"
+        maxLength={maxLength}
+        placeholder={part === 'y' ? '2026' : part === 'm' ? '09' : '07'}
+        testID={`semester-${which}-${part === 'y' ? 'year' : part === 'm' ? 'month' : 'day'}`}
+        accessibilityLabel={`semester ${which} ${part === 'y' ? 'year' : part === 'm' ? 'month' : 'day'}`}
+        style={{ width, textAlign: 'center', fontFamily: FONT.handBold, fontSize: 22, color: c.ink, paddingVertical: 4, paddingHorizontal: 0, borderBottomWidth: 1.4, borderBottomColor: c.ink }}
+      />
     </View>
   );
 }

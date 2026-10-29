@@ -1,5 +1,5 @@
 import type {
-  AttRecord, AttStatus, Course, DayMark, DayStatus, Mark, Meeting, Notice, Settings, Snapshot, Task, TaskKind,
+  AttRecord, AttStatus, Course, DayMark, DayStatus, Mark, Meeting, Notice, Settings, Snapshot, SubjectVariant, Task, TaskKind,
 } from './types';
 import { ST, occKey } from './attendance';
 import { parseCsv } from './csv';
@@ -22,13 +22,10 @@ import { isYmd, validRange } from './semester';
  */
 export interface Problem { where: string; field: string; message: string }
 
-/** One subject variant, as the full-dataset file spells it and as WS2's `subject_variants` table will
- *  store it (`id, subject_id, name, room, teacher, note, ord`). It is carried beside `snapshot` rather
- *  than inside it because `Snapshot` has no variants field yet — the storage lands with the release's
- *  single migration, and this shape is the seam it fills. */
-export interface ImportVariant {
-  id: string; subjectId: string; name: string; room: string; teacher: string; note: string; ord: number;
-}
+/** One subject variant is a `SubjectVariant`: as the full-dataset file spells it and as v0.9's
+ *  `subject_variants` table stores it (`id, subject_id, name, room, teacher, note, ord`). `plan.variants`
+ *  is the preview's copy; `snapshot.variants` is what the repository writes — both built from the same
+ *  map below, so the preview cannot promise a row the write does not carry. */
 
 /** How one dataset's rows will land. `write` and `skip` are exact; `add`/`update` split `write` and
  *  are `null` when the plan cannot see what is already on the phone. A preview that calls a row "new"
@@ -48,8 +45,9 @@ export interface DatasetCount {
 
 export interface ImportPlan {
   snapshot: Partial<Snapshot>;
-  /** Rows that will be written, per dataset. A dataset this version cannot write (`variants`) is never
-   *  here, so the preview, the button and the toast can never claim it landed. */
+  /** Rows that will be written, per dataset. Every dataset this parser produces one for is written by
+   *  `importSnapshot`, variants included since v0.9's table landed — a count that overstated the write
+   *  would be the same lie as one that understated it. */
   counts: Record<string, number>;
   /** Every dataset the file carried, with the add/update/skip split the preview prints. */
   breakdown: Record<string, DatasetCount>;
@@ -60,7 +58,7 @@ export interface ImportPlan {
    *  disagree — they are built from one set of maps in `parseImport`. */
   profileName?: string;
   settings?: Partial<Settings>;
-  variants?: ImportVariant[];
+  variants?: SubjectVariant[];
   attendance?: AttRecord[];
   marks?: Mark[];
   tasks?: Task[];
@@ -80,6 +78,9 @@ export interface ImportOptions {
   attendance?: Record<string, AttRecord>;
   dayMarks?: Record<string, DayMark>;
   marks?: readonly Mark[];
+  /** The variants already on this phone, so the preview can split a variant row into new/updated the
+   *  way it does for subjects. Optional: without it the split is honestly `null`. */
+  variants?: readonly SubjectVariant[];
   now?: number;
 }
 
@@ -183,7 +184,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   const dayMarks = new Map<string, DayMark>();
   const marks = new Map<string, Mark>();
   const adjusts = new Map<string, number>();
-  const variantRows = new Map<string, ImportVariant>();
+  const variantRows = new Map<string, SubjectVariant>();
   /* The phone's rows by id, as the CSV door's `existingById`: the map a raw or compact course row
      is merged against, so neither JSON door can wipe a subject the phone already has. */
   const existingById = new Map((opts.courses ?? []).map((c) => [c.id, c]));
@@ -239,11 +240,13 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     readCompact(parsed);
   }
 
-  /* What will actually land, and what the file carried. `variants` is deliberately absent from the
-     writes: WS2 owns that table, so nothing here may count it as a written row. */
+  /* What will actually land, and what the file carried. Variants are written like every other dataset
+     since v0.9's migration gave them a table — the row is a `put`, so it carries a `rev` and reaches
+     `importSnapshot` with the rest. */
   const writes: Record<string, number> = {
     courses: courses.size, meetings: meetings.size, tasks: tasks.size, notices: notices.size,
     attendance: attendance.size, dayMarks: dayMarks.size, marks: marks.size, adjusts: adjusts.size,
+    variants: variantRows.size,
   };
   const counts = Object.fromEntries(Object.entries(writes).filter(([, n]) => n > 0));
   const snapshot: Partial<Snapshot> = {};
@@ -251,6 +254,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   if (meetings.size) snapshot.meetings = [...meetings.values()];
   if (tasks.size) snapshot.tasks = [...tasks.values()];
   if (notices.size) snapshot.notices = [...notices.values()];
+  if (variantRows.size) snapshot.variants = [...variantRows.values()];
   if (attendance.size) snapshot.attendance = Object.fromEntries(attendance);
   if (dayMarks.size) snapshot.dayMarks = Object.fromEntries(dayMarks);
   if (marks.size) snapshot.marks = [...marks.values()];
@@ -642,6 +646,7 @@ function datasetCounts(
     dayMarks: Object.keys(snapshot.dayMarks ?? {}),
     marks: (snapshot.marks ?? []).map((m) => m.id),
     adjusts: Object.keys(snapshot.adjusts ?? {}),
+    variants: (snapshot.variants ?? []).map((v) => v.id),
   };
   const phone: Record<string, readonly string[] | undefined> = {
     courses: opts.courses?.map((c) => c.id),
@@ -652,6 +657,7 @@ function datasetCounts(
     dayMarks: opts.dayMarks ? Object.keys(opts.dayMarks) : undefined,
     marks: opts.marks?.map((m) => m.id),
     adjusts: undefined,
+    variants: opts.variants?.map((v) => v.id),
   };
   const out: Record<string, DatasetCount> = {};
   for (const kind of new Set([...Object.keys(read), ...Object.keys(writes)])) {

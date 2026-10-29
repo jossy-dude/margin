@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Appearance, AppState as RNAppState } from 'react-native';
-import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, Settings, Snapshot, Task, NotifSettings, Trip, Alarm } from '../domain/types';
+import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, NotifSettings, Trip, Alarm } from '../domain/types';
 import type { NotifLogRow, Repository } from '../data/repository';
 import { openRepository } from '../data/sqliteExpo';
 import { MemoryRepository } from '../data/memory';
@@ -15,6 +15,8 @@ import { makeTheme } from '../tokens/theme';
 import { advance, endBreak, finish, initTimer, setMinutes, startBreak, toggle as timerToggle, type TimerState } from '../domain/timer';
 import { uid } from '../domain/time';
 import type { ImportPlan } from '../domain/importPlan';
+import { buildSnapshot, newSemester, semesterName } from '../domain/archive';
+import { isYmd, suggestEnd, validRange } from '../domain/semester';
 import { configureFx, fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 
@@ -28,7 +30,8 @@ export interface PlanInfo { count: number; deferred: number; shifted: number; ne
 export interface State {
   ready: boolean; error: string | null; now: number;
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
-  tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; trips: Trip[]; alarms: Alarm[]; settings: Settings;
+  tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; trips: Trip[]; alarms: Alarm[]; variants: SubjectVariant[]; settings: Settings;
+  semesters: SemesterRow[];
   timer: TimerState; sheet: SheetSpec | null; settingsPath: string[]; toast: Toast | null; route: RouteName; prevRoute: RouteName | null; focusTaskId: string | null;
   notifStatus: notifs.NotifStatus | null; plan: PlanInfo | null; notifLog: NotifLogRow[];
   fev: { k: string; at: number } | null;
@@ -44,7 +47,7 @@ let demoMode = false;
 let real: Repository | null = null;
 let repo: Repository | null = null;
 let state: State = {
-  ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: withDefaults({}),
+  ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], variants: [], settings: withDefaults({}), semesters: [],
   timer: initTimer(), sheet: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, notifLog: [], fev: null,
 };
 const subs = new Set<() => void>();
@@ -145,13 +148,44 @@ export function resync(delay = 700) {
 }
 export async function refreshNotifStatus() { set({ notifStatus: await notifs.status() }); await refreshNotifLog(); }
 
+/* ───── the row, and its mirror ───── */
+
+/** Read the terms, and repair `settings.semesterStart/End` from the active row when the two disagree.
+ *
+ *  v0.9 split one fact in two: the active `semesters` row is the truth and the settings pair is its
+ *  mirror. The split is only safe if a mirror that drifts is repaired, because the pair is written by
+ *  code that never touches the row — `act.setSettings` (the tour's last step, `adoptDemo`'s hand-over)
+ *  and the import door's settings patch among them — while the whole app (Grades, export, the Settings
+ *  summary, the attendance grid) keeps reading the pair. The row is authoritative; this is the one place
+ *  that makes that true on read, so a KV-only writer is harmless instead of a permanent disagreement.
+ *
+ *  Called by `hydrate()` (a restart, and the boot right after a demo session was adopted) and by
+ *  `loadSemesters()` (the in-session read; the tour wrote the KV before adoption in the same session).
+ *  Both use the SAME helper so the two doors cannot disagree about which one wins.
+ *
+ *  Failure is not fatal and is not silent: a repository that cannot answer leaves the cached rows alone
+ *  (returning `null`, so callers keep what they had) and lands in the Problems log. `setActiveSemester`
+ *  throws on an unknown id — wrapped here, because a read must never throw at the call site. */
+async function reconcileSemesters(): Promise<SemesterRow[] | null> {
+  try {
+    const rows = await R().listSemesters();
+    const active = rows.find((x) => x.active);
+    if (active && (state.settings.semesterStart !== active.start || state.settings.semesterEnd !== active.end)) {
+      await R().setActiveSemester(active.id); // one transaction: the row is re-mirrored into the KV
+      set({ settings: withDefaults((await R().load()).settings) }); // and the app reads what landed on disk
+    }
+    return rows;
+  } catch (e) { recordCrash(e, 'data', 'Semesters'); return null; }
+}
+
 /* ───── hydrate ───── */
 export async function hydrate(r: Repository) {
   repo = r;
   try {
     const snap = await r.load();
     applySnapshot(snap); configureFx(state.settings);
-    set({ ready: true, now: Date.now() }); resync(1500);
+    const rows = await reconcileSemesters();
+    set({ ready: true, now: Date.now(), semesters: rows ?? [] }); resync(1500);
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
 }
 /** What App.tsx runs to bring the app up — the open-and-decide step v0.1 grew.
@@ -198,12 +232,44 @@ function applySnapshot(s: Partial<Snapshot>, keepTimer = false) {
   if (s.focus) patch.focus = s.focus;
   if (s.trips) patch.trips = s.trips;
   if (s.alarms) patch.alarms = s.alarms;
+  if (s.variants) patch.variants = s.variants;
   if (!keepTimer) {
     patch.timer = initTimer({ planMin: settings.focusPresetMin, flow: settings.focusFlow, breakMs: settings.breakMin * 60_000, breaksAllowed: settings.breaksPerRound });
   }
   set(patch);
 }
 export const snapshotOf = (s: State = state): Snapshot => ({ courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, notices: s.notices, marks: s.marks, adjusts: s.adjusts, focus: s.focus, trips: s.trips, alarms: s.alarms, settings: s.settings });
+
+/** The term an import asks for, written where v0.9 reads it: the active `semesters` row.
+ *
+ *  The import door wrote `settings.semesterStart/End` only, and the next `loadSemesters()` replaced
+ *  that pair with the row's — so a file that says "the term starts 7 September" survived the toast and
+ *  died on the next screen. The row is written here, after `importSnapshot` (a repository call inside
+ *  its transaction would deadlock, the same reason it writes settings itself), and `setActiveSemester`
+ *  mirrors the pair back into the KV, so the two cannot disagree afterwards.
+ *
+ *  Merge-only, as everywhere in this door: a file that carries no start changes nothing; a missing
+ *  `semesterEnd` key keeps the row's end; an explicit empty one opens the term; and a start that would
+ *  strand the old end (or a malformed end) takes the domain's own 15-week seed rather than storing an
+ *  impossible pair. A repository with no active row gets one named from the start (`newSemester`'s
+ *  naming rule). */
+async function carryImportedRange(patch: Partial<Settings> | undefined) {
+  const start = patch?.semesterStart;
+  if (!isYmd(start)) return;
+  const rows = await R().listSemesters();
+  const active = rows.find((x) => x.active) ?? null;
+  const carriesEnd = !!patch && 'semesterEnd' in patch;
+  const said = carriesEnd ? String(patch?.semesterEnd ?? '') : active?.end ?? suggestEnd(start);
+  const end = !said || (isYmd(said) && validRange(start, said)) ? said : suggestEnd(start);
+  if (active && active.start === start && active.end === end) { set({ semesters: rows }); return; }
+  const next: SemesterRow = active
+    ? { ...active, start, end }
+    : { ...newSemester(state.now), name: semesterName(start), start, end };
+  await R().saveSemester(next);
+  await R().setActiveSemester(next.id);
+  set({ semesters: await R().listSemesters() });
+}
+
 
 /* ───── actions ───── */
 export const act = {
@@ -324,6 +390,7 @@ export const act = {
     if (plan.problems.length) return false;
     try {
       await R().importSnapshot(plan.snapshot);
+      await carryImportedRange(plan.snapshot.settings);
       applySnapshot(await R().load(), true);
       configureFx(state.settings);
       const rows = Object.values(plan.counts).reduce((a, b) => a + b, 0);
@@ -336,6 +403,96 @@ export const act = {
       return false;
     }
   },
+  /* ── semesters (v0.9) ─────────────────────────────────────────────────────────────────────────
+   * `settings.semesterStart/End` stopped being the truth in v0.9: the active `semesters` row is, and
+   * the pair is its mirror. Every write below goes through the repository's own mirror writer
+   * (`setActiveSemester`) rather than writing the settings directly, so a range cannot end up on
+   * screen that the row does not have. The store keeps the loaded rows so the Semesters page and the
+   * Settings attendance control read and write the same term without a query per keystroke. */
+
+  /** List the terms. The active row is authoritative, so a settings mirror that disagrees with it is
+   *  rewritten from the row as part of this read — a KV-only writer is therefore harmless rather than
+   *  something every caller has to know about. A repository with no active row heals with today's term
+   *  (fresh install, a wipe, or a roll-over killed between archiving and activating) inside the same
+   *  call, and its mirror write comes back through the same reconciliation. */
+  async loadSemesters() {
+    const rows = await reconcileSemesters(); // records the failure itself; `null` keeps the cached rows
+    if (rows) set({ semesters: rows });
+  },
+
+  async renameSemester(id: string, name: string) {
+    const clean = name.trim(), row = state.semesters.find((x) => x.id === id);
+    if (!clean || !row || row.name === clean) return;
+    const next: SemesterRow = { ...row, name: clean };
+    set((s) => ({ semesters: s.semesters.map((x) => (x.id === id ? next : x)) }));
+    await persist(R().saveSemester(next));
+  },
+
+  /** Save one term's range. The active term's pair is mirrored by `setActiveSemester`; an archived
+   *  term keeps its own range and never touches what the app is reading today. */
+  async setSemesterRange(id: string, semesterStart: string, semesterEnd: string) {
+    const row = state.semesters.find((x) => x.id === id);
+    if (!row) return;
+    const next: SemesterRow = { ...row, start: semesterStart, end: semesterEnd };
+    set((s) => ({
+      semesters: s.semesters.map((x) => (x.id === id ? next : x)),
+      ...(row.active ? { settings: { ...s.settings, semesterStart, semesterEnd } } : {}),
+    }));
+    await persist(R().saveSemester(next));
+    if (row.active) await persist(R().setActiveSemester(id));
+  },
+
+  /** The Settings → Attendance control knows the range but not the id. The active row is the one it
+   *  means, so the write goes through `setSemesterRange` — a settings-only write would leave the row
+   *  printing last term's dates. */
+  async setActiveRange(semesterStart: string, semesterEnd: string) {
+    // The mirror moves first and synchronously: this control sits under the user's finger, and a day
+    // typed into it must read back before the row write's promise resolves.
+    set((s) => ({ settings: { ...s.settings, semesterStart, semesterEnd } }));
+    let active = state.semesters.find((x) => x.active);
+    if (!active) {
+      try {
+        const rows = await R().listSemesters();
+        set({ semesters: rows });
+        active = rows.find((x) => x.active);
+      } catch (e) { recordCrash(e, 'data', 'Settings'); }
+    }
+    if (!active) {
+      // No row at all (a preview, or a store built for a test): the mirror is all there is to write.
+      await persist(R().putSettings({ semesterStart, semesterEnd }));
+      return;
+    }
+    const next: SemesterRow = { ...active, start: semesterStart, end: semesterEnd };
+    set((s) => ({ semesters: s.semesters.map((x) => (x.id === active!.id ? next : x)) }));
+    await persist(R().saveSemester(next));
+    await persist(R().setActiveSemester(active.id));
+  },
+
+  /** Roll the term over: freeze the live rows into the old row's snapshot, clear the day tables (the
+   *  owner chooses whether attendance goes with them), create the next term and make it active. The
+   *  order matters — the archive is written before anything is cleared, and the next row exists before
+   *  it becomes the one the app reads, so a kill in between leaves history, never a lost term. */
+  async rollOverSemester(keepAttendance: boolean) {
+    const active = state.semesters.find((x) => x.active);
+    if (!active) return;
+    try {
+      const snapshotJson = buildSnapshot(state.courses, state.meetings, state.attendance, state.marks, state.tasks, state.settings, state.variants);
+      await R().saveSemester({ ...active, active: false, snapshotJson, archivedAt: new Date().toISOString() });
+      await R().clearActiveSchedule(keepAttendance);
+      const next = newSemester(state.now);
+      await R().saveSemester(next);
+      await R().setActiveSemester(next.id);
+      applySnapshot(await R().load(), true);
+      configureFx(state.settings);
+      set({ semesters: await R().listSemesters() });
+      toast(`${active.name} archived${keepAttendance ? ' — attendance kept' : ''}`);
+      resync(0);
+    } catch (e) {
+      recordCrash(e, 'save', 'Semesters');
+      toast(`Couldn't start a new semester: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    }
+  },
+
   /** The one true "erase everything": wipe every table (on device, the FILE itself — SQLite's close
    *  + delete, WAL/SHM with it), then re-open a fresh, EMPTY database. No sample semester comes
    *  back: since v0.1 the demo set is a first-session memory playground, not something the database
@@ -345,7 +502,11 @@ export const act = {
       await ensureRepo().then((r) => persist(r.wipe()));
       repo = real = await openRepository();
       const snap = await R().load(); applySnapshot(snap); configureFx(state.settings); demoMode = false;
-      set({ ready: true, error: null }); toast('Everything erased'); resync(300);
+      /* The rows cached from the erased file are gone with it: a later `setActiveRange` (Settings →
+         Attendance, before the Semesters page has ever been opened) would otherwise find the ghost
+         active row and write it back into the fresh database. Cleared rather than reloaded — the heal
+         is lazy, and `listSemesters()` creates the new term when something reads it. */
+      set({ ready: true, error: null, semesters: [] }); toast('Everything erased'); resync(300);
     } catch (e) { set({ error: `Couldn't reset: ${String((e as Error)?.message ?? e).slice(0, 80)}` }); }
   },
   /** Called when the tour is left, however it is left (App.tsx maps the finishes: "Get started"
@@ -386,6 +547,19 @@ export const act = {
       await r.putSettings(settings);
     })());
     repo = r;
+    /* The term cache belongs to the repository that is now open. Boot hydrated from the DEMO memory
+       copy, so `state.semesters` still held the sample term; leaving it there let the next Settings →
+       Attendance edit save that phantom id into the real file and deactivate the term the user actually
+       had — the failure `resetAll` had, at the other repository swap, and the same cure in the same
+       order: the cache is cleared synchronously with the swap (a write can never interleave and find
+       the sample rows, and this cannot fail, so the phantom is gone for good even if the next step
+       throws). The re-read right after is for the session's UX, not correctness: a real term exists by
+       the time it answers — `listSemesters()` heals one, carrying the range the hand-over just stored —
+       so the Semesters page is correct without waiting for a lazy load, and the same read re-mirrors
+       the settings pair from the row. Should that read fail (recorded there, never thrown), the cache
+       is already empty and `setActiveRange`'s own no-active-row path re-reads and heals. */
+    set({ semesters: [] });
+    await act.loadSemesters();
     set((s: State) => (keepSamples ? s : { courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) }));
     toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
     resync(0);

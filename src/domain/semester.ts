@@ -1,4 +1,5 @@
-import { DAY_MS, MO, pad, parseYmd, startOfDay } from './time';
+import { DAY_MS, MO, pad, parseYmd, startOfDay, ymd } from './time';
+import type { SemesterRow } from './types';
 
 /**
  * The semester, as a range of local calendar days.
@@ -71,6 +72,17 @@ export function suggestEnd(start: string): string {
   return `${String(y).padStart(4, '0')}-${pad(m)}-${pad(Math.min(d.getDate(), daysInMonth(y, m)))}`;
 }
 
+/**
+ * The range a term starts with when there is nothing to carry: today, and the `suggestEnd` seed after
+ * it. Shared by the migration's empty fallback and the Semesters page's "Start new semester", because
+ * two copies of "what a new term looks like" is how the migrated row and a rolled-over one would come
+ * to disagree. The caller owns writing it back — this is a pure range, not a side effect.
+ */
+export function newSemesterRange(now: number): { start: string; end: string } {
+  const start = ymd(new Date(now));
+  return { start, end: suggestEnd(start) };
+}
+
 /** The stored range as dates. A missing or malformed start reads as 1 Jan 1970 — the "no lower bound"
  *  answer every caller already had — and an end earlier than the start is treated as no end at all:
  *  a bad setting must not silently hide a whole term's attendance. */
@@ -80,6 +92,29 @@ export function semesterOf(s: Range): SemesterSpan {
   if (!isYmd(s.semesterEnd)) return { start, end: null };
   const end = parseYmd(s.semesterEnd);
   return { start, end: startOfDay(end.getTime()) >= startOfDay(start.getTime()) ? end : null };
+}
+
+/**
+ * A stored term as the range type every other helper already speaks.
+ *
+ * This is the bridge between the `semesters` row (v0.9's one active term) and the decade of range
+ * checks that read `settings.semesterStart`/`semesterEnd`: both go through `semesterOf`, so an
+ * open-ended term, an end before the start, and a malformed start all mean here what they mean there
+ * — one rule, not a second one that only the Semesters page believes.
+ */
+export function activeSemester(s: SemesterRow): SemesterSpan {
+  return semesterOf({ semesterStart: s.start, semesterEnd: s.end });
+}
+
+/**
+ * Whole days from today to the last day of term, inclusive: `0` means today IS the last day, a
+ * negative number how long ago the term ended, and `null` that it is open-ended (no countdown to
+ * print). `startOfDay` on both sides because a term ends at midnight of the day after its last day:
+ * without that, the answer would drift by one as the clock moves through the afternoon.
+ */
+export function daysLeft(span: SemesterSpan, now: number): number | null {
+  if (span.end === null) return null;
+  return Math.round((startOfDay(span.end.getTime()) - startOfDay(now)) / DAY_MS);
 }
 
 /** Is this day inside the semester? Both ends are inclusive by local calendar day — the last day of

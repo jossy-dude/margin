@@ -27,6 +27,7 @@ import { safetyInfo, shareNewestSafetyCopy, type SafetyInfo } from '../services/
 import { crashCount, subscribeCrashes } from '../ui/crashlog';
 import { DiagnosticsPage } from './Diagnostics';
 import { ImportPage } from './Import';
+import { SemestersPage } from './Semesters';
 import { SemesterRange } from '../ui/SemesterRange';
 import { semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
@@ -36,7 +37,7 @@ import type { Settings } from '../domain/types';
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -179,6 +180,7 @@ export function SettingsSheet() {
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
+    <Nav icon="week" label="Semesters" hint="The active term, its dates, and the terms you kept" to="semesters" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
@@ -336,7 +338,7 @@ export function SettingsSheet() {
   if (page === 'attendance') body = (<>
     <Toggle label="Lock attendance grid" hint="Nothing can change until you unlock it" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
     <Txt f="serif" s={15.5} c="mut">When unlocked: tap an empty cell once to mark it. After that, long-press to change it.</Txt>
-    <SemesterRange start={s.semesterStart} end={s.semesterEnd} onChange={(p) => set(p)} />
+    <SemesterRange start={s.semesterStart} end={s.semesterEnd} onChange={(p) => void act.setActiveRange(p.semesterStart, p.semesterEnd)} />
     <Row><Btn small kind="ghost" icon="plus" label="Add class" onPress={() => act.open({ t: 'meeting' })} /><Btn small kind="ghost" icon="plus" label="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>
   </>);
   if (page === 'focus') body = (<>
@@ -371,6 +373,7 @@ export function SettingsSheet() {
     <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset wipes the whole database file.</Txt>
   </>);
   if (page === 'import') body = <ImportPage />;
+  if (page === 'semesters') body = <SemestersPage />;
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
     <Txt f="serif" s={16} c="mut">The tour runs the first time this app opens, over the app itself rather than instead of it: it rings the real +, the real sheet close, the real gear, the tab bar, a timetable block, a task row and the real Focus dial — which it waits for you to drag. Every step has a Next and a Skip, and nothing on it changes your data.</Txt>

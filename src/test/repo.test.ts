@@ -254,9 +254,9 @@ describe('repository transactions are serialised (audit C1)', () => {
  * repair. `IF NOT EXISTS` plus one transaction per migration is the fix; these are its three states.
  */
 describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
-  it('a fresh database reaches version 3 with the new tables, the focus columns and the demo columns', async () => {
+  it('a fresh database reaches version 4 with the new tables, the focus columns and the demo columns', async () => {
     const { sql, raw } = rawDb(); await new SqliteRepository(sql, () => NOW).init();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
     const cols = (t: string) => (raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name);
     expect(cols('trip')).toEqual(expect.arrayContaining(['id', 'started_at', 'ended_at', 'route', 'note']));
     expect(cols('alarm')).toEqual(expect.arrayContaining(['id', 'at', 'label', 'enabled', 'kind', 'task_id']));
@@ -265,14 +265,14 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     for (const t of ['course', 'meeting', 'notice', 'mark']) expect(cols(t)).toContain('demo');
   });
 
-  it('a v1 database keeps its rows, reaches version 3, and a second init is a no-op', async () => {
+  it('a v1 database keeps its rows, reaches version 4, and a second init is a no-op', async () => {
     const { sql, raw } = rawDb();
     raw.exec(MIGRATIONS[0] as string); raw.exec('PRAGMA user_version = 1');
     raw.run(`INSERT INTO task(${TASK_COLS}) VALUES('t1','Old task',NULL,'other',NULL,NULL,NULL,0,'',0,?,NULL,'[]','[]',0)`, [NOW]);
     raw.run("INSERT INTO focus_session(id,task_id,course_id,started_at,ended_at,focus_sec,break_sec,over_sec,rounds,plan_min,demo) VALUES('f1',NULL,NULL,?,?,600,0,0,1,25,0)", [NOW, NOW + 600_000]);
 
     const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op…
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]); // …and neither throw
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]); // …and neither throw
     const l = await r.load();
     expect(l.tasks.map((t) => t.id)).toEqual(['t1']); // the old row survived the ALTER
     expect(l.focus[0]).toMatchObject({ id: 'f1', focusSec: 600, planMin: 25, mode: 'focus', completed: false });
@@ -293,7 +293,7 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     raw.run("INSERT INTO mark(id,course_id,name,score,weight,on_,sort) VALUES('k1','c1','Quiz',80,10,1,0)");
 
     const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
     // the columns appear, and every pre-existing row defaults to 0 — "not sample"
     for (const t of ['course', 'meeting', 'notice', 'mark']) {
       expect((raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name)).toContain('demo');
@@ -313,7 +313,7 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     raw.exec(MIGRATIONS[0] as string); // the v0 kill window: the tables exist…
     expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 0 }]); // …and the marker says otherwise
     await expect(new SqliteRepository(sql, () => NOW).init()).resolves.toBeUndefined();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 3 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
   });
 });
 
@@ -373,7 +373,7 @@ describe('an unreadable stored value is skipped, reported, and left on disk (aud
 
   it('a corrupt setting is excluded so the default applies, and its bytes survive later writes', async () => {
     const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW); await r.init();
-    raw.run("INSERT INTO setting(k,v) VALUES('semesterStart','{broken')");
+    raw.run("INSERT OR REPLACE INTO setting(k,v) VALUES('semesterStart','{broken')");
 
     const l = await r.load();
     expect(l.settings.semesterStart).toBe(withDefaults({}).semesterStart);

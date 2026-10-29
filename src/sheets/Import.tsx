@@ -22,12 +22,11 @@ const SAMPLE = `{
     "course": "DB Systems", "due": "2026-09-20T23:59" }]
 }`;
 
-/** Singular and plural for each count the preview prints: `1 subject`, not `1 subjects`. `variants`
- *  is absent on purpose: WS2 owns the table, so nothing this page prints may claim one is written. */
+/** Singular and plural for each count the preview prints: `1 subject`, not `1 subjects`. */
 const WORD: Record<string, readonly [string, string]> = {
   courses: ['subject', 'subjects'], meetings: ['class', 'classes'], tasks: ['task', 'tasks'], notices: ['note', 'notes'],
   attendance: ['attendance mark', 'attendance marks'], dayMarks: ['day mark', 'day marks'], marks: ['mark', 'marks'],
-  adjusts: ['curve', 'curves'],
+  adjusts: ['curve', 'curves'], variants: ['variant', 'variants'],
 };
 const word = (key: string, n: number) => { const w = WORD[key]; return w ? w[n === 1 ? 0 : 1] : key; };
 const total = (plan: ImportPlan) => Object.values(plan.counts).reduce((a, b) => a + b, 0);
@@ -43,10 +42,11 @@ function describe(key: string, d: DatasetCount): string | null {
   return split ? `${name} (${split})` : name;
 }
 
-/** Rows the file carried that this import will not write. Variants are left out on purpose (WS2 owns
- *  that table); everything else says plainly that it is not being written. */
+/** Rows the file carried that this import will not write — a class that has not happened, a cell that
+ *  could not be read. Every dataset is named here: a skip the preview hides is a row the user loses
+ *  without being told. */
 const skipped = (plan: ImportPlan) => Object.entries(plan.breakdown)
-  .filter(([k, d]) => k !== 'variants' && d.skip > 0)
+  .filter(([, d]) => d.skip > 0)
   .map(([k, d]) => `${d.skip} ${word(k, d.skip)}`)
   .join(' · ');
 
@@ -54,9 +54,10 @@ const skipped = (plan: ImportPlan) => Object.entries(plan.breakdown)
  *  date merges over it instead of resetting it, and so the preview can split new from updated. Module
  *  level, not inside the page, because `Date.now()` in a component's body is an impure call during
  *  render. */
-const options = (phone: Pick<Snapshot, 'courses' | 'meetings' | 'tasks' | 'attendance' | 'dayMarks' | 'marks'>) => ({
+const options = (phone: Pick<Snapshot, 'courses' | 'meetings' | 'tasks' | 'attendance' | 'dayMarks' | 'marks' | 'variants'>) => ({
   courses: phone.courses, meetings: phone.meetings, tasks: phone.tasks,
-  attendance: phone.attendance, dayMarks: phone.dayMarks, marks: phone.marks, now: Date.now(),
+  attendance: phone.attendance, dayMarks: phone.dayMarks, marks: phone.marks,
+  variants: phone.variants ?? [], now: Date.now(),
 });
 
 /** The tables a CSV may be, printed the way the app names them. */
@@ -83,8 +84,8 @@ export function ImportPage() {
      clock tick elsewhere does not re-render the page. */
   const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings);
   const tasks = useStore((s) => s.tasks), attendance = useStore((s) => s.attendance);
-  const dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks);
-  const onPhone = { courses, meetings, tasks, attendance, dayMarks, marks };
+  const dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), variants = useStore((s) => s.variants);
+  const onPhone = { courses, meetings, tasks, attendance, dayMarks, marks, variants };
   const [text, setText] = useState(''), [plan, setPlan] = useState<ImportPlan | null>(null), [busy, setBusy] = useState(false);
   /** The picked file's name, and the parsed table when a CSV needs a second pass with the table chosen. */
   const [name, setName] = useState<string | undefined>(undefined), [csv, setCsv] = useState<CsvTable | null>(null), [pickErr, setPickErr] = useState('');
