@@ -101,8 +101,8 @@ export class MemoryRepository implements Repository {
   }
   async clearActiveSchedule(keepAttendance: boolean) {
     const entities: EntityName[] = keepAttendance
-      ? ['meeting', 'task', 'notice', 'dayMark', 'mark']
-      : ['meeting', 'task', 'notice', 'dayMark', 'mark', 'attendance'];
+      ? ['meeting', 'task', 'notice', 'dayMark', 'mark', 'adjust'] // D4: curves reset with the term (they are archived first)
+      : ['meeting', 'task', 'notice', 'dayMark', 'mark', 'adjust', 'attendance'];
     for (const e of entities) for (const [id, r] of this.tab(e)) if (!r.deleted) { r.deleted = true; this.log(e, id, 'del'); }
   }
 }

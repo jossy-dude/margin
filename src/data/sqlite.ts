@@ -323,8 +323,8 @@ export class SqliteRepository implements Repository {
      next term inherits. */
   async clearActiveSchedule(keepAttendance: boolean) {
     const entities: EntityName[] = keepAttendance
-      ? ['meeting', 'task', 'notice', 'dayMark', 'mark']
-      : ['meeting', 'task', 'notice', 'dayMark', 'mark', 'attendance'];
+      ? ['meeting', 'task', 'notice', 'dayMark', 'mark', 'adjust'] // D4: curves reset with the term (they are archived first)
+      : ['meeting', 'task', 'notice', 'dayMark', 'mark', 'adjust', 'attendance'];
     await this.ser(() => this.db.withTransactionAsync(async () => {
       for (const e of entities) {
         const s = SPECS[e];

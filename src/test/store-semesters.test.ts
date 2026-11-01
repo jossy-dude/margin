@@ -3,8 +3,7 @@
  *
  * `semesters-sheet.test.ts` drives the same actions through the page; this file pins the store half on
  * its own: what changes synchronously, what the repository ends up holding, what the archive contains,
- * and what the roll-over clears. Assertions marked `CURRENT behaviour, changes in D4` record a known gap
- * (the archive leaves out notes and day marks) that D4 will close.
+ * and what the roll-over clears (since D4: everything it clears is archived first).
  */
 import { MemoryRepository } from '../data/memory';
 import { readSnapshot } from '../domain/archive';
@@ -168,16 +167,18 @@ describe('rollOverSemester', () => {
     expect(d.settings).toMatchObject({ semesterStart: '2026-09-07', semesterEnd: '2026-12-20' });
   });
 
-  it('the archive leaves out the notes and the day marks the roll-over just cleared', async () => {
+  it('the archive is whole: notes, day marks, curves and focus travel with the term (D4)', async () => {
     const r = await store();
+    act.setAdjust('E', 4);
+    await flush();
     await act.rollOverSemester(true);
     const old = (await r.listSemesters()).find((x) => x.id === 's1')!;
-    const raw = JSON.parse(old.snapshotJson!) as { datasets: Record<string, unknown> };
-    // CURRENT behaviour, changes in D4: notices and dayMarks are cleared but never archived.
-    expect(Object.keys(raw.datasets).sort()).toEqual(['attendance', 'courses', 'marks', 'meetings', 'settings', 'tasks', 'variants']);
-    expect(raw.datasets).not.toHaveProperty('notices');
-    expect(raw.datasets).not.toHaveProperty('dayMarks');
-    expect((await r.load()).notices).toEqual([]); // CURRENT behaviour, changes in D4: the note is gone everywhere
+    const d = readSnapshot(old.snapshotJson!)!.datasets;
+    expect(d.notices.map((n) => n.id)).toEqual(['n1']);
+    expect(Object.keys(d.dayMarks)).toEqual(['2026-09-15']);
+    expect(d.adjusts).toEqual({ E: 4 });
+    expect((await r.load()).adjusts).toEqual({}); // and the curve resets for the new term
+    expect(getState().adjusts).toEqual({});
   });
 
   it('start fresh: attendance goes with the schedule, and the toast does not mention it', async () => {

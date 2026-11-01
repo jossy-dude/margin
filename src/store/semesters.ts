@@ -148,7 +148,7 @@ export async function rollOverSemester(keepAttendance: boolean) {
   const active = st.semesters.find((x) => x.active);
   if (!active) return;
   try {
-    const snapshotJson = buildSnapshot(st.courses, st.meetings, st.attendance, st.marks, st.tasks, st.settings, st.variants);
+    const snapshotJson = buildSnapshot(st.courses, st.meetings, st.attendance, st.marks, st.tasks, st.settings, st.variants, { notices: st.notices, dayMarks: st.dayMarks, adjusts: st.adjusts, focus: st.focus });
     await R().saveSemester({ ...active, active: false, snapshotJson, archivedAt: new Date().toISOString() });
     await R().clearActiveSchedule(keepAttendance);
     const next = newSemester(getState().now);

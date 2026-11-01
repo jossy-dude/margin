@@ -1,4 +1,4 @@
-import type { AttRecord, Course, Mark, Meeting, SemesterRow, Settings, SubjectVariant, Task } from './types';
+import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, SubjectVariant, Task } from './types';
 import { newSemesterRange } from './semester';
 import { uid } from './time';
 
@@ -14,7 +14,9 @@ import { uid } from './time';
  * Everything here is pure: no store, no repository, no clock of its own. The caller builds the string
  * from rows it already has, and the history viewer reads it back with `readSnapshot`.
  */
-export const ARCHIVE_VERSION = 9;
+export const ARCHIVE_VERSION = 10;
+/** Envelopes this release can read: v9 (v0.5 before D4, without notes, day marks, curves and focus) and v10. */
+const READABLE = new Set([9, 10]);
 
 /** The datasets a term archives. The six the plan names (schedule, subjects + variants, attendance,
  *  grades, tasks, settings), with `variants` folded in beside `courses` because a variant's meaning
@@ -23,6 +25,9 @@ export interface ArchivedData {
   courses: Course[]; meetings: Meeting[]; variants: SubjectVariant[];
   attendance: Record<string, AttRecord>; marks: Mark[]; tasks: Task[];
   settings: Partial<Settings>;
+  /** v10 (D4): everything else the roll-over clears or resets, so a closed term is whole. A v9 archive
+   *  reads back with these empty — it never had them. */
+  notices: Notice[]; dayMarks: Record<string, DayMark>; adjusts: Record<string, number>; focus: FocusSession[];
 }
 export interface ArchiveEnvelope { v: number; datasets: ArchivedData }
 
@@ -37,8 +42,9 @@ export interface ArchiveEnvelope { v: number; datasets: ArchivedData }
 export function buildSnapshot(
   courses: Course[], meetings: Meeting[], attendance: Record<string, AttRecord>,
   marks: Mark[], tasks: Task[], settings: Partial<Settings>, variants: SubjectVariant[] = [],
+  rest: { notices?: Notice[]; dayMarks?: Record<string, DayMark>; adjusts?: Record<string, number>; focus?: FocusSession[] } = {},
 ): string {
-  const envelope: ArchiveEnvelope = { v: ARCHIVE_VERSION, datasets: { courses, meetings, variants, attendance, marks, tasks, settings } };
+  const envelope: ArchiveEnvelope = { v: ARCHIVE_VERSION, datasets: { courses, meetings, variants, attendance, marks, tasks, settings, notices: rest.notices ?? [], dayMarks: rest.dayMarks ?? {}, adjusts: rest.adjusts ?? {}, focus: rest.focus ?? [] } };
   return JSON.stringify(envelope);
 }
 
@@ -56,7 +62,7 @@ const isArr = (v: unknown): v is unknown[] => Array.isArray(v);
 export function readSnapshot(json: string): ArchiveEnvelope | null {
   let parsed: unknown;
   try { parsed = JSON.parse(json); } catch { return null; }
-  if (!isObj(parsed) || parsed.v !== ARCHIVE_VERSION || !isObj(parsed.datasets)) return null;
+  if (!isObj(parsed) || typeof parsed.v !== 'number' || !READABLE.has(parsed.v) || !isObj(parsed.datasets)) return null;
   const d = parsed.datasets;
   if (!isArr(d.courses) || !isArr(d.meetings) || !isArr(d.variants) || !isArr(d.marks) || !isArr(d.tasks) || !isObj(d.attendance) || !isObj(d.settings)) return null;
   return {
@@ -65,6 +71,8 @@ export function readSnapshot(json: string): ArchiveEnvelope | null {
       courses: d.courses as Course[], meetings: d.meetings as Meeting[], variants: d.variants as SubjectVariant[],
       attendance: d.attendance as Record<string, AttRecord>, marks: d.marks as Mark[], tasks: d.tasks as Task[],
       settings: d.settings as Partial<Settings>,
+      notices: isArr(d.notices) ? d.notices as Notice[] : [], dayMarks: isObj(d.dayMarks) ? d.dayMarks as Record<string, DayMark> : {},
+      adjusts: isObj(d.adjusts) ? d.adjusts as Record<string, number> : {}, focus: isArr(d.focus) ? d.focus as FocusSession[] : [],
     },
   };
 }

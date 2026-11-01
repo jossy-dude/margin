@@ -65,8 +65,8 @@ export interface Repository {
   listSemesters(): Promise<SemesterRow[]>;
   saveSemester(row: SemesterRow): Promise<void>;
   setActiveSemester(id: string): Promise<void>;
-  /** Clear the day-to-day schedule of the term that just ended: meetings, tasks, notices, day marks
-   *  and marks. Attendance is the user's choice — kept, it is the term's record; wiped, it goes with
+  /** Clear the day-to-day schedule of the term that just ended: meetings, tasks, notices, day marks,
+   *  marks and the grade curves (all of them archived in the term's snapshot first). Attendance is the user's choice — kept, it is the term's record; wiped, it goes with
    *  everything else. Subjects and their variants are never touched: they are what the next term
    *  inherits. */
   clearActiveSchedule(keepAttendance: boolean): Promise<void>;
