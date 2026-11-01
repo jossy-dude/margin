@@ -56,7 +56,7 @@ async function rebuildsAfter(delay: number) {
 }
 
 const mine = (id = 't-mine'): Task => ({ id, title: 'My essay', courseId: null, kind: 'assignment', dueAt: NOW + 86_400_000, startAt: null, estimateMin: 60, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false });
-const myCourse: Course = { id: 'c-mine', name: 'Latin', room: 'L1', teacher: 'Varro', goal: null, sort: 9, demo: false };
+const myCourse: Course = { id: 'c-mine', name: 'Latin', rooms: ['L1'], teacher: 'Varro', goal: null, sort: 9, demo: false };
 const myMeeting: Meeting = { id: 'm-mine', courseId: 'c-mine', weekday: 1, start: '11:00', end: '11:50', demo: false };
 const myNotice: Notice = { id: 'n-mine', courseId: null, text: 'Pay the fee', dueAt: NOW, priority: 1, demo: false };
 const myMark: Mark = { id: 'k-mine', courseId: 'c-mine', name: 'Oral', score: 88, weight: 20, on: true, sort: 0, demo: false };

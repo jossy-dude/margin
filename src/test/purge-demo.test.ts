@@ -58,7 +58,7 @@ describe('Remove all sample data takes the whole sample semester, and nothing el
     const { repo } = await seeded();
     /* One row per table, flagged the way a form save flags it (`demo: false`). If any create/edit
        path stopped clearing the flag, its row here would be deleted with the sample set. */
-    await repo.upsert('course', { id: 'mine-c', name: 'Real course', room: '', teacher: '', goal: null, sort: 9, demo: false });
+    await repo.upsert('course', { id: 'mine-c', name: 'Real course', rooms: [], teacher: '', goal: null, sort: 9, demo: false });
     await repo.upsert('meeting', { id: 'mine-m', courseId: 'mine-c', weekday: 0, start: '09:00', end: '09:50', demo: false });
     await repo.upsert('task', { id: 'mine-t', title: 'Real task', courseId: null, kind: 'assignment', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 2, createdAt: NOW, completedAt: NOW, reminders: [], subtasks: [], demo: false });
     await repo.upsert('notice', { id: 'mine-n', courseId: null, text: 'Bring it', dueAt: NOW, priority: 0, demo: false });

@@ -1,6 +1,7 @@
 import type { Snapshot } from '../domain/types';
 import { fmtTime, pad, ymd } from '../domain/time';
 import { effective, occurrencesBetween } from '../domain/attendance';
+import { roomOf, roomsLabel } from '../domain/rooms';
 import { total } from '../domain/grades';
 import { clampToSemester, inSemester, semesterFirstDay, semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
@@ -20,8 +21,8 @@ export function buildTables(s: Snapshot, now: number): Table[] {
   const first = semesterFirstDay(s.settings, now);
   const occ = occurrencesBetween(first, clampToSemester(now, s.settings), s.meetings).filter((o) => inSemester(o.date, s.settings));
   const tables: Table[] = [
-    { name: 'Courses', header: ['id', 'name', 'room', 'teacher', 'goal', 'total'], rows: s.courses.map((c) => [c.id, c.name, c.room, c.teacher, c.goal, total(s.marks.filter((m) => m.courseId === c.id), s.adjusts[c.id] ?? 0)]) },
-    { name: 'Timetable', header: ['course', 'weekday', 'start', 'end', 'room'], rows: s.meetings.map((m) => [cn(m.courseId), WD[m.weekday] ?? '', m.start, m.end, s.courses.find((c) => c.id === m.courseId)?.room ?? '']) },
+    { name: 'Courses', header: ['id', 'name', 'room', 'teacher', 'goal', 'total'], rows: s.courses.map((c) => [c.id, c.name, roomsLabel(c), c.teacher, c.goal, total(s.marks.filter((m) => m.courseId === c.id), s.adjusts[c.id] ?? 0)]) },
+    { name: 'Timetable', header: ['course', 'weekday', 'start', 'end', 'room'], rows: s.meetings.map((m) => [cn(m.courseId), WD[m.weekday] ?? '', m.start, m.end, roomOf(m, s.courses.find((c) => c.id === m.courseId), s.variants)]) },
     { name: 'Attendance', header: ['date', 'course', 'start', 'status', 'source'], rows: occ.map((o) => { const e = effective(o.date, o.meeting, s.attendance, s.dayMarks, now); const label = e.status ?? 'upcoming'; return [ymd(o.date), cn(o.meeting.courseId), o.meeting.start, label, e.explicit ? 'marked' : e.inferred ? 'inferred' : 'future']; }) },
     { name: 'Day marks', header: ['date', 'status', 'marked at', 'reason'], rows: Object.values(s.dayMarks).map((d) => [d.date, d.status, iso(d.at), d.reason]) },
     { name: 'Tasks', header: ['id', 'title', 'course', 'kind', 'due', 'start', 'estimate min', 'priority', 'status', 'created', 'completed', 'on time', 'notes'], rows: s.tasks.map((t) => [t.id, t.title, cn(t.courseId), t.kind, iso(t.dueAt), iso(t.startAt), t.estimateMin, t.priority, ['open', 'in progress', 'done'][t.status] ?? '', iso(t.createdAt), iso(t.completedAt), t.completedAt && t.dueAt ? t.completedAt <= t.dueAt : null, t.notes]) },

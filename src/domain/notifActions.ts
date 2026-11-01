@@ -1,6 +1,7 @@
 import type { AttStatus, Meeting, Task } from './types';
 import type { Planned } from './reminders';
 import { fmtTime } from './time';
+import { parseOccKey } from './attendance';
 
 /** Everything about "what does tapping this notification do", kept pure so it can be tested without the
  *  OS, the store or a phone. `services/notifications.ts` asks it what to attach when scheduling and what
@@ -58,7 +59,7 @@ export function resolveAction(actionId: string, data: NotifData): NotifAction | 
 
 export interface NotifEffects {
   tasks: readonly Pick<Task, 'id' | 'status' | 'title'>[];
-  meetings: readonly Pick<Meeting, 'start' | 'courseId'>[];
+  meetings: readonly Pick<Meeting, 'start' | 'courseId' | 'variantId'>[];
   setAtt: (key: string, status: AttStatus) => void;
   toggleTask: (id: string) => void;
   toast: (text: string) => void;
@@ -71,8 +72,8 @@ export interface NotifEffects {
  *  the button was aimed at is gone, because a notification outlives the row it was built from. */
 export function applyAction(a: NotifAction, fx: NotifEffects): boolean {
   if (a.kind === 'att') {
-    const [, start, courseId] = a.key.split('|');
-    if (!start || !courseId || !fx.meetings.some((m) => m.start === start && m.courseId === courseId)) { fx.toast('That class is no longer in your timetable'); return false; }
+    const k = parseOccKey(a.key);
+    if (!k || !fx.meetings.some((m) => m.start === k.start && m.courseId === k.courseId && (m.variantId ?? null) === k.variantId)) { fx.toast('That class is no longer in your timetable'); return false; }
     fx.setAtt(a.key, a.status); return true;
   }
   const t = fx.tasks.find((x) => x.id === a.taskId);

@@ -137,6 +137,7 @@ export async function adoptDemo(keepSamples: boolean) {
       courses: snap.courses.filter((x) => !x.demo), meetings: snap.meetings.filter((x) => !x.demo), tasks: snap.tasks.filter((x) => !x.demo),
       notices: snap.notices.filter((x) => !x.demo), marks: snap.marks.filter((x) => !x.demo), focus: snap.focus.filter((x) => !x.demo),
       attendance: snap.attendance, dayMarks: snap.dayMarks, adjusts: snap.adjusts, trips: snap.trips, alarms: snap.alarms, settings,
+      variants: (snap.variants ?? []).filter((v) => snap.courses.some((c) => c.id === v.subjectId && !c.demo)),
     });
   } catch (e) { failed = e; recordCrash(e, 'save', 'Tour'); }
   finally { db.repo = r; }

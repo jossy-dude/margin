@@ -16,6 +16,10 @@ export class MemoryRepository implements Repository {
   async upsert<K extends EntityName>(e: K, v: EntityMap[K]) { const id = pkOf(e, v); this.tab(e).set(id, { v: structuredClone(v), deleted: false }); this.log(e, id, 'put'); }
   async remove(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = true; this.log(e, id, 'del'); }
   async removeMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.remove(r.entity, r.id); }
+  async commit(b: { put: { entity: EntityName; value: unknown }[]; remove: { entity: EntityName; id: string }[] }) {
+    for (const r of b.remove) await this.remove(r.entity, r.id);
+    for (const p of b.put) await this.upsert(p.entity, p.value as never);
+  }
   async restoreMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.restore(r.entity, r.id); }
   async restore(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = false; this.log(e, id, 'restore'); }
   async putSettings(p: Partial<Settings>) { Object.assign(this.set, structuredClone(p)); }

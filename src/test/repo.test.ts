@@ -70,7 +70,7 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     const l = await r.load(); expect(l.settings.name).toBe('Sam'); expect(l.settings.soundOn).toBe(false); expect(l.settings.hapticsOn).toBe(true);
   });
   it('every mutation lands in the outbox in order, and ack drains it (sync-ready boundary)', async () => {
-    const r = await make(); await r.upsert('course', { id: 'X', name: 'X', room: '', teacher: '', goal: null, sort: 0, demo: false }); await r.remove('course', 'X'); await r.restore('course', 'X');
+    const r = await make(); await r.upsert('course', { id: 'X', name: 'X', rooms: [], teacher: '', goal: null, sort: 0, demo: false }); await r.remove('course', 'X'); await r.restore('course', 'X');
     const ob = await r.pendingOutbox(); expect(ob.map((o) => o.op)).toEqual(['put', 'del', 'restore']);
     await r.ackOutbox(ob[1]!.seq); expect((await r.pendingOutbox()).map((o) => o.op)).toEqual(['restore']);
   });
@@ -78,7 +78,7 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     const r = await make(); await r.seed(seedSnapshot(NOW));
     /* One row of each purgeable kind that the user created (`demo: false`, exactly what the forms
        write). The seed itself is now flagged whole, so after the purge these six are what remains. */
-    await r.upsert('course', { id: 'mine-c', name: 'Real course', room: '', teacher: '', goal: null, sort: 9, demo: false });
+    await r.upsert('course', { id: 'mine-c', name: 'Real course', rooms: [], teacher: '', goal: null, sort: 9, demo: false });
     await r.upsert('meeting', { id: 'mine-m', courseId: 'mine-c', weekday: 0, start: '09:00', end: '09:50', demo: false });
     await r.upsert('notice', { id: 'mine-n', courseId: null, text: 'Bring it', dueAt: NOW, priority: 0, demo: false });
     await r.upsert('mark', { id: 'mine-k', courseId: 'mine-c', name: 'Quiz', score: 80, weight: 10, on: true, sort: 0, demo: false });
@@ -106,7 +106,7 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     expect(await r.pendingOutbox()).toHaveLength(0);
     expect(await r.notifLog()).toHaveLength(0);
     /* the wipe must not break the database: a fresh copy keeps accepting writes */
-    await r.upsert('course', { id: 'new', name: 'n', room: '', teacher: '', goal: null, sort: 0, demo: false });
+    await r.upsert('course', { id: 'new', name: 'n', rooms: [], teacher: '', goal: null, sort: 0, demo: false });
     expect((await r.load()).courses.map((c) => c.id)).toEqual(['new']);
   });
   it('seeds attendance, day marks and adjustments (audit L3)', async () => {
@@ -150,7 +150,7 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
     const r = await make(); await r.seed(seedSnapshot(NOW));
     const before = await r.load();
     await r.importSnapshot({
-      courses: [{ id: 'imp-c', name: 'Imported', room: 'B1', teacher: '', goal: null, sort: 9, demo: false }],
+      courses: [{ id: 'imp-c', name: 'Imported', rooms: ['B1'], teacher: '', goal: null, sort: 9, demo: false }],
       meetings: [{ id: 'imp-m', courseId: 'imp-c', weekday: 1, start: '08:30', end: '10:00', demo: false }],
       tasks: [task('imp-t', { courseId: 'imp-c' })],
       attendance: { '2026-10-05|08:30|imp-c': { key: '2026-10-05|08:30|imp-c', status: 'a', at: NOW, reason: '' } },
@@ -180,7 +180,7 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
   it('importing the same snapshot twice produces no duplicate rows', async () => {
     const r = await make();
     const snap = {
-      courses: [{ id: 'imp-c', name: 'Imported', room: '', teacher: '', goal: null, sort: 0, demo: false }],
+      courses: [{ id: 'imp-c', name: 'Imported', rooms: [], teacher: '', goal: null, sort: 0, demo: false }],
       tasks: [task('imp-t', { courseId: 'imp-c' })],
       dayMarks: { '2026-10-06': { date: '2026-10-06', status: 'c' as const, at: NOW, reason: '' } },
     };
@@ -254,9 +254,9 @@ describe('repository transactions are serialised (audit C1)', () => {
  * repair. `IF NOT EXISTS` plus one transaction per migration is the fix; these are its three states.
  */
 describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
-  it('a fresh database reaches version 4 with the new tables, the focus columns and the demo columns', async () => {
+  it('a fresh database reaches the latest version with the new tables, the focus columns and the demo columns', async () => {
     const { sql, raw } = rawDb(); await new SqliteRepository(sql, () => NOW).init();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: MIGRATIONS.length }]);
     const cols = (t: string) => (raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name);
     expect(cols('trip')).toEqual(expect.arrayContaining(['id', 'started_at', 'ended_at', 'route', 'note']));
     expect(cols('alarm')).toEqual(expect.arrayContaining(['id', 'at', 'label', 'enabled', 'kind', 'task_id']));
@@ -265,14 +265,14 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     for (const t of ['course', 'meeting', 'notice', 'mark']) expect(cols(t)).toContain('demo');
   });
 
-  it('a v1 database keeps its rows, reaches version 4, and a second init is a no-op', async () => {
+  it('a v1 database keeps its rows, reaches the latest version, and a second init is a no-op', async () => {
     const { sql, raw } = rawDb();
     raw.exec(MIGRATIONS[0] as string); raw.exec('PRAGMA user_version = 1');
     raw.run(`INSERT INTO task(${TASK_COLS}) VALUES('t1','Old task',NULL,'other',NULL,NULL,NULL,0,'',0,?,NULL,'[]','[]',0)`, [NOW]);
     raw.run("INSERT INTO focus_session(id,task_id,course_id,started_at,ended_at,focus_sec,break_sec,over_sec,rounds,plan_min,demo) VALUES('f1',NULL,NULL,?,?,600,0,0,1,25,0)", [NOW, NOW + 600_000]);
 
     const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op…
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]); // …and neither throw
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: MIGRATIONS.length }]); // …and neither throw
     const l = await r.load();
     expect(l.tasks.map((t) => t.id)).toEqual(['t1']); // the old row survived the ALTER
     expect(l.focus[0]).toMatchObject({ id: 'f1', focusSec: 600, planMin: 25, mode: 'focus', completed: false });
@@ -293,7 +293,7 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     raw.run("INSERT INTO mark(id,course_id,name,score,weight,on_,sort) VALUES('k1','c1','Quiz',80,10,1,0)");
 
     const r = new SqliteRepository(sql, () => NOW); await r.init(); await r.init(); // the second is a no-op
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: MIGRATIONS.length }]);
     // the columns appear, and every pre-existing row defaults to 0 — "not sample"
     for (const t of ['course', 'meeting', 'notice', 'mark']) {
       expect((raw.all(`PRAGMA table_info(${t})`) as { name: string }[]).map((c) => c.name)).toContain('demo');
@@ -313,7 +313,7 @@ describe('migrations self-heal, and land the W5/W6 shapes (audit C2)', () => {
     raw.exec(MIGRATIONS[0] as string); // the v0 kill window: the tables exist…
     expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 0 }]); // …and the marker says otherwise
     await expect(new SqliteRepository(sql, () => NOW).init()).resolves.toBeUndefined();
-    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: 4 }]);
+    expect(raw.all('PRAGMA user_version')).toEqual([{ user_version: MIGRATIONS.length }]);
   });
 });
 
@@ -417,7 +417,7 @@ describe('data-layer reliability (F6)', () => {
 
   it('removeMany is one transaction: a failure part-way leaves every row in place', async () => {
     const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW, report); await r.init();
-    await r.upsert('course', { id: 'E', name: 'Chem', room: '', teacher: '', goal: null, sort: 0, demo: false });
+    await r.upsert('course', { id: 'E', name: 'Chem', rooms: [], teacher: '', goal: null, sort: 0, demo: false });
     await r.upsert('meeting', { id: 'm1', courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
     raw.exec("CREATE TRIGGER no_mark_delete BEFORE UPDATE OF deleted_at ON mark BEGIN SELECT RAISE(ABORT, 'disk refused'); END;");
     await r.upsert('mark', { id: 'k1', courseId: 'E', name: 'Quiz', score: 1, weight: 1, on: true, sort: 0, demo: false });

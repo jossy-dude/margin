@@ -3,7 +3,19 @@ import { addDays, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './
 
 export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late · stayed out', a: 'Absent', s: 'Sick', c: 'Cancelled', t: 'Teacher out' };
 export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
-export const occKey = (date: string, m: Pick<Meeting, 'start' | 'courseId'>) => `${date}|${m.start}|${m.courseId}`;
+/** One class occurrence's attendance key: `date|start|courseId`, plus `~variantId` for a meeting that
+ *  belongs to one of the subject's variants. The suffix keeps the lecture and the lab apart when both
+ *  sit in the same slot (two groups, one subject), and a meeting with no variant keeps the exact key
+ *  every record since v0.1 was written under — no stored attendance is rekeyed by this. */
+export const occKey = (date: string, m: Pick<Meeting, 'start' | 'courseId'> & { variantId?: string | null }) =>
+  `${date}|${m.start}|${m.courseId}${m.variantId ? `~${m.variantId}` : ''}`;
+/** The inverse of `occKey`, for the notification actions and the importers. `null` when the key is not one. */
+export function parseOccKey(key: string): { date: string; start: string; courseId: string; variantId: string | null } | null {
+  const [date, start, rest, extra] = key.split('|');
+  if (!date || !start || !rest || extra !== undefined) return null;
+  const at = rest.indexOf('~');
+  return at < 0 ? { date, start, courseId: rest, variantId: null } : { date, start, courseId: rest.slice(0, at), variantId: rest.slice(at + 1) || null };
+}
 
 /** The moment a class occurrence actually ends, as absolute ms.
  *

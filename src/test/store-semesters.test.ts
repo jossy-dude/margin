@@ -32,7 +32,7 @@ const row = (extra: Partial<SemesterRow> = {}): SemesterRow => ({
   id: 's1', name: 'Autumn 2026', start: '2026-09-07', end: '2026-12-20', active: true,
   snapshotJson: null, createdAt: '2026-09-01T10:00:00.000Z', archivedAt: null, ...extra,
 });
-const course: Course = { id: 'E', name: 'Organic Chemistry', room: 'B-12', teacher: 'Hale', goal: null, sort: 0, demo: false };
+const course: Course = { id: 'E', name: 'Organic Chemistry', rooms: ['B-12'], teacher: 'Hale', goal: null, sort: 0, demo: false };
 const variant: SubjectVariant = { id: 'v1', subjectId: 'E', name: 'Group B', room: 'B-14', teacher: 'Hale', note: '', ord: 0 };
 const ATT = '2026-09-14|09:00|E';
 

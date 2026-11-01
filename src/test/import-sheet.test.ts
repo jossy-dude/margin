@@ -79,7 +79,7 @@ const fs = jest.requireMock('expo-file-system') as { __state: { text: string } }
 const picker = jest.requireMock('expo-document-picker') as { __state: { result: unknown; asked?: Record<string, unknown> } };
 
 const NOW = new Date(2026, 9, 5, 8).getTime();
-const course = (id: string, name: string): Course => ({ id, name, room: '', teacher: '', goal: null, sort: 0, demo: false });
+const course = (id: string, name: string): Course => ({ id, name, rooms: [], teacher: '', goal: null, sort: 0, demo: false });
 
 const TERM = JSON.stringify({
   semester: { start: '2026-09-07', end: '2026-12-20' },

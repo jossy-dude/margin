@@ -1,6 +1,7 @@
-import type { AttRecord, Course, DayMark, Meeting, NotifSettings, Task } from './types';
+import type { AttRecord, Course, DayMark, Meeting, NotifSettings, SubjectVariant, Task } from './types';
 import { addDays, atTime, fmtDur, fmtTime, hm, startOfDay, weekdayOf, ymd, DAY_MS } from './time';
 import { effective, isCancelled, occEnd, occKey, occurrencesBetween } from './attendance';
+import { roomOf } from './rooms';
 
 export type PlannedKind = 'class' | 'ended' | 'task' | 'start' | 'exam';
 export interface Planned {
@@ -15,6 +16,8 @@ export interface PlanInput {
    *  clock). It is an argument rather than a read of the store so `domain/` keeps importing nothing but
    *  `domain/`; absent means the shipped 24-hour default, so every existing call site is unchanged. */
   hour12?: boolean;
+  /** The subject variants, so a lab's reminder names the lab's room. Absent = none. */
+  variants?: SubjectVariant[];
 }
 export interface Plan { items: Planned[]; deferred: number; dropped: { id: string; why: string }[] }
 
@@ -190,7 +193,7 @@ export function planReminders(i: PlanInput): Plan {
     // `key` is both the attendance record key and the notification's `entityId`: the Here/Late/Absent
     // button splits it on `|` and writes under it, so any other spelling marks nothing the grid reads.
     const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = occKey(ymd(o.date), o.meeting);
-    if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${course?.room ?? ''}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start, i.hour12)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
+    if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${roomOf(o.meeting, course, i.variants)}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start, i.hour12)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
     if (s.classEnded && !i.attendance[key]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
   }
   // tasks

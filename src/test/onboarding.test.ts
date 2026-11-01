@@ -424,7 +424,7 @@ describe('the two ways out of the tour', () => {
     await repo.seed(seedSnapshot(NOW));
     await hydrate(repo);
     expect(hasRealRows()).toBe(false);                                   // all of it is `demo: true`
-    set({ courses: [...getState().courses, { id: 'c-real', name: 'Mine', room: '', teacher: '', goal: null, sort: 99, demo: false }] });
+    set({ courses: [...getState().courses, { id: 'c-real', name: 'Mine', rooms: [], teacher: '', goal: null, sort: 99, demo: false }] });
     expect(hasRealRows()).toBe(true);                                    // an upgrading device is never offered it
     await act(async () => { await storeAct.purgeDemo(); });
     expect(hasRealRows()).toBe(true);                                    // the row the user made survived

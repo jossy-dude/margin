@@ -85,7 +85,7 @@ describe('the v0.5 migration (Review Focus 2)', () => {
     await r.init();
 
     // one bump, and the three storage objects the release adds
-    expect(version(raw)).toBe(4);
+    expect(version(raw)).toBe(MIGRATIONS.length);
     expect(cols(raw, 'semesters')).toEqual(['id', 'name', 'start', 'end', 'active', 'snapshot_json', 'created_at', 'archived_at']);
     expect(cols(raw, 'subject_variants')).toEqual(expect.arrayContaining(['id', 'subject_id', 'name', 'room', 'teacher', 'note', 'ord']));
     expect(cols(raw, 'meeting')).toContain('variant_id');
@@ -95,8 +95,8 @@ describe('the v0.5 migration (Review Focus 2)', () => {
       expect({ table, n: count(raw, table) }).toEqual({ table, n });
     }
     const l = await r.load();
-    expect(l.courses).toEqual([{ id: 'C1', name: 'Economics', room: 'B-12', teacher: 'Hale', goal: 85, sort: 0, demo: false }]);
-    expect(l.meetings[0]).toMatchObject({ id: 'M1', courseId: 'C1', weekday: 0, start: '08:30', end: '09:20', variantId: null });
+    expect(l.courses).toEqual([{ id: 'C1', name: 'Economics', rooms: ['B-12'], teacher: 'Hale', goal: 85, sort: 0, demo: false, bar: null }]);
+    expect(l.meetings[0]).toMatchObject({ id: 'M1', courseId: 'C1', weekday: 0, start: '08:30', end: '09:20', variantId: null, room: null });
     expect(l.tasks[0]).toMatchObject({ id: 'T1', title: 'Read chapter 1', priority: 1, notes: 'p. 20', reminders: [{ id: 'r1', mode: 'before', minutes: 60, label: '1 h before' }] });
     expect(l.marks[0]).toMatchObject({ id: 'K1', score: 18, on: true });
     expect(l.focus[0]).toMatchObject({ id: 'F1', mode: 'focus', completed: true, planMin: 25 });
@@ -117,7 +117,7 @@ describe('the v0.5 migration (Review Focus 2)', () => {
     const before = semesters(raw);
     await new SqliteRepository(sql, () => NOW).init();
 
-    expect(version(raw)).toBe(4);
+    expect(version(raw)).toBe(MIGRATIONS.length);
     expect(semesters(raw)).toEqual(before);
     expect(semesters(raw)).toHaveLength(1);
     for (const table of ['course', 'meeting', 'task', 'mark', 'attendance', 'day_mark', 'notice', 'adjust', 'focus_session', 'trip', 'alarm']) {
@@ -148,11 +148,11 @@ describe('the v0.5 migration (Review Focus 2)', () => {
     expect(row).toMatchObject({ start: '2026-09-07', end: '', active: 1 });
   });
 
-  it('a fresh database reaches version 4 and still has an active semester to show', async () => {
+  it('a fresh database reaches the latest version and still has an active semester to show', async () => {
     const { sql, raw } = rawDb();
     const r = new SqliteRepository(sql, () => NOW);
     await r.init();
-    expect(version(raw)).toBe(4);
+    expect(version(raw)).toBe(MIGRATIONS.length);
     const rows = semesters(raw);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ start: '2026-10-05', end: suggestEnd('2026-10-05'), active: 1 });
@@ -171,5 +171,77 @@ describe('the v0.5 migration (Review Focus 2)', () => {
     const [row] = semesters(raw);
     expect(row).toMatchObject({ name: expect.any(String), start: '2026-10-05', end: suggestEnd('2026-10-05'), active: 1 });
     expect(raw.all("SELECT v FROM setting WHERE k='semesterStart'")).toEqual([{ v: '{broken' }]);
+  });
+});
+
+/**
+ * Migration 5 (v0.5 D1) against the two databases that exist on real phones: a v0.1.0 file (the owner's
+ * phone — migrations 0–1, so no `demo` columns yet) and a v0.3.1 file (migrations 0–2). The claim is the
+ * same as above — every row survives, and gains exactly the new shape — plus the one data step: the old
+ * single `room` string is split into the `rooms` list on `,` `/` `;` `·`, so the owner's real
+ * "LR-601, LR-303" becomes two rooms and nothing else changes.
+ */
+describe('migration 5: rooms, a bar per subject, a room per class, variants on marks', () => {
+  function phone(upTo: 2 | 3) {
+    const db = rawDb();
+    for (const m of MIGRATIONS.slice(0, upTo)) db.raw.exec(m);
+    db.raw.exec(`PRAGMA user_version = ${upTo}`);
+    const demo = upTo === 3 ? ',demo' : '', d0 = upTo === 3 ? ',0' : '';
+    db.raw.run(`INSERT INTO course(id,name,room,teacher,goal,sort${demo},rev) VALUES('DB','Database','LR-601, LR-303','Abebe',80,0${d0},4)`);
+    db.raw.run(`INSERT INTO course(id,name,room,teacher,goal,sort${demo},rev) VALUES('DBL','Database LAB','Lab 2','Abebe',NULL,1${d0},1)`);
+    db.raw.run(`INSERT INTO course(id,name,room,teacher,goal,sort${demo},rev) VALUES('X','No room',NULL,'',NULL,2${d0},1)`);
+    db.raw.run(`INSERT INTO course(id,name,room,teacher,goal,sort${demo},rev) VALUES('Y','Odd rooms',' A1 / a1 ;B2 · ,','',NULL,3${d0},1)`);
+    db.raw.run(`INSERT INTO meeting(id,course_id,weekday,start_t,end_t${demo},rev) VALUES('M1','DB',1,'08:30','10:00'${d0},1)`);
+    db.raw.run(`INSERT INTO meeting(id,course_id,weekday,start_t,end_t${demo},rev) VALUES('M2','DBL',3,'14:00','16:00'${d0},1)`);
+    db.raw.run(`INSERT INTO mark(id,course_id,name,score,weight,on_,sort${demo},rev) VALUES('K1','DB','Midterm',27,30,1,0${d0},1)`);
+    db.raw.run("INSERT INTO attendance(\"key\",status,at,reason,rev) VALUES('2026-10-06|08:30|DB','p',?,'',1)", [NOW]);
+    db.raw.run("INSERT INTO task(id,title,course_id,kind,due_at,start_at,estimate_min,priority,notes,status,created_at,completed_at,reminders,subtasks,rev) VALUES('T1','ER diagram','DB','assignment',?,NULL,90,2,'',0,?,NULL,'[]','[{\"id\":\"s1\",\"t\":\"entities\",\"done\":true}]',1)", [NOW, NOW]);
+    db.raw.run("INSERT INTO setting(k,v) VALUES('name','\"Jossy\"')");
+    return db;
+  }
+
+  for (const upTo of [2, 3] as const) {
+    it(`a ${upTo === 2 ? 'v0.1.0' : 'v0.3.1'} database keeps every row and splits the old room string`, async () => {
+      const { sql, raw } = phone(upTo);
+      const r = new SqliteRepository(sql, () => NOW);
+      await r.init();
+      expect(version(raw)).toBe(MIGRATIONS.length);
+      expect(cols(raw, 'course')).toEqual(expect.arrayContaining(['room', 'rooms', 'bar']));
+      expect(cols(raw, 'meeting')).toEqual(expect.arrayContaining(['variant_id', 'room']));
+      expect(cols(raw, 'mark')).toContain('variant_id');
+
+      const l = await r.load();
+      expect(l.courses.map((c) => [c.id, c.rooms, c.bar])).toEqual([
+        ['DB', ['LR-601', 'LR-303'], null], ['DBL', ['Lab 2'], null], ['X', [], null], ['Y', ['A1', 'B2'], null],
+      ]);
+      expect(l.courses[0]).toMatchObject({ name: 'Database', teacher: 'Abebe', goal: 80, demo: false });
+      expect(l.meetings.map((m) => [m.id, m.courseId, m.variantId, m.room])).toEqual([['M1', 'DB', null, null], ['M2', 'DBL', null, null]]);
+      expect(l.marks).toEqual([{ id: 'K1', courseId: 'DB', name: 'Midterm', score: 27, weight: 30, on: true, sort: 0, demo: false, variantId: null }]);
+      expect(l.attendance['2026-10-06|08:30|DB']).toMatchObject({ status: 'p' });
+      expect(l.tasks[0]).toMatchObject({ id: 'T1', estimateMin: 90, subtasks: [{ id: 's1', t: 'entities', done: true }] });
+      expect(l.settings.name).toBe('Jossy');
+      // the legacy column keeps its bytes (old migrations are never edited, and a support copy can read it)
+      expect(raw.all("SELECT room FROM course WHERE id='DB'")).toEqual([{ room: 'LR-601, LR-303' }]);
+    });
+  }
+
+  it('the backfill runs once: a second open, or a rooms list edited since, is left alone', async () => {
+    const { sql, raw } = phone(3);
+    await new SqliteRepository(sql, () => NOW).init();
+    raw.run(`UPDATE course SET rooms='["LR-601"]' WHERE id='DB'`);
+    await new SqliteRepository(sql, () => NOW).init();
+    expect(raw.all("SELECT rooms FROM course WHERE id='DB'")).toEqual([{ rooms: '["LR-601"]' }]);
+  });
+
+  it('a kill inside migration 5 leaves the version at 4 and the next open completes it', async () => {
+    const { sql, raw } = phone(3);
+    let calls = 0;
+    const flaky: typeof sql = { ...sql, runAsync: async (q, p) => { if (/UPDATE course SET rooms/.test(q) && calls++ === 1) throw new Error('killed'); return sql.runAsync(q, p); } };
+    await expect(new SqliteRepository(flaky, () => NOW).init()).rejects.toThrow('killed');
+    expect(version(raw)).toBe(4);
+    expect(cols(raw, 'course')).not.toContain('rooms'); // the DDL rolled back with the data step
+    await new SqliteRepository(sql, () => NOW).init();
+    expect(version(raw)).toBe(MIGRATIONS.length);
+    expect((await new SqliteRepository(sql, () => NOW).load()).courses.find((c) => c.id === 'DB')?.rooms).toEqual(['LR-601', 'LR-303']);
   });
 });

@@ -34,10 +34,10 @@ const TUE_CLASSES: Period[] = [
   { start: at('13:15'), end: at('14:05'), label: 'Database Systems', cancelled: false },
 ];
 const COURSES: Course[] = [
-  { id: 'C', name: 'Computer Programming', room: 'C-4', teacher: 'Reyes', goal: null, sort: 0, demo: false },
-  { id: 'E', name: 'Intro to Economics', room: 'B-12', teacher: 'Hale', goal: null, sort: 1, demo: false },
-  { id: 'B', name: 'Database Systems', room: 'L-4', teacher: 'Nkemi', goal: null, sort: 2, demo: false },
-  { id: 'X', name: 'Personal Seminar', room: '', teacher: '', goal: null, sort: 3, demo: false },
+  { id: 'C', name: 'Computer Programming', rooms: ['C-4'], teacher: 'Reyes', goal: null, sort: 0, demo: false },
+  { id: 'E', name: 'Intro to Economics', rooms: ['B-12'], teacher: 'Hale', goal: null, sort: 1, demo: false },
+  { id: 'B', name: 'Database Systems', rooms: ['L-4'], teacher: 'Nkemi', goal: null, sort: 2, demo: false },
+  { id: 'X', name: 'Personal Seminar', rooms: [], teacher: '', goal: null, sort: 3, demo: false },
 ];
 
 /* ── the model of `deckOf` in src/screens/Today.tsx ───────────────────────────
@@ -70,7 +70,7 @@ function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false) {
 function afterOf(periods: Period[], courses: Course[], occ: Occurrence[], i: number) {
   const o = i >= 0 ? occ[i + 1] : undefined;
   const c = o ? courses.find((x) => x.id === o.meeting.courseId) : undefined;
-  return c ? [c.name, c.room.trim()].filter(Boolean).join(' · ')
+  return c ? [c.name, c.rooms[0]?.trim()].filter(Boolean).join(' · ')
     : i >= 0 ? 'last class of the day' : 'nothing scheduled';
 }
 

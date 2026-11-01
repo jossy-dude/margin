@@ -75,7 +75,7 @@ async function brokenStore(seed?: (r: MemoryRepository) => Promise<void>) {
 describe('a rejected entity write', () => {
   it.each<[string, (s: Store) => void, (s: Store) => boolean]>([
     ['saveTask', (s) => s.act.saveTask(task('t-new')), (s) => s.getState().tasks.some((t) => t.id === 't-new')],
-    ['saveCourse', (s) => s.act.saveCourse({ id: 'c-new', name: 'Latin', room: '', teacher: '', goal: null, sort: 1, demo: false }), (s) => s.getState().courses.some((c) => c.id === 'c-new')],
+    ['saveCourse', (s) => s.act.saveCourse({ id: 'c-new', name: 'Latin', rooms: [], teacher: '', goal: null, sort: 1, demo: false }), (s) => s.getState().courses.some((c) => c.id === 'c-new')],
     ['saveMark', (s) => s.act.saveMark({ id: 'k-new', courseId: 'E', name: 'Oral', score: 9, weight: 1, on: true, sort: 0, demo: false }), (s) => s.getState().marks.some((m) => m.id === 'k-new')],
     ['setAdjust', (s) => s.act.setAdjust('E', 5), (s) => s.getState().adjusts.E === 5],
     ['setSettings', (s) => s.act.setSettings({ name: 'Sam' }), (s) => s.getState().settings.name === 'Sam'],
@@ -106,7 +106,7 @@ describe('a rejected entity write', () => {
 
   it('a rejected removeCourse cascade brings the subject, its meetings and marks back, and the disk is whole', async () => {
     const { r, s } = await brokenStore(async (rr) => {
-      await rr.upsert('course', { id: 'E', name: 'Chem', room: '', teacher: '', goal: null, sort: 0, demo: false });
+      await rr.upsert('course', { id: 'E', name: 'Chem', rooms: [], teacher: '', goal: null, sort: 0, demo: false });
       await rr.upsert('meeting', { id: 'm1', courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
       await rr.upsert('mark', { id: 'k1', courseId: 'E', name: 'Quiz', score: 1, weight: 1, on: true, sort: 0, demo: false });
     });

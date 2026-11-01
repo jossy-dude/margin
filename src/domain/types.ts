@@ -6,7 +6,11 @@ export type TaskKind = 'assignment' | 'exam' | 'reading' | 'project' | 'lab' | '
  *  without touching the user's own data (Task and FocusSession already carry it). The rule: anything
  *  the user creates or edits is written with `demo: false` — you touched it, it's yours — and only
  *  `seed.ts` sets it to `true`. */
-export interface Course { id: string; name: string; room: string; teacher: string; goal: number | null; sort: number; demo: boolean }
+/** `rooms` (migration 5) replaced the single `room` string: a class is not always in the same room, so a
+ *  subject owns a list and each meeting picks one (`Meeting.room`, defaulting to the first). The legacy
+ *  string was split on `,` `/` `;` `·` when the column was added, so "LR-601, LR-303" became two chips.
+ *  `bar` is the subject's own progress instrument; `null` means "use the default in Settings". */
+export interface Course { id: string; name: string; rooms: string[]; teacher: string; goal: number | null; sort: number; demo: boolean; bar?: string | null }
 /** A subject's alternate identity — the same course under another room/teacher, for a timetable that
  *  differs per group (v0.5/WS8). It is a separate table rather than fields on `Course` because a
  *  subject may have several, and a meeting points at exactly one by `variantId`.
@@ -18,7 +22,9 @@ export interface SubjectVariant { id: string; subjectId: string; name: string; r
 /** `variantId` is nullable on purpose: every meeting written before v0.5 has none, and that is the
  *  meaning ("the subject's own room/teacher"). Optional in the type so existing fixtures that name a
  *  meeting without it keep compiling; the adapter binds it, so a reload reports the column's null. */
-export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean; variantId?: string | null }
+export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean; variantId?: string | null;
+  /** Which of the subject's rooms this class is in (migration 5). Empty/absent = the variant's room, else the subject's first. */
+  room?: string | null }
 export interface AttRecord { key: string; status: AttStatus; at: number; reason: string }
 export interface DayMark { date: string; status: DayStatus; at: number; reason: string }
 /** A reminder is either an absolute moment, or an offset before the due date. */
@@ -34,7 +40,9 @@ export interface Task {
   reminders: ReminderSpec[]; subtasks: Subtask[]; demo: boolean;
 }
 export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean }
-export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number; demo: boolean }
+/** `variantId` (migration 5): a mark earned in one of the subject's variants (the lab, say). It still
+ *  belongs to `courseId`, so the subject's average rolls every variant up; the id only splits the breakdown. */
+export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number; demo: boolean; variantId?: string | null }
 export interface Adjust { courseId: string; adj: number }
 /** A saved study session. `mode`/`completed` are the two columns DECISIONS D2 added to `focus_session`
  *  instead of forking a `study_sessions` table (W1's migration 2). Like `Alarm.kind` below, `mode` is a free

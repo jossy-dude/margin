@@ -18,6 +18,10 @@ export interface Repository {
    *  failure leaves all of them or none of them. */
   removeMany(rows: { entity: EntityName; id: string }[]): Promise<void>;
   restoreMany(rows: { entity: EntityName; id: string }[]): Promise<void>;
+  /** A compound edit — puts and tombstones together — in ONE transaction ("make this a variant of…",
+   *  deleting a variant with its classes). A put of a tombstoned row revives it, which is how an undo of
+   *  the same batch read backwards restores what the first one removed. */
+  commit(batch: { put: { entity: EntityName; value: unknown }[]; remove: { entity: EntityName; id: string }[] }): Promise<void>;
   putSettings(patch: Partial<Settings>): Promise<void>;
   /* ── the setting table as a KV (v0.5) ──────────────────────────────────────────────────────────
    * Not every stored fact is a user setting: the OTA loop's "this bundle was applied" marker is

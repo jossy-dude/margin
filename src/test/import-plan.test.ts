@@ -20,7 +20,7 @@ const BRIEF = `{
 
 const parse = (text: string, courses?: Course[]) => parseImport(text, { courses, now: NOW });
 const json = (v: unknown) => JSON.stringify(v);
-const course = (id: string, name: string): Course => ({ id, name, room: '', teacher: '', goal: null, sort: 0, demo: false });
+const course = (id: string, name: string): Course => ({ id, name, rooms: [], teacher: '', goal: null, sort: 0, demo: false });
 
 /** Every message the plan carries, joined: a readable failure is the parser's whole job. */
 const messages = (p: ReturnType<typeof parse>) => p.problems.map((x) => `${x.where} · ${x.field}: ${x.message}`);
@@ -46,7 +46,7 @@ describe('parseImport', () => {
 
     it('links the meeting, task and mark to the course by name, case-insensitively', () => {
       const c = plan.snapshot.courses![0]!;
-      expect(c).toMatchObject({ name: 'DB Systems', room: 'B12', teacher: 'Ms. X' });
+      expect(c).toMatchObject({ name: 'DB Systems', rooms: ['B12'], teacher: 'Ms. X' });
       expect(c.id).toMatch(/^imp-course-/);
       expect(plan.snapshot.meetings![0]).toMatchObject({ courseId: c.id, weekday: 1, start: '08:30', end: '10:00' });
       expect(plan.snapshot.tasks![0]!.courseId).toBe(c.id);
@@ -107,7 +107,7 @@ describe('parseImport', () => {
       }));
       expect(p.problems).toEqual([]);
       expect(p.counts).toEqual({ courses: 1, tasks: 1 });
-      expect(p.snapshot.courses![0]).toMatchObject({ name: 'maths', room: 'B2' });
+      expect(p.snapshot.courses![0]).toMatchObject({ name: 'maths', rooms: ['B2'] });
       expect(p.snapshot.tasks![0]!.notes).toBe('second');
       expect(p.warnings.some((w) => w.includes('courses[1]: the course "maths" is listed twice'))).toBe(true);
       expect(p.warnings.some((w) => w.includes('tasks[1]: this task is listed twice'))).toBe(true);
@@ -136,7 +136,7 @@ describe('parseImport', () => {
         tasks: [{ title: 'Essay', course: 'ECONOMICS' }],
         marks: [{ course: 'Economics', name: 'Quiz', score: 5, weight: 10 }],
       }), phone);
-      expect(p.snapshot.courses).toEqual([{ ...course('E', 'Economics'), name: 'economics', room: 'A1' }]); // an update of E, not a second row
+      expect(p.snapshot.courses).toEqual([{ ...course('E', 'Economics'), name: 'economics', rooms: ['A1'] }]); // an update of E, not a second row
       expect(p.snapshot.tasks![0]!.courseId).toBe('E');
       expect(p.snapshot.marks![0]!.courseId).toBe('E');
       expect(p.counts).toEqual({ courses: 1, tasks: 1, marks: 1 });
@@ -144,20 +144,20 @@ describe('parseImport', () => {
     });
 
     it('a second file\'s room and teacher overwrite the phone\'s subject, and nothing else moves', () => {
-      const phone = [{ ...course('E', 'Organic Chem'), room: 'S3', teacher: 'Dr Who', goal: 80, sort: 4 }];
-      const p = parse(json({ courses: [{ name: 'Organic Chem', room: 'S9', teacher: 'Deveraux' }] }), phone);
+      const phone = [{ ...course('E', 'Organic Chem'), rooms: ['S3'], teacher: 'Dr Who', goal: 80, sort: 4 }];
+      const p = parse(json({ courses: [{ name: 'Organic Chem', rooms: ['S9'], teacher: 'Deveraux' }] }), phone);
       expect(p.problems).toEqual([]);
-      expect(p.snapshot.courses).toEqual([{ id: 'E', name: 'Organic Chem', room: 'S9', teacher: 'Deveraux', goal: 80, sort: 4, demo: false }]);
+      expect(p.snapshot.courses).toEqual([{ id: 'E', name: 'Organic Chem', rooms: ['S9'], teacher: 'Deveraux', goal: 80, sort: 4, demo: false }]);
       expect(p.counts).toEqual({ courses: 1 });
       expect(p.breakdown.courses).toEqual({ write: 1, skip: 0, add: 0, update: 1 });
     });
 
     it('a compact field the row leaves out — or leaves empty — keeps the phone\'s value', () => {
-      const phone = [{ ...course('E', 'Organic Chem'), room: 'S3', teacher: 'Dr Who', goal: 80, sort: 4 }];
+      const phone = [{ ...course('E', 'Organic Chem'), rooms: ['S3'], teacher: 'Dr Who', goal: 80, sort: 4 }];
       const absent = parse(json({ courses: [{ name: 'Organic Chem', room: 'S9' }] }), phone);
-      expect(absent.snapshot.courses![0]).toMatchObject({ room: 'S9', teacher: 'Dr Who', goal: 80, sort: 4 });
-      const empty = parse(json({ courses: [{ name: 'Organic Chem', room: '', teacher: 'Deveraux' }] }), phone);
-      expect(empty.snapshot.courses![0]).toMatchObject({ room: 'S3', teacher: 'Deveraux' });
+      expect(absent.snapshot.courses![0]).toMatchObject({ rooms: ['S9'], teacher: 'Dr Who', goal: 80, sort: 4 });
+      const empty = parse(json({ courses: [{ name: 'Organic Chem', rooms: [], teacher: 'Deveraux' }] }), phone);
+      expect(empty.snapshot.courses![0]).toMatchObject({ rooms: ['S3'], teacher: 'Deveraux' });
     });
 
     it('a compact row that claims the phone subject\'s id merges too, and its new name resolves in-file', () => {
@@ -167,7 +167,7 @@ describe('parseImport', () => {
         tasks: [{ title: 'Sheet 1', course: 'Data Systems' }],
       }), phone);
       expect(p.problems).toEqual([]);
-      expect(p.snapshot.courses).toEqual([{ ...course('C1', 'DB Systems'), name: 'Data Systems', room: 'B12', goal: 70, sort: 2 }]);
+      expect(p.snapshot.courses).toEqual([{ ...course('C1', 'DB Systems'), name: 'Data Systems', rooms: ['B12'], goal: 70, sort: 2 }]);
       expect(p.snapshot.tasks![0]!.courseId).toBe('C1'); // the file's own new name still finds it
       expect(p.breakdown.courses).toEqual({ write: 1, skip: 0, add: 0, update: 1 });
     });
@@ -246,7 +246,7 @@ describe('parseImport', () => {
 
   describe('the app\'s own export (shape A)', () => {
     const raw = {
-      courses: [{ id: 'C1', name: 'Economics', room: 'A1', teacher: 'Mr T', goal: 80, sort: 0, demo: false }],
+      courses: [{ id: 'C1', name: 'Economics', rooms: ['A1'], teacher: 'Mr T', goal: 80, sort: 0, demo: false }],
       meetings: [{ id: 'M1', courseId: 'C1', weekday: 0, start: '08:30', end: '10:00', demo: false }],
       tasks: [{ id: 'T1', title: 'Essay', courseId: 'C1', kind: 'assignment', dueAt: 123, startAt: null, estimateMin: null, priority: 1, notes: '', status: 0, createdAt: 1, completedAt: null, reminders: [], subtasks: [], demo: false }],
       notices: [{ id: 'N1', courseId: 'C1', text: 'Bring the book', dueAt: 5, priority: 2, demo: false }],
@@ -298,19 +298,19 @@ describe('parseImport', () => {
        it omits (or blanks) instead of wiping them, and a complete export behaves exactly as before
        because it provides every field. */
     it('a sparse raw course keeps the fields it omits, and overwrites the ones it provides', () => {
-      const phone = [{ ...course('C1', 'Economics'), room: 'A1', teacher: 'Mr T', goal: 80, sort: 3 }];
+      const phone = [{ ...course('C1', 'Economics'), rooms: ['A1'], teacher: 'Mr T', goal: 80, sort: 3 }];
       const sparse = parse(json({ app: 'margin', raw: { courses: [{ id: 'C1', name: 'Economics' }] } }), phone);
       expect(sparse.problems).toEqual([]);
-      expect(sparse.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), room: 'A1', teacher: 'Mr T', goal: 80, sort: 3 }]);
+      expect(sparse.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), rooms: ['A1'], teacher: 'Mr T', goal: 80, sort: 3 }]);
       expect(sparse.breakdown.courses).toEqual({ write: 1, skip: 0, add: 0, update: 1 });
       const provided = parse(json({ app: 'margin', raw: { courses: [{ id: 'C1', name: 'Economics', room: 'B2', goal: 90, sort: 5 }] } }), phone);
-      expect(provided.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), room: 'B2', teacher: 'Mr T', goal: 90, sort: 5 }]);
+      expect(provided.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), rooms: ['B2'], teacher: 'Mr T', goal: 90, sort: 5 }]);
     });
 
     it('a raw course row that blanks a field keeps the phone\'s value, like every other door', () => {
-      const phone = [{ ...course('C1', 'Economics'), room: 'A1', teacher: 'Mr T', goal: 80, sort: 3 }];
-      const p = parse(json({ app: 'margin', raw: { courses: [{ id: 'C1', name: 'Economics', room: '', teacher: '' }] } }), phone);
-      expect(p.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), room: 'A1', teacher: 'Mr T', goal: 80, sort: 3 }]);
+      const phone = [{ ...course('C1', 'Economics'), rooms: ['A1'], teacher: 'Mr T', goal: 80, sort: 3 }];
+      const p = parse(json({ app: 'margin', raw: { courses: [{ id: 'C1', name: 'Economics', rooms: [], teacher: '' }] } }), phone);
+      expect(p.snapshot.courses).toEqual([{ ...course('C1', 'Economics'), rooms: ['A1'], teacher: 'Mr T', goal: 80, sort: 3 }]);
     });
 
     it('treats an object with raw but no app as an export, because the raw snapshot is the tell', () => {
@@ -563,7 +563,7 @@ describe('CSV planning', () => {
     const q = planCsv(t.header, t.rows, 'courses', { now: NOW });
     expect(q.problems).toEqual([]);
     expect(q.counts).toEqual({ courses: 2 });
-    expect(q.snapshot.courses!.map((c) => [c.name, c.room, c.teacher, c.goal])).toEqual([
+    expect(q.snapshot.courses!.map((c) => [c.name, c.rooms.join(' · '), c.teacher, c.goal])).toEqual([
       ['DB Systems', 'B12', 'Ms. X', 80],
       ['Maths', 'A1', 'Mr T', null],
     ]);
@@ -585,7 +585,7 @@ describe('CSV planning', () => {
     const q = planCsv(t.header, t.rows, 'courses', { courses: phone, now: NOW });
     expect(q.problems).toEqual([]);
     expect(q.snapshot.courses).toEqual([
-      { id: 'C1', name: 'DB Systems', room: 'B12', teacher: 'Ms. X', goal: 80, sort: 3, demo: false },
+      { id: 'C1', name: 'DB Systems', rooms: ['B12'], teacher: 'Ms. X', goal: 80, sort: 3, demo: false },
     ]);
   });
 
@@ -608,8 +608,8 @@ describe('CSV planning', () => {
     const t = parseCsv('name,room,teacher,goal\nHistory,C3,Mr H,65\nGeography,C4,,\n');
     const q = planCsv(t.header, t.rows, 'courses', { courses: [course('C1', 'DB Systems')], now: NOW });
     expect(q.snapshot.courses).toEqual([
-      { id: expect.stringMatching(/^imp-course-/), name: 'History', room: 'C3', teacher: 'Mr H', goal: 65, sort: 0, demo: false },
-      { id: expect.stringMatching(/^imp-course-/), name: 'Geography', room: 'C4', teacher: '', goal: null, sort: 1, demo: false },
+      { id: expect.stringMatching(/^imp-course-/), name: 'History', rooms: ['C3'], teacher: 'Mr H', goal: 65, sort: 0, demo: false, bar: null },
+      { id: expect.stringMatching(/^imp-course-/), name: 'Geography', rooms: ['C4'], teacher: '', goal: null, sort: 1, demo: false, bar: null },
     ]);
     expect(q.breakdown.courses).toEqual({ write: 2, skip: 0, add: 2, update: 0 });
   });

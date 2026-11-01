@@ -11,11 +11,12 @@ import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, nextWhen, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
+import { roomOf } from '../domain/rooms';
 import { effective, dayBlock, isCancelled, occEnd, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
 import { FS } from '../ui/fit';
-import type { Course } from '../domain/types';
+import type { Course, SubjectVariant } from '../domain/types';
 
 /* ── the command deck ─────────────────────────────────────────────────────
    `deck()` in the design of record (`marginalia-v10(1).html`, line 236),
@@ -220,8 +221,8 @@ function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
  * same off-screen gate the page applies to its own `useNow` — a hidden
  * screen must not tick fast — so off Today the card drops to the same 60 s the page uses.
  */
-export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, isToday, bar, w, live, hour12, headPad = 0 }: {
-  periods: Period[]; occ: Occurrence[]; courses: Course[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
+export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, variants, isToday, bar, w, live, hour12, headPad = 0 }: {
+  periods: Period[]; occ: Occurrence[]; courses: Course[]; variants?: SubjectVariant[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
   /** The user's 12/24-hour choice, for the non-today window the card prints. */
   hour12?: boolean;
   /** Extra left padding on the header row, for when the clock is taped over the card's top-left
@@ -237,8 +238,8 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
      class" and "after nothing" are different sentences. */
   const courseAt = (i: number) => { const o = i >= 0 ? occ[i] : undefined; return o ? courses.find((x) => x.id === o.meeting.courseId) ?? null : null; };
   const mine = courseAt(d.at), after = d.at >= 0 ? courseAt(d.at + 1) : null;
-  const room = mine?.room?.trim() ?? '';
-  const afterText = after ? [after.name, after.room.trim()].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
+  const room = roomOf(d.at >= 0 ? occ[d.at]?.meeting : null, mine, variants);
+  const afterText = after ? [after.name, roomOf(occ[d.at + 1]?.meeting, after, variants)].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
   /* The disc fills across the gap the card is actually in: from the previous non-cancelled class's end
      (or midnight when this is the first class), floored at a minute so a same-minute back-to-back swap
      can never divide by zero or render a backwards ring. */
@@ -328,8 +329,8 @@ export function TodayScreen() {
   /* Narrow selectors: each slice subscribes on its own, so toast/timer/sheet/plan writes no longer
      re-render this whole page — only the slices it actually reads. Settings are read field by field
      (`name`, `bar`); `clock` lives in `HeaderClock` above. `st` is rebuilt locally each render. */
-  const name = useStore((s) => s.settings.name), bar = useStore((s) => s.settings.bar), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
-  const st = { meetings, courses, attendance, dayMarks, tasks, notices };
+  const name = useStore((s) => s.settings.name), bar = useStore((s) => s.settings.bar), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
+  const st = { meetings, courses, variants, attendance, dayMarks, tasks, notices };
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
      so a store subscription here would re-render the whole of Today on every tap anywhere in the app —
      including the taps that have nothing to do with it. */
@@ -367,7 +368,7 @@ export function TodayScreen() {
               {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}
             </View>
           </View>
-          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X} />
+          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X} />
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -399,7 +400,7 @@ export function TodayScreen() {
             <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${spokenStatus(e)}. Opens attendance.`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}>
               <HandBox seed={key} stroke={live ? c.acc : c.ink} sw={live ? 2.4 : 1.6} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 12, opacity: isCancelled(e) ? 0.7 : 1 }}>
                 <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{range}</Txt></View>
-                <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[course?.room, course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
                 <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: e.inferred || !e.status ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
               </HandBox>
             </Pressable>);

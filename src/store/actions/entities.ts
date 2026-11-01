@@ -1,4 +1,5 @@
-import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, NotifSettings, Settings, Task } from '../../domain/types';
+import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, NotifSettings, Settings, SubjectVariant, Task } from '../../domain/types';
+import { batchOf, duplicateMeeting, emptyRows, makeVariantChange, pkOfRow, removeVariantChange, type Change, type RowSet } from '../../domain/variants';
 import type { EntityName } from '../../data/repository';
 import { ST } from '../../domain/attendance';
 import { uid } from '../../domain/time';
@@ -101,20 +102,66 @@ export function clearAtt(key: string) { unstamp('attendance', 'attendance', key,
 export function setDay(date: string, status: DayStatus, reason = '') { fx.stamp(status); stamp('dayMarks', 'dayMark', date, { date, status, at: Date.now(), reason }, `Marked ${ST[status]}`); }
 export function clearDay(date: string) { unstamp('dayMarks', 'dayMark', date, 'Day mark cleared'); }
 
-export function saveCourse(c: Course) { void saveRow('courses', 'course', c); resync(); }
-export function saveMeeting(m: Meeting) { void saveRow('meetings', 'meeting', m); resync(); }
-export function removeMeeting(id: string) { removeRow('meetings', 'meeting', id, 'Class removed from the timetable', true); }
-/** A subject goes with its meetings and marks, in ONE repository transaction (`removeMany`), so the disk
- *  never holds half a cascade; a refused write brings all of them back on screen. */
-export function removeCourse(id: string) {
-  const st = getState();
-  const c = st.courses.find((x) => x.id === id); if (!c) return; const ms = st.meetings.filter((m) => m.courseId === id), mk = st.marks.filter((m) => m.courseId === id);
-  const rows = [{ entity: 'course' as const, id }, ...ms.map((m) => ({ entity: 'meeting' as const, id: m.id })), ...mk.map((m) => ({ entity: 'mark' as const, id: m.id }))];
-  const drop = () => set((s) => ({ courses: s.courses.filter((x) => x.id !== id), meetings: s.meetings.filter((m) => m.courseId !== id), marks: s.marks.filter((m) => m.courseId !== id) }));
-  const back = () => set((s) => ({ courses: [...s.courses.filter((x) => x.id !== id), c].sort((a, b) => a.sort - b.sort), meetings: [...s.meetings.filter((m) => !ms.some((x) => x.id === m.id)), ...ms], marks: [...s.marks.filter((m) => !mk.some((x) => x.id === m.id)), ...mk] }));
-  void optimistic(drop, () => R().removeMany(rows), back);
+/* ── compound edits ──────────────────────────────────────────────────────────────────────────────
+ * A change is two row sets (`domain/variants.ts`): the screen swaps `before` for `after`, the repository
+ * writes the same swap in one transaction (`commit`), and a refused write — or the undo — swaps back. */
+const LIST: (keyof RowSet)[] = ['courses', 'meetings', 'marks', 'tasks', 'notices', 'focus', 'variants'];
+function swap(from: RowSet, to: RowSet) {
+  set((s) => {
+    const patch: Partial<State> = {};
+    for (const k of LIST) {
+      const gone = new Set([...(from[k] as unknown[]), ...(to[k] as unknown[])].map((r) => pkOfRow(k, r)));
+      const next = [...(s[k] as { id: string }[]).filter((r) => !gone.has(r.id)), ...(to[k] as { id: string }[])];
+      (patch as Record<string, unknown>)[k] = k === 'courses' ? (next as Course[]).sort((a, b) => a.sort - b.sort) : k === 'variants' ? (next as SubjectVariant[]).sort((a, b) => a.ord - b.ord) : next;
+    }
+    const att = { ...s.attendance };
+    for (const r of from.attendance) delete att[r.key];
+    for (const r of to.attendance) att[r.key] = r;
+    patch.attendance = att;
+    return patch;
+  });
+}
+function applyChange(c: Change, said: string) {
+  void optimistic(() => swap(c.before, c.after), () => R().commit(batchOf(c.before, c.after)), () => swap(c.after, c.before));
   resync();
-  toast(`${c.name} removed`, () => { void optimistic(back, () => R().restoreMany(rows), drop); resync(); });
+  toast(said, () => { void optimistic(() => swap(c.after, c.before), () => R().commit(batchOf(c.after, c.before)), () => swap(c.before, c.after)); resync(); });
+}
+
+export function saveCourse(c: Course) { void saveRow('courses', 'course', c); resync(); }
+/** Refuses (and says so) a class that would share its attendance key with one already in the timetable —
+ *  the same subject, variant, day and start — because the two could never be marked apart. */
+export function saveMeeting(m: Meeting): boolean {
+  if (duplicateMeeting(m, getState().meetings)) { toast('That class is already in the timetable at that time'); return false; }
+  void saveRow('meetings', 'meeting', m); resync(); return true;
+}
+export function saveVariant(v: SubjectVariant) {
+  const prev = getState().variants.find((x) => x.id === v.id) ?? null;
+  const before = emptyRows(), after = emptyRows();
+  if (prev) before.variants.push(prev);
+  after.variants.push(v);
+  void optimistic(() => swap(before, after), () => R().upsert('variant', v), () => swap(after, before));
+  resync();
+}
+export function removeVariant(id: string) {
+  const c = removeVariantChange(getState(), id); if (!c) return;
+  applyChange(c, `${c.before.variants[0]?.name ?? 'Variant'} removed`);
+}
+/** Subject `childId` becomes a variant of `parentId`, with everything it owned — one transaction, one undo. */
+export function makeVariantOf(childId: string, parentId: string) {
+  const st = getState(), c = makeVariantChange(st, childId, parentId, uid('v')); if (!c) return;
+  applyChange(c, `${st.courses.find((x) => x.id === childId)?.name ?? 'Subject'} is now part of ${st.courses.find((x) => x.id === parentId)?.name ?? 'the subject'}`);
+}
+export function removeMeeting(id: string) { removeRow('meetings', 'meeting', id, 'Class removed from the timetable', true); }
+/** A subject goes with its variants, meetings and marks, in ONE repository transaction, so the disk never
+ *  holds half a cascade; a refused write brings all of them back on screen, and the undo restores them all. */
+export function removeCourse(id: string) {
+  const st = getState(), c = st.courses.find((x) => x.id === id); if (!c) return;
+  const before = emptyRows();
+  before.courses.push(c);
+  before.variants.push(...st.variants.filter((v) => v.subjectId === id));
+  before.meetings.push(...st.meetings.filter((m) => m.courseId === id));
+  before.marks.push(...st.marks.filter((m) => m.courseId === id));
+  applyChange({ before, after: emptyRows() }, `${c.name} removed`);
 }
 export function saveMark(m: Mark) { void saveRow('marks', 'mark', m); }
 export function removeMark(id: string) { removeRow('marks', 'mark', id, 'Mark deleted', false); }
@@ -132,7 +179,7 @@ export const entityActions = {
   setSettings, setNotif,
   saveTask, toggleTask, toggleSubtask, removeTask,
   setAtt, clearAtt, setDay, clearDay,
-  saveCourse, saveMeeting, removeMeeting, removeCourse,
+  saveCourse, saveMeeting, removeMeeting, removeCourse, saveVariant, removeVariant, makeVariantOf,
   saveMark, removeMark, setAdjust, saveNotice, removeNotice,
   addSession,
 };

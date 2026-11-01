@@ -1,4 +1,5 @@
 import type { EntityName } from './repository';
+import { splitRooms } from '../domain/rooms';
 
 type Kind = 'text' | 'int' | 'real' | 'bool' | 'json';
 export interface Field { p: string; c: string; k: Kind; nullable?: boolean }
@@ -6,8 +7,10 @@ export interface Spec { table: string; pk: string; pkProp: string; fields: Field
 const f = (p: string, k: Kind, nullable = false, c?: string): Field => ({ p, k, nullable, c: c ?? p.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()) });
 
 export const SPECS: Record<EntityName, Spec> = {
-  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool')] },
-  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id')] },
+  /* Migration 5: `rooms` (a JSON list) replaces the bound `room` string, which stays in the table
+     unbound — an old migration is never edited, and the backfill below copied it into `rooms` first. */
+  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('rooms', 'json'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool'), f('bar', 'text', true)] },
+  meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id'), f('room', 'text', true)] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
   task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool')] },
@@ -15,7 +18,7 @@ export const SPECS: Record<EntityName, Spec> = {
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
   notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int'), f('demo', 'bool')] },
-  mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int'), f('demo', 'bool')] },
+  mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id')] },
   adjust: { table: 'adjust', pk: 'course_id', pkProp: 'courseId', fields: [f('courseId', 'text'), f('adj', 'real')] },
   /* `mode`/`completed` are bound here from W3 on: migration 2 (W1) added the columns, and until the finish
      path wrote them they were dead weight — a row loaded with the schema's own defaults and was exported
@@ -100,4 +103,26 @@ export const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS semesters(id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', start TEXT NOT NULL DEFAULT '', end TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 0, snapshot_json TEXT, created_at TEXT NOT NULL DEFAULT '', archived_at TEXT);
    CREATE TABLE IF NOT EXISTS subject_variants(id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', room TEXT NOT NULL DEFAULT '', teacher TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', ord INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, deleted_at INTEGER, rev INTEGER DEFAULT 0);
    ALTER TABLE meeting ADD COLUMN variant_id TEXT;`,
+  /* Migration 5 (v0.5 D1): a subject's rooms as a list and its own progress bar, the room a class is
+     in, and the variant a mark was earned in. Plain ALTERs only; the one data step (splitting the old
+     room string into the list) is `BACKFILL[4]`, which `init()` runs inside the same transaction as
+     this DDL and its `user_version`, so a kill leaves either the old file or the whole new one. */
+  `ALTER TABLE course ADD COLUMN rooms TEXT;
+   ALTER TABLE course ADD COLUMN bar TEXT;
+   ALTER TABLE meeting ADD COLUMN room TEXT;
+   ALTER TABLE mark ADD COLUMN variant_id TEXT;`,
 ];
+
+/** The slice of a database a backfill needs — the same two calls `SqlDb` has. */
+export interface BackfillDb {
+  runAsync(sql: string, params?: any[]): Promise<unknown>;
+  getAllAsync<T>(sql: string, params?: any[]): Promise<T[]>;
+}
+/** Data steps that follow a migration's DDL, by migration index. Each runs inside that migration's
+ *  transaction and must be safe on every row shape an older build could have written (NULL, '', junk). */
+export const BACKFILL: Partial<Record<number, (db: BackfillDb) => Promise<void>>> = {
+  4: async (db) => {
+    const rows = await db.getAllAsync<{ id: string; room: unknown }>('SELECT id, room FROM course WHERE rooms IS NULL');
+    for (const r of rows) await db.runAsync('UPDATE course SET rooms=? WHERE id=?', [JSON.stringify(splitRooms(r.room)), r.id]);
+  },
+};

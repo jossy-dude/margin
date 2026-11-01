@@ -19,7 +19,7 @@ const TT: [string, string, string][][] = [
  *  sample data, so "Remove all sample data" can take the whole semester back to an empty planner. */
 export function seedSnapshot(now = Date.now()): Snapshot {
   const mon = mondayOf(now), day = startOfDay(now);
-  const courses: Course[] = COURSES.map(([id, name, room, teacher], sort) => ({ id, name, room, teacher, goal: null, sort, demo: true }));
+  const courses: Course[] = COURSES.map(([id, name, room, teacher], sort) => ({ id, name, rooms: [room], teacher, goal: null, sort, demo: true }));
   const meetings: Meeting[] = TT.flatMap((pl, weekday) => pl.map(([start, end, courseId]) => ({ id: `m-${weekday}-${start}-${courseId}`, courseId, weekday, start, end, demo: true })));
   const rem = (id: string) => [{ id: `${id}-r`, mode: 'before' as const, minutes: 60, label: '1 h before' }];
   const mk = (n: number, title: string, c: string | null, d: number, du: string, status: 0 | 1 | 2, est: number | null, kind: Task['kind'] = 'assignment', notes = ''): Task => ({

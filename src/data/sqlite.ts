@@ -3,7 +3,7 @@ import { withDefaults } from '../domain/defaults';
 import { newSemester, semesterName } from '../domain/archive';
 import { isYmd } from '../domain/semester';
 import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository } from './repository';
-import { fromSql, MIGRATIONS, SPECS, toSql } from './specs';
+import { BACKFILL, fromSql, MIGRATIONS, SPECS, toSql } from './specs';
 
 /** The slice of expo-sqlite's SQLiteDatabase this adapter needs. A node:sqlite shim implements it for the contract test. */
 export interface SqlDb {
@@ -65,6 +65,7 @@ export class SqliteRepository implements Repository {
          (specs.ts) plus one transaction means such an install heals on the next boot instead. */
       await this.db.withTransactionAsync(async () => {
         await this.db.execAsync(MIGRATIONS[n] as string);
+        await BACKFILL[n]?.(this.db);
         await this.db.execAsync(`PRAGMA user_version = ${n + 1}`);
       });
     }
@@ -145,6 +146,12 @@ export class SqliteRepository implements Repository {
    *  (the subject gone, its marks still there) is exactly what a kill between separate writes left. */
   async removeMany(rows: { entity: EntityName; id: string }[]) {
     await this.ser(() => this.db.withTransactionAsync(async () => { for (const r of rows) await this.markDeleted(r.entity, r.id); }));
+  }
+  async commit(b: { put: { entity: EntityName; value: unknown }[]; remove: { entity: EntityName; id: string }[] }) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      for (const r of b.remove) await this.markDeleted(r.entity, r.id);
+      for (const p of b.put) await this.put(p.entity, p.value as never);
+    }));
   }
   async restoreMany(rows: { entity: EntityName; id: string }[]) {
     await this.ser(() => this.db.withTransactionAsync(async () => { for (const r of rows) await this.markRestored(r.entity, r.id); }));

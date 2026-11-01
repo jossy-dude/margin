@@ -88,6 +88,7 @@ describe('toasts', () => {
   });
 });
 
-it('snapshotOf carries the twelve persisted collections and the settings, nothing of the UI', () => {
-  expect(Object.keys(snapshotOf()).sort()).toEqual(['adjusts', 'alarms', 'attendance', 'courses', 'dayMarks', 'focus', 'marks', 'meetings', 'notices', 'settings', 'tasks', 'trips']);
+// v0.5 D1: `variants` joined — the brief's "export isn't a full backup" defect was snapshotOf leaving them out.
+it('snapshotOf carries the thirteen persisted collections and the settings, nothing of the UI', () => {
+  expect(Object.keys(snapshotOf()).sort()).toEqual(['adjusts', 'alarms', 'attendance', 'courses', 'dayMarks', 'focus', 'marks', 'meetings', 'notices', 'settings', 'tasks', 'trips', 'variants']);
 });

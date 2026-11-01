@@ -11,7 +11,7 @@ import { act, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE } from '../domain/attendance';
 import { DW, fmtDur, fmtWhen, fromMin, hm, uid, startOfDay } from '../domain/time';
 import { workload } from '../domain/reminders';
-import type { AttStatus, DayStatus, Mark, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
+import type { AttStatus, Course, DayStatus, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
 import { fx } from '../services/fx';
 
 const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'exam', l: 'Exam', i: 'exam' }, { k: 'deadline', l: 'Deadline', i: 'timer' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'other', l: 'Other', i: 'pencil' }];
@@ -174,25 +174,29 @@ export function CourseSheet({ id }: { id?: string }) {
   const c0 = useStore((s) => s.courses.find((x) => x.id === id)), count = useStore((s) => s.courses.length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => c0?.id ?? uid('c')), [submit] = useState(latch);
   const [name, setName] = useState(c0?.name ?? ''), [teacher, setTeacher] = useState(c0?.teacher ?? ''), [goal, setGoal] = useState(c0?.goal ?? 0);
   return (
-    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), room: c0?.room ?? '', teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false }); close(); })} /></Row>}>
+    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), rooms: c0?.rooms ?? [], teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false, bar: c0?.bar ?? null }); close(); })} /></Row>}>
       <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
       <Label>Grade goal</Label><Stepper label="goal" value={goal} min={0} max={100} fmt={(v) => (v ? `${v}%` : 'none')} onChange={setGoal} />
     </Sheet>
   );
 }
+/** The room a class form opens with: this class's own room, else the subject's first. */
+const seedRoom = (m0: Meeting | undefined, all: Course[], c: string | null) => (m0 && m0.courseId === c ? m0.room ?? '' : '') || all.find((x) => x.id === c)?.rooms[0] || '';
 export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?: string; weekday?: number }) {
   const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), all = useStore((s) => s.courses), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId ?? first ?? null), [wd, setWd] = useState(m0?.weekday ?? weekday ?? 0), [a, setA] = useState(hm(m0?.start ?? '09:00')), [b, setB] = useState(hm(m0?.end ?? '09:50'));
-  /* v0.2 — the room is asked here, when you schedule the class, not when you name the subject. It
-     stays bound to `course.room` (a subject has one room), so switching the subject re-seeds the
-     field from that subject's own room rather than carrying the last one typed. */
-  const [room, setRoom] = useState(all.find((x) => x.id === (m0?.courseId ?? courseId ?? first ?? null))?.room ?? ''), roomFor = useRef(cid);
-  useEffect(() => { if (roomFor.current !== cid) { roomFor.current = cid; setRoom(all.find((x) => x.id === cid)?.room ?? ''); } }, [cid, all]);
+  /* v0.2 — the room is asked here, when you schedule the class, not when you name the subject. Since
+     migration 5 a subject owns a LIST of rooms and each class names its own (`meeting.room`), so the
+     field seeds from this class's room, else the subject's first, and switching the subject re-seeds it
+     rather than carrying the last one typed. A room the subject does not list yet is added to its list. */
+  const [room, setRoom] = useState(() => seedRoom(m0, all, cid)), roomFor = useRef(cid);
+  useEffect(() => { if (roomFor.current !== cid) { roomFor.current = cid; setRoom(seedRoom(m0, all, cid)); } }, [cid, all, m0]);
   const bad = !cid || b <= a;
   const save = () => submit(() => {
-    act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b), demo: false });
-    const course = all.find((x) => x.id === cid);
-    if (course && course.room !== room.trim()) act.saveCourse({ ...course, room: room.trim() }); // the room belongs to the subject
+    const r = room.trim(), course = all.find((x) => x.id === cid);
+    const ok = act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b), demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null, room: r || null });
+    if (!ok) return;
+    if (course && r && !course.rooms.some((x) => x.toLocaleLowerCase() === r.toLocaleLowerCase())) act.saveCourse({ ...course, rooms: [...course.rooms, r], demo: false });
     close();
   });
   return (
@@ -210,7 +214,7 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
   const m0 = useStore((s) => s.marks.find((x) => x.id === id)), count = useStore((s) => s.marks.filter((m) => m.courseId === courseId).length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('k')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId), [name, setName] = useState(m0?.name ?? ''), [score, setScore] = useState(m0?.score ?? 70), [has, setHas] = useState(m0 ? m0.score !== null : true), [weight, setWeight] = useState(m0?.weight ?? 10), [on, setOn] = useState(m0?.on ?? true);
   return (
-    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false }; act.saveMark(mk); close(); })} /></Row>}>
+    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null }; act.saveMark(mk); close(); })} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={(v) => v && setCid(v)} none={null} />
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />

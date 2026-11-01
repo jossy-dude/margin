@@ -65,7 +65,7 @@ const ops = async (r: MemoryRepository) => (await r.pendingOutbox()).map((o) => 
 const undo = () => { const u = getState().toast?.undo; expect(typeof u).toBe('function'); u!(); };
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({ id, title: 'Problem set 6', courseId: null, kind: 'assignment', dueAt: NOW + 86_400_000, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false, ...extra });
-const course = (id: string, extra: Partial<Course> = {}): Course => ({ id, name: 'Organic Chemistry', room: 'B-12', teacher: 'Hale', goal: null, sort: 0, demo: false, ...extra });
+const course = (id: string, extra: Partial<Course> = {}): Course => ({ id, name: 'Organic Chemistry', rooms: ['B-12'], teacher: 'Hale', goal: null, sort: 0, demo: false, ...extra });
 const meeting = (id: string, courseId: string, extra: Partial<Meeting> = {}): Meeting => ({ id, courseId, weekday: 0, start: '09:00', end: '09:50', demo: false, ...extra });
 const mark = (id: string, courseId: string, extra: Partial<Mark> = {}): Mark => ({ id, courseId, name: 'Quiz 3', score: 70, weight: 10, on: true, sort: 0, demo: false, ...extra });
 const notice = (id: string, extra: Partial<Notice> = {}): Notice => ({ id, courseId: null, text: 'Bring the sources', dueAt: NOW, priority: 0, demo: false, ...extra });
@@ -259,10 +259,10 @@ describe('courses and meetings', () => {
     const repo = await store();
     act.saveCourse(course('E'));
     act.saveCourse(course('M', { name: 'Maths', sort: 1 }));
-    act.saveCourse(course('E', { room: 'C-3' }));
-    expect(getState().courses.map((c) => [c.id, c.room])).toEqual([['E', 'C-3'], ['M', 'B-12']]);
+    act.saveCourse(course('E', { rooms: ['C-3'] }));
+    expect(getState().courses.map((c) => [c.id, c.rooms[0]])).toEqual([['E', 'C-3'], ['M', 'B-12']]);
     await flush();
-    expect((await repo.load()).courses.map((c) => [c.id, c.room])).toEqual([['E', 'C-3'], ['M', 'B-12']]);
+    expect((await repo.load()).courses.map((c) => [c.id, c.rooms[0]])).toEqual([['E', 'C-3'], ['M', 'B-12']]);
     expect(getState().toast).toBeNull();
     await rebuildsAfter(700);
   });
@@ -359,7 +359,10 @@ describe('removeCourse cascades, and its undo reverses the cascade', () => {
     expect(l.courses.map((c) => c.id)).toEqual(['E', 'M', 'P']);
     expect(l.meetings.map((m) => m.id).sort()).toEqual(['mE1', 'mE2', 'mM1']);
     expect(l.marks.map((m) => m.id).sort()).toEqual(['kE1', 'kM1']);
-    expect((await ops(repo)).filter((o) => o.endsWith(':restore'))).toEqual(['course:E:restore', 'meeting:mE1:restore', 'meeting:mE2:restore', 'mark:kE1:restore']);
+    /* v0.5 D1: the cascade is now one compound change (`domain/variants.ts`) whose undo is the same batch
+       read backwards, so the rows come back as `put`s of their exact before-values (which also revive the
+       tombstones) rather than as `restore`s. What a sync sees is the same row content either way. */
+    expect((await ops(repo)).slice(-4)).toEqual(['course:E:put', 'meeting:mE1:put', 'meeting:mE2:put', 'mark:kE1:put']);
     await rebuildsAfter(700);
   });
 

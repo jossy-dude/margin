@@ -2,6 +2,7 @@ import type {
   AttRecord, AttStatus, Course, DayMark, DayStatus, Mark, Meeting, Notice, Settings, Snapshot, SubjectVariant, Task, TaskKind,
 } from './types';
 import { ST, occKey } from './attendance';
+import { splitRooms } from './rooms';
 import { parseCsv } from './csv';
 import { fromMin, hm } from './time';
 import { isYmd, validRange } from './semester';
@@ -96,6 +97,9 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 const int = (v: unknown, dflt: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : dflt);
 const bool = (v: unknown, dflt: boolean): boolean => (typeof v === 'boolean' ? v : dflt);
 const nonEmpty = (v: unknown): string | null => { const s = str(v)?.trim(); return s ? s : null; };
+/** A subject's rooms from a file row: `rooms` (a list or a string) wins, else the legacy `room` string,
+ *  split the way migration 5 split it. `null` = the row names no room (so a merge keeps the phone's). */
+const roomsIn = (row: Rec): string[] | null => { const r = splitRooms(row.rooms ?? row.room); return r.length ? r : null; };
 
 /** The statuses a day mark can hold, and the words the app prints for them (`ST`). The brief's prose
  *  says "(`cancelled`, `holiday`, …)"; `domain/types.ts` has no `holiday` — it is a *reason* on a
@@ -278,7 +282,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of courseRows.entries()) {
       const at = `courses[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['id', 'name', 'room', 'teacher', 'goal', 'sort', 'demo'], at);
+      unknownKeys(row, ['id', 'name', 'room', 'rooms', 'teacher', 'goal', 'sort', 'demo', 'bar'], at);
       const name = nonEmpty(row.name);
       if (!name) { problem(at, 'name', 'A course needs a name.'); continue; }
       const id = nonEmpty(row.id) ?? derived('course', name.toLowerCase());
@@ -290,12 +294,12 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
       courses.set(id, phoneRow ? {
         ...phoneRow,
         name,
-        room: nonEmpty(row.room) ?? phoneRow.room,
+        rooms: roomsIn(row) ?? phoneRow.rooms,
         teacher: nonEmpty(row.teacher) ?? phoneRow.teacher,
         goal: num(row.goal) ?? phoneRow.goal,
         sort: num(row.sort) === null ? phoneRow.sort : int(row.sort, i),
         demo: typeof row.demo === 'boolean' ? row.demo : phoneRow.demo,
-      } : { id, name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '', goal: num(row.goal), sort: int(row.sort, i), demo: bool(row.demo, false) });
+      } : { id, name, rooms: roomsIn(row) ?? [], teacher: str(row.teacher) ?? '', goal: num(row.goal), sort: int(row.sort, i), demo: bool(row.demo, false), bar: str(row.bar) });
     }
 
     const meetingRows = asRows(raw.meetings, 'meetings');
@@ -456,19 +460,19 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
           courses.set(existing, {
             ...phoneRow,
             name,
-            room: nonEmpty(row.room) ?? phoneRow.room,
+            rooms: roomsIn(row) ?? phoneRow.rooms,
             teacher: nonEmpty(row.teacher) ?? phoneRow.teacher,
           });
         } else {
           /* A duplicate named in this file only (the phone was not handed in): the later row wins,
              exactly as it always has. */
-          courses.set(existing, { ...(courses.get(existing) as Course), name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '' });
+          courses.set(existing, { ...(courses.get(existing) as Course), name, rooms: roomsIn(row) ?? [], teacher: str(row.teacher) ?? '' });
         }
         byName.set(key, existing); /* a row that renames the subject by id keeps its own name resolvable */
         return existing;
       }
       const id = rowId ?? derived('course', key);
-      courses.set(id, { id, name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '', goal: null, sort: courses.size, demo: false });
+      courses.set(id, { id, name, rooms: roomsIn(row) ?? [], teacher: str(row.teacher) ?? '', goal: null, sort: courses.size, demo: false, bar: null });
       byName.set(key, id);
       return id;
     };
@@ -478,7 +482,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of compactCourses.entries()) {
       const at = `courses[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['id', 'name', 'room', 'teacher', 'meetings', 'variants'], at);
+      unknownKeys(row, ['id', 'name', 'room', 'rooms', 'teacher', 'meetings', 'variants'], at);
       const courseId = courseOf(row, at);
       if (!courseId) continue;
       const variantList = asRows(row.variants, `${at}.variants`);
@@ -856,12 +860,12 @@ export function planCsv(
         out.set(id, phoneRow ? {
           ...phoneRow,
           name,
-          room: col(row, 'room') || phoneRow.room,
+          rooms: col(row, 'room') ? splitRooms(col(row, 'room')) : phoneRow.rooms,
           teacher: col(row, 'teacher') || phoneRow.teacher,
           goal: numberOf(col(row, 'goal'), warnings, at, 'goal') ?? phoneRow.goal,
         } : {
-          id, name, room: col(row, 'room'), teacher: col(row, 'teacher'),
-          goal: numberOf(col(row, 'goal'), warnings, at, 'goal'), sort: i, demo: false,
+          id, name, rooms: splitRooms(col(row, 'room')), teacher: col(row, 'teacher'),
+          goal: numberOf(col(row, 'goal'), warnings, at, 'goal'), sort: i, demo: false, bar: null,
         });
       });
       if (out.size) { snapshot.courses = [...out.values()]; counts.courses = out.size; }
