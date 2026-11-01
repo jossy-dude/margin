@@ -34,7 +34,6 @@ function rawDb(): { sql: SqlDb; raw: { exec(s: string): void; all(s: string, p?:
   };
 }
 
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
 const NOW = new Date(2026, 9, 5, 8).getTime(); // 2026-10-05, a Monday, 08:00 local
 
 const cols = (raw: ReturnType<typeof rawDb>['raw'], table: string) =>

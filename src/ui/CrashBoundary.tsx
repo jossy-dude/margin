@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Btn, HandBox, Icon, Tape, Txt } from './kit';
 import { PaperBg } from './PaperBg';
 import { useTheme } from './theme-context';
-import { crashCount, recordCrash, type CrashEntry } from './crashlog';
+import { crashCount, recordCrash, type CrashEntry } from '../services/problems';
 
 /**
  * The recovery screen, in the app's own language: paper, a taped hand-cut card, the same buttons as everywhere

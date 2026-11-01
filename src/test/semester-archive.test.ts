@@ -24,7 +24,6 @@ import { ARCHIVE_VERSION, buildSnapshot, newSemester, readSnapshot } from '../do
 import { activeSemester, daysLeft, suggestEnd } from '../domain/semester';
 import type { Mark, SemesterRow, SubjectVariant } from '../domain/types';
 
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
 const NOW = new Date(2026, 9, 5, 8).getTime(); // 2026-10-05
 
 /** The same node:sqlite shim the repository contract test uses. */

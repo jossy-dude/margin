@@ -10,11 +10,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MemoryRepository } from '../data/memory';
 import { act as storeAct, getState, hydrate, stopResync } from '../store/store';
+import { openRepository } from '../store/openRepository';
 import type { Task } from '../domain/types';
 
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
-const recordCrash = (jest.requireMock('../ui/crashlog') as { recordCrash: jest.Mock }).recordCrash;
-jest.mock('../data/sqliteExpo', () => ({ openRepository: async () => { throw new Error('the database is not used in this test'); } }));
+jest.mock('../services/problems', () => ({ recordCrash: jest.fn(() => null) }));
+const recordCrash = (jest.requireMock('../services/problems') as { recordCrash: jest.Mock }).recordCrash;
+/** The adapter records the ports it was opened with, so the wiring in `store/openRepository.ts` can be
+ *  asserted by what those ports DO, not by reading the file. */
+const mockAdapterDeps: { report: (e: unknown, phase: 'data', where: string) => void; beforeMigration: unknown }[] = [];
+jest.mock('../data/sqliteExpo', () => ({ openRepository: async (deps: never) => { mockAdapterDeps.push(deps); throw new Error('the database is not used in this test'); } }));
+jest.mock('../services/safety', () => ({ dumpBeforeMigration: jest.fn(async () => null) }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
 /** What the phone's notification module answers. The mutable object is reached from inside the
  *  factory's own functions, which run long after this module body has been evaluated. */
@@ -66,11 +71,26 @@ describe('a failed write is still there tomorrow (W1/C · audit H1)', () => {
   });
 
   it('both bookkeeping arms report; the old silent `.catch(() => undefined)` is gone', () => {
-    const src = readFileSync(join(__dirname, '..', 'store', 'store.ts'), 'utf8');
+    /* F4 split `store.ts` into modules behind a barrel, so this reads the whole store directory. It stays
+       a source check (with the two behaviour tests above covering `persist` and `schedNotif`) because the
+       other two arms — `logNotif` and the OTA marker — only fail on a device's notification callback or a
+       post-update reload, which this suite cannot drive. */
+    const dir = join(__dirname, '..', 'store');
+    const src = ['persist.ts', 'reminders.ts', 'ota.ts'].map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
     // persist + logNotif + schedNotif + the OTA update marker's write (v0.5 WS4). The last one is a
     // fourth write that must not vanish: a marker that fails to save means the post-reload sentence is
     // never shown, and the Problems log is the only place that can say why.
-    expect(src.match(/recordCrash\(e, 'save', state\.route\)/g)).toHaveLength(4);
+    expect(src.match(/recordCrash\(e, 'save', getState\(\)\.route\)/g)).toHaveLength(4);
     expect(src).not.toContain('.catch(() => undefined)');
+  });
+});
+
+describe('the device repository reports into the Problems log (F2)', () => {
+  it('a row the adapter skips lands in the log as a data problem, and the safety copy is the real one', async () => {
+    await expect(openRepository()).rejects.toThrow('not used in this test');
+    const deps = mockAdapterDeps.at(-1)!;
+    deps.report(new Error('task row skipped: bad JSON'), 'data', 'task');
+    expect(recordCrash).toHaveBeenCalledWith(expect.objectContaining({ message: 'task row skipped: bad JSON' }), 'data', 'task');
+    expect(deps.beforeMigration).toBe((jest.requireMock('../services/safety') as { dumpBeforeMigration: unknown }).dumpBeforeMigration);
   });
 });

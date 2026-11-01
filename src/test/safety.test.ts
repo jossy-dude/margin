@@ -45,11 +45,11 @@ jest.mock('expo-sharing', () => {
     shareAsync: async (uri: string, opts: unknown) => { state.calls.push({ uri, opts }); },
   };
 });
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
+jest.mock('../services/problems', () => ({ recordCrash: jest.fn(() => null) }));
 
 const fs = (jest.requireMock('expo-file-system') as { __state: FsState }).__state;
 const sharing = (jest.requireMock('expo-sharing') as { __state: { available: boolean; calls: { uri: string; opts: unknown }[] } }).__state;
-const recordCrash = (jest.requireMock('../ui/crashlog') as { recordCrash: jest.Mock }).recordCrash;
+const recordCrash = (jest.requireMock('../services/problems') as { recordCrash: jest.Mock }).recordCrash;
 
 const DIR = 'doc/marginalia/backups';
 const at = (y: number, m: number, d: number, h = 0, min = 0, s = 0) => new Date(y, m - 1, d, h, min, s).getTime();

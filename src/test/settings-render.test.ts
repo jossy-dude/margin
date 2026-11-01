@@ -22,7 +22,7 @@ import { APP_VERSION } from '../domain/version';
 import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
 import { AboutPage, SUPPORT_URL } from '../sheets/AboutPage';
-import { clearCrashes, recordCrash, type CrashEntry } from '../ui/crashlog';
+import { clearCrashes, recordCrash, type CrashEntry } from '../services/problems';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
@@ -82,11 +82,11 @@ jest.mock('react-native-reanimated', () => {
 });
 
 /** Counts every read of the crash log, so a test can assert how often the file is opened. The mock
- *  sits on `crashlog`'s own dependency (`expo-file-system`), so it counts real reads, not calls to a
+ *  sits on `services/problems`'s own dependency (`expo-file-system`), so it counts real reads, not calls to a
  *  seam we chose. `textSync` is the blocking read the finding is about.
  *
  *  The state lives inside the factory and is reached through `__state`: a `jest.mock` factory is
- *  hoisted above the module body, so it cannot close over anything declared here. (`crashlog` caches
+ *  hoisted above the module body, so it cannot close over anything declared here. (`services/problems` caches
  *  its parse, so a test wanting a clean slate goes through the app's own `clearCrashes()`.) */
 jest.mock('expo-file-system', () => {
   const state = { reads: 0, exists: true, entries: [] as string[] };

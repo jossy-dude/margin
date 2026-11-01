@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { pad, ymd } from '../domain/time';
-import { recordCrash } from '../ui/crashlog';
+import { recordCrash } from './problems';
 
 /**
  * Pre-migration safety copies.

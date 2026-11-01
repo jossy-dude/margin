@@ -5,7 +5,7 @@ import { Label } from '../ui/Sheet';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
 import { getState, toast } from '../store/store';
-import { appVersion, clearCrashes, formatAllCrashes, formatCrash, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../ui/crashlog';
+import { appVersion, clearCrashes, formatAllCrashes, formatCrash, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../services/problems';
 
 /** Clipboard from react-native core. It is marked `@deprecated` (and logs one `warnOnce` the first time it is
  *  touched) but it is still a real native module in RN 0.86, and it is the only copy-to-clipboard available

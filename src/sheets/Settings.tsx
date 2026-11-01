@@ -24,7 +24,7 @@ import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { runExport, type ExportFormat, type ExportTarget } from '../services/exportFile';
 import { safetyInfo, shareNewestSafetyCopy, type SafetyInfo } from '../services/safety';
-import { crashCount, subscribeCrashes } from '../ui/crashlog';
+import { crashCount, subscribeCrashes } from '../services/problems';
 import { DiagnosticsPage } from './Diagnostics';
 import { ImportPage } from './Import';
 import { SemestersPage } from './Semesters';

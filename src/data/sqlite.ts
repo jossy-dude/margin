@@ -2,7 +2,6 @@ import type { SemesterRow, Settings, Snapshot } from '../domain/types';
 import { withDefaults } from '../domain/defaults';
 import { newSemester, semesterName } from '../domain/archive';
 import { isYmd } from '../domain/semester';
-import { recordCrash } from '../ui/crashlog';
 import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository } from './repository';
 import { fromSql, MIGRATIONS, SPECS, toSql } from './specs';
 
@@ -17,11 +16,19 @@ export interface SqlDb {
    *  node:sqlite shim omits it and keeps the DELETE-all fallback. */
   closeAndDelete?(): Promise<void>;
 }
+/**
+ * Where the adapter reports a stored value it skipped because it could not read it back (audits H2/H3).
+ * The data layer does not decide where problems go — `src/data` imports nothing above it (depcruise
+ * `data-not-up`) — so the caller hands one in: on the device that is the Problems log, wired in
+ * `store/openRepository.ts`. Called from inside `load()`, so it must not throw. The default drops the
+ * report, which is what a test that is not asserting on it wants.
+ */
+export type ReportProblem = (e: unknown, phase: 'data', where: string) => void;
 const q = (c: string) => `"${c}"`;
 const ENTITIES = Object.keys(SPECS) as EntityName[];
 
 export class SqliteRepository implements Repository {
-  constructor(private db: SqlDb, private clock: () => number = Date.now) {}
+  constructor(private db: SqlDb, private clock: () => number = Date.now, private report: ReportProblem = () => undefined) {}
 
   /* ── one transaction at a time ─────────────────────────────────────────────────────────────────
    * `expo-sqlite`'s `withTransactionAsync` is explicitly not exclusive (its own doc comment says so)
@@ -163,7 +170,7 @@ export class SqliteRepository implements Repository {
          next save — the user's real bytes, gone, with no message. Skipping keeps those bytes where
          they are, so nothing this session does can destroy them, and the occurrence is listed in
          Diagnostics. `fromSql` throws the message; the entity name is added here. */
-      catch (err) { recordCrash(new Error(`${e} row skipped: ${String((err as Error)?.message ?? err)}`), 'data', e); }
+      catch (err) { this.report(new Error(`${e} row skipped: ${String((err as Error)?.message ?? err)}`), 'data', e); }
     }
     return out;
   }
@@ -177,7 +184,7 @@ export class SqliteRepository implements Repository {
            that key then wrote the default over the user's stored value (audit H3). `putSettings`
            persists exactly the keys it is handed, so a key that never appears in the UI again keeps
            its bytes. */
-        try { settings[r.k] = JSON.parse(r.v); } catch { recordCrash(new Error(`setting "${r.k}" is not valid JSON — first 40 chars: ${r.v.slice(0, 40)}`), 'data', 'setting'); }
+        try { settings[r.k] = JSON.parse(r.v); } catch { this.report(new Error(`setting "${r.k}" is not valid JSON — first 40 chars: ${r.v.slice(0, 40)}`), 'data', 'setting'); }
       }
       return {
         courses: (courses as EntityMap['course'][]).sort((a, b) => a.sort - b.sort), meetings: meetings as EntityMap['meeting'][],

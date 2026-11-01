@@ -13,7 +13,7 @@ import { SpecialElite_400Regular } from '@expo-google-fonts/special-elite/400Reg
 import { ThemeProvider, useTheme } from './ui/theme-context';
 import { CrashBoundary } from './ui/CrashBoundary';
 import { ScreenBoundary } from './ui/ScreenBoundary';
-import { recordCrash } from './ui/crashlog';
+import { recordCrash } from './services/problems';
 import { PaperBg } from './ui/PaperBg';
 import { Btn, HandBox, Icon, Tape, Txt } from './ui/kit';
 import { Overlay } from './ui/Overlay';

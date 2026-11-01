@@ -11,7 +11,7 @@ import { Text } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { useNow } from '../ui/theme-context';
 
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
+jest.mock('../services/problems', () => ({ recordCrash: jest.fn(() => null) }));
 jest.mock('../data/sqliteExpo', () => ({ openRepository: async () => { throw new Error('the database is not used in this test'); } }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
 jest.mock('../services/notifications', () => ({

@@ -6,11 +6,11 @@ import { withDefaults } from '../domain/defaults';
 import type { Repository } from '../data/repository';
 import type { Task } from '../domain/types';
 
-/** The problems log writes a file through `expo-file-system`, which does not exist under jest. The
- *  data layer's reports (audit H2/H3) are asserted on the CALL here — `settings-render.test.ts` is
- *  what renders the page that shows them. */
-jest.mock('../ui/crashlog', () => ({ recordCrash: jest.fn(() => null) }));
-const recordCrash = (jest.requireMock('../ui/crashlog') as { recordCrash: jest.Mock }).recordCrash;
+/** The adapter's reports (audit H2/H3) go through the `ReportProblem` port it is constructed with —
+ *  `src/data` does not import the Problems log (F2, depcruise `data-not-up`). So the port is a plain
+ *  spy here and the CALL is what is asserted; `problems-log.test.ts` asserts the device wiring hands
+ *  the adapter the real log, and `settings-render.test.ts` renders the page that shows the entries. */
+const report = jest.fn();
 
 /** node:sqlite shim that satisfies the same SqlDb the Expo adapter is handed, plus the raw handle so
  *  a test can build a legacy schema by hand and read bytes back without the repository in the way. */
@@ -350,17 +350,17 @@ describe('the internal bookkeeping tables stay bounded (audit M4)', () => {
  * these two tests assert, including the byte-for-byte part.
  */
 describe('an unreadable stored value is skipped, reported, and left on disk (audit H2/H3)', () => {
-  beforeEach(() => recordCrash.mockClear());
+  beforeEach(() => report.mockClear());
 
   it('a corrupt json column drops only its own row, and no later write rewrites the bytes', async () => {
-    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW); await r.init();
+    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW, report); await r.init();
     await r.upsert('task', task('good'));
     raw.run(`INSERT INTO task(${TASK_COLS}) VALUES('bad','Bad row',NULL,'other',NULL,NULL,NULL,0,'',0,?,NULL,'{broken','[]',0)`, [NOW]);
 
     const l = await r.load();
     expect(l.tasks.map((t) => t.id)).toEqual(['good']); // skipped, NOT defaulted to `reminders: []`
-    expect(recordCrash).toHaveBeenCalledTimes(1);
-    const [err, phase, route] = recordCrash.mock.calls[0] as [Error, string, string];
+    expect(report).toHaveBeenCalledTimes(1);
+    const [err, phase, route] = report.mock.calls[0] as [Error, string, string];
     expect(phase).toBe('data');
     expect(route).toBe('task');
     expect(err.message).toContain('reminders'); // names the column…
@@ -372,13 +372,13 @@ describe('an unreadable stored value is skipped, reported, and left on disk (aud
   });
 
   it('a corrupt setting is excluded so the default applies, and its bytes survive later writes', async () => {
-    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW); await r.init();
+    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW, report); await r.init();
     raw.run("INSERT OR REPLACE INTO setting(k,v) VALUES('semesterStart','{broken')");
 
     const l = await r.load();
     expect(l.settings.semesterStart).toBe(withDefaults({}).semesterStart);
-    expect(recordCrash).toHaveBeenCalledTimes(1);
-    const [err, phase, route] = recordCrash.mock.calls[0] as [Error, string, string];
+    expect(report).toHaveBeenCalledTimes(1);
+    const [err, phase, route] = report.mock.calls[0] as [Error, string, string];
     expect(phase).toBe('data');
     expect(route).toBe('setting');
     expect(err.message).toContain('semesterStart');

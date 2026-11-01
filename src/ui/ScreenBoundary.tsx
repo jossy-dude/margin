@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { Btn, HandBox, Icon, Tape, Txt } from './kit';
 import { useTheme } from './theme-context';
-import { recordCrash } from './crashlog';
+import { recordCrash } from '../services/problems';
 
 /**
  * One page's own error boundary.

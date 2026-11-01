@@ -15,7 +15,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { ScreenBoundary } from '../ui/ScreenBoundary';
-import { clearCrashes, readCrashes } from '../ui/crashlog';
+import { clearCrashes, readCrashes } from '../services/problems';
 
 jest.mock('../data/sqliteExpo', () => ({ openRepository: async () => { throw new Error('the database is not used in this test'); } }));
 jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { get: () => () => {} }) }));
