@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { Btn, Chip, EASE, Field, HandBox, HStrip, Icon, Reveal, Row, STEP, Stepper, Toggle, Txt, Hair } from '../ui/kit';
+import { Btn, Chip, EASE, Field, HandBox, HStrip, Icon, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
+import { DurationField, NumberField, TimeField } from '../ui/fields';
 import { Label, Sheet, useSheetClose } from '../ui/Sheet';
 import { latch } from '../ui/latch';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
@@ -127,14 +128,14 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" h12={hour12} />
       {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
       <Label>How long will it take?</Label>
-      <Stepper label="effort" value={est} min={0} max={720} step={15} fmt={(v) => (v ? fmtDur(v) : 'unknown')} onChange={setEst} />
+      <DurationField label="effort" value={est || null} onChange={(v) => setEst(v ?? 0)} presets={[15, 30, 45, 60, 90, 120]} min={0} max={720} noneLabel="unknown" />
       {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now, hour12)} />}
       {due ? <>
         <Label>Remind me</Label>
         <Row>{OFFS.map((o) => <Chip key={o.m} label={o.l} on={has(o.m)} onPress={() => toggleOff(o.m)} small />)}
           {home && home < due && <Chip label="When I get home" icon="bell" on={hasHome} small onPress={() => setRem((r) => (hasHome ? r.filter((x) => !(x.mode === 'abs' && x.label === 'When I get home')) : [...r, { id: uid('r'), mode: 'abs', at: home, label: 'When I get home' }]))} />}
           {rem.filter((r) => (r.mode === 'before' && !OFFS.some((o) => o.m === r.minutes)) || (r.mode === 'abs' && r.label !== 'When I get home')).map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now, hour12) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}</Row>
-        <Row><Stepper label="custom lead" value={custom} min={5} max={10080} step={5} fmt={fmtDur} onChange={setCustom} /><Btn small kind="ghost" label="+ add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); }} /><Btn small kind="ghost" label="+ at a time" onPress={() => setAddAt(!addAt)} /></Row>
+        <Row><DurationField label="custom lead" value={custom} onChange={(v) => { if (v !== null) setCustom(v); }} presets={[]} min={5} max={10080} /><Btn small kind="ghost" label="+ add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); }} /><Btn small kind="ghost" label="+ at a time" onPress={() => setAddAt(!addAt)} /></Row>
         {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" h12={hour12} /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
       </> : <Txt f="serif" s={15} c="mut">Set a due date to choose reminders.</Txt>}
       <Label>Priority</Label><Row>{PRI.map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
@@ -176,14 +177,14 @@ export function CourseSheet({ id }: { id?: string }) {
   return (
     <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), rooms: c0?.rooms ?? [], teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false, bar: c0?.bar ?? null }); close(); })} /></Row>}>
       <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
-      <Label>Grade goal</Label><Stepper label="goal" value={goal} min={0} max={100} fmt={(v) => (v ? `${v}%` : 'none')} onChange={setGoal} />
+      <Label>Grade goal</Label><NumberField label="goal" value={goal || null} onChange={(v) => setGoal(v ?? 0)} min={0} max={100} decimals={1} unit="%" emptyLabel="none" />
     </Sheet>
   );
 }
 /** The room a class form opens with: this class's own room, else the subject's first. */
 const seedRoom = (m0: Meeting | undefined, all: Course[], c: string | null) => (m0 && m0.courseId === c ? m0.room ?? '' : '') || all.find((x) => x.id === c)?.rooms[0] || '';
 export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?: string; weekday?: number }) {
-  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), all = useStore((s) => s.courses), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
+  const m0 = useStore((s) => s.meetings.find((x) => x.id === id)), first = useStore((s) => s.courses[0]?.id), all = useStore((s) => s.courses), hour12 = useStore((s) => s.settings.hour12), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('m')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId ?? first ?? null), [wd, setWd] = useState(m0?.weekday ?? weekday ?? 0), [a, setA] = useState(hm(m0?.start ?? '09:00')), [b, setB] = useState(hm(m0?.end ?? '09:50'));
   /* v0.2 — the room is asked here, when you schedule the class, not when you name the subject. Since
      migration 5 a subject owns a LIST of rooms and each class names its own (`meeting.room`), so the
@@ -204,8 +205,8 @@ export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?
       <Label>Subject</Label><CourseChips value={cid} onChange={setCid} none={null} />
       <Field label="Room" value={room} onChangeText={setRoom} placeholder="e.g. B-12" />
       <Label>Day</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} on={wd === i} onPress={() => setWd(i)} small />)}</Row>
-      <Label>Starts</Label><Stepper label="start" value={a} min={360} max={1320} step={5} fmt={fromMin} onChange={(v) => { setA(v); if (b <= v) setB(v + 50); }} />
-      <Label>Ends</Label><Stepper label="end" value={b} min={a + 5} max={1380} step={5} fmt={fromMin} onChange={setB} />
+      <Label>Starts</Label><TimeField label="start" value={a} min={0} max={1435} hour12={hour12} onChange={(v) => { setA(v); if (b <= v) setB(Math.min(1435, v + 50)); }} />
+      <Label>Ends</Label><TimeField label="end" value={b} min={0} max={1435} hour12={hour12} onChange={setB} />
       {b <= a && <Txt f="bold" s={17} c="bad">The class has to end after it starts.</Txt>}
     </Sheet>
   );
@@ -218,8 +219,8 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
       <Label>Subject</Label><CourseChips value={cid} onChange={(v) => v && setCid(v)} none={null} />
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />
-      {has && <><Label>Score</Label><Stepper label="score" value={score} min={0} max={100} fmt={(v) => `${v}%`} onChange={setScore} /></>}
-      <Label>Weight in the final grade</Label><Stepper label="weight" value={weight} min={0} max={100} step={5} fmt={(v) => `${v}%`} onChange={setWeight} />
+      {has && <><Label>Score</Label><NumberField label="score" value={score} onChange={(v) => setScore(v ?? 0)} min={0} max={100} decimals={1} unit="%" /></>}
+      <Label>Weight in the final grade</Label><NumberField label="weight" value={weight} onChange={(v) => setWeight(v ?? 0)} min={0} max={100} decimals={1} unit="%" />
       <Toggle label="Counts toward the total" value={on} onChange={setOn} />
     </Sheet>
   );

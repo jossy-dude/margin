@@ -66,19 +66,19 @@ describe('WhenPicker.tsx wiring — the presetsFor model cannot go stale', () =>
     expect(src).toContain('label: `Next Mon ${fmtTime(mon9, h12)}`');
   });
 
-  it('the component threads h12 into the presets and into the hour stepper', () => {
+  /* v0.5 U1: the hour and minute steppers became one TimeField (typed `930`, or the drag ruler), so the
+     12-hour choice is threaded into that field instead of an hour stepper's formatter. */
+  it('the component threads h12 into the presets and into the time field', () => {
     expect(src).toContain('presetsFor(now, homeAt, h12)');
     expect(src).toContain('[now, homeAt, h12]');
-    expect(src).toContain("h12 ? String(v % 12 || 12) : String(v).padStart(2, '0')");
+    expect(src).toContain('<TimeField label="time" value={minutes} onChange={setMin} hour12={h12} />');
   });
 
-  /* The first build of the 12-hour pen put ONE chip under the steppers that read `AM`/`PM` and flipped
-     on tap. In a static frame it reads as a label — there is nothing on screen saying PM exists (the
-     vision round failed it). It is now the pair the rest of the sheet already uses for choices
-     (Assignment | Exam | Deadline): both halves visible, the active one filled. */
-  it('the 12-hour stepper carries a visible AM/PM pair, not a lone flipping chip', () => {
-    expect(src).toContain('<Chip label="AM" on={minutes < 720}');
-    expect(src).toContain('<Chip label="PM" on={minutes >= 720}');
+  /* The first build of the 12-hour pen put ONE chip under the steppers that read `AM`/`PM` and flipped on
+     tap, which read as a label. v0.5 U1 replaced the steppers: the time box prints the half of the day in
+     full ("1:00 PM") and the ruler under it marks every hour `1p`, so both halves are always on screen.
+     The behaviour is pinned in fields.test.ts ("a 12-hour field says AM or PM in full"). */
+  it('no lone flipping AM/PM chip survives', () => {
     expect(src).not.toContain("label={minutes >= 720 ? 'PM' : 'AM'}");
   });
 });

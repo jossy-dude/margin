@@ -66,3 +66,58 @@ export function relFire(at: number, now = Date.now()): string {
   return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : `in ${Math.round(m / 1440)} d`;
 }
 export const uid = (() => { let n = 0; return (p = 'x') => `${p}${Date.now().toString(36)}${(n++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`; })();
+
+/* ── typed input (v0.5 U1) ──────────────────────────────────────────────────────────────────────
+ * What a person types into a number, time or duration field, read leniently. Each returns `null` for
+ * text that is not one, so the field can put the old value back instead of guessing. */
+
+/** A number as typed on any keyboard: `7.5`, `7,5`, ` 80 `, `-2`. */
+export function parseNumber(text: string): number | null {
+  const t = text.trim().replace(',', '.');
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A time of day as typed, in minutes after midnight: `930` and `0930` → 9:30, `9:30`, `9.30`, `9h30`,
+ * `9` → 9:00, `21` → 21:00, `9p` / `9:30 pm` → 21:30, `12am` → 0:00. With `hour12` and no am/pm, an hour
+ * from 1 to 12 keeps the half of the day `near` is in, so retyping `930` on an afternoon field stays PM.
+ */
+export function parseClock(text: string, hour12 = false, near = 0): number | null {
+  const t = text.trim().toLowerCase().replace(/\s+/g, '');
+  const m = /^(\d{1,2})(?:[:.h]?(\d{2}))?(am|pm|a|p)?$/.exec(t) ?? /^(\d)(\d{2})(am|pm|a|p)?$/.exec(t);
+  if (!m) return null;
+  let h = Number(m[1]); const min = m[2] === undefined ? 0 : Number(m[2]); const ap = m[3]?.[0];
+  if (min > 59) return null;
+  if (ap) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (ap === 'p' ? 12 : 0);
+  } else {
+    if (h > 23) return null;
+    if (hour12 && h >= 1 && h <= 12) h = (h % 12) + (near >= 720 ? 12 : 0);
+  }
+  return h * 60 + min;
+}
+
+/**
+ * A duration as typed, in minutes: `90`, `45m`, `1h`, `1h30`, `1h 30m`, `1.5h`, `2d`, `1w`, `2 days`,
+ * `1 hour 15 min`. A bare number is minutes. Fractions round to the nearest minute.
+ */
+export function parseDuration(text: string): number | null {
+  const t = text.trim().toLowerCase().replace(',', '.');
+  if (!t) return null;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t));
+  const UNIT: Record<string, number> = { w: 10080, week: 10080, weeks: 10080, d: 1440, day: 1440, days: 1440, h: 60, hr: 60, hrs: 60, hour: 60, hours: 60, m: 1, min: 1, mins: 1, minute: 1, minutes: 1 };
+  const re = /(\d+(?:\.\d+)?)\s*([a-z]+)?/g;
+  let total = 0, seen = 0, prevUnit = 0, consumed = '';
+  for (let x = re.exec(t); x; x = re.exec(t)) {
+    const n = Number(x[1]);
+    /* `1h30`: a trailing bare number after hours means minutes. */
+    const u = x[2] ? UNIT[x[2]] : prevUnit === 60 ? 1 : undefined;
+    if (u === undefined) return null;
+    total += n * u; prevUnit = u; seen++; consumed += x[0];
+  }
+  if (!seen || consumed.replace(/\s/g, '') !== t.replace(/\s/g, '')) return null;
+  return Math.round(total);
+}

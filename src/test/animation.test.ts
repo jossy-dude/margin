@@ -107,22 +107,6 @@ function chip(on: boolean, reduce = false) {
   };
 }
 
-/** The `Stepper`'s nudge. The value only ever retargets, which is the whole anti-strobe property. */
-function stepper(value: number, reduce = false) {
-  const k = new Shared(0), dir = new Shared(-1);
-  let last = value;
-  return {
-    k, dir,
-    change(next: number) {
-      if (last === next) return;
-      dir.set(next > last ? -1 : 1);
-      last = next;
-      if (reduce) { k.set(0); return; }
-      retarget(k, 1); // then a retarget back to 0
-    },
-  };
-}
-
 /** The chart leaves: it enters once — on FIRST FOCUS, not on mount, because every page now mounts on
  *  the navigator's first render — and then travels. `live` is the off-screen gate (`show`/`hide` flip
  *  it the way the navigator's focus context does); while hidden the value is assigned the correct
@@ -161,6 +145,7 @@ const charts = readFileSync(join(SRC, 'ui', 'charts.tsx'), 'utf8');
 const paperBg = readFileSync(join(SRC, 'ui', 'PaperBg.tsx'), 'utf8');
 const week = readFileSync(join(SRC, 'screens', 'Week.tsx'), 'utf8');
 const settings = readFileSync(join(SRC, 'sheets', 'Settings.tsx'), 'utf8');
+const fields = readFileSync(join(SRC, 'ui', 'fields.tsx'), 'utf8');
 
 describe('the motion vocabulary is one vocabulary', () => {
   it('EASE is the page placement curve, not a new one', () => {
@@ -254,13 +239,6 @@ describe('reduce-motion collapses every new animation', () => {
     c.select(true); expect(c.s.get()).toBe(1);
   });
 
-  it('the stepper nudge is zero', () => {
-    const s = stepper(10, true);
-    s.change(25);
-    expect(s.k.get()).toBe(0);
-    expect(s.k.tweenFrom).toBe(null);
-  });
-
   it('the chart settles on its target rather than animating to it', () => {
     const c = chart(0, true, true);
     c.drive(0.8);
@@ -279,9 +257,12 @@ describe('reduce-motion collapses every new animation', () => {
       paperBg: (code(paperBg).match(/useReduceMotion\(\)/g) ?? []).length,
       week: (code(week).match(/useReduceMotion\(\)/g) ?? []).length,
       settings: (code(settings).match(/useReduceMotion\(\)/g) ?? []).length,
-    }).toEqual({ kit: 7, charts: 4, sheet: 1, swipe: 1, paperBg: 1, week: 1, settings: 1 });
-    // Btn, Chip, Toggle, StepBtn, Stepper, Field, Reveal — one per animated primitive in the kit.
-    for (const name of ['Btn', 'Chip', 'Toggle', 'StepBtn', 'Stepper', 'Field', 'Reveal']) {
+      fields: (code(fields).match(/useReduceMotion\(\)/g) ?? []).length,
+    // v0.5 U1: kit 7 → 5 (the Stepper and its button went); the time ruler's glide in `ui/fields.tsx` is gated too.
+    }).toEqual({ kit: 5, charts: 4, sheet: 1, swipe: 1, paperBg: 1, week: 1, settings: 1, fields: 1 });
+    // Btn, Chip, Toggle, Field, Reveal — one per animated primitive in the kit. (v0.5 U1 deleted the
+    // Stepper and its StepBtn: every number is typed now, in `ui/fields.tsx`.)
+    for (const name of ['Btn', 'Chip', 'Toggle', 'Field', 'Reveal']) {
       const body = kit.slice(kit.indexOf(`function ${name}(`) >= 0 ? kit.indexOf(`function ${name}(`) : kit.indexOf(`export function ${name}(`));
       expect({ name, gated: /useReduceMotion\(\)/.test(body.slice(0, 700)) }).toEqual({ name, gated: true });
     }
@@ -401,16 +382,6 @@ describe('rapid repeated input cannot leave a stuck state', () => {
     expect(kit).not.toMatch(/k\.set\(0\);\s*$/m);
   });
 
-  it('holding a stepper runs the value up and down without a strobe', () => {
-    const s = stepper(0);
-    const targets = Array.from({ length: 10 }, (_, i) => (i * 15) % 200);
-    for (const t of targets) s.change(t);
-    expect(s.k.tweenFrom).not.toBe(null); // something is still travelling — it did not park
-    expect(s.k.get()).toBeGreaterThanOrEqual(0);
-    expect(s.k.get()).toBeLessThanOrEqual(1);
-    expect(kit).toContain('if (last.current === value) return;');
-  });
-
   it('catching a sheet mid-dismiss un-latches it, so it can still be dismissed', () => {
     // This was a real stuck state, not a feel problem: `close()` returns early while `closing` is set,
     // and nothing cleared it except finishing — so catching a closing sheet left a sheet that could never
@@ -464,7 +435,8 @@ describe('re-entrancy retargets rather than snaps', () => {
       expect({ name, resets: (src.match(/\.set\(0\)(?!;\s*\/\/)/g) ?? []).length >= 0 }).toEqual({ name, resets: expect.any(Boolean) });
     }
     // The two places a literal 0 is correct are both reduce-motion branches, where it IS the intent.
-    expect((kit.match(/\.set\(0\)/g) ?? []).length).toBe(1); // Stepper, under reduce-motion
+    // v0.5 U1: the one literal 0 was the Stepper's reduce-motion branch; the Stepper is gone, so none remain.
+    expect((kit.match(/\.set\(0\)/g) ?? []).length).toBe(0);
     expect(paperBg).toContain('rule.set(1); return;');
   });
 

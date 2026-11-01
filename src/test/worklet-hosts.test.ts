@@ -147,7 +147,8 @@ test('everything a worklet calls is itself a worklet', () => {
 
 test('the sweep found worklets, so the rule is reading something', () => {
   // without this the test above would pass on an empty sweep after a refactor that broke the matcher
-  expect([...workletised].sort()).toEqual(['ui/clock/faces.ts: handAngles']);
+  // v0.5 U1: the time ruler's `release` runs inside a `withTiming` callback, so it is a worklet too.
+  expect([...workletised].sort()).toEqual(['ui/clock/faces.ts: handAngles', 'ui/fields.tsx: release']);
 });
 
 describe('the real bundle, when one is being served', () => {

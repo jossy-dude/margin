@@ -156,7 +156,7 @@ describe('a button acts on the finger-down frame, not on the lift', () => {
 
 /* ═══════════════════════════════════════════════ the rest of the kit ════ */
 
-const { Chip, Toggle, Stepper } = jest.requireActual<typeof import('../ui/kit')>('../ui/kit') as typeof import('../ui/kit');
+const { Chip, Toggle } = jest.requireActual<typeof import('../ui/kit')>('../ui/kit') as typeof import('../ui/kit');
 
 /** The control with this accessibility label. Filtering on the label rather than on a handler prop is
  *  what stops a stepper's two buttons from collapsing onto each other. */
@@ -185,27 +185,14 @@ describe('every other control in the kit answers on the down frame too', () => {
     expect(seen).toEqual([true]); // exactly one flip per press — a toggle that double-fires is a lie
   });
 
-  it('a stepper steps on press-in and still keeps its long-press repeat', async () => {
-    const seen: number[] = [];
-    const r = await mount(React.createElement(Stepper, { label: 'Estimate', value: 30, min: 0, max: 120, step: 5, onChange: (v: number) => seen.push(v) }));
-    const n = byLabel(r, 'Increase Estimate');
-    await act(async () => { n.props.onPressIn?.(); });
-    expect(seen).toEqual([35]); // the first step is on the down frame
-    await act(async () => { n.props.onPressOut?.(); n.props.onPress?.(); });
-    expect(seen).toEqual([35]);
-    // and the repeat path is still there for a hold
-    const long = r.root.findAll((x) => typeof (x.props as { onLongPress?: unknown }).onLongPress === 'function')[0] as unknown as ControlNode;
-    expect(long).toBeDefined();
-  });
-
-  it('their accessibility path still works, on all three', async () => {
+  // v0.5 U1: the stepper's press-in case went with the Stepper; numbers are typed now (`ui/fields.tsx`, tested in fields.test.ts).
+  it('their accessibility path still works, on both', async () => {
     for (const node of [
       React.createElement(Chip, { key: 'c', label: 'Algebra', onPress: () => {} }),
       React.createElement(Toggle, { key: 't', label: 'Sound', value: false, onChange: () => {} }),
-      React.createElement(Stepper, { key: 's', label: 'Estimate', value: 30, min: 0, max: 120, onChange: () => {} }),
     ]) {
       const r = await mount(node);
-      const target = node.type === Chip ? 'Algebra' : node.type === Toggle ? 'Sound' : 'Increase Estimate';
+      const target = node.type === Chip ? 'Algebra' : 'Sound';
       const n = byLabel(r, target);
       expect(typeof n.props.onPress).toBe('function'); // never deleted: it is TalkBack's only route
     }

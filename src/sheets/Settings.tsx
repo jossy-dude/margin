@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Linking, Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
-import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Stepper, Toggle, Txt } from '../ui/kit';
+import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
+import { NumberField, Slider, TimeField } from '../ui/fields';
 import { Label, Sheet } from '../ui/Sheet';
 import { Empty, Section } from '../screens/common';
 import { FaceThumb } from '../ui/clock/ClockFace';
@@ -111,7 +112,12 @@ const Labelled = ({ label, children }: { label: string; children: React.ReactNod
     {children}
   </Row>
 );
-const MinStep = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <Labelled label={label}><Stepper label={label} value={hm(value)} min={0} max={1425} step={15} fmt={fromMin} onChange={(m) => onChange(fromMin(m))} /></Labelled>;
+/** A time-of-day setting: its name, then the typed box with the drag ruler under it (v0.5 U1). Stacked, not
+ *  side by side, because the ruler wants the sheet's full width. */
+const MinStep = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => {
+  const hour12 = useStore((x) => x.settings.hour12);
+  return <View style={{ gap: 4 }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS}>{label}</Txt><TimeField label={label} value={hm(value)} hour12={hour12} onChange={(m) => onChange(fromMin(m))} /></View>;
+};
 
 /* ───── Safety copies ───── */
 /** The backup folder is read ONCE, in this component's lazy initial state — the component mounts when
@@ -276,14 +282,14 @@ export function SettingsSheet() {
   </>);
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
-    <Labelled label="Lead time"><Stepper label="lead" value={n.classLeadMin} min={0} max={60} step={5} fmt={(v) => `${v} min`} onChange={(v) => act.setNotif({ classLeadMin: v })} /></Labelled>
+    <Labelled label="Lead time"><NumberField label="Lead time" value={n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ classLeadMin: v ?? 0 })} /></Labelled>
     <Toggle label="Ask me when a class ends" hint="Here, late or missed, one tap to mark" value={n.classEnded} onChange={(v) => act.setNotif({ classEnded: v })} />
   </>);
   if (page === 'ntask') body = (<>
     <Toggle label="Task reminders" value={n.taskReminders} onChange={(v) => act.setNotif({ taskReminders: v })} />
     <Toggle label="Exam reminders" value={n.examReminders} onChange={(v) => act.setNotif({ examReminders: v })} />
     <Toggle label="Start-by nudges" hint="If a task needs more time than the free hours you have, the app tells you when to begin" value={n.startBy} onChange={(v) => act.setNotif({ startBy: v })} />
-    <Labelled label="Effort buffer"><Stepper label="buffer" value={Math.round(n.effortBuffer * 100)} min={0} max={100} step={5} fmt={(v) => `+${v}%`} onChange={(v) => act.setNotif({ effortBuffer: v / 100 })} /></Labelled>
+    <Labelled label="Effort buffer"><NumberField label="Effort buffer" value={Math.round(n.effortBuffer * 100)} min={0} max={100} unit="%" onChange={(v) => act.setNotif({ effortBuffer: (v ?? 0) / 100 })} /></Labelled>
     <MinStep label="“When I get home”" value={n.homeAt} onChange={(v) => act.setNotif({ homeAt: v })} />
     <Label>Default reminder for new tasks</Label><Row>{[0, 30, 60, 120, 1440].map((m) => <Chip key={m} small label={m ? `${fmtDur(m)} before` : 'At due'} on={n.defaultTaskMinutes.includes(m)} onPress={() => act.setNotif({ defaultTaskMinutes: n.defaultTaskMinutes.includes(m) ? n.defaultTaskMinutes.filter((x) => x !== m) : [...n.defaultTaskMinutes, m] })} />)}</Row>
   </>);
@@ -297,7 +303,7 @@ export function SettingsSheet() {
   </>);
   if (page === 'ncourse') body = st.courses.length === 0
     ? <Empty icon="grad" text="No subjects yet. Add one and it gets its own lead time here." />
-    : <>{st.courses.map((co) => <Labelled key={co.id} label={co.name}><Stepper label={co.name} value={n.courseLead[co.id] ?? n.classLeadMin} min={0} max={60} step={5} fmt={(v) => `${v} min`} onChange={(v) => act.setNotif({ courseLead: { ...n.courseLead, [co.id]: v } })} /></Labelled>)}</>;
+    : <>{st.courses.map((co) => <Labelled key={co.id} label={co.name}><NumberField label={`${co.name} lead time`} value={n.courseLead[co.id] ?? n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ courseLead: { ...n.courseLead, [co.id]: v ?? 0 } })} /></Labelled>)}</>;
   if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan, target = testTarget(now, pl?.next ?? null, tasks, notifs.TEST_ACTION_ID, s.hour12); body = (<>
     {/* The one honest place: every number below is either read off this phone or computed by the
         planner, and the two failure states a phone can be in — blocked, and unable to be asked — are
@@ -361,7 +367,7 @@ export function SettingsSheet() {
     <Hair />
     {SOUND_GROUPS.map((g) => (
       <View key={g.id} style={{ gap: 2 }}><Txt f="bold" s={20}>{g.label}</Txt><Txt f="serif" s={14} c="mut">{g.hint}</Txt>
-        <Row style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}><Stepper label={g.label} value={Math.round(s.soundVol[g.id] * 100)} min={0} max={100} step={10} fmt={(v) => `${v}%`} onChange={(v) => set({ soundVol: { ...s.soundVol, [g.id]: v / 100 } })} /><Btn small kind="ghost" icon="play" label="Play" quiet a11y={`Play the ${g.label} preview`} onPress={() => { const why = previewSilence(g.id, g.label, s); if (why) { toast(why); return; } if (!play(SAMPLE[g.id])) toast(`Could not play ${g.label.toLowerCase()} — tap again.`); }} /></Row></View>))}
+        <Row style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}><Slider label={`${g.label} volume`} value={Math.round(s.soundVol[g.id] * 100)} min={0} max={100} step={10} onChange={(v) => set({ soundVol: { ...s.soundVol, [g.id]: v / 100 } })} /><Btn small kind="ghost" icon="play" label="Play" quiet a11y={`Play the ${g.label} preview`} onPress={() => { const why = previewSilence(g.id, g.label, s); if (why) { toast(why); return; } if (!play(SAMPLE[g.id])) toast(`Could not play ${g.label.toLowerCase()} — tap again.`); }} /></Row></View>))}
   </>);
   if (page === 'attendance') body = (<>
     <Toggle label="Lock attendance grid" hint="Nothing can change until you unlock it" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
@@ -370,8 +376,9 @@ export function SettingsSheet() {
     <Row><Btn small kind="ghost" icon="plus" label="Add class" onPress={() => act.open({ t: 'meeting' })} /><Btn small kind="ghost" icon="plus" label="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>
   </>);
   if (page === 'focus') body = (<>
-    <Labelled label="Break length"><Stepper label="break" value={s.breakMin} min={1} max={30} fmt={(v) => `${v} min`} onChange={(v) => set({ breakMin: v })} /></Labelled>
-    <Labelled label="Breaks per round"><Stepper label="breaks" value={s.breaksPerRound} min={0} max={4} fmt={(v) => String(v)} onChange={(v) => set({ breaksPerRound: v })} /></Labelled>
+    <Labelled label="Break length"><NumberField label="Break length" value={s.breakMin} min={1} max={30} unit="min" onChange={(v) => set({ breakMin: v ?? 1 })} /></Labelled>
+    <Label>Breaks per round</Label>
+    <Row>{[0, 1, 2, 3, 4].map((k) => <Chip key={k} small label={k ? String(k) : 'None'} on={s.breaksPerRound === k} onPress={() => set({ breaksPerRound: k })} />)}</Row>
     <Toggle label="Flow mode by default" hint="Keep counting after the round ends" value={s.focusFlow} onChange={(v) => set({ focusFlow: v })} />
     {/* The nudge sentence is generated from `nudgeStep`, the function the timer itself uses, so the page cannot
         promise a cadence the code does not deliver. It used to read "nudges you every 5 minutes", which was

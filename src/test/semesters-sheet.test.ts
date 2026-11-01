@@ -26,7 +26,6 @@ import { buildSnapshot, readSnapshot } from '../domain/archive';
 import type { SemesterRow } from '../domain/types';
 import { SemestersPage } from '../sheets/Semesters';
 import { SettingsSheet } from '../sheets/Settings';
-import { Stepper } from '../ui/kit';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
@@ -165,7 +164,8 @@ describe('the Semesters page lists the terms it really has', () => {
      fields (year/month/day × start/end) and no Stepper anywhere on the page. */
   it('the range is keypad fields, never steppers', async () => {
     const s = await mountPage();
-    expect(s.r.root.findAllByType(Stepper)).toHaveLength(0);
+    // v0.5 U1 deleted the Stepper itself; what this pins now is that nothing on the page is a +/− pair.
+    expect(s.r.root.findAll((n) => /^(Increase|Decrease) /.test(String(n.props?.accessibilityLabel ?? '')))).toHaveLength(0);
     const ids = ['semester-start-year', 'semester-start-month', 'semester-start-day', 'semester-end-year', 'semester-end-month', 'semester-end-day'];
     for (const id of ids) {
       const field = s.r.root.findAll((n) => n.props?.testID === id && typeof n.props?.onChangeText === 'function')[0];

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Btn, HandBox, HStrip, Icon, Row, Stepper, Txt } from '../ui/kit';
+import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
+import { NumberField } from '../ui/fields';
 import { useNow, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
@@ -69,7 +70,7 @@ export function GradesScreen() {
                 <Row style={{ flexWrap: 'nowrap', minHeight: 40 }}><Txt f="bold" s={20} style={{ flex: 1, textDecorationLine: m.on ? 'none' : 'line-through', color: m.on ? c.ink : c.mut }}>{m.name}</Txt><Txt f="serif" s={15} c="mut">{m.weight}%</Txt>
                   <View style={{ minWidth: 62, alignItems: 'flex-end' }}>{m.score === null ? <Txt f="serif" s={16} c="mut">to do</Txt> : <Txt f="marker" s={20}>{m.score}</Txt>}</View></Row>
               </Pressable>))}
-            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="plus" label="Mark" onPress={() => act.open({ t: 'mark', courseId: course.id })} /><Row style={{ flexWrap: 'nowrap', gap: 6 }}><Txt f="serif" s={14} c="mut">curve</Txt><Stepper label="curve" value={adj} min={-20} max={20} fmt={(v) => (v > 0 ? `+${v}` : String(v))} onChange={(v) => act.setAdjust(course.id, v)} /></Row></Row>
+            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="plus" label="Mark" onPress={() => act.open({ t: 'mark', courseId: course.id })} /><Row style={{ flexWrap: 'nowrap', gap: 6 }}><Txt f="serif" s={14} c="mut">curve</Txt><NumberField label={`${course.name} curve`} value={adj} min={-20} max={20} decimals={1} unit="pts" width={112} onChange={(v) => act.setAdjust(course.id, v ?? 0)} /></Row></Row>
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}

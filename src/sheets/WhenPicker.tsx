@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Pressable } from 'react-native';
-import { Chip, HandBox, HStrip, Reveal, Row, Stepper, Txt } from '../ui/kit';
+import { Chip, HandBox, HStrip, Reveal, Txt } from '../ui/kit';
+import { TimeField } from '../ui/fields';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { DW, MO, addDays, atTime, fmtTime, fmtWhen, fromMin, hm, startOfDay, weekdayOf } from '../domain/time';
@@ -40,7 +41,7 @@ export function WhenPicker({ value, onChange, now, homeAt, optional, nonePlaceho
                   <Txt f="serif" s={13} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'mut'}>{dt.getDate() === 1 || d === days[0] ? MO[dt.getMonth()]?.slice(0, 3) : DW[weekdayOf(dt)]}</Txt><Txt f="marker" s={22} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'ink'}>{dt.getDate()}</Txt><Txt f="serif" s={12} maxFontSizeMultiplier={FS} c={on ? 'onAcc' : 'mut'}>{DW[weekdayOf(dt)]}</Txt>
                 </HandBox></Pressable>); })}
           </HStrip>
-          <Row><Stepper label="hour" value={Math.floor(minutes / 60)} min={0} max={23} fmt={(v) => (h12 ? String(v % 12 || 12) : String(v).padStart(2, '0'))} onChange={(h) => setMin(h * 60 + (minutes % 60))} /><Txt f="marker" s={26}>:</Txt><Stepper label="minutes" value={minutes % 60} min={0} max={55} step={5} fmt={(v) => String(v).padStart(2, '0')} onChange={(m) => setMin(Math.floor(minutes / 60) * 60 + m)} />{h12 && <><Chip label="AM" on={minutes < 720} onPress={() => setMin(minutes % 720)} /><Chip label="PM" on={minutes >= 720} onPress={() => setMin((minutes % 720) + 720)} /></>}</Row>
+          <TimeField label="time" value={minutes} onChange={setMin} hour12={h12} />
       </Reveal>
     </View>
   );
