@@ -60,7 +60,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
       </View>
 
       <Section title="What it holds">
-        <Txt f="serif" s={15.5} c="mut">Your timetable, attendance, tasks and exams, grades, notes and focus time, in one place. Nothing leaves the phone: no account, no sign-in, no network needed. Export is the way out, not a subscription.</Txt>
+        <Txt f="serif" s={15.5} c="mut">Your timetable, attendance, tasks and exams, grades, notes and focus time, in one place. Your data never leaves the phone: no account, no sign-in, no sync. The only thing Margin asks the internet is whether an update exists for this version. Export is the way out, not a subscription.</Txt>
       </Section>
 
       <Section title="Why it looks like this">
@@ -74,7 +74,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
       </Section>
 
       <Section title="This build">
-        <Txt f="serif" s={15} c="mut">Margin {APP_VERSION} · local-first, no account, no network needed.</Txt>
+        <Txt f="serif" s={15} c="mut">Margin {APP_VERSION} · local-first, no account; the network is used only for the update check.</Txt>
       </Section>
 
       <Hair />
