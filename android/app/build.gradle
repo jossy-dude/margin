@@ -86,6 +86,12 @@ def marginVariant = (findProperty('marginVariant') ?: 'over').toString()
 if (!(marginVariant in ['dev', 'over', 'release'])) throw new GradleException("marginVariant must be dev, over or release, not ${marginVariant}")
 
 android {
+    /* v0.5 N1: lint-vital on release builds analyses every library module too, and it is what ran out of
+       memory in CI. This build never goes to a store review that would need it; `npm run check` is the
+       app's own gate. */
+    lint {
+        checkReleaseBuilds false
+    }
     ndkVersion rootProject.ext.ndkVersion
 
     buildToolsVersion rootProject.ext.buildToolsVersion

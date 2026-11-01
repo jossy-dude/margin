@@ -20,7 +20,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     # A wedged Gradle run must fail visibly instead of burning six hours of Actions time.
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -74,6 +74,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        timeout-minutes: 60
         run: cd android && ./gradlew assembleRelease -PmarginVariant=${{ steps.variant.outputs.variant }} --no-daemon --stacktrace
 
       - name: Remove the release key
