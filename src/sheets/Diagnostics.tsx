@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { Clipboard, View } from 'react-native';
 import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
+import { Mascot } from '../onboarding/Mascot';
+import { MASCOT_CREDIT } from '../onboarding/mascot';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
 import { getState, toast } from '../store/store';
@@ -68,6 +70,12 @@ export function DiagnosticsPage() {
           </HandBox>
         ))}</View>
       )}
+      <Hair />
+      <Label>Mascot check</Label>
+      <Row style={{ flexWrap: 'nowrap', gap: 12 }}>
+        <Mascot size={96} testID="diag-mascot" />
+        <Txt f="serif" s={14.5} c="mut" style={{ flex: 1 }}>The onboarding bear, live. If he blinks and looks around, the animation engine works on this phone. {MASCOT_CREDIT}.</Txt>
+      </Row>
       <Label>What gets recorded</Label>
       <Txt f="serif" s={14.5} c="mut">
         The error message, its stack, the page you were on, the time, the app version and whether it happened before or after the app finished starting. No task, mark or note content is ever copied into the log.

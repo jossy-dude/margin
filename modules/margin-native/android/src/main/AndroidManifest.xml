@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Do Not Disturb for a focus session: the app asks for policy access in Settings, never silently. -->
+  <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
+  <!-- Android 16 Live Updates: lets the pinned class / focus countdown be promoted to the status chip. -->
+  <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
+  <application>
+    <!-- Records that the person swiped the live countdown away, so it is not posted again for that class. -->
+    <receiver android:name="app.marginalia.nativebits.LiveDismissReceiver" android:exported="false"/>
+  </application>
+</manifest>

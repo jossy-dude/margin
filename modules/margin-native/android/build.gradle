@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.marginalia'
+version = '0.5.0'
+
+android {
+  namespace "app.marginalia.nativebits"
+  defaultConfig {
+    versionCode 1
+    versionName "0.5.0"
+  }
+}

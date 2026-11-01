@@ -1,0 +1,7 @@
+{
+  "name": "margin-native",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Margin's own Android bits: the pinned live countdown, Do Not Disturb for a focus session, and the widget data bridge.",
+  "main": "index.ts"
+}
