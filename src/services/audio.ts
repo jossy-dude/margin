@@ -48,7 +48,12 @@ const PRIO = (n: SoundName) => (n === 'tick' || n === 'tock' || n.startsWith('de
 /* A sweep of the dial retriggers far faster than a 75 ms file lasts. Handing out a player that is
    still sounding is what turned a fast drag into machine-gun clipping, so the drag-critical sounds
    get a deep pool and every trigger must find a player that is neither sounding nor mid-seek. */
-const POOL = 3, DRAG_POOL = 6;
+/* Device test, v0.5 dev build on the owner's Galaxy A51: with 3 players per sound and 6 per drag sound,
+   boot preloading alone held ~80 ExoPlayer AudioTracks, Android refused the rest ("UnsupportedOperation
+   Exception: Cannot create AudioTrack", 206 times in one session), and not one player ever reached
+   `started` — the same silent app `dumpsys audio` showed on v0.1.0. So: one player per sound, two for the
+   drag sounds, and never more than `MAX_PLAYERS` alive at once (least recently used are released). */
+const POOL = 1, DRAG_POOL = 2, MAX_PLAYERS = 14;
 const isDrag = (n: SoundName) => n.startsWith('detent') || n === 'tick' || n === 'tock';
 /** A ratchet pawl cannot click faster than this; without it one layer retriggers several times
     inside a single file and the velocity mapping degrades into noise. */
@@ -89,7 +94,17 @@ export async function initAudio() {
 }
 function pool(n: SoundName): AudioPlayer[] {
   let p = pools.get(n);
-  if (!p) { p = Array.from({ length: isDrag(n) ? DRAG_POOL : POOL }, () => createAudioPlayer(SRC[n])); pools.set(n, p); }
+  if (p) { pools.delete(n); pools.set(n, p); return p; } // most recently used goes to the back
+  p = Array.from({ length: isDrag(n) ? DRAG_POOL : POOL }, () => createAudioPlayer(SRC[n]));
+  pools.set(n, p);
+  let live = 0; for (const x of pools.values()) live += x.length;
+  for (const [k, old] of pools) {
+    if (live <= MAX_PLAYERS) break;
+    if (k === n) continue;
+    pools.delete(k); live -= old.length;
+    for (const pl of old) { seeking.delete(pl); try { pl.remove(); } catch { /* already gone */ } }
+    active = active.filter((a) => !old.includes(a.pl));
+  }
   return p;
 }
 /**
