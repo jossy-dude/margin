@@ -603,6 +603,55 @@ cold start following the download).
 
 ---
 
+## V05-REL — reliability and release plumbing (UNVERIFIED-ON-DEVICE)
+
+- **V05-REL.1 Fatal screen offers Try again.** Only reachable with a damaged or newer-version database; if
+  you ever see "The planner could not open your data", the first button is *Try again* and nothing has
+  been erased. **PASS / FAIL: ______**
+- **V05-REL.2 Margin dev installs beside Margin.** Two launcher icons, "Margin" and "Margin dev"; the real
+  app's data is untouched by anything done in the dev app. **PASS / FAIL: ______**
+- **V05-REL.3 A thousand tasks scroll.** On To-do, the list shows 60 cards and a "Show 60 more" row.
+  **PASS / FAIL: ______**
+
+---
+
+## Owner's final device test (v0.5.0)
+
+Do these in order, on the phone that has v0.1.0 with your real data. Write PASS/FAIL beside each.
+
+1. **Export first.** In v0.1.0: Settings → Data → Export. Look for: a file you can see in Files/Drive.
+   Keep it until step 12 passes.
+2. **The `over` APK over v0.1.0.** Install `margin-v0.5.0-over-android.apk` (Actions → Release APK,
+   `variant=over`) without uninstalling. Look for: it installs as an update; every class, task, mark,
+   attendance stamp and focus session is still there; Settings → Data shows a safety copy was made.
+3. **Release key plus import.** (After you create the key, `docs/RELEASING.md` §1.) Uninstall, install
+   `margin-v0.5.0-release-android.apk`, import the export from step 1. Look for: every row comes back;
+   the import toast counts them.
+4. **Onboarding with Teddy.** On a fresh install (or Settings → replay the tour). Look for: the mascot
+   animates, follows typing, covers its eyes on a password-style field, and celebrates at the end. If
+   the tour still shows the coach marks instead, Teddy has not shipped in this build — note it.
+5. **The notification ask.** First launch after onboarding. Look for: Android asks once for
+   notifications; denying it leaves the app usable, and Settings → Reminders → Delivery status says
+   reminders are off and why.
+6. **Do Not Disturb.** If the build has the DND option: enable it, start a class or focus round. Look
+   for: DND turns on and off with it. If there is no such option, note "not in this build".
+7. **The live countdown.** Start a focus round, lock the phone. Look for: the round's notification with
+   its time; it ends when the round ends. Pull the shade during a class to see the class countdown, if
+   present.
+8. **Sound plus haptics.** Stamp attendance, finish a task, start a break. Look for: each makes its
+   sound (media volume up) and a buzz; turning sound off in Settings silences them.
+9. **Widgets.** Long-press the home screen → Widgets → Margin. Look for: the widgets exist and open the
+   right page. If there are none, note "not in this build".
+10. **The OTA loop.** After an update is published (`docs/RELEASING.md` §3): open the app, background
+    it, return after a minute, then reopen it. Look for: "You're now on Margin …" once, and About naming
+    the update.
+11. **Clock and DST.** Change the phone's time back an hour during a focus round. Look for: the round
+    keeps counting instead of freezing.
+12. **Backup and restore.** Settings (Android) → Google → Backup → Back up now; on a second phone or after
+    a reinstall, restore. Look for: the planner comes back with its data.
+
+---
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

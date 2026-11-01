@@ -1,11 +1,9 @@
 # STATE — Marginalia v2 improvements
 
-_Updated: 2026-10-23 (**v0.3.1 committed** — A = `5136499` (semester range, bulk import, pre-migration
-safety copies), B = `6f5bb63` (OTA plumbing, warm preview sounds, spiral elapsed ink). Gate 65 suites /
-1029 tests, boundaries clean; browser 25/25, spiral 14/14, tour probe 3/3. **The native project, not
-`app.json`, is what ships — see note 22 and `docs/BUILD_V031.md` before building.** Nothing built,
-published or pushed — the owner builds. W5b full-screen still pending D9 answer; **v0.3.2 proof pass
-next**)_
+_Updated: 2026-11-01 (**v0.5 in progress on `v2-improvements`**, pushed. Version 0.5.0 / versionCode 4.
+Gate: 81 suites / 1,325 tests, typecheck, lint (0 warnings) and depcruise green; the suite runs under
+`TZ=Europe/Berlin`. Committed: CP2 `526f3c0` store split + pins, CP3 `0be36d9` reliability, CP4 `586ec7d` +
+`c4c4815` time and perf, D4 core `c3f5386`, R1 core `9557519`. The v0.5 status section below says what is left.)_
 
 ## Git
 
@@ -213,7 +211,29 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 | UX-8 | Low | CONFIRMED dev-only upstream warning (RNW SVG) | REPORT note |
 | env | — | "live is not defined" / "unknown colour token #FFFBF1" do NOT reproduce at HEAD (moving-tree artifacts; the token text came from audit-code's M1 proposal) | closed |
 
-## Next
+## v0.5 status (2026-11-01)
+
+Done and committed: F2 layering (depcruise `data-not-up`, `services-not-ui`, `ui-not-data` over sheets),
+F3 store pins (`src/test/store-*.test.ts`), F4 store split behind `store/store.ts`, F5/F6 essentials
+(refused writes revert; `removeMany` cascade; atomic tour hand-over; reset wipes the real database;
+notif/outbox writes queued; downgrade guard; safety copy written via `.tmp` + rename and blocking the
+migration on failure; one Problems entry per damaged table; Fatal screen *Try again*), F7 (calendar
+`addDays` across DST, timer survives the clock moving back, multi-round focus total, period numbering),
+F8/F9 lean (pages mount on first visit; To-do draws 60 cards + Show more), D4 core (archive v10 with
+notes, day marks, curves and focus; curves reset on roll-over), R1 core (variants `dev|over|release`,
+release signing from secrets, manifest trimmed, `docs/RELEASING.md`).
+
+**Builds.** Release APK, `variant=dev`: https://github.com/jossy-dude/margin/actions/runs/41291045240
+(artifact `margin-android-apk-dev` → `margin-v0.5.0-dev-android.apk`).
+
+**Not started (next session, in this order):** D1 migration 5 and the variant model, D2 import/export
+`margin/2`, D3 import sheet, D4 remainder (archived-term viewer, roll-over range picker, deleting the
+settings mirror), D5 OTA on `useUpdates()`, R1 remainder (`ota-publish.yml`, backup rules, About privacy
+line), U1 inputs, U2 theme, S1–S7 surfaces and sound, N1 native scaffolding (Rive, margin-native), O1
+onboarding with Teddy, N2 notifications/DND, N3 widgets, P1 design pass, Phase 3 review. The owner's
+final device test is at the end of `docs/DEVICE_CHECKLIST.md`.
+
+## Earlier next steps (v0.3.x)
 
 - **v0.3.1 closed** (`5136499` + `6f5bb63`, both local — nothing pushed, nothing built). The owner
   builds it when the version he wants is ready, so the next step is his: build `0.3.1`, install it,

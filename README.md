@@ -26,7 +26,7 @@
 - **Export as an escape hatch.** The whole dataset to **xlsx** (one sheet per table), **csv** (one file per table, zipped) or **json**, saved to a folder or shared out.
 - **Diagnostics page.** The app's own crash log, readable and copyable in plain text, with a test-crash button.
 - **Android reminders that report back.** Class lead times, task and exam reminders, start-by nudges, active hours, quiet hours, weekend modes, "hold it until class ends", per-subject lead times, and a lock-screen text toggle. A **Delivery status** page counts what is actually queued on the phone, when the next one fires, and what the phone refused. `SCHEDULE_EXACT_ALARM` is declared, and the app quotes an honest window rather than pretending to a promise it cannot read.
-- **Local-first, by design.** One SQLite file (`marginalia.db`) on the device. No account, no sign-in, no server, no telemetry. Nothing in `src/` opens a network connection.
+- **Local-first, by design.** One SQLite file (`marginalia.db`) on the device. No account, no sign-in, no server, no telemetry. The one network request is the update check (below).
 
 ## Screenshots
 
@@ -104,7 +104,7 @@ That is a **dev client** — it needs `npm run start:lan` running somewhere. For
 
 ## Data & privacy
 
-Margin is local-first. Everything — timetable, attendance, marks, tasks, notes, focus sessions, settings — lives in one SQLite file on your phone. There is no account, no sign-in, no server and no analytics. Nothing in the app source opens a network connection; the only network use in this repository is development tooling (the Metro dev server, npm). Reminders are scheduled on the device and need no internet. Export exists so your data is never held hostage, not as a sync service.
+Margin is local-first. Everything — timetable, attendance, marks, tasks, notes, focus sessions, settings — lives in one SQLite file on your phone. There is no account, no sign-in, no server and no analytics. The app makes one kind of network request: the **update check** (expo-updates), at launch and when it comes back to the foreground at most every five minutes, which asks Expo's update server whether a newer JavaScript bundle exists for this version and downloads it if so. It sends the platform, app version, runtime version and update channel that any expo-updates request carries — never your data. Everything else is offline. Reminders are scheduled on the device and need no internet. Export exists so your data is never held hostage, not as a sync service.
 
 ## Status / known gaps
 
