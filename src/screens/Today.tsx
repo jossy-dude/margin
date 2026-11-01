@@ -16,7 +16,8 @@ import { effective, dayBlock, isCancelled, occEnd, occKey, occurrencesOn, ST, ty
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
 import { FS } from '../ui/fit';
-import type { Course, SubjectVariant } from '../domain/types';
+import type { Course, SubjectVariant, Task } from '../domain/types';
+import { fx } from '../services/fx';
 
 /* ── the command deck ─────────────────────────────────────────────────────
    `deck()` in the design of record (`marginalia-v10(1).html`, line 236),
@@ -69,6 +70,30 @@ export interface Deck {
   at: number;
   /** how many classes the day is counting, cancelled ones excluded */
   total: number;
+  /** Every class in the card's slot, as indices into `periods`: the classes on right now, or the
+   *  classes that start together next (S2). One entry is the ordinary case; two or more is the owner's
+   *  "two classes in the same slot", and the card offers a tab for each. `at` is the one shown. */
+  slot: number[];
+  /** Index of the class after the slot (the next one that is not in it), or -1. */
+  after: number;
+}
+
+/** The class name, as large as fits in two lines across `width` (S2). Permanent Marker's capitals run
+ *  about 0.68 em wide; the size steps down from 32 to 20 until the name wraps into two lines, and only a
+ *  name too long for two lines at 20 is clamped. Pure, so the test and the card agree. */
+export function headingSize(name: string, width: number): number {
+  const words = name.trim().split(/\s+/);
+  for (let s = 32; s >= 20; s -= 2) {
+    const per = Math.max(1, Math.floor(width / (s * 0.68)));
+    let lines = 1, used = 0;
+    for (const w of words) {
+      if (w.length > per) { if (used) lines++; lines += Math.ceil(w.length / per) - 1; used = w.length % per || per; continue; }
+      const need = used ? used + 1 + w.length : w.length;
+      if (need <= per) used = need; else { lines++; used = w.length; }
+    }
+    if (lines <= 2) return s;
+  }
+  return 20;
 }
 
 /**
@@ -84,13 +109,22 @@ export interface Deck {
  * `h12` is the user's 12/24-hour choice, passed in so this stays a pure function (`domain/` owns no
  * store) and pinned by `src/test/time-format.test.ts`.
  */
-export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false): Deck {
+export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false, pick = 0): Deck {
   // `Period.end` is already correct for an overnight class (see `periodsOn`), so this is index-for-index
   // with the `occ` list `dayBlock` builds, which is what lets the card find the same class in both.
   const ps = periods.map((p, i) => ({ p, i })).filter((x) => !x.p.cancelled);
-  const cur = isToday ? ps.find((x) => t >= x.p.start && t < x.p.end) : undefined;
-  const next = isToday ? ps.find((x) => x.p.start > t) : ps[0];
+  /* The slot (S2): every class on now, or every class that starts at the next start. A student in two
+     classes at once (two groups, a lab beside a lecture) sees both, and picks which one the card is
+     about with `pick`; the first is shown until they do. */
+  const live = isToday ? ps.filter((x) => t >= x.p.start && t < x.p.end) : [];
+  const firstNext = isToday ? ps.find((x) => x.p.start > t) : ps[0];
+  const slotOf = live.length ? live : firstNext ? ps.filter((x) => x.p.start === firstNext.p.start && (!isToday || x.p.start > t)) : [];
+  const cur = live.length ? slotOf[Math.min(Math.max(0, pick), slotOf.length - 1)] : undefined;
+  const next = live.length ? undefined : slotOf.length ? slotOf[Math.min(Math.max(0, pick), slotOf.length - 1)] : undefined;
   const hit = cur ?? next;
+  const inSlot = new Set(slotOf.map((x) => x.i));
+  const from = live.length ? t : hit ? hit.p.start : t;
+  const afterHit = hit ? ps.find((x) => !inSlot.has(x.i) && x.p.start > from && x.p.start >= hit.p.start) : undefined;
   const period = hit ? hit.p : null;
   const target = cur ? cur.p.end : next ? next.p.start : null;
   const state: DeckState = cur ? 'live' : next ? (isToday ? 'soon' : 'first') : 'rest';
@@ -98,15 +132,21 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
   /* `at` indexes `periods` (cancelled ones included) because the card finds its class by it; the words
      count only the classes that are on, or a cancelled first class printed "Period 3 of 2". */
   const rank = hit ? ps.indexOf(hit) : -1;
+  const many = slotOf.length > 1;
   return {
-    state, period, at, total: ps.length,
+    state, period, at, total: ps.length, slot: slotOf.map((x) => x.i), after: afterHit ? afterHit.i : -1,
     word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : 'Rest day',
     countdown: target === null || !period ? '--:--' : isToday ? fmtClock((target - t) / 1000) : `${fmtTime(period.start, h12)}–${fmtTime(period.end, h12)}`,
     /* The reference's `lb` is only ever overwritten when there is a class to point at: with nothing
        on, `cn` and `lb` keep their opening values and it reads `--:--  nothing on`, not a countdown
        with a unit borrowed from a state that is not happening. */
-    unit: cur ? 'min left' : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
+    /* The unit says what the digits are: "34:12" is minutes and seconds, "1:05:00" is hours (S2: it used
+       to say "min left" beside an hours readout). */
+    unit: cur ? (target !== null && target - t >= 3_600_000 ? 'left' : 'min left') : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
+      /* Beside the "Now" / "Next up" pill, so it reads "Now +1 more". Short on purpose: at 320 dp the
+         header row has about 50 dp for this line once the clock, the pill and the room have theirs. */
+      : many ? `+${slotOf.length - 1} more`
       : state === 'soon' ? `${ps.length - rank} of ${ps.length} left` : `Period ${rank + 1} of ${ps.length}`,
   };
 }
@@ -231,15 +271,27 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
 }) {
   const { c } = useTheme();
   const t = useNow(live ? 1000 : 60_000);
-  const d = deckOf(periods, t, isToday, hour12);
+  /* Which class of a shared slot the card is about (S2). Stored with the slot it belongs to, so when the
+     slot changes (the class ends, another day is picked) it falls back to the first without an effect. */
+  const [picked, setPicked] = React.useState<{ key: string; i: number } | null>(null);
+  const probe = deckOf(periods, t, isToday, hour12);
+  const slotKey = probe.slot.join(','), pick = picked && picked.key === slotKey ? picked.i : 0;
+  const d = pick ? deckOf(periods, t, isToday, hour12, pick) : probe;
   /* `occ[i]` is the meeting behind `periods[i]` — `periodsOn` maps one array to the other in order.
      `at` is -1 when the card has no class, and `at + 1` would then be the FIRST class of the day:
      the reference guards this the same way (`a = p && pl[pl.indexOf(p)+1]`), because "after the last
      class" and "after nothing" are different sentences. */
   const courseAt = (i: number) => { const o = i >= 0 ? occ[i] : undefined; return o ? courses.find((x) => x.id === o.meeting.courseId) ?? null : null; };
-  const mine = courseAt(d.at), after = d.at >= 0 ? courseAt(d.at + 1) : null;
+  /* "After" is the next class that is NOT in this slot (S2): with two classes at 10:00 it used to name the
+     other 10:00 class, which is not after anything. */
+  const mine = courseAt(d.at), after = d.after >= 0 ? courseAt(d.after) : null;
   const room = roomOf(d.at >= 0 ? occ[d.at]?.meeting : null, mine, variants);
-  const afterText = after ? [after.name, roomOf(occ[d.at + 1]?.meeting, after, variants)].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
+  const afterText = after ? [after.name, roomOf(occ[d.after]?.meeting, after, variants)].filter(Boolean).join(' · ') : d.period ? 'last class of the day' : 'nothing scheduled';
+  const many = d.slot.length > 1;
+  /* The bar draws the class the card is about; the other classes of the slot are left out of it, or two
+     overlapping periods would be drawn as one muddle. */
+  const barPeriods = many ? periods.filter((_, i) => !(d.slot.includes(i) && i !== d.at)) : periods;
+  const title = d.period ? d.period.label : 'Free day';
   /* The disc fills across the gap the card is actually in: from the previous non-cancelled class's end
      (or midnight when this is the first class), floored at a minute so a same-minute back-to-back swap
      can never divide by zero or render a backwards ring. */
@@ -266,7 +318,9 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
               <Txt f="bold" s={22} c={c.deck} maxFontSizeMultiplier={FS} style={{ paddingHorizontal: 10, paddingVertical: 1 }}>{d.word}</Txt>
             </HandBox>
           </View>
-          <Txt f="serif" s={14} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>
+          {/* On a narrow phone with two classes in the slot, the tabs below already say it; the header
+              line would only be clipped to "+…". */}
+          {!(many && w < 300) && <Txt f="serif" s={14} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>}
         </View>
         {/* `.tg span > .R` … and the room code beside it. */}
         {room !== '' && (
@@ -282,7 +336,25 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           reference's tighter `1.05` leading is not reproduced: `Txt` sets `1.25` for the marker face so
           scaled glyphs still have their line box, and a fixed 1.05 would overlap them past 1.3x. The
           card is therefore about 20 px taller than the reference's, all of it in this row. */}
-      <Txt f="marker" s={32} numberOfLines={2} style={{ color: c.deckInk, marginTop: 8, marginBottom: 6 }}>{d.period ? d.period.label : 'Free day'}</Txt>
+      {/* S2: the name is as large as fits in two lines (`headingSize`), so a long name steps down instead of
+          being cut after two lines at full size. */}
+      <Txt f="marker" s={headingSize(title, w)} numberOfLines={2} style={{ color: c.deckInk, marginTop: 8, marginBottom: many ? 4 : 6 }}>{title}</Txt>
+      {/* Two classes in one slot (S2, the owner's O4 case): a paper tab for each, in the deck's own inks.
+          The chosen one is filled; the card's countdown, room, bar and "After" follow it. */}
+      {many && (
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+          {d.slot.map((pi, k) => {
+            const on = pi === d.at, name = periods[pi]?.label ?? '';
+            return (
+              <Pressable key={pi} testID={`deck-slot-${k}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${name}${on ? ', shown' : ', show this class'}`} onPress={() => { setPicked({ key: slotKey, i: k }); fx.select(); }} hitSlop={6}>
+                <HandBox seed={`slot-${k}`} fill={on ? c.deckInk : c.deck} stroke={c.deckInk} corners={RS} shadow={false} sw={1.4} amp={0.6}>
+                  <Txt f="bold" s={17} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ color: on ? c.deck : c.deckInk, paddingHorizontal: 9, paddingVertical: 1, maxWidth: Math.max(80, (w - 12) / 2) }}>{name}</Txt>
+                </HandBox>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       {/* `.cnt` — the readout. The digits change every second, so they are set one fixed advance per
           glyph (`Countdown`) rather than trusting the face to be tabular, which Special Elite is not
           (see `COUNT_DIGIT_W`). A day that is not today has no countdown to run, so it prints the
@@ -307,7 +379,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           <StartCircle leftMs={Math.max(0, d.period!.start - t)} gapMs={gapMs} />
         </View>
       )}
-      <DayBar kind={bar} periods={periods} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
+      <DayBar kind={bar} periods={barPeriods} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
       {/* `.aft` — a dashed rule, then what the day does next. */}
       <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
         <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>After</Txt>
@@ -324,6 +396,20 @@ const HeaderClock = React.memo(function HeaderClock({ live, size }: { live: bool
   const id = useStore((s) => s.settings.clock);
   return <ClockFace id={id} size={size} live={live} />;
 });
+
+/** Today's "Due" groups (S2), pure: open tasks with a due date, split into overdue (oldest first, five
+ *  shown), due later today, and the next three after today. */
+export function dueGroups(tasks: readonly Task[], now: number) {
+  const open = tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number));
+  const today = startOfDay(now), tomorrow = addDays(today, 1);
+  const late = open.filter((t) => (t.dueAt as number) < now);
+  return {
+    overdue: late.slice(0, 5), moreOverdue: Math.max(0, late.length - 5),
+    today: open.filter((t) => (t.dueAt as number) >= now && (t.dueAt as number) < tomorrow),
+    next: open.filter((t) => (t.dueAt as number) >= tomorrow).slice(0, 3),
+    empty: open.length === 0,
+  };
+}
 
 export function TodayScreen() {
   /* Narrow selectors: each slice subscribes on its own, so toast/timer/sheet/plan writes no longer
@@ -346,9 +432,10 @@ export function TodayScreen() {
   const hour = new Date(now).getHours(), hello = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   /** The name is user-editable now, so it may be blank: drop the whole ", name" rather than greet nobody. */
   const who = name.trim();
-  const open = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).slice(0, 5);
+  /* "Due" (S2): what is late, what is due today, then the next three — grouped, so a long overdue tail
+     cannot push today's work off the page. Overdue is capped at five with a pointer to the rest. */
+  const due = dueGroups(st.tasks, now);
   const dayMark = st.dayMarks[selDate];
-  const nDone = open.length;
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
       right={<RunningTimer />}>
@@ -423,8 +510,13 @@ export function TodayScreen() {
               </Pressable>))}
           </HStrip>)}
       </Section>
-      <Section title="Due soon" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
-        {nDone === 0 ? <Empty icon="tasks" text="Nothing due. Tap + to add an assignment." /> : open.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
+      <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
+        {due.empty ? <Empty icon="tasks" text="Nothing due. Nice. Tap + when something is set." /> : <>
+          {due.overdue.length > 0 && <><Txt f="bold" s={18} c="bad" accessibilityRole="header">Overdue</Txt>{due.overdue.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
+            {due.moreOverdue > 0 && <Btn small kind="ghost" label={`${due.moreOverdue} more overdue`} onPress={() => act.go('Tasks')} />}</>}
+          {due.today.length > 0 && <><Txt f="bold" s={18} accessibilityRole="header">Due today</Txt>{due.today.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</>}
+          {due.next.length > 0 && <><Txt f="bold" s={18} c="mut" accessibilityRole="header">Coming up</Txt>{due.next.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</>}
+        </>}
       </Section>
     </Page>
   );

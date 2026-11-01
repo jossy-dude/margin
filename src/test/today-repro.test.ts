@@ -4,15 +4,15 @@
  * subject twice in a day, an emoji name, and a cancelled earlier class. Each case renders the real Today
  * screen over a hydrated store and reads the deck model, so what fails here is what a student saw.
  *
- * Cases that are broken today are `it.failing` — they document the bug and turn red the moment S2 fixes
- * it, which is the signal to flip them to `it`.
+ * S2 fixed the two that were broken (they were `it.failing` in S1): the deck knows every class in the
+ * slot and offers each, and "After" skips the slot.
  */
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { dayBlock } from '../domain/attendance';
+import { dayBlock, lanes } from '../domain/attendance';
 import type { Course, Meeting } from '../domain/types';
-import { deckOf, TodayScreen } from '../screens/Today';
+import { deckOf, dueGroups, headingSize, TodayScreen } from '../screens/Today';
 import { hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -106,21 +106,25 @@ describe('S1: Today with the cases that broke it', () => {
     expect(text).toContain('Database Systems');
   });
 
-  it.failing('the deck says both classes in the slot are on now, not just the first', () => {
-    const d = deckOf(block().periods, NOW, true);
+  it('the deck says both classes in the slot are on now, and can show either', () => {
+    const ps = block().periods, d = deckOf(ps, NOW, true);
     expect(d.state).toBe('live');
-    // what a student needs: the card knows there are two, so it can show both
-    expect((d as unknown as { concurrent?: number }).concurrent).toBe(2);
+    expect(d.slot).toHaveLength(2);
+    expect(d.position).toBe('+1 more'); // beside the Now pill
+    expect(ps[d.at]?.label).toBe('Database Systems');
+    const other = deckOf(ps, NOW, true, false, 1);
+    expect(ps[other.at]?.label).toBe('Database Systems LAB');
+    expect(other.slot).toEqual(d.slot);
   });
 
-  it.failing('"After" names the next class after the slot, never the other class in the same slot', async () => {
+  it('"After" names the next class after the slot, never the other class in the same slot', async () => {
     const { text } = await today();
     expect(text).not.toMatch(/After \| Database Systems LAB/);
     expect(text).toMatch(/After \| Database Systems · LR-601/); // the 13:00 class
   });
 
   it('a cancelled earlier class does not make the count read "Period 3 of 2"', () => {
-    const d = deckOf(block(CANCEL_FIRST).periods, NOW, true);
+    const d = deckOf(block(CANCEL_FIRST).periods, new Date(2026, 9, 5, 13, 30).getTime(), true); // in the 13:00 class
     const [, at, of] = /Period (\d+) of (\d+)/.exec(d.position) ?? [];
     expect(Number(at)).toBeLessThanOrEqual(Number(of));
   });
@@ -129,5 +133,37 @@ describe('S1: Today with the cases that broke it', () => {
     const labels = block().periods.map((p) => p.label);
     expect(labels).toContain('Música 🎵 y Arte');
     expect(labels).toContain('Introduction to the Theory of Computation and Formal Languages, Section B');
+  });
+});
+
+describe('S2 pieces', () => {
+  it('lanes put overlapping classes side by side and leave a lone class full width', () => {
+    expect(lanes([{ start: 600, end: 690 }, { start: 600, end: 690 }, { start: 780, end: 840 }])).toEqual([{ lane: 0, of: 2 }, { lane: 1, of: 2 }, { lane: 0, of: 1 }]);
+    // a chain: A overlaps B, B overlaps C, A and C do not -> two lanes, C reuses A's
+    expect(lanes([{ start: 0, end: 60 }, { start: 30, end: 120 }, { start: 90, end: 150 }])).toEqual([{ lane: 0, of: 2 }, { lane: 1, of: 2 }, { lane: 0, of: 2 }]);
+  });
+  it('the heading steps down for a long name and stays at full size for a short one', () => {
+    expect(headingSize('Database', 340)).toBe(32);
+    const long = headingSize('Introduction to the Theory of Computation and Formal Languages, Section B', 340);
+    expect(long).toBeLessThan(32);
+    expect(long).toBeGreaterThanOrEqual(20);
+  });
+  it('the unit says minutes only when the digits are minutes', () => {
+    const p = { start: NOW - 60_000, end: NOW + 2 * 3_600_000, label: 'Long lab', cancelled: false };
+    expect(deckOf([p], NOW, true).unit).toBe('left');
+    expect(deckOf([{ ...p, end: NOW + 30 * 60_000 }], NOW, true).unit).toBe('min left');
+  });
+  it('Due groups: overdue (five shown), due later today, then the next three', () => {
+    const t = (id: string, dueAt: number | null, status: 0 | 2 = 0) => ({ id, title: id, courseId: null, kind: 'assignment' as const, dueAt, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status, createdAt: 0, completedAt: null, reminders: [], subtasks: [], demo: false });
+    const H = 3_600_000, tasks = [
+      ...Array.from({ length: 7 }, (_, i) => t(`late${i}`, NOW - (i + 1) * H)), t('today', NOW + 2 * H), t('done', NOW + H, 2), t('nodate', null),
+      t('d1', NOW + 30 * H), t('d2', NOW + 50 * H), t('d3', NOW + 70 * H), t('d4', NOW + 90 * H),
+    ];
+    const g = dueGroups(tasks, NOW);
+    expect(g.overdue.map((x) => x.id)).toEqual(['late6', 'late5', 'late4', 'late3', 'late2']);
+    expect(g.moreOverdue).toBe(2);
+    expect(g.today.map((x) => x.id)).toEqual(['today']);
+    expect(g.next.map((x) => x.id)).toEqual(['d1', 'd2', 'd3']);
+    expect(dueGroups([], NOW).empty).toBe(true);
   });
 });

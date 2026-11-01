@@ -335,7 +335,9 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('isToday={sel === today}');
     expect(src).toContain('occ={selOcc}');
     // …and it is the same `periods` array the bar was already drawn from.
-    expect(src).toContain('<DayBar kind={bar} periods={periods}');
+    // v0.5 S2: the bar draws the selected day's periods minus the OTHER classes of a shared slot.
+    expect(src).toContain('periods.filter((_, i) => !(d.slot.includes(i) && i !== d.at))');
+    expect(src).toContain('<DayBar kind={bar} periods={barPeriods}');
   });
 
   it('the countdown ticks at 1 Hz only while Today is on screen', () => {
@@ -377,7 +379,8 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
   });
 
   it('a class title is capped at two lines, like every other course name on the page', () => {
-    expect(src).toContain('<Txt f="marker" s={32} numberOfLines={2}');
+    // v0.5 S2: still two lines, now at the largest size that fits them (32 down to 20, `headingSize`).
+    expect(src).toContain('<Txt f="marker" s={headingSize(title, w)} numberOfLines={2}');
   });
 
   it("the midnight rule is NOT re-implemented in the view — it is the domain's, once", () => {
@@ -506,9 +509,11 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     });
 
   it('exactly one marker line prints a class label: the deck title', () => {
-    const hits = markerLines(src()).filter((m) => /\b(label|course\?\.name)\b/.test(m.body));
+    const hits = markerLines(src()).filter((m) => /\b(label|title|course\?\.name)\b/.test(m.body));
     expect(hits).toHaveLength(1);
-    expect(hits[0]!.body).toContain('d.period.label');
+    // v0.5 S2: the deck title prints `title` (the picked class's label, or "Free day"), set once above it.
+    expect(hits[0]!.body).toContain('title');
+    expect(src()).toContain("const title = d.period ? d.period.label : 'Free day';");
   });
 
   it('the masthead row keeps its state word and its clock time, and drops the name', () => {

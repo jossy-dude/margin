@@ -125,7 +125,7 @@ ok('0', !(await p.locator('[data-testid="time-start"]').count()), 'the second 10
 await p.evaluate(() => window.scrollTo(0, 0));
 const text = await pageText();
 ok('1a', text.includes('Discrete Mathematics'), 'Today renders with the deck on Discrete Mathematics');
-ok('1b', /2 classes now|Two classes now|2 on now/i.test(text), 'the deck says two classes are on now');
+ok('1b', /\+1 more/.test(text) && (await p.locator('[data-testid^="deck-slot-"]').count()) === 2, 'the deck says there is one more class now, with a tab for each');
 const after = (await texts()).join(' | ').match(/After \| ([^|]+)/)?.[1]?.trim() ?? '';
 // whichever subject the new 10:00 class got, the class after the 10:00 slot is the 11:45 Emerging Technology
 ok('2', /^Emerging Technology/.test(after), `"After" names the class after the slot, not the other one in it (${JSON.stringify(after)})`);

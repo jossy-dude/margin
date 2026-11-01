@@ -95,3 +95,26 @@ export function attendanceRate(occ: Occurrence[], att: Record<string, AttRecord>
   }
   return { held, here, late, absent, sick, cancelled, rate: held ? here / held : null };
 }
+
+/**
+ * Side-by-side lanes for classes that overlap in time (S2: Week drew two classes in one slot exactly on
+ * top of each other, so one was invisible). Classes that overlap, directly or through a chain, form a
+ * cluster; each gets the first lane free at its start, and every class in a cluster is told how many
+ * lanes the cluster needs, so they all share its width evenly. Input in minutes; order is preserved.
+ */
+export function lanes(items: readonly { start: number; end: number }[]): { lane: number; of: number }[] {
+  const idx = items.map((x, i) => ({ ...x, i })).sort((a, b) => a.start - b.start || a.end - b.end);
+  const out: { lane: number; of: number }[] = items.map(() => ({ lane: 0, of: 1 }));
+  let cluster: typeof idx = [], ends: number[] = [], clusterEnd = -Infinity;
+  const close = () => { const n = Math.max(1, ends.length); for (const c of cluster) out[c.i]!.of = n; cluster = []; ends = []; };
+  for (const it of idx) {
+    if (it.start >= clusterEnd) { close(); clusterEnd = -Infinity; }
+    let lane = ends.findIndex((e) => e <= it.start);
+    if (lane < 0) { lane = ends.length; ends.push(it.end); } else ends[lane] = it.end;
+    out[it.i]!.lane = lane;
+    cluster.push(it);
+    clusterEnd = Math.max(clusterEnd, it.end);
+  }
+  close();
+  return out;
+}

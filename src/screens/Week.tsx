@@ -8,7 +8,7 @@ import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Page, Section } from './common';
 import { DW, MO, addDays, atTime, fmtTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
-import { effective, isCancelled, occEnd, occKey, occurrencesOn } from '../domain/attendance';
+import { effective, isCancelled, lanes, occEnd, occKey, occurrencesOn } from '../domain/attendance';
 import { roomOf } from '../domain/rooms';
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
@@ -73,6 +73,8 @@ export function WeekScreen() {
           </View>
           {DW.map((_, i) => {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
+            /* S2: classes that overlap share the column side by side instead of stacking on one spot. */
+            const lay = lanes(occ.map(({ meeting: m }) => { const a = hm(m.start), b = hm(m.end); return { start: a, end: b > a ? b : b + 24 * 60 }; }));
             return (
               <View key={i} style={{ width: cw, height: H }}>
 {occ.map(({ date, meeting }, oi) => {
@@ -82,7 +84,7 @@ export function WeekScreen() {
               const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, mins = hm(meeting.end) - hm(meeting.start), h = (mins > 0 ? mins : mins + 24 * 60) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
                   return (
                     <Pressable key={key} ref={i === 0 && oi === 0 ? tourCell : undefined} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
-                      style={{ position: 'absolute', left: 2, right: 2, top, height: Math.max(20, h - 2) }}>
+                      style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
                       <HandBox seed={key} fill={x ? c.paper : hexA(c.acc, 0.2)} stroke={x ? c.mut : c.acc} shadow={false} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
                         {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{roomOf(meeting, course, st.variants)}</Txt>}

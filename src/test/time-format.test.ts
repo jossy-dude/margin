@@ -173,7 +173,8 @@ describe('deckOf (source) — the W4 shape, cross-checked against card.test.ts\'
   const src = readFileSync(join(__dirname, '..', 'screens', 'Today.tsx'), 'utf8');
 
   it('takes the clock as a 4th argument, and the card hands it the user\'s choice', () => {
-    expect(src).toContain('export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false)');
+    // v0.5 S2 added a 5th argument after the clock: which class of a shared slot the card shows.
+    expect(src).toContain('export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false, pick = 0)');
     expect(src).toContain('deckOf(periods, t, isToday, hour12)');
   });
 
