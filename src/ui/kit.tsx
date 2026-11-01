@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollVi
 import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, FONT, TAPE, hexA, type Colors } from '../tokens/theme';
-import { handPath, hashSeed, type Corners } from './hand';
+import { handPath, hashSeed, tornTape, type Corners } from './hand';
 import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
@@ -373,8 +373,23 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
     </View>
   );
 }
+/**
+ * A strip of tape (v0.5 U2): torn at both ends the way tape tears off a roll, a faint sheen along its top
+ * edge, and a soft shadow just below and to the right, because tape lifts a hair off the paper and the
+ * lamp is up and to the left. Still one non-interactive layer; the tear is seeded by size and angle, so
+ * a given strip tears the same way every render.
+ */
 export function Tape({ w = 62, rot = -4, style, testID }: { w?: number; rot?: number; style?: StyleProp<ViewStyle>; testID?: string }) {
-  const { dark } = useTheme();
-  return <View testID={testID} pointerEvents="none" style={[{ position: 'absolute', width: w, height: 20, backgroundColor: dark ? TAPE.dark.fill : TAPE.light.fill, borderColor: dark ? TAPE.dark.edge : TAPE.light.edge, borderWidth: 0.8, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]} />;
+  const { dark } = useTheme(), T = dark ? TAPE.dark : TAPE.light, H = 20;
+  const d = useMemo(() => tornTape(w, H, hashSeed(`tape${w}:${rot}`)), [w, rot]);
+  return (
+    <View testID={testID} pointerEvents="none" style={[{ position: 'absolute', width: w, height: H, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]}>
+      <Svg width={w + 2} height={H + 3} style={{ position: 'absolute', left: 0, top: 0 }}>
+        <Path d={d} fill={T.shadow} transform="translate(0.9 1.8)" />
+        <Path d={d} fill={T.fill} stroke={T.edge} strokeWidth={0.8} />
+        <Path d={`M4 2.4H${w - 4}`} stroke={T.shine} strokeWidth={1} strokeLinecap="round" />
+      </Svg>
+    </View>
+  );
 }
 export const Hair = () => { const { c } = useTheme(); return <View style={{ height: 1.4, backgroundColor: c.rule, marginVertical: 8 }} />; };

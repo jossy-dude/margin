@@ -16,19 +16,35 @@ export interface Colors {
 }
 const REFINED: Record<'light' | 'dark', Colors> = {
   light: { paper: '#FAF4E6', card: '#FFFBF1', desk: '#E9DFC9', ink: '#2A241C', mut: '#665B4B', acc: '#8A4B27', hl: '#F3E3A8', rule: '#2A241C33', dot: '#2A241C26', shadow: '#2A241C', ok: '#3F6B4A', warn: '#8F5A00', bad: '#9C3322', slab: '#2F2920', slabInk: '#FAF4E6', slabMut: '#D9CDB4', deck: '#2A241C', deckInk: '#FAF4E6', deckMut: '#D9CDB4', grain: 0.5, photo: 0.22, onAcc: '#FFFBF1' },
-  /* Only `paper` moves. `card`, `desk`, `slab` and the deck's inks are contrast-tuned against their
-     *  own pairs (ui.test.ts pins every pair at 4.5:1) and lifting them with the background silently
-     *  breaks pairs that were passing — measured: deckMut on deck fell to 3.3:1, bad on card to 4.4:1.
-     *  The page reads as "too dark" because of the paper, so the paper is the only token that lifts. */
-  dark: { paper: '#3C352C', card: '#353029', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E0A47A', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F08C7A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', deck: '#F2EAD8', deckInk: '#2B2620', deckMut: '#665B4B', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
+  /* Dark card stock (v0.5 U2). The page keeps the luminance the owner approved when "too dark" was
+     fixed (`paper` was lifted then, and stays). What changes is the card: it used to be DARKER than the
+     page (#353029 on #3C352C), so every card read as a hole cut in the paper. Real card stock laid on a
+     dark desk under a lamp is a shade lighter than the sheet under it, so `card` now sits above `paper`
+     (1.13:1, enough to read as a layer, not a slab). Two inks were re-measured on the lighter card and
+     nudged up to stay over 4.5:1: `bad` (#F08C7A → #F4998A, 4.99:1) and the sienna `acc` (#E0A47A →
+     #E3AA82, 5.28:1). `desk`, `slab` and the deck are untouched — their pairs did not move. */
+  dark: { paper: '#3C352C', card: '#433D35', desk: '#1F1B16', ink: '#F2EAD8', mut: '#BCB19C', acc: '#E3AA82', hl: '#4A3F22', rule: '#F2EAD83D', dot: '#F2EAD81F', shadow: '#000000', ok: '#8FC49A', warn: '#E3B04B', bad: '#F4998A', slab: '#1F1B16', slabInk: '#F2EAD8', slabMut: '#C9BEA8', deck: '#F2EAD8', deckInk: '#2B2620', deckMut: '#665B4B', grain: 0.4, photo: 0.18, onAcc: '#2B2620' },
 };
 const ORIGINAL: Record<'light' | 'dark', Colors> = {
   light: { paper: '#FAF5EB', card: '#FEFBF5', desk: '#C0B9B2', ink: '#26201C', mut: '#57514C', acc: '#67696B', hl: '#E4DECD', rule: '#26201C33', dot: '#26201C26', shadow: '#26201C', ok: '#4B6B52', warn: '#8A5A12', bad: '#8F3A2C', slab: '#26201C', slabInk: '#FAF5EB', slabMut: '#C9C3BA', deck: '#26201C', deckInk: '#FAF5EB', deckMut: '#C9C3BA', grain: 0.6, photo: 0.3, onAcc: '#FEFBF5' },
   dark: { paper: '#10141A', card: '#1C1F26', desk: '#030407', ink: '#E7E4DC', mut: '#A8A49D', acc: '#A6A9AC', hl: '#3D434C', rule: '#E7E4DC3D', dot: '#E7E4DC1F', shadow: '#000000', ok: '#8FBF9A', warn: '#D9A94A', bad: '#E58A78', slab: '#E7E4DC', slabInk: '#10141A', slabMut: '#3D434C', deck: '#E7E4DC', deckInk: '#10141A', deckMut: '#57514C', grain: 0.5, photo: 0.25, onAcc: '#10141A' },
 };
-export const PENS: Record<Exclude<Settings['pen'], 'warm' | 'graphite'>, { light: string; dark: string }> = {
-  red: { light: '#9C3322', dark: '#F08C7A' }, blue: { light: '#2F4F7A', dark: '#9DB9E3' },
+/**
+ * The four pens are inks, not palettes (v0.5 U2). A pen used to borrow its palette's accent, so in the
+ * Original palette "Warm sienna" was the same grey as "Graphite" — two names, one ink. Now each pen is
+ * one ink with a measured pair per theme, whatever paper it writes on: a brown fountain-pen sienna, a
+ * pencil graphite with its faint blue sheen, a red ink, a blue ballpoint. Every value clears 4.5:1 on
+ * paper and card, and under `onAcc` as a filled button, in both palettes and both themes (ui.test.ts).
+ */
+export const PENS: Record<Settings['pen'], { light: string; dark: string }> = {
+  warm: { light: '#8A4B27', dark: '#E3AA82' },
+  graphite: { light: '#55585D', dark: '#B9BDC2' },
+  red: { light: '#A3291F', dark: '#F4998A' },
+  blue: { light: '#24448A', dark: '#9DB9E3' },
 };
+/** The red margin rule of a ruled exercise book: the same in every palette and with every pen, because
+ *  it is printed on the paper, not written on it. */
+export const MARGIN = { light: '#C0392B', dark: '#E0705F' } as const;
 export const palettes = { refined: REFINED, original: ORIGINAL };
 
 /** Art constants that are deliberately theme-independent, so they are tokens rather than literals
@@ -58,8 +74,8 @@ export const ONYX = { dark: '#17130F' } as const;
 export const DIAL = { light: '#FFFFFF', dark: '#000000' } as const;
 export const SECOND = { light: '#8A4B27', dark: '#C0663A' } as const;
 export const TAPE = {
-  light: { fill: '#E7D9AE99', edge: '#B8A56E55' },
-  dark: { fill: '#C9B98F55', edge: '#C9B98F66' },
+  light: { fill: '#E7D9AE99', edge: '#B8A56E55', shadow: '#2A241C1A', shine: '#FFFFFF59' },
+  dark: { fill: '#C9B98F55', edge: '#C9B98F66', shadow: '#00000052', shine: '#FFFFFF1F' },
 } as const;
 
 export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', serif: 'Newsreader_400Regular_Italic', serifB: 'Newsreader_600SemiBold_Italic', marker: 'PermanentMarker_400Regular', type: 'SpecialElite_400Regular' } as const;
@@ -71,9 +87,7 @@ export interface Theme { c: Colors; dark: boolean; font: typeof FONT }
 export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean): Theme {
   const dark = s.theme === 'auto' ? systemDark : s.theme === 'dark', mode = dark ? 'dark' : 'light';
   const base = palettes[s.palette][mode];
-  let acc = base.acc;
-  if (s.pen === 'red' || s.pen === 'blue') acc = PENS[s.pen][mode];
-  else if (s.pen === 'graphite') acc = palettes.original[mode].acc;
+  const acc = (PENS[s.pen] ?? PENS.warm)[mode];
   return { c: { ...base, acc }, dark, font: FONT };
 }
 export const hexA = (hex: string, a: number) => `${hex.slice(0, 7)}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

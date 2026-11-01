@@ -24,6 +24,10 @@ export function outline(w: number, h: number, c: Corners, step = 7): [number, nu
 /** A closed SVG path with low-frequency wobble: neighbouring points move together so the edge reads as a hand-cut line, not noise. */
 export function handPath(w: number, h: number, c: Corners, seed: number, amp = 1.1): string {
   if (w < 2 || h < 2) return '';
+  /* The wobble is capped on small boxes (v0.5 U2). Scissors wander about as far on a chip as on a card,
+     so the same ±1.1 dp that reads as a hand-cut edge on a 300 dp card read as a shaky, broken line on a
+     32 dp chip. Below 44 dp on the short side the amplitude scales down with it. */
+  amp *= Math.min(1, Math.min(w, h) / 44);
   const pts = outline(w, h, c), n = pts.length, r = rnd(seed), K = Math.max(6, Math.round(n / 9));
   const ctrl = Array.from({ length: K + 1 }, () => [r() * 2 - 1, r() * 2 - 1] as const);
   const at = (i: number) => { const u = (i / n) * K, k = Math.floor(u), f = u - k, s = f * f * (3 - 2 * f), a = ctrl[k % K]!, b = ctrl[(k + 1) % K]!; return [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s] as const; };
@@ -32,3 +36,20 @@ export function handPath(w: number, h: number, c: Corners, seed: number, amp = 1
   return d + 'Z';
 }
 export const hashSeed = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+/**
+ * A strip of tape torn off the roll (v0.5 U2): long edges straight (it was cut along the roll), short
+ * ends torn — a fine, irregular zigzag a couple of dp deep, different at each end and stable per seed.
+ */
+export function tornTape(w: number, h: number, seed: number): string {
+  if (w < 8 || h < 4) return '';
+  const r = rnd(seed), DEPTH = 2.4, STEP = 2.6;
+  const end = (x: number, dir: 1 | -1) => {
+    const pts: string[] = [];
+    const n = Math.max(3, Math.round(h / STEP));
+    for (let i = 1; i < n; i++) { const y = dir === 1 ? (i * h) / n : h - (i * h) / n; pts.push(`L${(x + dir * -1 * r() * DEPTH).toFixed(1)} ${y.toFixed(1)}`); }
+    return pts.join('');
+  };
+  const l = DEPTH, rgt = w - DEPTH;
+  return `M${l.toFixed(1)} 0L${rgt.toFixed(1)} 0${end(rgt + DEPTH * 0.5, 1)}L${rgt.toFixed(1)} ${h}L${l.toFixed(1)} ${h}${end(l - DEPTH * 0.5, -1)}Z`;
+}

@@ -1,5 +1,5 @@
-import { palettes, RG } from '../tokens/theme';
-import { handPath, outline, scaleRadii } from '../ui/hand';
+import { makeTheme, palettes, PENS, RG } from '../tokens/theme';
+import { handPath, outline, scaleRadii, tornTape } from '../ui/hand';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -47,6 +47,21 @@ describe('every text/background pair the app draws clears 4.5:1 — in BOTH pale
       it.each(PAIRS)(`${name}.${mode}: %s on %s — %s`, (fg, bg, _where) => {
         expect(cr((c as never)[fg], (c as never)[bg])).toBeGreaterThanOrEqual(4.5);
       });
+    }
+  }
+
+  /* v0.5 U2: the pen is the accent, and each pen is its own ink. Every pen, on both papers and both
+     themes, is checked where the accent is drawn: as text on the page and on a card, and as a filled
+     button carrying `onAcc`. */
+  for (const pen of Object.keys(PENS) as (keyof typeof PENS)[]) {
+    for (const palette of ['refined', 'original'] as const) {
+      for (const theme of ['light', 'dark'] as const) {
+        it(`the ${pen} pen on ${palette} ${theme}: on paper, on a card, and under its own button label`, () => {
+          const { c } = makeTheme({ pen, palette, theme }, false);
+          expect(c.acc).toBe(PENS[pen][theme]);
+          for (const [fg, bg] of [[c.acc, c.paper], [c.acc, c.card], [c.onAcc, c.acc]] as const) expect(cr(fg, bg)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
     }
   }
 
@@ -256,5 +271,19 @@ describe('synth recipes (scripts/synth-sounds.mjs output, the audition set)', ()
   it('rapid-fire sounds stay inside the 30-120 ms window and nothing runs long', () => {
     for (const n of RAPID) { const s = all.get(n) as { seconds: number }; expect({ sound: n, rapid: s.seconds >= 0.03 && s.seconds <= 0.12 }).toEqual({ sound: n, rapid: true }); }
     for (const [n, s] of all) { expect({ sound: n, len: s.seconds > 0.03 && s.seconds < 1.3 }).toEqual({ sound: n, len: true }); }
+  });
+});
+/* v0.5 U2 — tape tears, small boxes wobble less. */
+describe('tape and small boxes', () => {
+  it('a tape strip is torn at both ends, the same way for the same strip, differently for another', () => {
+    const a = tornTape(62, 20, 7), b = tornTape(62, 20, 7), c = tornTape(62, 20, 8);
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+    expect(a.match(/L/g)!.length).toBeGreaterThan(10); // a zigzag at each end, not a rectangle
+    expect(tornTape(4, 20, 1)).toBe('');
+  });
+  it('the wobble on a 32 dp chip is a smaller share than on a 300 dp card', () => {
+    const spread = (d: string) => { const ys = [...d.matchAll(/[ML][\d.]+ ([\d.]+)/g)].map((m) => Number(m[1])).filter((y) => y < 6); return Math.max(...ys) - Math.min(...ys); };
+    expect(spread(handPath(120, 32, RG, 3))).toBeLessThan(spread(handPath(300, 200, RG, 3)) + 0.01);
   });
 });

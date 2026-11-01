@@ -6,6 +6,7 @@ import Svg, { Circle, Defs, Line, Pattern, Rect } from 'react-native-svg';
 import { EASE } from './kit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { useStore } from '../store/store';
+import { MARGIN } from '../tokens/theme';
 
 const GRAIN_SRC = require('../../assets/textures/grain.png');
 const PHOTO_SRC = require('../../assets/textures/t1.jpg');
@@ -45,6 +46,8 @@ const PHOTO_WEB = Asset.fromModule(PHOTO_SRC).uri;
  * that reads as deliberate.
  */
 const PAPER_MS = 220;
+/** Ruled paper's line pitch, dp. */
+const RULED = 28;
 
 /** A full-bleed, repeating CSS background — the web's equivalent of `resizeMode="repeat"`. The asset
  *  URLs are resolved through `Image.resolveAssetSource`, which is react-native-web's own accessor and
@@ -107,14 +110,14 @@ const tileStyle = (col: number, row: number, px: number): ImageStyle => ({ posit
  * `PaperBg` lives in a container that is that size or smaller, so the grid always covers its paper, and
  * anything past the paper's own edge is cut by `CLIP`.
  */
-function Tiles({ src, px }: { src: number; px: number }) {
+function Tiles({ src, px, tint }: { src: number; px: number; tint?: string }) {
   const { width, height } = useWindowDimensions();
   const cols = Math.ceil(width / px), rows = Math.ceil(height / px);
   return (
     <>
       {Array.from({ length: cols * rows }, (_, i) => {
         const col = i % cols;
-        return <Image key={i} source={src} resizeMode="stretch" style={tileStyle(col, (i - col) / cols, px)} />;
+        return <Image key={i} source={src} resizeMode="stretch" tintColor={tint} style={tileStyle(col, (i - col) / cols, px)} />;
       })}
     </>
   );
@@ -151,7 +154,12 @@ export function PaperBg({ card = false }: { card?: boolean }) {
     return () => clearTimeout(t);
   }, [tex, reduce, grain, photo]);
   const ruleStyle = useAnimatedStyle(() => ({ opacity: rule.get() }));
-  const grainStyle = useAnimatedStyle(() => ({ opacity: interpolate(grain.get(), [0, 1], [0, c.grain * (dark ? 0.55 : 0.8)]) }));
+  /* Grain per theme (v0.5 U2). The bitmap is black flecks on transparency: on cream they are the
+     paper's pulp, but on dark card stock black flecks vanish into the sheet and the page read as flat
+     plastic. Dark paper's fibres catch the light instead, so in dark the same flecks are drawn in the
+     theme's ink (pale) — `tintColor` on native, an invert on the web's CSS layer — and a little stronger,
+     because pale fibres on a dark ground read fainter than dark ones on a light ground. */
+  const grainStyle = useAnimatedStyle(() => ({ opacity: interpolate(grain.get(), [0, 1], [0, c.grain * (dark ? 0.7 : 0.8)]) }));
   const photoStyle = useAnimatedStyle(() => ({ opacity: photo.get() * c.photo }));
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: card ? c.card : c.paper }]}>
@@ -161,10 +169,14 @@ export function PaperBg({ card = false }: { card?: boolean }) {
             <Defs>
               {paper === 'dots' && <Pattern id={id} width={18} height={18} patternUnits="userSpaceOnUse"><Circle cx={9} cy={9} r={0.95} fill={c.dot} /></Pattern>}
               {paper === 'grid' && <Pattern id={id} width={20} height={20} patternUnits="userSpaceOnUse"><Line x1={0} y1={0.5} x2={20} y2={0.5} stroke={c.dot} strokeWidth={1} /><Line x1={0.5} y1={0} x2={0.5} y2={20} stroke={c.dot} strokeWidth={1} /></Pattern>}
-              {paper === 'ruled' && <Pattern id={id} width={32} height={32} patternUnits="userSpaceOnUse"><Line x1={0} y1={31.5} x2={32} y2={31.5} stroke={c.dot} strokeWidth={1} /></Pattern>}
+              {/* v0.5 U2: 28 dp between lines, the line height of the app's handwriting (Caveat at 20-22),
+                  so a ruled page has the rhythm of an exercise book written in that hand. It was 32. */}
+              {paper === 'ruled' && <Pattern id={id} width={RULED} height={RULED} patternUnits="userSpaceOnUse"><Line x1={0} y1={RULED - 0.5} x2={RULED} y2={RULED - 0.5} stroke={c.dot} strokeWidth={1} /></Pattern>}
             </Defs>
             <Rect width="100%" height="100%" fill={`url(#${id})`} />
-            {paper === 'ruled' && <Line x1={46} y1={0} x2={46} y2="100%" stroke={c.acc} strokeOpacity={0.35} strokeWidth={1.2} />}
+            {/* The margin rule is printed on the paper, so it is the book's red in every palette and with
+                every pen (it used to follow the pen, which drew a grey margin with graphite). */}
+            {paper === 'ruled' && <Line x1={46} y1={0} x2={46} y2="100%" stroke={dark ? MARGIN.dark : MARGIN.light} strokeOpacity={dark ? 0.45 : 0.5} strokeWidth={1.2} />}
           </Svg>
         </Animated.View>
       )}
@@ -178,8 +190,8 @@ export function PaperBg({ card = false }: { card?: boolean }) {
            paper. A CSS background on a genuinely full-bleed layer is the only thing that actually
            repeats, so the web takes that path and native takes the explicit grid of `Image` tiles in
            `Tiles`. */
-        ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle, tiled(GRAIN_WEB)]} />
-        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, grainStyle]}><Tiles src={GRAIN_SRC} px={GRAIN_PX} /></Animated.View>)}
+        ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle, tiled(GRAIN_WEB), dark ? ({ filter: 'invert(0.92) sepia(0.25)' } as never) : null]} />
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, grainStyle]}><Tiles src={GRAIN_SRC} px={GRAIN_PX} tint={dark ? c.ink : undefined} /></Animated.View>)}
       {(tex === 'photo' || cross) && (WEB
         ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tiled(PHOTO_WEB, PHOTO_PX), { mixBlendMode: dark ? 'screen' : 'multiply' } as never, photoStyle]} />
         : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, { mixBlendMode: dark ? 'screen' : 'multiply' }, photoStyle]}><Tiles src={PHOTO_SRC} px={PHOTO_PX} /></Animated.View>)}

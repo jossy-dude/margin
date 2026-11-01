@@ -58,13 +58,17 @@ describe('notification accent (BUG-009)', () => {
     }
   });
 
-  it('follows the palette too, not only the pen', async () => {
+  /* v0.5 U2: a pen is an ink, the same on either paper, so "Warm sienna" is sienna in the Original palette
+     too (it used to turn into the Original palette's grey, the same colour as Graphite). The notification
+     accent therefore follows the pen, and the palette no longer changes it. */
+  it('follows the pen, which is the same ink on either palette', async () => {
     for (const palette of ['refined', 'original'] as const) {
       (scheduleNotificationAsync as jest.Mock).mockClear();
       await sync(plan, accentOf('warm', palette));
       expect((scheduleNotificationAsync as jest.Mock).mock.calls[0]![0].content.color).toBe(accentOf('warm', palette));
     }
-    expect(accentOf('warm')).not.toBe(accentOf('warm', 'original'));
+    expect(accentOf('warm')).toBe(accentOf('warm', 'original'));
+    expect(accentOf('warm')).not.toBe(accentOf('graphite'));
   });
 });
 
