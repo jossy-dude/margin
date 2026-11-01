@@ -1,5 +1,5 @@
 import type { AttRecord, AttStatus, Course, DayMark, Meeting } from './types';
-import { DAY_MS, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
+import { addDays, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
 
 export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late · stayed out', a: 'Absent', s: 'Sick', c: 'Cancelled', t: 'Teacher out' };
 export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
@@ -15,7 +15,7 @@ export const occKey = (date: string, m: Pick<Meeting, 'start' | 'courseId'>) => 
  *  marked "Here" a day early and the "just ended" notification fired 23½ hours before the lecture. */
 export const occEnd = (dayMs: number, m: Pick<Meeting, 'start' | 'end'>) => {
   const start = atTime(dayMs, m.start), end = atTime(dayMs, m.end);
-  return end > start ? end : end + DAY_MS;
+  return end > start ? end : atTime(addDays(dayMs, 1), m.end); // calendar day, not 24 h: DST nights are 23 or 25
 };
 
 export interface Eff { status: AttStatus | null; inferred: boolean; explicit: boolean }

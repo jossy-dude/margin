@@ -6,7 +6,7 @@ import { BEAT, EASE, HandBox, Icon, Txt } from '../ui/kit';
 import { PaperBg } from '../ui/PaperBg';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
-import { DAY_MS, fmtDur, fmtTime, startOfDay } from '../domain/time';
+import { addDays, fmtDur, fmtTime, startOfDay } from '../domain/time';
 import type { AttStatus, Task } from '../domain/types';
 import { workload } from '../domain/reminders';
 import { ST } from '../domain/attendance';
@@ -64,7 +64,7 @@ export function spokenStatus(e: { status: AttStatus | null; inferred: boolean })
 export function relDue(ms: number, now: number, h12 = false) {
   const d = ms - now, a = Math.abs(d), m = Math.round(a / 60_000);
   if (d < 0) return m < 60 ? `${m} min late` : m < 1440 ? `${Math.round(m / 60)} h late` : `${Math.round(m / 1440)} d late`;
-  return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : startOfDay(ms) - startOfDay(now) === DAY_MS ? `tomorrow ${fmtTime(ms, h12)}` : `in ${Math.round(m / 1440)} d`;
+  return m < 60 ? `in ${m} min` : m < 1440 ? `in ${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}m` : ''}` : startOfDay(ms) === addDays(startOfDay(now), 1) ? `tomorrow ${fmtTime(ms, h12)}` : `in ${Math.round(m / 1440)} d`;
 }
 /** Today's masthead "when" line: the next class, as a wall clock plus how far off it is.
  *

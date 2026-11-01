@@ -7,6 +7,10 @@ export interface TimerState {
   breakLeftMs: number; breakTotalMs: number; breakElapsedMs: number; nextNudgeMs: number; breakDoneMs: number;
   breaksUsed: number; breaksAllowed: number; breakMs: number; rounds: number;
   taskId: string | null; courseId: string | null; title: string;
+  /** Focus and flow overtime from the rounds ALREADY finished in this session. The per-round fields above
+   *  reset when the next round starts (the dial, the break gate and the flow cap all read one round), so
+   *  the session total lives here. Optional so a timer persisted before v0.5 reads as zero. */
+  priorFocusMs?: number; priorOverMs?: number;
 }
 export const NUDGE_MS = 5 * 60_000, MIN_BREAK_AFTER_MS = 5 * 60_000;
 /** A break must be able to wiggle at least once before it ends, so the nudge step is a third of its own
@@ -43,6 +47,10 @@ export interface Advanced { state: TimerState; events: TimerEvent[] }
 /** Apply the wall-clock time that passed since the last checkpoint. */
 export function advance(s0: TimerState, now: number): Advanced {
   let s = { ...s0 }; const events: TimerEvent[] = [];
+  /* The wall clock moved BACK (a timezone fix, NTP, the user setting it by hand). `dt` would be negative,
+     clamped to 0, and stay 0 until the clock caught up with the old checkpoint — the timer froze for as
+     long as the step. The step is not time anyone spent, so the timer re-anchors and carries on. */
+  if (s.running && now < s.checkpoint) s.checkpoint = now;
   for (let guard = 0; guard < 8 && s.running; guard++) {
     const dt = Math.max(0, now - s.checkpoint);
     if (dt === 0) break;
@@ -86,10 +94,10 @@ export const canBreak = (s: TimerState) => s.phase === 'focus' && s.running && s
 /** The primary button: start / pause / resume / begin the next round. */
 export function toggle(s0: TimerState, now: number): Advanced {
   const { state: s, events } = advance(s0, now);
-  if (s.phase === 'set') return { state: { ...s, phase: 'focus', running: true, startedAt: now, checkpoint: now, focusLeftMs: s.planMin * 60_000, focusElapsedMs: 0, overMs: 0, warned: false, breaksUsed: 0 }, events };
+  if (s.phase === 'set') return { state: { ...s, phase: 'focus', running: true, startedAt: now, checkpoint: now, focusLeftMs: s.planMin * 60_000, focusElapsedMs: 0, overMs: 0, warned: false, breaksUsed: 0, priorFocusMs: 0, priorOverMs: 0 }, events };
   if (s.phase === 'break') return { state: s, events };
   if (s.running) return { state: { ...s, running: false }, events };
-  if (s.focusLeftMs === 0) return { state: { ...s, running: true, checkpoint: now, focusLeftMs: s.planMin * 60_000, focusElapsedMs: 0, overMs: 0, warned: false, breaksUsed: 0 }, events };
+  if (s.focusLeftMs === 0) return { state: { ...s, running: true, checkpoint: now, focusLeftMs: s.planMin * 60_000, focusElapsedMs: 0, overMs: 0, warned: false, breaksUsed: 0, priorFocusMs: (s.priorFocusMs ?? 0) + s.focusElapsedMs, priorOverMs: (s.priorOverMs ?? 0) + s.overMs }, events };
   return { state: { ...s, running: true, checkpoint: now }, events };
 }
 export function startBreak(s0: TimerState, now: number): TimerState {
@@ -116,6 +124,9 @@ export interface Summary { startedAt: number; endedAt: number; focusSec: number;
  *  is `true`: a completed round is in it. */
 export function finish(s0: TimerState, now: number): Summary | null {
   const s = advance(s0, now).state;
-  if (s.startedAt === null || s.focusElapsedMs < 60_000) return null;
-  return { startedAt: s.startedAt, endedAt: now, focusSec: Math.round(s.focusElapsedMs / 1000), breakSec: Math.round(s.breakDoneMs / 1000), overSec: Math.round(s.overMs / 1000), rounds: s.rounds, planMin: s.planMin, mode: 'focus', completed: s.rounds > 0, taskId: s.taskId, courseId: s.courseId };
+  /* The whole session, not the last round: starting round two used to reset `focusElapsedMs`, so a
+     two-round session saved only round two's minutes. */
+  const focusMs = (s.priorFocusMs ?? 0) + s.focusElapsedMs, overMs = (s.priorOverMs ?? 0) + s.overMs;
+  if (s.startedAt === null || focusMs < 60_000) return null;
+  return { startedAt: s.startedAt, endedAt: now, focusSec: Math.round(focusMs / 1000), breakSec: Math.round(s.breakDoneMs / 1000), overSec: Math.round(overMs / 1000), rounds: s.rounds, planMin: s.planMin, mode: 'focus', completed: s.rounds > 0, taskId: s.taskId, courseId: s.courseId };
 }

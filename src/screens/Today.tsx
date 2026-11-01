@@ -94,6 +94,9 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
   const target = cur ? cur.p.end : next ? next.p.start : null;
   const state: DeckState = cur ? 'live' : next ? (isToday ? 'soon' : 'first') : 'rest';
   const at = hit ? hit.i : -1;
+  /* `at` indexes `periods` (cancelled ones included) because the card finds its class by it; the words
+     count only the classes that are on, or a cancelled first class printed "Period 3 of 2". */
+  const rank = hit ? ps.indexOf(hit) : -1;
   return {
     state, period, at, total: ps.length,
     word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : 'Rest day',
@@ -103,7 +106,7 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
        with a unit borrowed from a state that is not happening. */
     unit: cur ? 'min left' : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
-      : state === 'soon' ? `${ps.length - at} of ${ps.length} left` : `Period ${at + 1} of ${ps.length}`,
+      : state === 'soon' ? `${ps.length - rank} of ${ps.length} left` : `Period ${rank + 1} of ${ps.length}`,
   };
 }
 

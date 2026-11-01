@@ -238,7 +238,9 @@ describe('focus timer', () => {
     // one full round and then an early end is still a completed session
     let s = toggle(initTimer({ planMin: 25, flow: false }), 0).state; s = toggle(s, 25 * 60_000).state;
     expect(s.focusLeftMs).toBe(25 * 60_000); // "Next round" re-arms the clock and keeps the count
-    expect(finish(s, 40 * 60_000)).toMatchObject({ rounds: 1, completed: true, focusSec: 900 });
+    // F7: the saved focus is the whole session — round one's 25 min plus round two's 15 — not just the
+    // last round's 900 s, which is what this line used to pin (the multi-round bug).
+    expect(finish(s, 40 * 60_000)).toMatchObject({ rounds: 1, completed: true, focusSec: 2400 });
   });
   it('flow overtime stops at the cap instead of billing focus that never happened', () => {
     expect(FLOW_OVER_CAP_MS).toBe(15 * 60_000);

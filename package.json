@@ -68,6 +68,7 @@
     "testMatch": [
       "<rootDir>/src/**/*.test.ts"
     ],
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "globalSetup": "<rootDir>/jest.tz.js"
   }
 }

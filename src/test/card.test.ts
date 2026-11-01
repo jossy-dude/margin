@@ -55,13 +55,14 @@ function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false) {
   const target = cur ? cur.p.end : next ? next.p.start : null;
   const state: 'live' | 'soon' | 'first' | 'rest' = cur ? 'live' : next ? (isToday ? 'soon' : 'first') : 'rest';
   const at = hit ? hit.i : -1;
+  const rank = hit ? ps.indexOf(hit) : -1; // F7: the words count only classes that are on
   return {
     state, period, at, total: ps.length,
     word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : 'Rest day',
     countdown: target === null || !period ? '--:--' : isToday ? fmtClock((target - t) / 1000) : `${fmtTime(period.start, h12)}–${fmtTime(period.end, h12)}`,
     unit: cur ? 'min left' : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
-      : state === 'soon' ? `${ps.length - at} of ${ps.length} left` : `Period ${at + 1} of ${ps.length}`,
+      : state === 'soon' ? `${ps.length - rank} of ${ps.length} left` : `Period ${rank + 1} of ${ps.length}`,
   };
 }
 
@@ -371,8 +372,8 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
   });
 
   it('the day-position caption keeps the two sentences the app already used here', () => {
-    expect(src).toContain('`Period ${at + 1} of ${ps.length}`');
-    expect(src).toContain('`${ps.length - at} of ${ps.length} left`');
+    expect(src).toContain('`Period ${rank + 1} of ${ps.length}`');
+    expect(src).toContain('`${ps.length - rank} of ${ps.length} left`');
   });
 
   it('a class title is capped at two lines, like every other course name on the page', () => {
@@ -549,5 +550,17 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     // bearing 8, trimmed from 14: the header's widest state (`First class · Period 1 of 4 · B-12`)
     // was over budget by ~20 px and every candidate for them is defended in `src/screens/Today.tsx`.
     expect(s).toContain('headPad={CLOCK + 8 - DECK_PAD_X}');
+  });
+});
+
+describe('period numbering skips cancelled classes (F7)', () => {
+  it('a cancelled first class no longer makes the live one "Period 2 of 1"', () => {
+    const ps: Period[] = [
+      { start: at('08:30'), end: at('09:20'), label: 'A', cancelled: true },
+      { start: at('09:30'), end: at('10:20'), label: 'B', cancelled: false },
+      { start: at('10:30'), end: at('11:20'), label: 'C', cancelled: false },
+    ];
+    expect(deckOf(ps, at('09:40'), true)).toMatchObject({ state: 'live', at: 1, total: 2, position: 'Period 1 of 2' });
+    expect(deckOf(ps, at('09:25'), true)).toMatchObject({ state: 'soon', position: '2 of 2 left' });
   });
 });

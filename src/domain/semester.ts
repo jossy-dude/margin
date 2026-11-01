@@ -1,4 +1,4 @@
-import { DAY_MS, MO, pad, parseYmd, startOfDay, ymd } from './time';
+import { DAY_MS, addDays, MO, pad, parseYmd, startOfDay, ymd } from './time';
 import type { SemesterRow } from './types';
 
 /**
@@ -152,7 +152,7 @@ export function clampToSemester(now: number, s: Range): number {
   const first = startOfDay(start.getTime());
   if (now < first) return first;
   if (end === null) return now;
-  const last = startOfDay(end.getTime()) + DAY_MS - 1;
+  const last = addDays(startOfDay(end.getTime()), 1) - 1; // the calendar day, whatever its length
   return Math.min(now, last);
 }
 
@@ -160,7 +160,7 @@ export function clampToSemester(now: number, s: Range): number {
  *  rather than 1970: the old export path did exactly that, and a loop from 1970 would be 20 000 days
  *  of empty occurrences on every export. */
 export function semesterFirstDay(s: Range, now: number): number {
-  return isYmd(s.semesterStart) ? startOfDay(parseYmd(s.semesterStart).getTime()) : startOfDay(now - 90 * DAY_MS);
+  return isYmd(s.semesterStart) ? startOfDay(parseYmd(s.semesterStart).getTime()) : addDays(startOfDay(now), -90);
 }
 
 /** Can this pair be saved? A missing end is valid (open-ended); both present must be real dates with

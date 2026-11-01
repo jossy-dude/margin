@@ -46,7 +46,10 @@ export const timerActions = {
   },
   /** called by the UI ticker; writes state only when something happened so a 4 Hz tick costs nothing */
   timerPump(now: number) {
-    const t = getState().timer; if (!t.running) return; const r = advance(t, now); if (r.events.length) { set({ timer: r.state }); applyEvents(r.events); }
+    const t = getState().timer; if (!t.running) return; const r = advance(t, now);
+    // A clock that moved back re-anchors inside `advance`; that has to be committed too, or every later
+    // view would re-derive from the old (future) checkpoint and the timer would sit still.
+    if (r.events.length || now < t.checkpoint) { set({ timer: r.state }); applyEvents(r.events); }
   },
   /** swap the task shown on the Focus page (only while the dial is still being set) */
   timerSwap() {

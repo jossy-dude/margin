@@ -6,7 +6,7 @@ import { useNow } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, TaskCard } from './common';
-import { DAY_MS, startOfDay } from '../domain/time';
+import { addDays, startOfDay } from '../domain/time';
 import type { Task } from '../domain/types';
 
 export function TasksScreen() {
@@ -25,7 +25,7 @@ export function TasksScreen() {
   }, [st.tasks, taskFilter, taskSort, cid, q]);
   const groups = useMemo(() => {
     const t0 = startOfDay(now), g: { title: string; items: Task[] }[] = [{ title: 'Late', items: [] }, { title: 'Today', items: [] }, { title: 'Tomorrow', items: [] }, { title: 'This week', items: [] }, { title: 'Later', items: [] }, { title: 'No date', items: [] }, { title: 'Done', items: [] }];
-    for (const t of list) { const i = t.status === 2 ? 6 : t.dueAt === null ? 5 : t.dueAt < now ? 0 : t.dueAt < t0 + DAY_MS ? 1 : t.dueAt < t0 + 2 * DAY_MS ? 2 : t.dueAt < t0 + 7 * DAY_MS ? 3 : 4; (g[i] as { items: Task[] }).items.push(t); }
+    for (const t of list) { const i = t.status === 2 ? 6 : t.dueAt === null ? 5 : t.dueAt < now ? 0 : t.dueAt < addDays(t0, 1) ? 1 : t.dueAt < addDays(t0, 2) ? 2 : t.dueAt < addDays(t0, 7) ? 3 : 4; (g[i] as { items: Task[] }).items.push(t); }
     return taskSort === 'due' ? g.filter((x) => x.items.length) : [{ title: '', items: list }];
   }, [list, now, taskSort]);
   const openN = st.tasks.filter((t) => t.status !== 2).length;
