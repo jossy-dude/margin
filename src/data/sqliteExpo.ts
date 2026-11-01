@@ -7,8 +7,8 @@ import { MIGRATIONS } from './specs';
  *  `data-not-up`), so `store/openRepository.ts` hands them in. Both are required on purpose: an optional
  *  `beforeMigration` would let a forgotten wiring run a migration with no safety copy, silently. */
 export interface AdapterDeps {
-  /** Writes the pre-migration safety copy (`services/safety.dumpBeforeMigration`). Must swallow its own
-   *  failures — the migration runs whatever it does. */
+  /** Writes the pre-migration safety copy (`services/safety.dumpBeforeMigration`). It throws when the copy
+   *  could not be made, and then the migration does not run: opening fails with its sentence instead. */
   beforeMigration: (read: (sql: string) => Promise<Record<string, unknown>[]>, from: number, to: number) => Promise<unknown>;
   /** The Problems log, for a stored value `load()` had to skip. */
   report: ReportProblem;

@@ -5,7 +5,7 @@ import { isYmd, suggestEnd, validRange } from '../domain/semester';
 import { recordCrash } from '../services/problems';
 import { configureFx } from '../services/fx';
 import { applySnapshot, getState, set } from './core';
-import { persist, R } from './persist';
+import { optimistic, persist, R } from './persist';
 import { resync } from './reminders';
 import { toast } from './toast';
 
@@ -91,8 +91,8 @@ export async function renameSemester(id: string, name: string) {
   const clean = name.trim(), row = getState().semesters.find((x) => x.id === id);
   if (!clean || !row || row.name === clean) return;
   const next: SemesterRow = { ...row, name: clean };
-  set((s) => ({ semesters: s.semesters.map((x) => (x.id === id ? next : x)) }));
-  await persist(R().saveSemester(next));
+  const put = (r: SemesterRow) => set((s) => ({ semesters: s.semesters.map((x) => (x.id === id ? r : x)) }));
+  await optimistic(() => put(next), () => R().saveSemester(next), () => put(row));
 }
 
 /** Save one term's range. The active term's pair is mirrored by `setActiveSemester`; an archived
@@ -101,12 +101,16 @@ export async function setSemesterRange(id: string, semesterStart: string, semest
   const row = getState().semesters.find((x) => x.id === id);
   if (!row) return;
   const next: SemesterRow = { ...row, start: semesterStart, end: semesterEnd };
-  set((s) => ({
-    semesters: s.semesters.map((x) => (x.id === id ? next : x)),
-    ...(row.active ? { settings: { ...s.settings, semesterStart, semesterEnd } } : {}),
+  const was = getState().settings;
+  const put = (r: SemesterRow, start: string, end: string) => set((s) => ({
+    semesters: s.semesters.map((x) => (x.id === id ? r : x)),
+    ...(row.active ? { settings: { ...s.settings, semesterStart: start, semesterEnd: end } } : {}),
   }));
-  await persist(R().saveSemester(next));
-  if (row.active) await persist(R().setActiveSemester(id));
+  await optimistic(
+    () => put(next, semesterStart, semesterEnd),
+    async () => { await R().saveSemester(next); if (row.active) await R().setActiveSemester(id); },
+    () => put(row, was.semesterStart, was.semesterEnd),
+  );
 }
 
 /** The Settings → Attendance control knows the range but not the id. The active row is the one it
@@ -158,6 +162,9 @@ export async function rollOverSemester(keepAttendance: boolean) {
   } catch (e) {
     recordCrash(e, 'save', 'Semesters');
     toast(`Couldn't start a new semester: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    /* A roll-over that failed part-way may have archived, cleared or created some of its rows: the screen
+       re-reads what the disk now holds instead of showing the term it started from. */
+    try { applySnapshot(await R().load(), true); await loadSemesters(); } catch (e2) { recordCrash(e2, 'data', 'Semesters'); }
   }
 }
 

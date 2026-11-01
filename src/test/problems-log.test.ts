@@ -41,7 +41,7 @@ beforeEach(() => { jest.useFakeTimers({ now: NOW }); recordCrash.mockClear(); no
 afterEach(() => { stopResync(); jest.useRealTimers(); });
 
 describe('a failed write is still there tomorrow (W1/C · audit H1)', () => {
-  it('a rejected save records a problem on the current route, keeps the row, and still toasts', async () => {
+  it('a rejected save records a problem on the current route, takes the row back, and toasts', async () => {
     const repo = new MemoryRepository(() => NOW); await hydrate(repo);
     const t = task('t-fail');
     repo.upsert = async () => { throw new Error('the database is full'); }; // the one write that fails
@@ -51,9 +51,9 @@ describe('a failed write is still there tomorrow (W1/C · audit H1)', () => {
 
     expect(recordCrash).toHaveBeenCalledWith(expect.any(Error), 'save', 'Today');
     expect(String((recordCrash.mock.calls[0]?.[0] as Error).message)).toBe('the database is full');
-    // DECISIONS D5(a): the optimistic row is NOT rolled back. C1's serialised writes removed the
-    // failure reachable from ordinary use, so a revert can wait until one is actually seen.
-    expect(getState().tasks.some((x) => x.id === 't-fail')).toBe(true);
+    // F5 superseded DECISIONS D5(a): the optimistic row IS rolled back, so the screen never shows a
+    // row the disk refused (store-failures.test.ts covers every entity).
+    expect(getState().tasks.some((x) => x.id === 't-fail')).toBe(false);
     expect(getState().toast?.text).toContain("Couldn't save");
     expect(getState().toast?.text).toContain('the database is full');
   });

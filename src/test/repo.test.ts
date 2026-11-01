@@ -390,3 +390,59 @@ describe('an unreadable stored value is skipped, reported, and left on disk (aud
     expect((await r.load()).settings.name).toBe('Sam');
   });
 });
+
+describe('data-layer reliability (F6)', () => {
+  beforeEach(() => report.mockClear());
+
+  it('a thousand damaged rows in one table are ONE Problems entry, with the count and the first reason', async () => {
+    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW, report); await r.init();
+    await r.upsert('task', task('good'));
+    for (let i = 0; i < 1000; i++) raw.run(`INSERT INTO task(${TASK_COLS}) VALUES(?,'Bad row',NULL,'other',NULL,NULL,NULL,0,'',0,?,NULL,'{broken','[]',0)`, [`bad${i}`, NOW]);
+    expect((await r.load()).tasks.map((t) => t.id)).toEqual(['good']);
+    expect(report).toHaveBeenCalledTimes(1);
+    const [err, , where] = report.mock.calls[0] as [Error, string, string];
+    expect(where).toBe('task');
+    expect(err.message).toMatch(/^1000 task rows skipped: .*reminders/);
+  });
+
+  it('a database from a newer Margin is refused untouched, with a sentence', async () => {
+    const { sql, raw } = rawDb(); const r0 = new SqliteRepository(sql, () => NOW, report); await r0.init();
+    await r0.upsert('task', task('kept'));
+    const newer = (raw.all('PRAGMA user_version') as { user_version: number }[])[0]!.user_version + 1;
+    raw.exec(`PRAGMA user_version = ${newer}`);
+    await expect(new SqliteRepository(sql, () => NOW, report).init()).rejects.toThrow(/newer version of Margin.*Nothing was changed/);
+    expect((raw.all('PRAGMA user_version') as { user_version: number }[])[0]!.user_version).toBe(newer);
+    expect(raw.all("SELECT id FROM task WHERE deleted_at IS NULL")).toEqual([{ id: 'kept' }]);
+  });
+
+  it('removeMany is one transaction: a failure part-way leaves every row in place', async () => {
+    const { sql, raw } = rawDb(); const r = new SqliteRepository(sql, () => NOW, report); await r.init();
+    await r.upsert('course', { id: 'E', name: 'Chem', room: '', teacher: '', goal: null, sort: 0, demo: false });
+    await r.upsert('meeting', { id: 'm1', courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
+    raw.exec("CREATE TRIGGER no_mark_delete BEFORE UPDATE OF deleted_at ON mark BEGIN SELECT RAISE(ABORT, 'disk refused'); END;");
+    await r.upsert('mark', { id: 'k1', courseId: 'E', name: 'Quiz', score: 1, weight: 1, on: true, sort: 0, demo: false });
+    await expect(r.removeMany([{ entity: 'course', id: 'E' }, { entity: 'meeting', id: 'm1' }, { entity: 'mark', id: 'k1' }])).rejects.toThrow(/disk refused/);
+    const l = await r.load();
+    expect([l.courses.length, l.meetings.length, l.marks.length]).toEqual([1, 1, 1]);
+    raw.exec('DROP TRIGGER no_mark_delete');
+    await r.removeMany([{ entity: 'course', id: 'E' }, { entity: 'meeting', id: 'm1' }, { entity: 'mark', id: 'k1' }]);
+    expect((await r.load()).courses).toEqual([]);
+    await r.restoreMany([{ entity: 'course', id: 'E' }, { entity: 'meeting', id: 'm1' }, { entity: 'mark', id: 'k1' }]);
+    const back = await r.load();
+    expect([back.courses.length, back.meetings.length, back.marks.length]).toEqual([1, 1, 1]);
+  });
+
+  it('a reminder pass is one queued write, and the log reads back what it wrote', async () => {
+    const r = new SqliteRepository(nodeDb(), () => NOW, report); await r.init();
+    await Promise.all([r.schedNotifMany([{ id: 'a', kind: 'task', at: 1 }, { id: 'b', kind: 'class', at: 2 }]), r.upsert('task', task('t')), r.logNotif('a', 'task', 1, 'shown', 5)]);
+    const rows = (await r.notifLog()).sort((x, y) => x.id.localeCompare(y.id));
+    expect(rows).toEqual([{ id: 'a', kind: 'task', dueAt: 1, shownAt: 5, openedAt: null }, { id: 'b', kind: 'class', dueAt: 2, shownAt: null, openedAt: null }]);
+  });
+
+  it('after a reset closed the file, a late call fails with a sentence instead of a native error', async () => {
+    const db = { ...nodeDb(), closeAndDelete: async () => undefined };
+    const r = new SqliteRepository(db, () => NOW, report); await r.init();
+    await r.wipe();
+    await expect(r.load()).rejects.toThrow(/closed by a reset/);
+  });
+});

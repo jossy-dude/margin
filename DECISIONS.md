@@ -91,6 +91,10 @@ row for a bricked app, which C2's fix exists precisely to avoid.
 
 **Resolved 2026-10-16 (owner): (a)** — as being implemented in W1.
 
+**Superseded in v0.5 (F5, per the approved v0.5 plan): (b).** A refused write now reverts the row it moved
+(`store/persist.ts → optimistic`), compound writes are one transaction (`removeMany`, the tour hand-over via
+`importSnapshot`), and damaged rows are reported once per table per load instead of once per row.
+
 ## D6 — Focus dial: the taped slip below the dial vs the translucent in-face readout
 
 W3 shipped the default you locked and captured the alternative from the same build. Screenshots (light

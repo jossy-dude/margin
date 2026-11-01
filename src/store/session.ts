@@ -9,7 +9,7 @@ import { configureFx } from '../services/fx';
 import { checkOnForeground } from '../services/ota';
 import { applySnapshot, getState, set, type State } from './core';
 import { openRepository } from './openRepository';
-import { db, ensureRepo, persist, R } from './persist';
+import { db, ensureRepo, R, reportSaveFailure } from './persist';
 import { resync } from './reminders';
 import { carryImportedRange, loadSemesters, reconcileSemesters } from './semesters';
 import { toast } from './toast';
@@ -55,7 +55,12 @@ export async function boot() {
 
 /** Optimistic half of the repository purge: the same six collections the SQL DELETEs cover, so the
  *  screen cannot keep showing sample rows the database no longer has. */
-export async function purgeDemo() { await persist(R().purgeDemo()); set((s) => ({ courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Sample data removed'); resync(); }
+export async function purgeDemo() {
+  /* The screen follows the disk: a purge the repository refused leaves the samples where they are, on
+     screen as on disk, and says so — rather than hiding rows that would come back on the next launch. */
+  try { await R().purgeDemo(); } catch (e) { reportSaveFailure(e); return; }
+  set((s) => ({ courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) })); toast('Sample data removed'); resync();
+}
 
 /** The import path's write half. The parser has already refused anything it could not read, so a plan
  *  with problems is never applied; a plan without them lands in ONE transaction, and the store is then
@@ -86,7 +91,11 @@ export async function importPlan(plan: ImportPlan): Promise<boolean> {
  *  holds, so a full reset leaves a clean planner. */
 export async function resetAll() {
   try {
-    await ensureRepo().then((r) => persist(r.wipe()));
+    /* The REAL database is what "erase everything" means, even from inside the tour (whose memory copy
+       is discarded with the session), and a wipe that failed stops here with its reason: re-opening a
+       file that still holds everything and calling it erased was the old behaviour. */
+    const target = db.real ?? await ensureRepo();
+    await target.wipe();
     db.repo = db.real = await openRepository();
     const snap = await R().load(); applySnapshot(snap); configureFx(getState().settings); db.demo = false;
     /* The rows cached from the erased file are gone with it: a later `setActiveRange` (Settings →
@@ -118,23 +127,19 @@ export async function adoptDemo(keepSamples: boolean) {
   const snap = await session.load();
   db.real = db.real ?? await openRepository();
   const r = db.real;
-  await persist((async () => {
-    for (const row of snap.courses) if (!row.demo) await r.upsert('course', row);
-    for (const row of snap.meetings) if (!row.demo) await r.upsert('meeting', row);
-    for (const row of snap.tasks) if (!row.demo) await r.upsert('task', row);
-    for (const row of snap.notices) if (!row.demo) await r.upsert('notice', row);
-    for (const row of snap.marks) if (!row.demo) await r.upsert('mark', row);
-    for (const row of snap.focus) if (!row.demo) await r.upsert('focus', row);
-    for (const a of Object.values(snap.attendance)) await r.upsert('attendance', a);
-    for (const d of Object.values(snap.dayMarks)) await r.upsert('dayMark', d);
-    for (const [courseId, adj] of Object.entries(snap.adjusts)) await r.upsert('adjust', { courseId, adj });
-    for (const t of snap.trips) await r.upsert('trip', t);
-    for (const a of snap.alarms) await r.upsert('alarm', a);
-    const { seededAt: _drop, ...settings } = snap.settings; // a sample-made timestamp never migrates
-    void _drop;
-    await r.putSettings(settings);
-  })());
-  db.repo = r;
+  const { seededAt: _drop, ...settings } = snap.settings; // a sample-made timestamp never migrates
+  void _drop;
+  let failed: unknown = null;
+  try {
+    /* ONE transaction (`importSnapshot`): the hand-over lands whole or not at all. Writing it row by row
+       left a half-adopted database after any failure part-way, with no way to tell which half. */
+    await r.importSnapshot({
+      courses: snap.courses.filter((x) => !x.demo), meetings: snap.meetings.filter((x) => !x.demo), tasks: snap.tasks.filter((x) => !x.demo),
+      notices: snap.notices.filter((x) => !x.demo), marks: snap.marks.filter((x) => !x.demo), focus: snap.focus.filter((x) => !x.demo),
+      attendance: snap.attendance, dayMarks: snap.dayMarks, adjusts: snap.adjusts, trips: snap.trips, alarms: snap.alarms, settings,
+    });
+  } catch (e) { failed = e; recordCrash(e, 'save', 'Tour'); }
+  finally { db.repo = r; }
   /* The term cache belongs to the repository that is now open. Boot hydrated from the DEMO memory
      copy, so `state.semesters` still held the sample term; leaving it there let the next Settings →
      Attendance edit save that phantom id into the real file and deactivate the term the user actually
@@ -149,7 +154,8 @@ export async function adoptDemo(keepSamples: boolean) {
   set({ semesters: [] });
   await loadSemesters();
   set((s: State) => (keepSamples ? s : { courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) }));
-  toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
+  if (failed) toast(`Couldn't save what you made in the tour: ${String((failed as Error)?.message ?? failed).slice(0, 50)}`);
+  else toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
   resync(0);
 }
 

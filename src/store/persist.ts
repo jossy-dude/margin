@@ -15,15 +15,25 @@ import { getState, set } from './core';
  *  the demo memory repository, so adoption never re-opens or re-migrates. */
 export const db: { repo: Repository | null; real: Repository | null; demo: boolean } = { repo: null, real: null, demo: false };
 
-/** Every failed write lands here. The toast is 2.6 s of the user's attention; the Problems log is what
- *  is still there tomorrow, so `persist` writes both (audit H1): a rejected `upsert` used to leave the
- *  optimistic row on screen with no trace anywhere once the toast had gone, and Diagnostics showed
- *  nothing at all. DECISIONS D5(a): the optimistic state is NOT rolled back — C1's serialised writes
- *  remove the failure reachable from ordinary use, and reverting can wait until a real failure is seen. */
-export const persist = (p: Promise<unknown>) => p.catch((e) => {
+/** A write whose failure has nothing on screen to put back (bookkeeping, a term rename's second half):
+ *  the failure is logged and toasted (audit H1), nothing else. Entity writes use `optimistic`. */
+export const persist = (p: Promise<unknown>) => p.catch(reportSaveFailure);
+/** The failure half every write shares: the Problems log (what is still there tomorrow) and a toast. */
+export function reportSaveFailure(e: unknown) {
   recordCrash(e, 'save', getState().route);
   set({ toast: { id: Date.now(), text: `Couldn't save: ${String((e as Error)?.message ?? e).slice(0, 60)}` } });
-});
+}
+/** Change the screen now, write, and put the screen back if the write is refused (F5, superseding
+ *  DECISIONS D5(a)). Leaving the optimistic change in place meant the screen showed a row the disk never
+ *  got — until the next launch quietly took it away. `revert` undoes only what `apply` did, row by row, so
+ *  a later edit to another row is never rolled back with it. `write` is a thunk so a repository that is
+ *  not open (a synchronous throw from `R()`) is the same failure as a rejected promise. */
+export function optimistic(apply: () => void, write: () => Promise<unknown>, revert: () => void): Promise<void> {
+  apply();
+  let p: Promise<unknown>;
+  try { p = write(); } catch (e) { p = Promise.reject(e); }
+  return p.then(() => undefined, (e) => { revert(); reportSaveFailure(e); });
+}
 /** Every write goes through here. Throws a readable error instead of the old null-cast TypeError, which the fatal-error screen's only button used to swallow. */
 export const R = (): Repository => {
   if (!db.repo) throw new Error('Database is not open: call hydrate() first, or act.resetAll() to re-open it.');

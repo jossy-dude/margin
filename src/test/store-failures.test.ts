@@ -1,10 +1,9 @@
 /**
- * F3 — what a failed write does TODAY, pinned so F5 changes it on purpose rather than by accident.
- *
- * DECISIONS D5(a) chose not to roll back: the optimistic change stays on screen, the failure is a
- * "Couldn't save" toast plus a Problems-log entry. Every assertion about that is marked
- * `CURRENT behaviour, changes in F5`. The repository is a `MemoryRepository` whose writes are broken
- * after hydrate, so the read side still works and the failure is the write alone.
+ * What a refused write does. F3 pinned the old answer (DECISIONS D5(a): the optimistic change stayed on
+ * screen); F5 replaced it, and these tests now say the new one: the screen is put back to what the disk
+ * holds, the failure is a "Couldn't save" toast plus a Problems-log entry, and compound writes (a subject's
+ * cascade, the tour hand-over) land whole or not at all. The repository is a `MemoryRepository` whose
+ * writes are broken after hydrate, so the read side still works and the failure is the write alone.
  *
  * `expo-file-system` is replaced by an in-memory file so the real Problems log can be written without
  * a device, wherever that module lives.
@@ -82,39 +81,39 @@ describe('a rejected entity write', () => {
     ['setSettings', (s) => s.act.setSettings({ name: 'Sam' }), (s) => s.getState().settings.name === 'Sam'],
     ['setNotif', (s) => s.act.setNotif({ classLeadMin: 20 }), (s) => s.getState().settings.notif.classLeadMin === 20],
     ['setDay', (s) => s.act.setDay('2026-10-05', 'c'), (s) => s.getState().dayMarks['2026-10-05']?.status === 'c'],
-  ])('%s keeps the optimistic change on screen and toasts the failure', async (_name, run, shown) => {
+  ])('%s shows the change at once, then puts it back when the disk refuses it', async (_name, run, shown) => {
     const { r, s, before } = await brokenStore();
     run(s);
+    expect(shown(s)).toBe(true); // optimistic: on screen before the write settles
     await flush();
-    // CURRENT behaviour, changes in F5: no rollback — the screen keeps what the disk refused.
-    expect(shown(s)).toBe(true);
+    expect(shown(s)).toBe(false); // F5: reverted
     expect(s.getState().toast?.text).toBe(FAIL);
     expect(s.getState().toast?.undo).toBeUndefined();
     expect(await r.load()).toEqual(before); // nothing reached the repository
   });
 
-  it('a rejected delete replaces the undo toast with the failure, and the row stays gone from screen only', async () => {
+  it('a rejected delete brings the row back and says the delete did not happen', async () => {
     const { r, s } = await brokenStore(async (rr) => { await rr.upsert('task', task('t1')); });
     s.act.removeTask('t1');
     expect(s.getState().toast?.text).toBe('Task deleted');
-    await flush();
-    // CURRENT behaviour, changes in F5: the undo is lost to the failure toast and nothing is reverted.
     expect(s.getState().tasks).toEqual([]);
+    await flush();
+    expect(s.getState().tasks.map((t) => t.id)).toEqual(['t1']);
     expect(s.getState().toast?.text).toBe(FAIL);
     expect(s.getState().toast?.undo).toBeUndefined();
     expect((await r.load()).tasks.map((t) => t.id)).toEqual(['t1']);
   });
 
-  it('a rejected removeCourse cascade leaves the screen cascaded and the repository whole', async () => {
+  it('a rejected removeCourse cascade brings the subject, its meetings and marks back, and the disk is whole', async () => {
     const { r, s } = await brokenStore(async (rr) => {
       await rr.upsert('course', { id: 'E', name: 'Chem', room: '', teacher: '', goal: null, sort: 0, demo: false });
       await rr.upsert('meeting', { id: 'm1', courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
       await rr.upsert('mark', { id: 'k1', courseId: 'E', name: 'Quiz', score: 1, weight: 1, on: true, sort: 0, demo: false });
     });
     s.act.removeCourse('E');
-    await flush();
-    // CURRENT behaviour, changes in F5
     expect([s.getState().courses, s.getState().meetings, s.getState().marks].every((x) => x.length === 0)).toBe(true);
+    await flush();
+    expect([s.getState().courses.length, s.getState().meetings.length, s.getState().marks.length]).toEqual([1, 1, 1]);
     expect(s.getState().toast?.text).toBe(FAIL);
     const l = await r.load();
     expect([l.courses.length, l.meetings.length, l.marks.length]).toEqual([1, 1, 1]);
@@ -128,12 +127,11 @@ describe('a rejected semester write', () => {
     await rr.upsert('meeting', { id: 'm1', courseId: 'E', weekday: 0, start: '09:00', end: '09:50', demo: false });
   };
 
-  it('setSemesterRange keeps the new range on screen and toasts; the row on disk is unchanged', async () => {
+  it('setSemesterRange puts the old range back on screen and toasts; the row on disk is unchanged', async () => {
     const { r, s } = await brokenStore(withTerm);
     await s.act.setSemesterRange('s1', '2026-09-14', '2027-01-15');
-    // CURRENT behaviour, changes in F5
-    expect(s.getState().semesters[0]).toMatchObject({ start: '2026-09-14', end: '2027-01-15' });
-    expect(s.getState().settings.semesterStart).toBe('2026-09-14');
+    expect(s.getState().semesters[0]).toMatchObject({ start: '2026-09-07', end: '2026-12-20' });
+    expect(s.getState().settings.semesterStart).toBe('2026-09-07');
     expect(s.getState().toast?.text).toBe(FAIL);
     expect((await r.listSemesters())[0]).toMatchObject({ start: '2026-09-07', end: '2026-12-20' });
   });
@@ -149,16 +147,15 @@ describe('a rejected semester write', () => {
 });
 
 describe('a rejected session write', () => {
-  it('purgeDemo still clears the samples from screen and ends on its own toast', async () => {
+  it('a refused purgeDemo leaves the samples on screen, as on disk, and says it failed', async () => {
     const { r, s } = await brokenStore(async (rr) => { await rr.seed(seedSnapshot(NOW)); });
     await s.act.purgeDemo();
-    // CURRENT behaviour, changes in F5: the failure toast is overwritten and the screen drops rows the disk kept.
-    expect(s.getState().tasks).toEqual([]);
-    expect(s.getState().toast?.text).toBe('Sample data removed');
+    expect(s.getState().tasks.length).toBeGreaterThan(0);
+    expect(s.getState().toast?.text).toBe(FAIL);
     expect((await r.load()).tasks.length).toBeGreaterThan(0);
   });
 
-  it('adoptDemo whose real-database writes fail still switches to the real database', async () => {
+  it('adoptDemo whose hand-over is refused writes nothing, still switches to the real database, and says so', async () => {
     const real = new MemoryRepository(() => NOW);
     mockOpenRepo.mockImplementation(async () => real);
     const s = freshStore();
@@ -169,10 +166,11 @@ describe('a rejected session write', () => {
     real.putSettings = async () => { throw new Error('the disk is full'); };
 
     await s.act.adoptDemo(false);
-    // CURRENT behaviour, changes in F5: a half-adopted database, and the session moves on regardless.
     expect(s.R()).toBe(real);
-    expect((await real.load()).tasks).toEqual([]);
+    const l = await real.load();
+    expect([l.tasks.length, l.courses.length]).toEqual([0, 0]); // all or nothing: nothing
+    expect(l.settings.name).toBe('');
     expect(s.getState().tasks.map((t) => t.id)).toEqual(['t-mine']);
-    expect(s.getState().toast?.text).toBe('Your planner is empty — add your first class');
+    expect(s.getState().toast?.text).toBe("Couldn't save what you made in the tour: the disk is full");
   });
 });

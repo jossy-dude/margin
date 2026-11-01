@@ -34,6 +34,7 @@ jest.mock('expo-file-system', () => {
     create() { const d = state.dirs.get(this.parent); if (!d) throw new Error('no folder'); if (!d.has(this.name)) d.set(this.name, ''); }
     write(text: string) { const d = state.dirs.get(this.parent); if (!d) throw new Error('no folder'); d.set(this.name, text); }
     delete() { const d = state.dirs.get(this.parent); if (!d?.delete(this.name)) throw new Error('no file'); }
+    rename(to: string) { const d = state.dirs.get(this.parent); if (!d?.has(this.name)) throw new Error('no file'); d.set(to, d.get(this.name)!); d.delete(this.name); this.name = to; }
   }
   return { Directory, File, Paths: { document: 'doc' }, __state: state };
 });
@@ -118,10 +119,21 @@ describe('dumpBeforeMigration', () => {
     expect(read).toHaveBeenCalledWith('SELECT * FROM "setting"');
   });
 
-  it('never blocks boot: a read that throws logs and returns null', async () => {
+  /* F6 reversed this: a copy that could not be made used to be logged and skipped, and the migration ran
+     anyway — without the one thing that makes a bad migration recoverable. Now the open stops, says why,
+     and the database is untouched. */
+  it('a copy that cannot be made stops the migration with a sentence, and is logged', async () => {
     const read = jest.fn(async () => { throw new Error('database is locked'); });
-    await expect(dumpBeforeMigration(read, 2, 3)).resolves.toBeNull();
+    await expect(dumpBeforeMigration(read, 2, 3)).rejects.toThrow(/safety copy.*database is locked.*Nothing was changed/);
     expect(recordCrash).toHaveBeenCalledWith(expect.any(Error), 'boot', 'safety copy');
+  });
+
+  it('writes beside the final name and renames into place, so no half-written copy is ever listed', async () => {
+    fs.dirs.delete(DIR);
+    const read = jest.fn(async (sql: string) => (sql.includes('sqlite_master') ? [{ name: 'course' }] : [{ id: 'c1' }]));
+    const name = await dumpBeforeMigration(read, 2, 3);
+    expect(names()).toEqual([name]);
+    expect(name).not.toMatch(/\.tmp$/);
   });
 
   it('keeps the newest three and deletes the oldest', async () => {

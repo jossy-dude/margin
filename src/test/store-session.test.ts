@@ -246,19 +246,17 @@ describe('resetAll — erase everything', () => {
     await rebuildsAfter(300);
   });
 
-  it('inside the demo session it wipes the memory copy and lands on the real database with planning on', async () => {
+  it('inside the demo session it wipes the REAL database too, and lands on it with planning on', async () => {
     const real = device();
     await real.putSettings({ name: 'Kept' }); // a settings row, but no tour and no rows: still a first run
     const s = freshStore();
     await s.boot();
-    const demoRepo = s.R();
-    expect(demoRepo).not.toBe(real);
+    expect(s.R()).not.toBe(real); // the tour runs on its memory copy
 
     await s.act.resetAll();
-    expect((await demoRepo.load()).tasks).toEqual([]); // the memory copy is what was wiped
-    // CURRENT behaviour: the wipe goes to the repository the store points at, so during the tour the
-    // device database is re-opened, not wiped, and keeps the settings it already had.
-    expect((await real.load()).settings.name).toBe('Kept');
+    // F5: "erase everything" means the device database even from inside the tour (the memory copy is
+    // dropped with the session); before, the file was re-opened untouched and kept its settings.
+    expect((await real.load()).settings.name).toBe('');
     expect(s.R()).toBe(real);
     expect(s.getState().tasks).toEqual([]);
     await rebuildsAfter(300); // demo mode is off again

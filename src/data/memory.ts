@@ -15,6 +15,8 @@ export class MemoryRepository implements Repository {
   private log(entity: string, id: string, op: OutboxRow['op']) { this.ob.push({ seq: ++this.seq, entity, id, op, at: this.clock() }); }
   async upsert<K extends EntityName>(e: K, v: EntityMap[K]) { const id = pkOf(e, v); this.tab(e).set(id, { v: structuredClone(v), deleted: false }); this.log(e, id, 'put'); }
   async remove(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = true; this.log(e, id, 'del'); }
+  async removeMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.remove(r.entity, r.id); }
+  async restoreMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.restore(r.entity, r.id); }
   async restore(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = false; this.log(e, id, 'restore'); }
   async putSettings(p: Partial<Settings>) { Object.assign(this.set, structuredClone(p)); }
   /* Same KV surface as the SQLite adapter, over the same object `putSettings` writes: a key that is
@@ -51,12 +53,16 @@ export class MemoryRepository implements Repository {
     for (const d of Object.values(s.dayMarks ?? {})) await this.upsert('dayMark', d);
     for (const [courseId, adj] of Object.entries(s.adjusts ?? {})) await this.upsert('adjust', { courseId, adj });
     for (const v of s.variants ?? []) await this.upsert('variant', v);
+    for (const f of s.focus ?? []) await this.upsert('focus', f);
+    for (const t of s.trips ?? []) await this.upsert('trip', t);
+    for (const a of s.alarms ?? []) await this.upsert('alarm', a);
     if (s.settings) await this.putSettings(s.settings);
   }
   /** Same six tables as the SQLite adapter, same rows: the contract test runs both against one expectation. */
   async purgeDemo() { for (const e of ['course', 'meeting', 'notice', 'mark', 'task', 'focus'] as const) for (const [id, r] of this.tab(e)) if ((r.v as { demo: boolean }).demo) this.tab(e).delete(id); }
   async wipe() { this.t.clear(); this.sems.clear(); this.set = {}; this.ob = []; this.nl.clear(); }
   async schedNotif(id: string, kind: string, dueAt: number) { if (!this.nl.has(id)) this.nl.set(id, { id, kind, dueAt, shownAt: null, openedAt: null }); }
+  async schedNotifMany(rows: { id: string; kind: string; at: number }[]) { for (const r of rows) await this.schedNotif(r.id, r.kind, r.at); }
   async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) { await this.schedNotif(id, kind, dueAt); const r = this.nl.get(id)!; if (event === 'shown') r.shownAt = at; else r.openedAt = at; }
   async notifLog() { return [...this.nl.values()]; }
   async pendingOutbox(limit = 200) { return this.ob.slice(0, limit); }

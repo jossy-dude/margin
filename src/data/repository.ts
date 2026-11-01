@@ -14,6 +14,10 @@ export interface Repository {
   upsert<K extends EntityName>(entity: K, value: EntityMap[K]): Promise<void>;
   remove(entity: EntityName, id: string): Promise<void>;
   restore(entity: EntityName, id: string): Promise<void>;
+  /** Several tombstones (or restores) in ONE transaction: a subject with its meetings and marks, so a
+   *  failure leaves all of them or none of them. */
+  removeMany(rows: { entity: EntityName; id: string }[]): Promise<void>;
+  restoreMany(rows: { entity: EntityName; id: string }[]): Promise<void>;
   putSettings(patch: Partial<Settings>): Promise<void>;
   /* ── the setting table as a KV (v0.5) ──────────────────────────────────────────────────────────
    * Not every stored fact is a user setting: the OTA loop's "this bundle was applied" marker is
@@ -43,6 +47,8 @@ export interface Repository {
    *  `shown_at` or an `opened_at`, and inventing one of those to mean "queued" would be a lie in a
    *  column the Delivery page reads. */
   schedNotif(id: string, kind: string, dueAt: number): Promise<void>;
+  /** One scheduling pass's rows in one transaction. */
+  schedNotifMany(rows: { id: string; kind: string; at: number }[]): Promise<void>;
   notifLog(): Promise<NotifLogRow[]>;
   pendingOutbox(limit?: number): Promise<OutboxRow[]>;
   ackOutbox(upToSeq: number): Promise<void>;

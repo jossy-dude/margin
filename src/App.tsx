@@ -82,6 +82,21 @@ export function Shell() {
 
 /** The database could not be opened or hydrated. Paper and ink like every other screen, and the one
  *  irreversible action in the app is guarded by the same double tap Settings → Reset uses. */
+/** Open the database and start the services that need it. The Fatal screen's "Try again" runs it again. */
+async function bringUp() {
+  await boot();
+  await configureNotifications(getState().settings.notif.lockText);
+  initAudio();
+  preloadAudio();
+  wireLifecycle();
+}
+/** A refusal that left the file untouched (a newer Margin's data, a safety copy that could not be written)
+ *  is retried, not erased: "Try again" is the first button, erasing stays two taps away. */
+async function retry() {
+  set({ error: null, ready: false });
+  try { await bringUp(); } catch (e) { recordCrash(e, 'boot'); set({ error: String((e as Error)?.message ?? e), ready: true }); }
+}
+
 function Fatal({ message }: { message: string }) {
   const { c } = useTheme(), ins = useSafeAreaInsets(), [sure, setSure] = useState(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -100,12 +115,13 @@ function Fatal({ message }: { message: string }) {
             <Txt f="marker" s={26} accessibilityRole="header">The planner could not open your data</Txt>
           </View>
           <Txt f="serif" s={16} c="mut">
-            Erase everything deletes the database file itself and starts again with an empty planner. It cannot be
-            undone, which is why it asks twice, exactly like Settings → Reset.
+            Nothing has been erased. Try again after doing what the message below asks. Erase everything deletes the
+            database file itself and starts again with an empty planner; it cannot be undone, which is why it asks twice.
           </Txt>
           <HandBox seed="fatal-msg" shadow={false} dashed fill="transparent" style={{ padding: 10 }}>
             <Txt f="type" s={14} c="mut" selectable style={{ lineHeight: 18 }}>{message}</Txt>
           </HandBox>
+          <Btn kind="primary" label="Try again" onPress={() => { void retry(); }} />
           <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={reset} />
           <Txt f="serif" s={14} c="mut">The reason is in Settings → Diagnostics.</Txt>
         </HandBox>
@@ -224,11 +240,7 @@ export default function App() {
            implementation, so a browser build that called them would throw during boot and never
            reach a screen. `wireLifecycle()` still runs: it is what pumps the timer and keeps `now`
            fresh, and neither is native. */
-        await boot();
-        await configureNotifications(getState().settings.notif.lockText);
-        initAudio();
-        preloadAudio();
-        wireLifecycle();
+        await bringUp();
       } catch (e) { recordCrash(e, 'boot'); set({ error: String((e as Error)?.message ?? e), ready: true }); }
       finally { if (alive) setBooted(true); }
     })();

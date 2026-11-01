@@ -119,14 +119,20 @@ export async function dumpBeforeMigration(
     if (Object.keys(tables).length === 0) return null;
     const at = Date.now(), dir = backups();
     dir.create({ intermediates: true, idempotent: true });
-    const file = new File(dir, dumpName(from, to, at));
-    file.create({ overwrite: true });
-    file.write(JSON.stringify(dumpPayload(from, to, at, tables)));
+    /* Written beside its final name and renamed into place, so a kill or a full disk mid-write leaves a
+       `.tmp` the listing ignores — never a truncated copy that looks like a good one. */
+    const name = dumpName(from, to, at), tmp = new File(dir, `${name}.tmp`);
+    tmp.create({ overwrite: true });
+    tmp.write(JSON.stringify(dumpPayload(from, to, at, tables)));
+    tmp.rename(name);
     prune(dir);
-    return file.name;
+    return name;
   } catch (e) {
+    /* No copy, no migration: the copy exists for the one moment a migration could go wrong, so running
+       the migration without it is the risk this file was written to remove. Boot stops with a sentence
+       and a retry; nothing in the database has been touched yet. */
     recordCrash(e, 'boot', 'safety copy');
-    return null;
+    throw new Error(`Couldn't make the safety copy before updating your data (${String((e as Error)?.message ?? e).slice(0, 80)}). Nothing was changed — free some storage and try again.`);
   }
 }
 

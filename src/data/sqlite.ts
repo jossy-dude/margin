@@ -40,7 +40,11 @@ export class SqliteRepository implements Repository {
    * queued through `ser`, which chains each job onto the previous one whatever its outcome. */
   private q: Promise<unknown> = Promise.resolve();
   private ser<T>(f: () => Promise<T>): Promise<T> {
-    const r = this.q.then(f, f);
+    /* A reset closes and deletes the file (`wipe`); a call that arrives afterwards on this instance would
+       talk to a closed handle and fail with a native error nobody can read. It fails here instead, with a
+       sentence, and the store re-opens a fresh repository. */
+    const run = () => (this.closed ? Promise.reject(new Error('The database was closed by a reset; it has to be re-opened.')) : f());
+    const r = this.q.then(run, run);
     this.q = r.then(() => undefined, () => undefined);
     return r;
   }
@@ -48,6 +52,11 @@ export class SqliteRepository implements Repository {
   async init() {
     const row = (await this.db.getAllAsync<{ user_version: number }>('PRAGMA user_version'))[0];
     const v = row?.user_version ?? 0;
+    /* A database written by a NEWER Margin (a downgrade, or a backup restored from a newer phone) has
+       columns and meanings this build does not know. Opening it anyway would read some of its rows as
+       corrupt and write the rest back without the new columns. Nothing is changed; the message says what
+       to do instead. */
+    if (v > MIGRATIONS.length) throw new Error(`This planner was saved by a newer version of Margin (data version ${v}; this one reads up to ${MIGRATIONS.length}). Nothing was changed — install the newer version to open it.`);
     for (let n = v; n < MIGRATIONS.length; n++) {
       /* The schema and its version marker commit together. They used to be two separate statements,
          so a kill in between left the tables created and `user_version` at 0 — and because
@@ -132,11 +141,20 @@ export class SqliteRepository implements Repository {
   async remove(e: EntityName, id: string) {
     await this.ser(() => this.db.withTransactionAsync(() => this.markDeleted(e, id)));
   }
+  /** Several deletions as ONE transaction — a subject with its meetings and marks. Half a cascade on disk
+   *  (the subject gone, its marks still there) is exactly what a kill between separate writes left. */
+  async removeMany(rows: { entity: EntityName; id: string }[]) {
+    await this.ser(() => this.db.withTransactionAsync(async () => { for (const r of rows) await this.markDeleted(r.entity, r.id); }));
+  }
+  async restoreMany(rows: { entity: EntityName; id: string }[]) {
+    await this.ser(() => this.db.withTransactionAsync(async () => { for (const r of rows) await this.markRestored(r.entity, r.id); }));
+  }
+  private async markRestored(e: EntityName, id: string) {
+    await this.db.runAsync(`UPDATE ${SPECS[e].table} SET deleted_at=NULL, updated_at=?, rev=rev+1 WHERE ${q(SPECS[e].pk)}=?`, [this.clock(), id]);
+    await this.outbox(e, id, 'restore');
+  }
   async restore(e: EntityName, id: string) {
-    await this.ser(() => this.db.withTransactionAsync(async () => {
-      await this.db.runAsync(`UPDATE ${SPECS[e].table} SET deleted_at=NULL, updated_at=?, rev=rev+1 WHERE ${q(SPECS[e].pk)}=?`, [this.clock(), id]);
-      await this.outbox(e, id, 'restore');
-    }));
+    await this.ser(() => this.db.withTransactionAsync(() => this.markRestored(e, id)));
   }
   async putSettings(patch: Partial<Settings>) {
     await this.ser(() => this.db.withTransactionAsync(async () => { for (const [k, v] of Object.entries(patch)) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]); }));
@@ -162,6 +180,7 @@ export class SqliteRepository implements Repository {
   private async rows<K extends EntityName>(e: K): Promise<EntityMap[K][]> {
     const s = SPECS[e], rows = await this.db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${s.table} WHERE deleted_at IS NULL`);
     const out: EntityMap[K][] = [];
+    let skipped = 0, first = '';
     for (const r of rows) {
       try { out.push(Object.fromEntries(s.fields.map((x) => [x.p, fromSql(x, r[x.c])])) as unknown as EntityMap[K]); }
       /* A row whose value cannot be read back is SKIPPED, not defaulted (audit H2). Defaulting was the
@@ -170,8 +189,11 @@ export class SqliteRepository implements Repository {
          next save — the user's real bytes, gone, with no message. Skipping keeps those bytes where
          they are, so nothing this session does can destroy them, and the occurrence is listed in
          Diagnostics. `fromSql` throws the message; the entity name is added here. */
-      catch (err) { this.report(new Error(`${e} row skipped: ${String((err as Error)?.message ?? err)}`), 'data', e); }
+      catch (err) { if (skipped++ === 0) first = String((err as Error)?.message ?? err); }
     }
+    /* One entry per table per load, not one per row: a table with a thousand damaged rows used to push
+       a thousand entries into a Problems log that keeps fifty, burying everything else that went wrong. */
+    if (skipped) this.report(new Error(`${skipped === 1 ? `${e} row skipped` : `${skipped} ${e} rows skipped`}: ${first}`), 'data', e);
     return out;
   }
   async load(): Promise<Snapshot> {
@@ -227,6 +249,9 @@ export class SqliteRepository implements Repository {
       for (const a of Object.values(s.attendance ?? {})) await this.put('attendance', a);
       for (const d of Object.values(s.dayMarks ?? {})) await this.put('dayMark', d);
       for (const v of s.variants ?? []) await this.put('variant', v);
+      for (const f of s.focus ?? []) await this.put('focus', f);
+      for (const t of s.trips ?? []) await this.put('trip', t);
+      for (const a of s.alarms ?? []) await this.put('alarm', a);
       for (const [courseId, adj] of Object.entries(s.adjusts ?? {})) await this.put('adjust', { courseId, adj });
       for (const [k, v] of Object.entries(s.settings ?? {})) await this.db.runAsync('INSERT OR REPLACE INTO setting(k,v) VALUES(?,?)', [k, JSON.stringify(v)]);
     }));
@@ -309,12 +334,21 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  async schedNotif(id: string, kind: string, dueAt: number) { await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]); }
-  async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
-    await this.schedNotif(id, kind, dueAt);
-    await this.db.runAsync(`UPDATE notif_log SET ${event === 'shown' ? 'shown_at' : 'opened_at'}=? WHERE id=?`, [at, id]);
+  /* The bookkeeping tables ride the same queue as everything else: a bare statement issued while another
+     job holds BEGIN lands INSIDE that transaction, and is rolled back with it if that job fails. */
+  async schedNotif(id: string, kind: string, dueAt: number) { await this.schedNotifMany([{ id, kind, at: dueAt }]); }
+  /** A whole scheduling pass's rows in one transaction, instead of one write per reminder. */
+  async schedNotifMany(rows: { id: string; kind: string; at: number }[]) {
+    if (!rows.length) return;
+    await this.ser(() => this.db.withTransactionAsync(async () => { for (const r of rows) await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [r.id, r.kind, r.at]); }));
   }
-  async notifLog(): Promise<NotifLogRow[]> { return (await this.db.getAllAsync<{ id: string; kind: string; due_at: number; shown_at: number | null; opened_at: number | null }>('SELECT * FROM notif_log')).map((r) => ({ id: r.id, kind: r.kind, dueAt: r.due_at, shownAt: r.shown_at, openedAt: r.opened_at })); }
-  async pendingOutbox(limit = 200) { return this.db.getAllAsync<OutboxRow>('SELECT seq,entity,id,op,at FROM outbox ORDER BY seq LIMIT ?', [limit]); }
-  async ackOutbox(upTo: number) { await this.db.runAsync('DELETE FROM outbox WHERE seq<=?', [upTo]); }
+  async logNotif(id: string, kind: string, dueAt: number, event: 'shown' | 'opened', at: number) {
+    await this.ser(() => this.db.withTransactionAsync(async () => {
+      await this.db.runAsync('INSERT OR IGNORE INTO notif_log(id,kind,due_at) VALUES(?,?,?)', [id, kind, dueAt]);
+      await this.db.runAsync(`UPDATE notif_log SET ${event === 'shown' ? 'shown_at' : 'opened_at'}=? WHERE id=?`, [at, id]);
+    }));
+  }
+  async notifLog(): Promise<NotifLogRow[]> { return this.ser(async () => (await this.db.getAllAsync<{ id: string; kind: string; due_at: number; shown_at: number | null; opened_at: number | null }>('SELECT * FROM notif_log')).map((r) => ({ id: r.id, kind: r.kind, dueAt: r.due_at, shownAt: r.shown_at, openedAt: r.opened_at }))); }
+  async pendingOutbox(limit = 200) { return this.ser(() => this.db.getAllAsync<OutboxRow>('SELECT seq,entity,id,op,at FROM outbox ORDER BY seq LIMIT ?', [limit])); }
+  async ackOutbox(upTo: number) { await this.ser(() => this.db.runAsync('DELETE FROM outbox WHERE seq<=?', [upTo])); }
 }

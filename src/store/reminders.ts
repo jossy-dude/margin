@@ -30,9 +30,11 @@ export function logNotif(id: string, kind: string, dueAt: number, event: 'shown'
   // next resync — otherwise Delivery status keeps calling an opened reminder "queued".
   try { void R().logNotif(id, kind, dueAt, event, at).catch((e) => recordCrash(e, 'save', getState().route)).then(() => refreshNotifLog()); } catch { /* repository not open yet */ }
 }
-function schedNotif(id: string, kind: string, dueAt: number) {
-  if (!id) return;
-  try { void R().schedNotif(id, kind, dueAt).catch((e) => recordCrash(e, 'save', getState().route)); } catch { /* repository not open yet */ }
+/** One pass's queued reminders, as one bookkeeping write. */
+function schedNotifs(rows: { id: string; kind: string; at: number }[]) {
+  const keep = rows.filter((r) => r.id);
+  if (!keep.length) return;
+  try { void R().schedNotifMany(keep).catch((e) => recordCrash(e, 'save', getState().route)); } catch { /* repository not open yet */ }
 }
 /** Only the newest few rows: the page shows a handful, and `notif_log` itself keeps everything. */
 const LOG_KEEP = 12;
@@ -62,7 +64,7 @@ export function resync(delay = 700) {
     const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12 });
     let perm = await notifs.ensurePermission(false);
     if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
-    if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); for (const p of r.planned) schedNotif(p.id, p.kind, p.at); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
+    if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); schedNotifs(r.planned); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
     // Only notify subscribers when something visible actually changed — every mutation calls resync(),
     // and most recompute to the same plan (e.g. edits that don't move any reminder).
     const moved: Moved[] = [];
