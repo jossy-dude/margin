@@ -13,7 +13,9 @@
     database    — `marginalia.db` and its -wal/-shm siblings: subjects, timetable,
                   attendance, tasks, marks, notes, focus history, settings, semesters.
     sharedpref  — app-level flags the platform and React Native keep outside SQLite.
-    file        — the pre-migration safety copies under `Paths.document/marginalia/backups`.
+    file        — v0.5 (R1) narrowed to two folders: `SQLite/` (where expo-sqlite keeps `marginalia.db`
+                  and its -wal/-shm) and `marginalia/` (the pre-migration safety copies). Nothing
+                  else the app or a library writes under files/ is copied.
 
   Include-only semantics again: only the listed domains are copied, so the cache is not
   and cannot be. The <exclude> states that policy rather than leaving it implied.
@@ -22,13 +24,15 @@
   <cloud-backup>
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
-    <include domain="file" path="." />
+    <include domain="file" path="SQLite/" />
+    <include domain="file" path="marginalia/" />
     <exclude domain="root" path="cache" />
   </cloud-backup>
   <device-transfer>
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
-    <include domain="file" path="." />
+    <include domain="file" path="SQLite/" />
+    <include domain="file" path="marginalia/" />
     <exclude domain="root" path="cache" />
   </device-transfer>
 </data-extraction-rules>

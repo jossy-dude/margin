@@ -21,6 +21,7 @@
 <full-backup-content>
   <include domain="database" path="." />
   <include domain="sharedpref" path="." />
-  <include domain="file" path="." />
+  <include domain="file" path="SQLite/" />
+    <include domain="file" path="marginalia/" />
   <exclude domain="root" path="cache" />
 </full-backup-content>
