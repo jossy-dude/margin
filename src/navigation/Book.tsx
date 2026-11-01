@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { createNavigatorFactory, TabRouter, useNavigationBuilder, type ParamListBase, type TabNavigationState } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,10 +20,10 @@ type Nav = TabNavigationState<ParamListBase>;
  *  Everything about this component is about a frame budget, and each of the three decisions is
  *  load-bearing in one direction only — this file is the evidence, so the reasoning is kept.
  *
- *  **Mount is unconditional.** Every route mounts on the navigator's first render and stays for the
- *  session, so no navigation ever cold-mounts a page: the subtree's effects, the text measuring, the
- *  SVG pattern and the grain tile are all paid once, behind the splash. The cost used to be paid on
- *  every tap, on the UI thread, between the press and the first frame the finger sees.
+ *  **Mount once, on first visit.** A route mounts the first time it is focused and stays for the
+ *  session, so no navigation after that cold-mounts a page: the subtree's effects, the text measuring,
+ *  the SVG pattern and the grain tile are paid once. (Until v0.5 every route mounted behind the splash;
+ *  that made every cold start pay for pages most sessions never open — see `seen` in `BookView`.)
  *
  *  **The page does not move.** The paper drop — 70 dp of travel, a tilt, a scale, a shadow overlay,
  *  ten frames of two composited full-screen pages — is gone. `perf-placement.test.ts` holds the
@@ -61,6 +61,13 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
      whole of the tour's footprint in this file; the other two tabs are never pointed at. */
   const tour: Partial<Record<RouteName, { current: View | null }>> = { Week: useCoachSlot('tab-week'), Tasks: useCoachSlot('tab-tasks'), Grades: useCoachSlot('tab-grades') };
   const cur = state.routes[state.index]?.name as RouteName | undefined, kbUp = useKeyboardUp();
+  /* v0.5 (F8): a page mounts the first time it is visited, then stays. Mounting all six behind the splash
+     made cold start pay for pages most sessions never open (Grades and Stats are the heaviest); the
+     first visit now pays its own mount once, and every later switch is the same cut as before. A ref,
+     not state: the set only grows, and it grows in the same render that focuses the page. */
+  const seen = useRef(new Set<string>());
+  const focusedKey = state.routes[state.index]?.key;
+  if (focusedKey) seen.current.add(focusedKey);
   /* A tab tap does NOT come through these syncs: `onPressIn` writes the store and moves the navigator
    *  in the SAME event handler, React batches both into ONE render, and that render already has
    *  `route === cur` — so the finger pays a single render pass instead of two. The store-first flow
@@ -99,7 +106,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
             destination's node count (measured on web: week 286, today 639, tasks 658, stats 727,
             grades 756). The trade against the ~20 full-screen fills a stacked set of pages would cost
             every frame is deliberate; see the `Placed` note above. */}
-        {state.routes.map((r, i) => (<Placed key={r.key} on={i === state.index}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{descriptors[r.key]?.render()}</View></Placed>))}
+        {state.routes.map((r, i) => (<Placed key={r.key} on={i === state.index}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{seen.current.has(r.key) ? descriptors[r.key]?.render() : null}</View></Placed>))}
         {!hideNav && (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
             <HandBox seed="nav" fill={c.card} sw={2} amp={1.6} style={{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }}>

@@ -9,6 +9,9 @@ import { Empty, Page, TaskCard } from './common';
 import { addDays, startOfDay } from '../domain/time';
 import type { Task } from '../domain/types';
 
+/** How many task cards one "page" of the list draws. */
+export const PAGE_ROWS = 60;
+
 export function TasksScreen() {
   const tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
   const st = { tasks, courses };
@@ -29,13 +32,23 @@ export function TasksScreen() {
     return taskSort === 'due' ? g.filter((x) => x.items.length) : [{ title: '', items: list }];
   }, [list, now, taskSort]);
   const openN = st.tasks.filter((t) => t.status !== 2).length;
+  /* F8: the page draws at most `shown` cards, then a "Show more" row. Every card is a full swipeable
+     paper slip, and drawing a thousand of them made the first visit (and every refocus, which rebuilds
+     the page's layout) cost seconds on a mid-range phone. The cap resets when the question changes. */
+  const [more, setMore] = useState({ key: '', n: PAGE_ROWS });
+  const askKey = `${q}|${cid}|${taskFilter}|${taskSort}`;
+  const shown = more.key === askKey ? more.n : PAGE_ROWS;
+  let budget = shown;
+  const capped = groups.map((g) => { const items = g.items.slice(0, Math.max(0, budget)); budget -= items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
+  const hidden = list.length - Math.min(list.length, shown);
   return (
     <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />}>
       <Field placeholder="Search tasks" value={q} onChangeText={setQ} returnKeyType="search" />
       <Row>{(['all', 'open', 'done'] as const).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={taskFilter === f} onPress={() => act.setSettings({ taskFilter: f })} small />)}<View style={{ width: 8 }} />{(['due', 'priority', 'created'] as const).map((f) => <Chip key={f} label={f === 'due' ? 'By date' : f === 'priority' ? 'By priority' : 'Newest'} on={taskSort === f} icon={undefined} onPress={() => act.setSettings({ taskSort: f })} small />)}</Row>
       <HStrip gap={8}><Chip label="Every subject" on={cid === 'all'} onPress={() => setCid('all')} small /><Chip label="Personal" on={cid === null} onPress={() => setCid(null)} small />{st.courses.map((c) => <Chip key={c.id} label={c.name} on={cid === c.id} onPress={() => setCid(c.id)} small />)}</HStrip>
-      {list.length === 0 ? <Empty icon="tasks" text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add an assignment, exam or reading.'} /> : groups.map((g) => (
-        <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.items.length}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} tour="task-row" />)}</View>))}
+      {list.length === 0 ? <Empty icon="tasks" text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add an assignment, exam or reading.'} /> : capped.map((g) => (
+        <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.total}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} tour="task-row" />)}</View>))}
+      {hidden > 0 ? <Btn kind="ghost" testID="tasks-show-more" label={`Show ${Math.min(hidden, PAGE_ROWS)} more · ${hidden} not shown`} onPress={() => setMore({ key: askKey, n: shown + PAGE_ROWS })} /> : null}
       <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />
     </Page>
   );
