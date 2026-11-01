@@ -72,6 +72,13 @@ export async function importPlan(plan: ImportPlan): Promise<boolean> {
   try {
     await R().importSnapshot(plan.snapshot);
     await carryImportedRange(plan.snapshot.settings);
+    /* Archived terms (margin/2) are history: one the phone already has keeps the phone's copy, the rest
+       are added as archived rows. None is ever made active — the running term is the phone's. */
+    if (plan.semesters?.length) {
+      const have = new Set((await R().listSemesters()).map((r) => r.id));
+      for (const row of plan.semesters) if (!have.has(row.id)) await R().saveSemester({ ...row, active: false });
+      await loadSemesters();
+    }
     applySnapshot(await R().load(), true);
     configureFx(getState().settings);
     const rows = Object.values(plan.counts).reduce((a, b) => a + b, 0);

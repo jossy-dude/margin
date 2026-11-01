@@ -1,20 +1,20 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import type { Snapshot } from '../domain/types';
+import type { SemesterRow, Snapshot } from '../domain/types';
 import { buildTables, exportName, toCsvZip, toJson, toXlsx } from './export';
 
 export type ExportFormat = 'xlsx' | 'csv' | 'json';
 export type ExportTarget = 'folder' | 'share';
 const MIME: Record<ExportFormat, string> = { xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'application/zip', json: 'application/json' };
 
-export function buildExport(format: ExportFormat, s: Snapshot, now = Date.now()): { name: string; data: string | Uint8Array; mime: string } {
-  if (format === 'json') return { name: exportName(now, 'json'), data: toJson(s, now), mime: MIME.json };
-  const tables = buildTables(s, now);
+export function buildExport(format: ExportFormat, s: Snapshot, now = Date.now(), terms: readonly SemesterRow[] = []): { name: string; data: string | Uint8Array; mime: string } {
+  if (format === 'json') return { name: exportName(now, 'json'), data: toJson(s, now, terms), mime: MIME.json };
+  const tables = buildTables(s, now, terms);
   return format === 'xlsx' ? { name: exportName(now, 'xlsx'), data: toXlsx(tables, now), mime: MIME.xlsx } : { name: exportName(now, 'zip', '-csv'), data: toCsvZip(tables, now), mime: MIME.csv };
 }
 /** 'folder' lets the person choose any directory (Android's folder picker); 'share' hands the file to the system share sheet (Drive, Files, mail …). */
-export async function runExport(format: ExportFormat, target: ExportTarget, s: Snapshot): Promise<{ ok: boolean; where: string; name: string }> {
-  const { name, data, mime } = buildExport(format, s);
+export async function runExport(format: ExportFormat, target: ExportTarget, s: Snapshot, terms: readonly SemesterRow[] = []): Promise<{ ok: boolean; where: string; name: string }> {
+  const { name, data, mime } = buildExport(format, s, Date.now(), terms);
   if (target === 'folder') {
     const dir = await Directory.pickDirectoryAsync();
     const file = dir.createFile(name, mime); file.write(data);

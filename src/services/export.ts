@@ -1,4 +1,4 @@
-import type { Snapshot } from '../domain/types';
+import type { SemesterRow, Snapshot } from '../domain/types';
 import { fmtTime, pad, ymd } from '../domain/time';
 import { effective, occurrencesBetween } from '../domain/attendance';
 import { roomOf, roomsLabel } from '../domain/rooms';
@@ -15,33 +15,44 @@ const isoUtc = (ms: number) => new Date(ms).toISOString();
 const iso = (ms: number | null) => { if (ms === null) return ''; const d = new Date(ms); return `${ymd(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 /** Every table the app tracks, full and un-sampled. XLSX gets one sheet per table, CSV one file per table, JSON the same structure. */
-export function buildTables(s: Snapshot, now: number): Table[] {
+export function buildTables(s: Snapshot, now: number, terms: readonly SemesterRow[] = []): Table[] {
   const cn = (id: string | null) => s.courses.find((c) => c.id === id)?.name ?? '';
+  const vn = (id: string | null | undefined) => (id ? (s.variants ?? []).find((v) => v.id === id)?.name ?? '' : '');
   const st = s.settings as Record<string, unknown>;
   const first = semesterFirstDay(s.settings, now);
   const occ = occurrencesBetween(first, clampToSemester(now, s.settings), s.meetings).filter((o) => inSemester(o.date, s.settings));
   const tables: Table[] = [
     { name: 'Courses', header: ['id', 'name', 'room', 'teacher', 'goal', 'total'], rows: s.courses.map((c) => [c.id, c.name, roomsLabel(c), c.teacher, c.goal, total(s.marks.filter((m) => m.courseId === c.id), s.adjusts[c.id] ?? 0)]) },
-    { name: 'Timetable', header: ['course', 'weekday', 'start', 'end', 'room'], rows: s.meetings.map((m) => [cn(m.courseId), WD[m.weekday] ?? '', m.start, m.end, roomOf(m, s.courses.find((c) => c.id === m.courseId), s.variants)]) },
+    { name: 'Variants', header: ['subject', 'variant', 'room', 'teacher', 'note'], rows: (s.variants ?? []).map((v) => [cn(v.subjectId), v.name, v.room, v.teacher, v.note]) },
+    { name: 'Timetable', header: ['course', 'variant', 'weekday', 'start', 'end', 'room'], rows: s.meetings.map((m) => [cn(m.courseId), vn(m.variantId), WD[m.weekday] ?? '', m.start, m.end, roomOf(m, s.courses.find((c) => c.id === m.courseId), s.variants)]) },
     { name: 'Attendance', header: ['date', 'course', 'start', 'status', 'source'], rows: occ.map((o) => { const e = effective(o.date, o.meeting, s.attendance, s.dayMarks, now); const label = e.status ?? 'upcoming'; return [ymd(o.date), cn(o.meeting.courseId), o.meeting.start, label, e.explicit ? 'marked' : e.inferred ? 'inferred' : 'future']; }) },
     { name: 'Day marks', header: ['date', 'status', 'marked at', 'reason'], rows: Object.values(s.dayMarks).map((d) => [d.date, d.status, iso(d.at), d.reason]) },
     { name: 'Tasks', header: ['id', 'title', 'course', 'kind', 'due', 'start', 'estimate min', 'priority', 'status', 'created', 'completed', 'on time', 'notes'], rows: s.tasks.map((t) => [t.id, t.title, cn(t.courseId), t.kind, iso(t.dueAt), iso(t.startAt), t.estimateMin, t.priority, ['open', 'in progress', 'done'][t.status] ?? '', iso(t.createdAt), iso(t.completedAt), t.completedAt && t.dueAt ? t.completedAt <= t.dueAt : null, t.notes]) },
     { name: 'Subtasks', header: ['task', 'subtask', 'done'], rows: s.tasks.flatMap((t) => t.subtasks.map((x): Cell[] => [t.title, x.t, x.done])) },
     { name: 'Reminders', header: ['task', 'mode', 'value', 'label'], rows: s.tasks.flatMap((t) => t.reminders.map((r): Cell[] => [t.title, r.mode, r.mode === 'abs' ? iso(r.at) : `${r.minutes} min before`, r.label])) },
     { name: 'Notices', header: ['id', 'course', 'text', 'date', 'priority'], rows: s.notices.map((n) => [n.id, cn(n.courseId), n.text, iso(n.dueAt), n.priority]) },
-    { name: 'Marks', header: ['course', 'item', 'score', 'weight', 'counted'], rows: s.marks.map((m) => [cn(m.courseId), m.name, m.score, m.weight, m.on]) },
+    { name: 'Marks', header: ['course', 'variant', 'item', 'score', 'weight', 'counted'], rows: s.marks.map((m) => [cn(m.courseId), vn(m.variantId), m.name, m.score, m.weight, m.on]) },
     { name: 'Focus sessions', header: ['id', 'course', 'started', 'ended', 'focus min', 'break min', 'overtime min', 'rounds', 'planned min', 'mode', 'completed'], rows: s.focus.map((f) => [f.id, cn(f.courseId), iso(f.startedAt), iso(f.endedAt), +(f.focusSec / 60).toFixed(1), +(f.breakSec / 60).toFixed(1), +(f.overSec / 60).toFixed(1), f.rounds, f.planMin, f.mode, f.completed]) },
     /* W5/W6's two entities: empty on every database built before those workstreams, but the export has
        to carry them the moment they are not, and a sheet that appears later would be a silent change to
        the file's shape. Cheap enough to be honest now. */
     { name: 'Trips', header: ['id', 'started', 'ended', 'route', 'note'], rows: s.trips.map((t) => [t.id, iso(t.startedAt), iso(t.endedAt), t.route, t.note]) },
     { name: 'Alarms', header: ['id', 'at', 'label', 'enabled', 'kind', 'task'], rows: s.alarms.map((a) => [a.id, iso(a.at), a.label, a.enabled, a.kind, a.taskId]) },
+    { name: 'Semesters', header: ['name', 'start', 'end', 'state', 'archived'], rows: terms.map((t) => [t.name, t.start, t.end, t.active ? 'current' : 'archived', t.archivedAt ?? '']) },
     { name: 'Settings', header: ['key', 'value'], rows: Object.entries(st).map(([k, v]): Cell[] => [k, typeof v === 'object' ? JSON.stringify(v) : (v as Cell)]) },
   ];
   tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', `Margin ${APP_VERSION}`], ['semester', semesterLabel(s.settings)], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
   return tables;
 }
-export const toJson = (s: Snapshot, now: number) => JSON.stringify({ app: 'margin', version: 1, exportedAt: isoUtc(now), ...Object.fromEntries(buildTables(s, now).filter((t) => t.name !== 'Summary').map((t) => [t.name, t.rows.map((r) => Object.fromEntries(t.header.map((h, i) => [h, r[i] ?? null])))])), raw: s }, null, 2);
+/** `margin/2`: the readable tables (for a person or a spreadsheet), `raw` — the whole snapshot, which
+ *  is what an import reads back losslessly — and `semesters`, the archived terms with their frozen
+ *  snapshots, so a backup carries the history too. Version 1 files (no `format`, no `semesters`) still
+ *  import: the reader keys on `app` and `raw`, and treats a missing `semesters` as none. */
+export const toJson = (s: Snapshot, now: number, terms: readonly SemesterRow[] = []) => JSON.stringify({
+  app: 'margin', format: 'margin/2', version: 2, exportedAt: isoUtc(now),
+  ...Object.fromEntries(buildTables(s, now, terms).filter((t) => t.name !== 'Summary').map((t) => [t.name, t.rows.map((r) => Object.fromEntries(t.header.map((h, i) => [h, r[i] ?? null])))])),
+  raw: s, semesters: terms.filter((t) => !t.active && t.snapshotJson),
+}, null, 2);
 
 const csvCell = (v: Cell) => { const x = v === null ? '' : String(v); return /[",\r\n]/.test(x) || /^[=+\-@]/.test(x) && typeof v === 'string' ? `"${(/^[=+\-@]/.test(x) && typeof v === 'string' ? "'" + x : x).replace(/"/g, '""')}"` : x; };
 export const toCsv = (t: Table) => '\uFEFF' + [t.header, ...t.rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';

@@ -1,8 +1,9 @@
 import type {
-  AttRecord, AttStatus, Course, DayMark, DayStatus, Mark, Meeting, Notice, Settings, Snapshot, SubjectVariant, Task, TaskKind,
+  Alarm, AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, TaskKind, Trip,
 } from './types';
 import { ST, occKey } from './attendance';
 import { splitRooms } from './rooms';
+import { DEFAULT_SETTINGS } from './defaults';
 import { parseCsv } from './csv';
 import { fromMin, hm } from './time';
 import { isYmd, validRange } from './semester';
@@ -63,6 +64,8 @@ export interface ImportPlan {
   attendance?: AttRecord[];
   marks?: Mark[];
   tasks?: Task[];
+  /** Archived terms (`margin/2`), written as history beside the rows. */
+  semesters?: SemesterRow[];
 }
 export interface ImportOptions {
   /** The courses already on this phone. A compact file's course name is resolved against these
@@ -97,6 +100,8 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 const int = (v: unknown, dflt: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : dflt);
 const bool = (v: unknown, dflt: boolean): boolean => (typeof v === 'boolean' ? v : dflt);
 const nonEmpty = (v: unknown): string | null => { const s = str(v)?.trim(); return s ? s : null; };
+/** Same kind of value as the default: a boolean for a boolean, a plain object for an object, and so on. */
+const sameShape = (v: unknown, dflt: unknown) => (Array.isArray(dflt) ? Array.isArray(v) : isRec(dflt) ? isRec(v) : typeof v === typeof dflt && (typeof v !== 'number' || Number.isFinite(v)));
 /** A subject's rooms from a file row: `rooms` (a list or a string) wins, else the legacy `room` string,
  *  split the way migration 5 split it. `null` = the row names no room (so a merge keeps the phone's). */
 const roomsIn = (row: Rec): string[] | null => { const r = splitRooms(row.rooms ?? row.room); return r.length ? r : null; };
@@ -171,7 +176,7 @@ const derived = (kind: string, key: string) => `imp-${kind}-${shortHash(key)}`;
 
 /** Every top-level key the two shapes may carry. Shape A's list is the export's own table names (see
  *  `toJson`) plus the envelope; anything else is reported, not guessed at. */
-const A_KEYS = new Set(['app', 'version', 'exportedAt', 'raw', 'Summary', 'Courses', 'Timetable', 'Attendance', 'Day marks', 'Tasks', 'Subtasks', 'Reminders', 'Notices', 'Marks', 'Focus sessions', 'Trips', 'Alarms', 'Settings']);
+const A_KEYS = new Set(['app', 'version', 'format', 'semesters', 'Variants', 'Semesters', 'exportedAt', 'raw', 'Summary', 'Courses', 'Timetable', 'Attendance', 'Day marks', 'Tasks', 'Subtasks', 'Reminders', 'Notices', 'Marks', 'Focus sessions', 'Trips', 'Alarms', 'Settings']);
 const B_KEYS = new Set(['app', 'version', 'exportedAt', 'profileName', 'semester', 'courses', 'days', 'attendance', 'tasks', 'marks']);
 
 export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan {
@@ -189,6 +194,12 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   const marks = new Map<string, Mark>();
   const adjusts = new Map<string, number>();
   const variantRows = new Map<string, SubjectVariant>();
+  const focus = new Map<string, FocusSession>();
+  const trips = new Map<string, Trip>();
+  const alarms = new Map<string, Alarm>();
+  /** Archived terms a `margin/2` export carries. History only: written by `saveSemester` beside the
+   *  rows, never made active, and a term the phone already has (same id) is left as the phone has it. */
+  const archived: SemesterRow[] = [];
   /* The phone's rows by id, as the CSV door's `existingById`: the map a raw or compact course row
      is merged against, so neither JSON door can wipe a subject the phone already has. */
   const existingById = new Map((opts.courses ?? []).map((c) => [c.id, c]));
@@ -239,6 +250,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
       return { snapshot: {}, counts: {}, breakdown: {}, problems, warnings };
     }
     readRaw(raw);
+    readArchived(parsed.semesters);
   } else {
     for (const k of Object.keys(parsed)) if (!B_KEYS.has(k)) warnings.push(`"${k}" is not part of the import and was ignored.`);
     readCompact(parsed);
@@ -250,7 +262,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   const writes: Record<string, number> = {
     courses: courses.size, meetings: meetings.size, tasks: tasks.size, notices: notices.size,
     attendance: attendance.size, dayMarks: dayMarks.size, marks: marks.size, adjusts: adjusts.size,
-    variants: variantRows.size,
+    variants: variantRows.size, focus: focus.size, trips: trips.size, alarms: alarms.size, semesters: archived.length,
   };
   const counts = Object.fromEntries(Object.entries(writes).filter(([, n]) => n > 0));
   const snapshot: Partial<Snapshot> = {};
@@ -263,6 +275,9 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   if (dayMarks.size) snapshot.dayMarks = Object.fromEntries(dayMarks);
   if (marks.size) snapshot.marks = [...marks.values()];
   if (adjusts.size) snapshot.adjusts = Object.fromEntries(adjusts);
+  if (focus.size) snapshot.focus = [...focus.values()];
+  if (trips.size) snapshot.trips = [...trips.values()];
+  if (alarms.size) snapshot.alarms = [...alarms.values()];
   if (Object.keys(settings).length) snapshot.settings = settings;
   const breakdown = datasetCounts(snapshot, read, writes, opts);
 
@@ -273,7 +288,22 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   if (attendance.size) plan.attendance = [...attendance.values()];
   if (marks.size) plan.marks = [...marks.values()];
   if (tasks.size) plan.tasks = [...tasks.values()];
+  if (archived.length) plan.semesters = archived;
   return plan;
+
+  /* ── margin/2: the archived terms beside `raw` ──────────────────────────────────────────────── */
+  function readArchived(v: unknown) {
+    const rows = asRows(v, 'semesters');
+    reads('semesters', rows.length);
+    for (const [i, row] of rows.entries()) {
+      const at = `semesters[${i}]`;
+      if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
+      const id = nonEmpty(row.id), snap = str(row.snapshotJson), start = str(row.start) ?? '', end = str(row.end) ?? '';
+      if (!id || !snap) { problem(at, 'row', 'An archived term needs its id and its saved snapshot.'); continue; }
+      try { JSON.parse(snap); } catch { problem(at, 'snapshotJson', 'The saved term is not readable.'); continue; }
+      archived.push({ id, name: str(row.name) ?? '', start, end, active: false, snapshotJson: snap, createdAt: str(row.createdAt) ?? '', archivedAt: str(row.archivedAt) ?? new Date(now).toISOString() });
+    }
+  }
 
   /* ── shape A: this app's own export, read from `raw` ─────────────────────────────────────────── */
   function readRaw(raw: Rec) {
@@ -307,7 +337,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of meetingRows.entries()) {
       const at = `meetings[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['id', 'courseId', 'weekday', 'start', 'end', 'demo'], at);
+      unknownKeys(row, ['id', 'courseId', 'weekday', 'start', 'end', 'demo', 'variantId', 'room'], at);
       const courseId = nonEmpty(row.courseId);
       if (!courseId) { problem(at, 'courseId', 'A class needs the course it belongs to.'); continue; }
       const weekday = num(row.weekday);
@@ -316,7 +346,23 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
       if (!start || !end) { problem(at, start ? 'end' : 'start', 'Times are 24-hour "HH:MM".'); continue; }
       const id = nonEmpty(row.id) ?? derived('meeting', `${courseId}|${weekday}|${start}`);
       if (meetings.has(id)) duplicate('this class', at);
-      meetings.set(id, { id, courseId, weekday: Math.round(weekday), start, end, demo: bool(row.demo, false) });
+      meetings.set(id, { id, courseId, weekday: Math.round(weekday), start, end, demo: bool(row.demo, false), variantId: nonEmpty(row.variantId), room: nonEmpty(row.room) });
+    }
+
+    /* v0.5: a subject's variants, as `snapshotOf` carries them (`margin/2`). A variant whose subject is
+       neither in this file nor on the phone would be an orphan nothing can show, so it is a problem. */
+    const variantList = asRows(raw.variants, 'variants');
+    reads('variants', variantList.length);
+    for (const [i, row] of variantList.entries()) {
+      const at = `variants[${i}]`;
+      if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
+      unknownKeys(row, ['id', 'subjectId', 'name', 'room', 'teacher', 'note', 'ord'], at);
+      const subjectId = nonEmpty(row.subjectId), name = nonEmpty(row.name);
+      if (!subjectId || (!courses.has(subjectId) && !existingById.has(subjectId))) { problem(at, 'subjectId', 'A variant needs a subject in this file or on the phone.'); continue; }
+      if (!name) { problem(at, 'name', 'A variant needs a name.'); continue; }
+      const id = nonEmpty(row.id) ?? derived('variant', `${subjectId}|${name.toLowerCase()}`);
+      if (variantRows.has(id)) duplicate('this variant', at);
+      variantRows.set(id, { id, subjectId, name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '', note: str(row.note) ?? '', ord: int(row.ord, i) });
     }
 
     const taskRows = asRows(raw.tasks, 'tasks');
@@ -362,13 +408,13 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of markRows.entries()) {
       const at = `marks[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['id', 'courseId', 'name', 'score', 'weight', 'on', 'sort', 'demo'], at);
+      unknownKeys(row, ['id', 'courseId', 'name', 'score', 'weight', 'on', 'sort', 'demo', 'variantId'], at);
       const courseId = nonEmpty(row.courseId), name = nonEmpty(row.name);
       if (!courseId) { problem(at, 'courseId', 'A mark needs the course it belongs to.'); continue; }
       if (!name) { problem(at, 'name', 'A mark needs a name.'); continue; }
       const id = nonEmpty(row.id) ?? derived('mark', `${courseId}|${name}`);
       if (marks.has(id)) duplicate('this mark', at);
-      marks.set(id, { id, courseId, name, score: num(row.score), weight: num(row.weight) ?? 0, on: bool(row.on, true), sort: int(row.sort, i), demo: bool(row.demo, false) });
+      marks.set(id, { id, courseId, name, score: num(row.score), weight: num(row.weight) ?? 0, on: bool(row.on, true), sort: int(row.sort, i), demo: bool(row.demo, false), variantId: nonEmpty(row.variantId) });
     }
 
     const attendanceRows = entriesOf(raw.attendance);
@@ -419,12 +465,48 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
             else warnings.push('settings: the semester end date is not usable and was left as it was.');
           }
         }
+        /* v0.5: a backup restores the person's choices too (name, theme, pen, paper, sounds, reminders…).
+           Only keys this build knows, each with the type its default has, so a file can neither inject
+           a key nothing reads nor turn a toggle into text. Bookkeeping that belongs to the phone that
+           wrote the file (the sample stamp, the tour version) never travels. */
+        for (const [k, dflt] of Object.entries(DEFAULT_SETTINGS)) {
+          if (k === 'semesterStart' || k === 'semesterEnd' || k === 'seededAt' || !(k in raw.settings)) continue;
+          const v = raw.settings[k];
+          if (sameShape(v, dflt)) (settings as Record<string, unknown>)[k] = k === 'notif' ? { ...(dflt as object), ...(v as object) } : v;
+          else warnings.push(`settings.${k}: not the kind of value this setting takes; the phone's own was kept.`);
+        }
+        if (settings.name) profileName = settings.name;
       }
     }
 
-    /* Out of scope for v1, and said out loud rather than silently dropped. */
-    for (const [name, list] of [['focus sessions', raw.focus], ['trips', raw.trips], ['alarms', raw.alarms]] as const) {
-      if (Array.isArray(list) && list.length) warnings.push(`${list.length} ${name} are not imported; this version brings in courses, classes, tasks, notes, attendance, day marks, marks and curves.`);
+    /* v0.5: study history, commutes and alarms come back too, so an export is a whole backup. A row is
+       taken as the export wrote it when every field it needs reads; anything else is one problem. */
+    const focusRows = asRows(raw.focus, 'focus');
+    reads('focus', focusRows.length);
+    for (const [i, row] of focusRows.entries()) {
+      const at = `focus[${i}]`;
+      if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
+      const id = nonEmpty(row.id), startedAt = num(row.startedAt), endedAt = num(row.endedAt);
+      if (!id || startedAt === null || endedAt === null) { problem(at, 'row', 'A focus session needs its id, start and end.'); continue; }
+      focus.set(id, {
+        id, taskId: nonEmpty(row.taskId), courseId: nonEmpty(row.courseId), startedAt, endedAt,
+        focusSec: int(row.focusSec, 0), breakSec: int(row.breakSec, 0), overSec: int(row.overSec, 0), rounds: int(row.rounds, 1),
+        planMin: int(row.planMin, 25), mode: str(row.mode) ?? 'focus', completed: bool(row.completed, false), demo: bool(row.demo, false),
+      });
+    }
+    const tripRows = asRows(raw.trips, 'trips');
+    reads('trips', tripRows.length);
+    for (const [i, row] of tripRows.entries()) {
+      const at = `trips[${i}]`, id = isRec(row) ? nonEmpty(row.id) : null, startedAt = isRec(row) ? num(row.startedAt) : null;
+      if (!isRec(row) || !id || startedAt === null) { problem(at, 'row', 'A trip needs its id and start.'); continue; }
+      trips.set(id, { id, startedAt, endedAt: num(row.endedAt), route: str(row.route) ?? '', note: str(row.note) ?? '' });
+    }
+    const alarmRows = asRows(raw.alarms, 'alarms');
+    reads('alarms', alarmRows.length);
+    for (const [i, row] of alarmRows.entries()) {
+      const at = `alarms[${i}]`, id = isRec(row) ? nonEmpty(row.id) : null, when = isRec(row) ? num(row.at) : null;
+      if (!isRec(row) || !id || when === null) { problem(at, 'row', 'An alarm needs its id and time.'); continue; }
+      alarms.set(id, { id, at: when, label: str(row.label) ?? '', enabled: bool(row.enabled, true), kind: str(row.kind) ?? 'leave', taskId: nonEmpty(row.taskId) });
     }
   }
 
@@ -711,14 +793,14 @@ interface CsvSpec {
 
 const CSV_SPEC: Record<DatasetKind, CsvSpec> = {
   courses: { cols: { id: ['id'], name: ['name', 'subject'], room: ['room'], teacher: ['teacher'], goal: ['goal', 'target'] }, ignored: ['total'] },
-  timetable: { cols: { course: ['course', 'subject'], weekday: ['weekday', 'day'], start: ['start', 'from'], end: ['end', 'to'] }, ignored: ['room'] },
+  timetable: { cols: { course: ['course', 'subject'], variant: ['variant', 'group'], weekday: ['weekday', 'day'], start: ['start', 'from'], end: ['end', 'to'], room: ['room'] } },
   attendance: { cols: { date: ['date'], course: ['course', 'subject'], start: ['start'], status: ['status'], reason: ['reason'] }, ignored: ['source'] },
   dayMarks: { cols: { date: ['date'], status: ['status'], reason: ['reason'] }, ignored: ['marked at'] },
   tasks: {
     cols: { id: ['id'], title: ['title', 'task'], course: ['course', 'subject'], kind: ['kind'], due: ['due'], start: ['start'], estimateMin: ['estimate min', 'estimate'], priority: ['priority'], status: ['status'], notes: ['notes'] },
     ignored: ['created', 'completed', 'on time'],
   },
-  marks: { cols: { course: ['course', 'subject'], name: ['item', 'name', 'mark'], score: ['score'], weight: ['weight'], on: ['counted', 'on'] } },
+  marks: { cols: { course: ['course', 'subject'], variant: ['variant', 'group'], name: ['item', 'name', 'mark'], score: ['score'], weight: ['weight'], on: ['counted', 'on'] } },
 };
 /** Every table a CSV may be, in the order the sheet offers them. */
 export const DATASETS = Object.keys(CSV_SPEC) as DatasetKind[];
@@ -828,6 +910,15 @@ export function planCsv(
   for (const c of opts.courses ?? []) { phone.set(c.name.trim().toLowerCase(), c.id); existingById.set(c.id, c); }
   const courseIdOf = (name: string) => (name ? phone.get(name.trim().toLowerCase()) ?? null : null);
   const missingCourse = (name: string) => `No subject called "${name}" on the phone; import the Subjects table first.`;
+  /** A variant named in a CSV cell, under its subject, by name (case-insensitive). An empty cell is "the
+   *  subject itself"; a name the phone does not have is a warning and the row lands on the subject. */
+  const variantIdOf = (courseId: string, name: string, at: string): string | null => {
+    const n = name.trim().toLowerCase();
+    if (!n) return null;
+    const v = (opts.variants ?? []).find((x) => x.subjectId === courseId && x.name.trim().toLowerCase() === n);
+    if (!v) warnings.push(`${at}: no variant called "${name}" under that subject; the row was put on the subject itself.`);
+    return v?.id ?? null;
+  };
 
   /** Every row, with the line number a spreadsheet shows; a row that is not as wide as the header is
    *  reported and skipped rather than padded, because padding would invent values. */
@@ -883,9 +974,10 @@ export function planCsv(
         if (weekday === null) { problem(at, 'weekday', 'weekday must be 0 (Mon) … 6 (Sun), or a day name.'); return; }
         const start = clock(col(row, 'start')), end = clock(col(row, 'end'));
         if (!start || !end) { problem(at, !start ? 'start' : 'end', 'Times are 24-hour "HH:MM".'); return; }
-        const id = derived('meeting', `${courseId}|${weekday}|${start}`);
+        const variantId = variantIdOf(courseId, col(row, 'variant'), at);
+        const id = derived('meeting', `${courseId}${variantId ? `~${variantId}` : ''}|${weekday}|${start}`);
         if (out.has(id)) warnings.push(`${at}: this class is listed twice; the later row wins.`);
-        out.set(id, { id, courseId, weekday, start, end, demo: false });
+        out.set(id, { id, courseId, weekday, start, end, demo: false, variantId, room: col(row, 'room') || null });
       });
       if (out.size) { snapshot.meetings = [...out.values()]; counts.meetings = out.size; }
       break;
@@ -1005,6 +1097,7 @@ export function planCsv(
         if (!name) { problem(at, 'name', 'A mark needs a name.'); return; }
         if (!courseId) { problem(at, 'course', missingCourse(course)); return; }
         const id = derived('mark', `${courseId}|${name}`);
+        const variantId = variantIdOf(courseId, col(row, 'variant'), at);
         if (out.has(id)) warnings.push(`${at}: this mark is listed twice; the later row wins.`);
         const existing = markById.get(id);
         if (existing) {
@@ -1014,7 +1107,7 @@ export function planCsv(
           const weightCell = col(row, 'weight');
           const onCell = col(row, 'on');
           out.set(id, {
-            ...existing, courseId, name,
+            ...existing, courseId, name, variantId: col(row, 'variant') ? variantId : existing.variantId ?? null,
             score: (scoreCell ? numberOf(scoreCell, warnings, at, 'score') : existing.score),
             weight: (weightCell ? numberOf(weightCell, warnings, at, 'weight') ?? existing.weight : existing.weight),
             on: onCell ? countedCell(onCell, warnings, at) : existing.on,
@@ -1024,7 +1117,7 @@ export function planCsv(
         out.set(id, {
           id, courseId, name, score: numberOf(col(row, 'score'), warnings, at, 'score'),
           weight: numberOf(col(row, 'weight'), warnings, at, 'weight') ?? 0,
-          on: countedCell(col(row, 'on'), warnings, at), sort: out.size, demo: false,
+          on: countedCell(col(row, 'on'), warnings, at), sort: out.size, demo: false, variantId,
         });
       });
       if (out.size) { snapshot.marks = [...out.values()]; counts.marks = out.size; plan.marks = [...out.values()]; }

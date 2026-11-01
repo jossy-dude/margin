@@ -254,9 +254,11 @@ describe('parseImport', () => {
       attendance: { '2026-09-08|08:30|C1': { key: '2026-09-08|08:30|C1', status: 'l', at: 5, reason: 'bus' } },
       dayMarks: { '2026-09-14': { date: '2026-09-14', status: 'c', at: 5, reason: 'holiday' } },
       adjusts: { C1: 2.5 },
-      focus: [{ id: 'F1' }],
-      trips: [{ id: 'TR1' }],
-      alarms: [{ id: 'A1' }],
+      /* v0.5 D2: these three are imported now (an export is a whole backup), so the fixture carries
+         rows a real export writes rather than bare ids. */
+      focus: [{ id: 'F1', taskId: null, courseId: 'C1', startedAt: 1, endedAt: 2, focusSec: 1500, breakSec: 0, overSec: 0, rounds: 1, planMin: 25, mode: 'focus', completed: true, demo: false }],
+      trips: [{ id: 'TR1', startedAt: 1, endedAt: null, route: 'home', note: '' }],
+      alarms: [{ id: 'A1', at: 1, label: 'Leave', enabled: true, kind: 'leave', taskId: null }],
       settings: { semesterStart: '2026-09-07', semesterEnd: '2026-12-20' },
     };
     const exportText = json({ app: 'margin', version: 1, exportedAt: '2026-10-12T00:00:00.000Z', Summary: [], Courses: [], raw });
@@ -264,7 +266,7 @@ describe('parseImport', () => {
 
     it('reads the snapshot under raw, and every entity in it', () => {
       expect(plan.problems).toEqual([]);
-      expect(plan.counts).toEqual({ courses: 1, meetings: 1, tasks: 1, notices: 1, attendance: 1, dayMarks: 1, marks: 1, adjusts: 1 });
+      expect(plan.counts).toEqual({ courses: 1, meetings: 1, tasks: 1, notices: 1, attendance: 1, dayMarks: 1, marks: 1, adjusts: 1, focus: 1, trips: 1, alarms: 1 });
       expect(plan.snapshot.courses![0]!.id).toBe('C1');
       expect(plan.snapshot.attendance!['2026-09-08|08:30|C1']).toMatchObject({ status: 'l', reason: 'bus' });
       expect(plan.snapshot.dayMarks!['2026-09-14']!.status).toBe('c');
@@ -275,12 +277,11 @@ describe('parseImport', () => {
       expect(plan.snapshot.settings).toEqual({ semesterStart: '2026-09-07', semesterEnd: '2026-12-20' });
     });
 
-    it('says out loud which entities this version does not import', () => {
-      expect(plan.warnings).toEqual([
-        '1 focus sessions are not imported; this version brings in courses, classes, tasks, notes, attendance, day marks, marks and curves.',
-        '1 trips are not imported; this version brings in courses, classes, tasks, notes, attendance, day marks, marks and curves.',
-        '1 alarms are not imported; this version brings in courses, classes, tasks, notes, attendance, day marks, marks and curves.',
-      ]);
+    /* v0.5 D2 replaced "says out loud which entities this version does not import": focus history,
+       trips and alarms are imported now, so the old warnings would be false. */
+    it('imports focus history, trips and alarms too, with no warnings', () => {
+      expect(plan.warnings).toEqual([]);
+      expect(plan.counts).toMatchObject({ focus: 1, trips: 1, alarms: 1 });
     });
 
     it('is idempotent from an export too', () => {
@@ -319,10 +320,10 @@ describe('parseImport', () => {
       expect(p.snapshot.courses![0]!.id).toBe('C9');
     });
 
-    it('a raw settings object with no semesterEnd key writes only the start', () => {
+    it('a raw settings object with no semesterEnd key writes only the start (and, since v0.5, the person\'s name)', () => {
       const p = parse(json({ app: 'margin', raw: { settings: { semesterStart: '2026-09-07', name: 'Sam' } } }));
       expect(p.problems).toEqual([]);
-      expect(p.snapshot.settings).toEqual({ semesterStart: '2026-09-07' });
+      expect(p.snapshot.settings).toEqual({ semesterStart: '2026-09-07', name: 'Sam' });
     });
 
     it('warns on a key that is not part of a Margin export', () => {
@@ -348,10 +349,13 @@ describe('parseImport', () => {
       expect(p.problems).toEqual([]);
       expect(p.counts).toEqual({
         courses: snap.courses.length, meetings: snap.meetings.length, tasks: snap.tasks.length,
-        notices: snap.notices.length, marks: snap.marks.length,
+        notices: snap.notices.length, marks: snap.marks.length, focus: snap.focus.length, // v0.5: focus history travels
       });
-      expect(p.snapshot.settings).toEqual({ semesterStart: '2026-09-07', semesterEnd: '' });
-      expect(p.warnings.every((w) => w.includes('focus sessions'))).toBe(true);
+      // v0.5 D2: the whole settings object travels now (the range plus the person's choices), and focus
+      // history is imported rather than warned about.
+      expect(p.snapshot.settings).toMatchObject({ semesterStart: '2026-09-07', semesterEnd: '' });
+      expect(p.snapshot.settings).not.toHaveProperty('seededAt');
+      expect(p.warnings).toEqual([]);
     });
   });
 
