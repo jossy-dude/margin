@@ -1,6 +1,6 @@
-/* v0.9 / WS2 (semesters) assertions — what a browser can honestly show about the term.
+/* v0.5 / WS2 (semesters) assertions — what a browser can honestly show about the term.
  *
- *   node tools/v09-semester-assert.mjs [--url http://localhost:8098] [--out .shots/v09]
+ *   node tools/v05-semester-assert.mjs [--url http://localhost:8098] [--out .shots/v05]
  *
  * One context, 412x915, one session, in this order:
  *   1 — Settings → Semesters is reachable and names the running term, its range and the days left
@@ -23,7 +23,7 @@ import { mkdirSync } from 'node:fs';
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(`--${n}`); return i === -1 ? d : argv[i + 1]; };
 const URL_ = arg('url', 'http://localhost:8098');
-const OUT = arg('out', '.shots/v09');
+const OUT = arg('out', '.shots/v05');
 const W = 412, H = 915;
 mkdirSync(OUT, { recursive: true });
 
@@ -57,7 +57,7 @@ await p.goto(URL_, { waitUntil: 'networkidle', timeout: 240_000 });
 await p.locator('[data-testid="tab-week"]').first().waitFor({ state: 'attached', timeout: 90_000 });
 await p.waitForTimeout(5000);
 
-/* Same tap rules as tools/v09-import-assert.mjs: RNW answers Pressability on POINTERDOWN, the Book
+/* Same tap rules as tools/v05-import-assert.mjs: RNW answers Pressability on POINTERDOWN, the Book
    keeps every page mounted (`display:none` for the hidden ones, so a hidden page has no box), and
    controls can sit below the fold. A sheet leaves the focused page visible behind it, so every
    assertion below names a string only the control under test prints. */

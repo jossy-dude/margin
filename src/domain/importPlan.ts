@@ -22,7 +22,7 @@ import { isYmd, validRange } from './semester';
  */
 export interface Problem { where: string; field: string; message: string }
 
-/** One subject variant is a `SubjectVariant`: as the full-dataset file spells it and as v0.9's
+/** One subject variant is a `SubjectVariant`: as the full-dataset file spells it and as v0.5's
  *  `subject_variants` table stores it (`id, subject_id, name, room, teacher, note, ord`). `plan.variants`
  *  is the preview's copy; `snapshot.variants` is what the repository writes — both built from the same
  *  map below, so the preview cannot promise a row the write does not carry. */
@@ -46,7 +46,7 @@ export interface DatasetCount {
 export interface ImportPlan {
   snapshot: Partial<Snapshot>;
   /** Rows that will be written, per dataset. Every dataset this parser produces one for is written by
-   *  `importSnapshot`, variants included since v0.9's table landed — a count that overstated the write
+   *  `importSnapshot`, variants included since v0.5's table landed — a count that overstated the write
    *  would be the same lie as one that understated it. */
   counts: Record<string, number>;
   /** Every dataset the file carried, with the add/update/skip split the preview prints. */
@@ -241,7 +241,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   }
 
   /* What will actually land, and what the file carried. Variants are written like every other dataset
-     since v0.9's migration gave them a table — the row is a `put`, so it carries a `rev` and reaches
+     since v0.5's migration gave them a table — the row is a `put`, so it carries a `rev` and reaches
      `importSnapshot` with the rest. */
   const writes: Record<string, number> = {
     courses: courses.size, meetings: meetings.size, tasks: tasks.size, notices: notices.size,

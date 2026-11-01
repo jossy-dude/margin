@@ -1,6 +1,8 @@
 import { palettes, RG } from '../tokens/theme';
 import { handPath, outline, scaleRadii } from '../ui/hand';
-import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
@@ -167,11 +169,14 @@ const stats = (x: Float64Array, rate: number) => {
   return { seconds: x.length / rate, peak, dc: sum / x.length, bandDb: 20 * Math.log10(bandRms(x, rate)), ...spectrum(x, rate) };
 };
 
+/* One sound folder. The palette checks below used to run on a tracked copy in `assets/sounds-candidates/`
+   (gitignored, yet 29 files were still committed), which meant they measured files the app never loads. v0.5
+   points them at `assets/sounds/`, the folder `src/services/audio.ts` requires, and untracks the copy. */
 const LIVE = join(__dirname, '../../assets/sounds');
-const CAND = join(__dirname, '../../assets/sounds-candidates');
-/** Every sound src/services/fx.ts can ask for. nudge is new: the off-track warning had been
-    borrowing tick.wav, so muting the clock also silenced the warning. */
-const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1', 'detent-2', 'detent-3', 'detent-4', 'done', 'flutter', 'notify', 'place', 'round-done', 'shuffle', 'stamp-absent', 'stamp-cancel', 'stamp-here', 'stamp-late', 'stamp-sick', 'tape-peel', 'thud', 'thunk', 'tick', 'tock', 'toggle-off', 'toggle-on'];
+/** Every sound src/services/fx.ts can ask for (the keys of `src/services/audio.ts`). nudge has its own file:
+    the off-track warning had been borrowing tick.wav, so muting the clock also silenced the warning. It is
+    back in this list because the shipped folder has it; the candidate copy never did. */
+const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1', 'detent-2', 'detent-3', 'detent-4', 'done', 'flutter', 'notify', 'nudge', 'place', 'round-done', 'shuffle', 'stamp-absent', 'stamp-cancel', 'stamp-here', 'stamp-late', 'stamp-sick', 'tape-peel', 'thud', 'thunk', 'tick', 'tock', 'toggle-off', 'toggle-on'];
 /** Fired faster than the eye can follow, so these must stay inside the 30-120 ms window. */
 const RAPID = ['tick', 'tock', 'toggle-on', 'toggle-off', 'clack', 'detent-1', 'detent-2', 'detent-3', 'detent-4'];
 
@@ -192,13 +197,38 @@ describe('synthesised sounds', () => {
     }
   });
 });
-describe('candidate palette (audition set, not yet wired into the app)', () => {
-  const files = readdirSync(CAND).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
+describe('shipped palette (assets/sounds/, the files the app loads)', () => {
+  const files = readdirSync(LIVE).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
   it('covers exactly the sounds fx.ts asks for, no gaps and no strays', () => {
     expect(files).toEqual(EXPECTED);
-    expect(files).toHaveLength(27);
+    expect(files).toHaveLength(28);
   });
-  const all = new Map(files.map((n) => { const w = readWav(join(CAND, `${n}.wav`)); return [n, stats(w.x, w.rate)] as const; }));
+  const shipped = new Map(files.map((n) => { const w = readWav(join(LIVE, `${n}.wav`)); return [n, stats(w.x, w.rate)] as const; }));
+  it('rapid-fire sounds stay inside the 30-120 ms window, nothing runs long and nothing clips', () => {
+    for (const n of RAPID) { const s = shipped.get(n) as { seconds: number }; expect({ sound: n, rapid: s.seconds >= 0.03 && s.seconds <= 0.12 }).toEqual({ sound: n, rapid: true }); }
+    for (const [n, s] of shipped) { expect({ sound: n, len: s.seconds > 0.03 && s.seconds < 1.3, peak: s.peak < 1 }).toEqual({ sound: n, len: true, peak: true }); }
+  });
+});
+/* The recipe checks below measure what scripts/synth-sounds.mjs writes, generated fresh into a temp folder.
+   They used to read the tracked `assets/sounds-candidates/` copy, which was that same output (26 of 27 files
+   byte-identical; place.wav predated its shorter recipe). The shipped folder above was balanced by ear and does
+   NOT meet all of these (loudness spread ~13 dB, detent-1 brighter than detent-2, a DC offset and a sub-200 Hz
+   case), so pointing them at assets/sounds/ would fail on files nobody changed. Promoting the recipes into
+   assets/sounds/ is a sound-design decision for the v0.5 sound task (spec section K), not housekeeping. */
+describe('synth recipes (scripts/synth-sounds.mjs output, the audition set)', () => {
+  let dir = '';
+  let files: string[] = [];
+  const all = new Map<string, ReturnType<typeof stats>>();
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'margin-sounds-'));
+    execFileSync(process.execPath, [join(__dirname, '../../scripts/synth-sounds.mjs'), '--all', '--out', dir], { stdio: 'pipe' });
+    files = readdirSync(dir).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
+    for (const n of files) { const w = readWav(join(dir, `${n}.wav`)); all.set(n, stats(w.x, w.rate)); }
+  });
+  afterAll(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
+  it('the script writes exactly the sounds fx.ts asks for, no gaps and no strays', () => {
+    expect(files).toEqual(EXPECTED);
+  });
   it('the spectral metric is trustworthy (a 1 kHz tone must measure as 1 kHz, not as leakage)', () => {
     const x = new Float64Array(Math.round(0.3 * 44100));
     for (let i = 0; i < x.length; i++) x[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / 44100);

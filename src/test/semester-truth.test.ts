@@ -1,7 +1,7 @@
 /**
  * WS2 review, I1 and I3 — the `semesters` row is the truth on READ, and the cache is invalidated on a wipe.
  *
- * v0.9 made the active row the source of truth and `settings.semesterStart/End` its mirror, but nothing
+ * v0.5 made the active row the source of truth and `settings.semesterStart/End` its mirror, but nothing
  * repaired the mirror: two live writers (`adoptDemo`'s hand-over and the tour's last step → `setSettings`)
  * wrote the KV alone, `ensureActiveSemester` returns early when a row exists, and `loadSemesters`'
  * `moved` branch re-read the KV instead of re-mirroring — so after a first run the Settings → Semesters

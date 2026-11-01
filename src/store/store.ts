@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Appearance, AppState as RNAppState } from 'react-native';
 import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, NotifSettings, Trip, Alarm } from '../domain/types';
 import type { NotifLogRow, Repository } from '../data/repository';
@@ -19,7 +19,7 @@ import { buildSnapshot, newSemester, semesterName } from '../domain/archive';
 import { isYmd, suggestEnd, validRange } from '../domain/semester';
 import { configureFx, fx } from '../services/fx';
 import * as notifs from '../services/notifications';
-import { announceAppliedUpdate, bindOtaKv, checkOnForeground } from '../services/ota';
+import { announceAppliedUpdate, bindOtaKv, checkOnForeground, consumeAppliedUpdate } from '../services/ota';
 
 export type RouteName = 'Today' | 'Week' | 'Tasks' | 'Grades' | 'Stats' | 'Focus';
 export type SheetSpec =
@@ -91,6 +91,44 @@ bindOtaKv({
   get: async (k) => { try { return await R().getKv(k); } catch { return null; } },
   set: async (k, v) => { try { await R().setKv(k, v); } catch (e) { recordCrash(e, 'save', state.route); } },
 });
+
+/** Say "you’re now on Margin X" — once, from a MOUNTED shell, and only then retire the marker.
+ *
+ *  Why not `hydrate()` (where this lived): `hydrate` finishes long before `Shell` is drawn. `Gate`
+ *  shows `Splash` until the fonts have loaded, and on the launch that applied an update the fonts are
+ *  re-read from a bundle that has just changed on disk — the slowest plausible boot. `toast()` starts
+ *  its 2.6 s clear timer when it is CALLED, so the sentence would expire behind the splash, invisibly.
+ *  It was also consumed (the KV marker deleted) at that same moment, so there was no retry and the
+ *  one announcement the loop exists for could be lost outright. Both halves are fixed together:
+ *  `announceAppliedUpdate` is now a pure read, and the delete happens here, after the toast is drawn.
+ *
+ *  "Drawn", not "called": `toast()` only writes the store, and `Overlay` paints it on a later commit.
+ *  So the delete waits for `drawn` — the commit in which this hook reads the sentence out of the toast
+ *  slot. `useSyncExternalStore` gives every component in one render the same snapshot, so that is the
+ *  commit in which `Overlay` (a child of `Shell`, which calls this) drew it too. If anything replaces
+ *  the toast first, `drawn` never comes true and the marker stays: the sentence repeats next launch
+ *  rather than being lost.
+ *
+ *  `announced` is module-level rather than a ref because the once-ness belongs to the launch, not to a
+ *  component: a sheet closing, a theme change or a remount of `Shell` must not repeat the sentence.
+ *  The promise is `.catch`ed because this is a fire-and-forget call site with nobody to hand a
+ *  rejection to — `announceAppliedUpdate` is total already, but a hook must never leak one. */
+let announced = false;
+export function useUpdateAnnouncement(): void {
+  const [said, setSaid] = useState<string | null>(null);
+  const drawn = useStore((s) => said !== null && s.toast?.text === said);
+  useEffect(() => {
+    if (announced) return;
+    announced = true;
+    void announceAppliedUpdate()
+      .then((text) => { if (!text) return; toast(text); setSaid(text); })
+      .catch(() => { /* the sentence is a courtesy; a boot is not allowed to fail for it */ });
+  }, []);
+  useEffect(() => { if (drawn) void consumeAppliedUpdate(); }, [drawn]);
+}
+/** Forget that this launch has announced. Only tests need this, like `resetOtaState`: a real launch
+ *  starts with the flag down because the JS module is evaluated afresh. */
+export function resetUpdateAnnouncement(): void { announced = false; }
 
 /* ───── notifications: plan → OS queue, debounced ───── */
 /** The OS tints a notification with the app's accent, and `resync` runs from store actions rather than from a
@@ -198,10 +236,10 @@ export async function hydrate(r: Repository) {
     applySnapshot(snap); configureFx(state.settings);
     const rows = await reconcileSemesters();
     set({ ready: true, now: Date.now(), semesters: rows ?? [] }); resync(1500);
-    /* v0.9 WS4, both fire-and-forget: the launch that applied an update says so once, and this launch
-       asks the channel once. Neither is awaited — a check must never sit between the user and the
-       first frame — and both are total, so neither needs a catch at this call site. */
-    void announceAppliedUpdate().then((text) => { if (text) toast(text); });
+    /* v0.9 WS4: this launch asks the channel once. Fire-and-forget — a check must never sit between
+       the user and the first frame — and total, so it needs no catch here. The OTHER half of the loop,
+       the "you’re now on Margin X" sentence, is NOT said here: `hydrate` runs while the splash is up,
+       so the shell says it once it is actually mounted (`useUpdateAnnouncement`). */
     void checkOnForeground();
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
 }

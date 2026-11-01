@@ -1,7 +1,7 @@
 /**
  * WS2 follow-up — an imported semester range must land in the ACTIVE term, not only in the settings KV.
  *
- * v0.9 made `semesters` the truth and `settings.semesterStart/End` its mirror. An import wrote the KV
+ * v0.5 made `semesters` the truth and `settings.semesterStart/End` its mirror. An import wrote the KV
  * alone, so the range died the next time `loadSemesters()` read the row: the file said "the term starts
  * 7 September" and the app went on printing last term's dates. These tests drive the real store and the
  * in-memory repository (the same port the SQLite adapter implements) through the JSON door that carries

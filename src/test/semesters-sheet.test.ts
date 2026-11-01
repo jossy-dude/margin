@@ -286,7 +286,7 @@ describe('the Settings door and the Settings copy of the range', () => {
   });
 
   /* The Settings → Attendance control is the same two dates. It used to write only `settings`, which
-     after v0.9 is a mirror of the row: the page would then print a range the Semesters row did not have. */
+     after v0.5 is a mirror of the row: the page would then print a range the Semesters row did not have. */
   it('editing the range in Settings → Attendance writes the active row too', async () => {
     const s = await mountSettings(await repoWithTerm(), ['attendance']);
     await s.type('semester-start-day', '14');

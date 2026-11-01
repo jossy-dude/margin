@@ -15,7 +15,7 @@ export interface Repository {
   remove(entity: EntityName, id: string): Promise<void>;
   restore(entity: EntityName, id: string): Promise<void>;
   putSettings(patch: Partial<Settings>): Promise<void>;
-  /* ── the setting table as a KV (v0.9) ──────────────────────────────────────────────────────────
+  /* ── the setting table as a KV (v0.5) ──────────────────────────────────────────────────────────
    * Not every stored fact is a user setting: the OTA loop's "this bundle was applied" marker is
    * bookkeeping, must survive a restart, and has no place on a Settings page (it is not part of the
    * `Settings` type and no screen writes it). It still belongs in the one key-value table this app
@@ -46,7 +46,7 @@ export interface Repository {
   notifLog(): Promise<NotifLogRow[]>;
   pendingOutbox(limit?: number): Promise<OutboxRow[]>;
   ackOutbox(upToSeq: number): Promise<void>;
-  /* ── semesters (v0.9) ──────────────────────────────────────────────────────────────────────────
+  /* ── semesters (v0.5) ──────────────────────────────────────────────────────────────────────────
    * Four methods, not an `EntityName`: a term is not a synced row and must not be tombstoned or
    * renumbered by a `put`. `saveSemester` inserts or overwrites by id, and `setActiveSemester` owns
    * the one-active invariant — including mirroring the row's range into `settings.semesterStart/End`,

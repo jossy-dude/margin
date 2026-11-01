@@ -77,11 +77,12 @@ const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: st
   );
 };
 /**
- * v0.9 (WS3). Uninstalling deletes the database, and Android has no dialog an app can raise to keep its
- * data — the v0.9 plan names that explicitly (V4), so this page must not imply one exists. What the app
- * can do is hand over a copy first, and the copy has to be the export that already exists: the same
- * `runExport` the Data page calls, in the one format Import can read back. A second, uninstall-specific
- * writer would drift from the tested one, and "the backup is unreadable" is the worst way to find out.
+ * v0.5 (WS3). Uninstalling deletes the database, and Android has no dialog an app can raise to keep its
+ * data — the release spec names that explicitly (V4 in the v0.9 draft, B3 in v0.5), so this page must not
+ * imply one exists. What the app can do is hand over a copy first, and the copy has to be the export that
+ * already exists: the same `runExport` the Data page calls, in the one format Import can read back. A second,
+ * uninstall-specific writer would drift from the tested one, and "the backup is unreadable" is the worst way
+ * to find out.
  *
  * Shaped like `Nav` but with no chevron: the row acts, it does not navigate, and the arrow would say
  * otherwise. `busy` is the Data page's own flag, so a second tap during a slow share sheet cannot start a

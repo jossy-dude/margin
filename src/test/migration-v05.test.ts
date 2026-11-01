@@ -1,7 +1,7 @@
 /**
  * WS2 Task 1 — the release's ONLY migration.
  *
- * v0.9 adds three storage objects in one `user_version` bump: the `semesters` table (one active term
+ * v0.5 adds three storage objects in one `user_version` bump: the `semesters` table (one active term
  * plus its archived snapshots), the `subject_variants` side table, and `meetings.variant_id`. A
  * migration is the one moment the app rewrites the shape of the user's only file, so the fixture here is
  * a real v0.3.1 database — every table, every row — rather than an empty one: the claim to prove is
@@ -79,7 +79,7 @@ function v031(settings: boolean): ReturnType<typeof rawDb> {
   return db;
 }
 
-describe('the v0.9 migration (Review Focus 2)', () => {
+describe('the v0.5 migration (Review Focus 2)', () => {
   it('opens a v0.3.1 database with every row intact and carries the settings range into the active semester', async () => {
     const { sql, raw } = v031(true);
     const r = new SqliteRepository(sql, () => NOW);

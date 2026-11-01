@@ -104,7 +104,7 @@ jest.mock('expo-file-system', () => {
   return { File, Paths: { document: 'doc' }, __state: state };
 });
 jest.mock('expo-constants', () => ({ default: { expoConfig: { version: '1.0.0', sdkVersion: '57.0.0' } } }));
-/** v0.9 (WS3). The uninstall row must reach the *existing* export path, so the seam under test is the
+/** v0.5 (WS3). The uninstall row must reach the *existing* export path, so the seam under test is the
  *  module the Data page already calls: if a second implementation were added, this mock would not see
  *  the tap and the assertion below would fail. */
 jest.mock('../services/exportFile', () => ({
@@ -482,7 +482,7 @@ describe('Settings → Attendance & semester carries both dates and a year (v0.3
     expect(t).toContain('No end date');
     expect(t).toContain('from 7 Sep 2026'); // the label, generated from the stored range
     expect(t).not.toContain('Semester ends');
-    // v0.9 / R1: three numeric keypad fields, not steppers — a date is typed, not stepped.
+    // v0.5 / R1: three numeric keypad fields, not steppers — a date is typed, not stepped.
     for (const id of ['semester-start-year', 'semester-start-month', 'semester-start-day']) {
       const field = s.r.root.findAll((n) => (n.props as { testID?: string }).testID === id && typeof (n.props as { onChangeText?: unknown }).onChangeText === 'function')[0];
       expect(field).toBeDefined();
@@ -741,12 +741,13 @@ describe('the progress-bar picker previews the demo moment, not today’s clock'
   });
 });
 
-/* ───── v0.9 (WS3): a copy you hold, before an uninstall you cannot undo ───── */
+/* ───── v0.5 (WS3): a copy you hold, before an uninstall you cannot undo ───── */
 /**
  * Uninstalling deletes the database, and Android has no dialog an app can raise to keep its data — the
- * plan for v0.9 says so explicitly (V4), so the app must not imply otherwise. What it can do is hand the
- * person a copy first. That copy has to be the *same* export the Data & export page produces: a second
- * code path would drift from it, and a JSON file is the one format Import can read back.
+ * release spec says so explicitly (V4 in the v0.9 draft, B3 in v0.5), so the app must not imply otherwise.
+ * What it can do is hand the person a copy first. That copy has to be the *same* export the Data & export
+ * page produces: a second code path would drift from it, and a JSON file is the one format Import can read
+ * back.
  */
 describe('the uninstall row exports the planner instead of promising a keep-data dialog', () => {
   const runExport = (jest.requireMock('../services/exportFile') as { runExport: jest.Mock }).runExport;

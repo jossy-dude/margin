@@ -1,3 +1,5 @@
+> **Superseded by v0.5** — see docs/superpowers/specs/2026-11-01-v05-release-design.md and docs/superpowers/plans/2026-11-01-v05-release.md. Kept as history.
+
 # v0.9 Release — Design Spec
 
 **Date:** 2026-10-28 · **Status:** awaiting owner review · **Path:** architectural (brainstormed, sections 1–4 approved in chat)

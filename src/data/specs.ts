@@ -27,7 +27,7 @@ export const SPECS: Record<EntityName, Spec> = {
      one guessing them. */
   trip: { table: 'trip', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('startedAt', 'int'), f('endedAt', 'int', true), f('route', 'text'), f('note', 'text')] },
   alarm: { table: 'alarm', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('at', 'int'), f('label', 'text'), f('enabled', 'bool'), f('kind', 'text'), f('taskId', 'text', true)] },
-  /* v0.9/WS8: a subject taught in more than one room, or by more than one teacher. Bound here (not
+  /* v0.5/WS8: a subject taught in more than one room, or by more than one teacher. Bound here (not
      read by the UI yet) so the import path writes a variant with the standard `put` — a `rev` and an
      outbox row in the same transaction — instead of a hand-rolled INSERT that would skip both. */
   variant: { table: 'subject_variants', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('subjectId', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('note', 'text'), f('ord', 'int')] },
@@ -87,7 +87,7 @@ export const MIGRATIONS: string[] = [
    ALTER TABLE meeting ADD COLUMN demo INTEGER DEFAULT 0;
    ALTER TABLE notice ADD COLUMN demo INTEGER DEFAULT 0;
    ALTER TABLE mark ADD COLUMN demo INTEGER DEFAULT 0;`,
-  /* Migration 4 — the release's only migration (v0.9/WS2). Three storage objects in one bump:
+  /* Migration 4 — the release's only migration (v0.5/WS2). Three storage objects in one bump:
      `semesters` (the live term, plus one row per archived term frozen as `snapshot_json`),
      `subject_variants` (a subject's alternate room/teacher) and `meetings.variant_id` (which of a
      subject's variants a class belongs to; NULL means "the subject's own"). `semesters` deliberately

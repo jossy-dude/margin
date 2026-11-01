@@ -411,7 +411,7 @@ describe('the full-dataset JSON shape', () => {
   it('counts every dataset it writes, variants included', () => {
     expect(plan.problems).toEqual([]);
     expect(plan.warnings).toEqual([]);
-    // v0.9's migration gave variants a table, so the preview, the button and the toast count them:
+    // v0.5's migration gave variants a table, so the preview, the button and the toast count them:
     // a count that excluded a row the import really writes is the same lie as one that invented it.
     expect(plan.counts).toEqual({ courses: 1, meetings: 1, attendance: 1, dayMarks: 1, tasks: 1, marks: 1, variants: 1 });
     expect(plan.breakdown.variants).toEqual({ write: 1, skip: 0, add: null, update: null });

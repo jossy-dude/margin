@@ -4,24 +4,18 @@
 
 ## Platform
 
-adaptive
+android
 
-One product, two genuinely different design surfaces: an Expo/React Native app on an
-Android phone, and a desktop layout in a laptop browser on the same WiFi. The design
-language adapts to each — phone is capture-in-the-moment, desktop is analysis and
-planning.
+One surface: an Expo/React Native app on an Android phone. iPhone is on hold (the code
+is Expo, so it stays reachable later). **The desktop surface is out of scope.** Earlier
+versions of this file planned a laptop-browser layout of the same data; v0.5 drops it
+(see "Out of scope" under Capabilities and Constraints).
 
 ## Users
 
-A student. On the phone, mid-day: marking attendance the moment a class ends,
-jotting an assignment down between lessons, checking how long is left in the current
-period. On the laptop, evening study sessions or a long desk session: planning the
-week, triaging tasks, and reading the analytics properly — the analytics are the
-reason the desktop view exists.
-
-The phone is the primary device. The desktop view is a second surface the same person
-uses when they do not want to touch their phone. It is not a replacement and must not
-ask the student to give up the phone.
+A student, on the phone. Mid-day: marking attendance the moment a class ends, jotting
+an assignment down between lessons, checking how long is left in the current period.
+In the evening: planning the week, triaging tasks and reading the analytics.
 
 ## Product Purpose
 
@@ -41,7 +35,7 @@ the subject they were designed for, plus one day-wide sight glass.
 
 A neighbouring planner could copy the reminder list. It could not copy "your period 3
 is a piece of laboratory equipment that happens to know the time." That mechanism is
-the product's own, and it is what the desktop surface extends rather than replaces.
+the product's own.
 
 ## Operating Context
 
@@ -56,10 +50,9 @@ the product's own, and it is what the desktop surface extends rather than replac
 - Focus uses a pomodoro dial with 25/45/50/90-minute presets, optional flow mode that
   lets a round overrun, and breaks unlocked after a set amount of focus time.
 - Everything is local: SQLite on the device, local notifications, no account, no
-  cloud, no network calls. Export exists as a deliberate escape hatch (xlsx, csv, json).
-- The phone has been carrying `start:lan` and `tunnel` scripts since early in the
-  project, and Expo web is available in this SDK, so a desktop surface is technically
-  reachable without changing the data model.
+  cloud. The only network use is checking Expo's update server (`u.expo.dev`) for app
+  updates; no account, no personal data. Export exists as a deliberate escape hatch
+  (xlsx, csv, json).
 
 ## Capabilities and Constraints
 
@@ -70,7 +63,7 @@ or a FAB.
 **Forms and sheets:** add-task, add-class, add-subject, add-mark, add-note,
 mark-attendance (per class and per whole day), and a settings system with 18 sub-pages.
 
-**Reusable component language that must survive into the desktop view:** hand-cut paper
+**Reusable component language that every redesign keeps:** hand-cut paper
 cards with elliptical corners and wobble (`HandBox`); ink, paper and accent colour
 tokens across two palettes and two themes; four fonts — Caveat for handwriting,
 PermanentMarker for headings, Newsreader italic for secondary prose, Special Elite for
@@ -79,20 +72,22 @@ grain or photographic texture; six analog clock faces; the day bar instrument sy
 SVG charts (rings, heatmaps, histograms, horizontal bars, hand-inked lines).
 
 **Confirmed constraints:**
-- Mobile-first is preserved. The desktop view is additive.
-- Hosting/transmission of the desktop view is deliberately **undecided** — the user
-  asked for the design of the desktop surface first and chose to defer the mechanism.
-- Local-only stays a product truth: no account, no cloud, no telemetry.
+- The phone is the product. Every surface is designed for a phone held in one hand.
+- Local-only stays a product truth: no account, no cloud, no telemetry. The update
+  check is the one network call, and it carries no personal data.
 
-**Open decisions:**
-- How a laptop browser reaches the phone's data is unresolved. The design must not
-  assume one; it must be layout, not transport.
-- Whether the desktop surface ships a writing path (adding tasks, marking attendance)
-  or is read-and-plan only is unresolved.
+**Out of scope (v0.5):**
+- The desktop surface: a laptop-browser layout of the same data. Earlier versions of
+  this file left its transport (how a laptop reaches the phone's data) and its write
+  path open; with the surface dropped, neither question needs an answer. Expo web
+  stays a development and test harness (the browser assertions under `tools/`), not a
+  product surface.
 
 ## Brand Commitments
 
-- The name is **Marginalia**.
+- The shipped name is **Margin**. Marginalia was the working name; it survives only in
+  internal identifiers a student never reads (the `marginalia` scheme and slug, the
+  `app.marginalia.planner` package, `marginalia.db`), and never in user-facing copy.
 - The hand-cut paper world is binding. The user's instruction was to keep the
   components — the clocks, the fonts, the background, everything — and not to be
   limited by them. So the world is inherited and extended, never replaced.
@@ -113,18 +108,17 @@ SVG charts (rings, heatmaps, histograms, horizontal bars, hand-inked lines).
 
 ## Product Principles
 
-1. **The phone is the capture device; the laptop is the thinking device.** Each
-   surface is built for the job it is actually used at, not as a scaled copy of the
-   other.
+1. **The phone is the whole product.** Capture and planning both happen on it, so
+   capture stays thumb-shaped and the analytics are built to be read on a phone, not
+   as a scaled-down desktop page.
 2. **Show the mechanism, don't describe it.** The instrument bar, the escapement
    bezel, the real grade maths. The app demonstrates rather than claims.
 3. **Local-only is a feature.** Everything works on a plane. Export is the escape
    hatch, never a subscription.
-4. **Density is earned, not defaulted.** A wide screen earns more on screen at once
-   only where more at once actually helps — analytics and week planning. Capture
-   stays thumb-shaped.
-5. **Every hand-cut edge is a decision with a reason.** Extending the world to
-   desktop means extending its rules, not adding decoration.
+4. **Density is earned, not defaulted.** More on screen at once only where it
+   actually helps — analytics and week planning. Capture stays thumb-shaped.
+5. **Every hand-cut edge is a decision with a reason.** Extending the world means
+   extending its rules, not adding decoration.
 
 ## Accessibility & Inclusion
 
@@ -133,5 +127,4 @@ every interactive element, accessibility labels derived from the same string as
 `testID`, live regions on the focus countdown and round announcements, a
 `useReduceMotion` path that collapses every animation to an instant assignment, a
 font-scale ceiling, and measured contrast ratios on all text tokens (documented at
-6.7:1 and above in the theme file). The desktop view must hold every one of these,
-and adds keyboard operability, which a touch-only phone surface never needed.
+6.7:1 and above in the theme file). Every redesign must hold every one of these.

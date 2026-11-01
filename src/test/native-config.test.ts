@@ -133,7 +133,7 @@ describeIfNative('the native project agrees with app.json', () => {
 });
 
 /**
- * Android Auto Backup, v0.9 (WS3).
+ * Android Auto Backup, v0.5 (WS3).
  *
  * Uninstall is the one action that deletes the planner, and the app cannot intercept it — Android has no
  * "keep the data?" dialog an app can raise. What an app CAN do is tell the platform to copy its private

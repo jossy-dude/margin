@@ -9,7 +9,7 @@
 import { Platform } from 'react-native';
 import {
   APPLIED_VERSION_KEY, announceAppliedUpdate, applyUpdate, bindOtaKv, checkForUpdate, checkOnForeground,
-  otaAvailable, resetOtaState, versionLine, type OtaKv,
+  consumeAppliedUpdate, otaAvailable, resetOtaState, updateStaged, versionLine, type OtaKv,
 } from '../services/ota';
 
 const mockUpdates = {
@@ -158,6 +158,31 @@ describe('reloading is the user’s tap, never the app’s', () => {
     await applyUpdate();
     expect(mockUpdates.reloadAsync).not.toHaveBeenCalled();
   });
+
+  /* I2. A resume check can download an update silently. A later Check from About still sees the old
+     bundle running, so the channel says "available" and the fetch answers `isNew: false` — nothing
+     new to download, because the new bundle is already on disk. The old `pending = fetched.isNew`
+     erased that download there: the page printed "newest version" and the restart gate shut, with the
+     update sitting unapplied. A staged download has to stay staged. */
+  it('keeps a staged download staged, and restartable, across a later check', async () => {
+    await ready(); // exactly what a foreground check does: download, never reload
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true });
+    mockUpdates.fetchUpdateAsync.mockResolvedValue({ isNew: false });
+    expect(await checkForUpdate()).toBe('ready');
+    expect(updateStaged()).toBe(true);
+    mockUpdates.reloadAsync.mockResolvedValue();
+    await applyUpdate();
+    expect(mockUpdates.reloadAsync).toHaveBeenCalledTimes(1);
+  });
+
+  /* …and the same truth when the channel has nothing at all to say: the bundle is already downloaded,
+     so "ready" is the honest answer and the About row must not claim to be current. */
+  it('still reports `ready` when the channel has nothing new but a download is staged', async () => {
+    await ready();
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    expect(await checkForUpdate()).toBe('ready');
+    expect(updateStaged()).toBe(true);
+  });
 });
 
 /**
@@ -237,6 +262,17 @@ describe('checking on the way back into the app', () => {
     expect(await first).toBe('current');
     expect(mockUpdates.checkForUpdateAsync).toHaveBeenCalledTimes(1);
   });
+
+  /* A phone whose clock is put back a day (timezone fix, manual change, NTP correction) made `now -
+     lastCheckAt` negative, which is "inside the window" and throttled the app for a day. A negative
+     step is not a window at all: check, and take the new time as the new floor. */
+  it('does not let a backward clock step pin the throttle shut', async () => {
+    mockUpdates.checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+    await checkOnForeground();
+    jest.setSystemTime(NOW - 86_400_000);
+    expect(await checkOnForeground()).toBe('current');
+    expect(mockUpdates.checkForUpdateAsync).toHaveBeenCalledTimes(2);
+  });
 });
 
 /**
@@ -245,8 +281,9 @@ describe('checking on the way back into the app', () => {
  * `expo-updates` cannot report the version of a bundle that is not running yet, so the marker records
  * the one identity a downloaded update already has — its update id — and the next launch compares it
  * with the id of the bundle that is now running. A relaunch into the same old bundle (a reload the
- * platform refused, an emergency launch) must NOT announce anything, and the marker is consumed on the
- * announcement so the sentence appears once per applied update and never again.
+ * platform refused, an emergency launch) must NOT announce anything. Reading the marker does not
+ * consume it: the caller deletes it only after the sentence has actually been shown, so a launch that
+ * could not render the toast retries next time instead of losing the news.
  */
 describe('the update that was applied says so, once', () => {
   /** Download an update the way the About row does, then leave its id in the KV. */
@@ -274,12 +311,18 @@ describe('the update that was applied says so, once', () => {
     expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
   });
 
-  it('announces the running update exactly once', async () => {
+  /* The sentence is read WITHOUT consuming the marker, so a toast that never renders (the shell not
+     mounted yet, a crash before the overlay) can be retried on the next launch instead of being lost
+     forever. Deletion is a separate act the caller performs only after `toast()` has been called. */
+  it('reads the sentence without consuming the marker, and consumes it only on request', async () => {
     await downloaded();
     mockUpdates.updateId = 'update-2';
     expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
-    expect(await announceAppliedUpdate()).toBeNull();
+    expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2'); // still there: readable again
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    await consumeAppliedUpdate();
     expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
+    expect(await announceAppliedUpdate()).toBeNull();
   });
 
   it('says nothing while the bundle that applied it is not the one running', async () => {
@@ -307,6 +350,8 @@ describe('the update that was applied says so, once', () => {
     const readOnly: OtaKv = { get: fakeKv.get, set: async () => { throw new Error('disk full'); } };
     bindOtaKv(readOnly);
     expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    await expect(consumeAppliedUpdate()).resolves.toBeUndefined(); // a failed delete repeats, never throws
+    expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2'); // the REAL store still holds it
   });
 });
 

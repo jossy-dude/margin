@@ -430,7 +430,7 @@ status page directly below it.
 ### W5b — pending DECISIONS D9
 
 **Nothing here can pass on this build.** `expo-notifications` never calls `setFullScreenIntent`
-(`reports/w5-d0-mechanism.md` §2), so a reminder cannot take over the screen, and W5a only *declared*
+(`docs/archive/reports/w5-d0-mechanism.md` §2), so a reminder cannot take over the screen, and W5a only *declared*
 `USE_FULL_SCREEN_INTENT` so the grant is possible once the native module exists. Run these after W5b.
 
 - **W5b.1** Android 14+: the phone's **Settings → Apps → Special app access → Full screen notifications**
@@ -557,9 +557,9 @@ an app bug. Wear the same pair of shoes every run.
 
 ---
 
-## V09-WS1 — import: a file picked from the phone
+## V05-WS1 — import: a file picked from the phone
 
-### V09-WS1.1 — the picker opens, and the file's text arrives
+### V05-WS1.1 — the picker opens, and the file's text arrives
 **Look at** Settings → Data & export → Import. Tap **Pick file**.
 - Check: Android's document picker opens. Choosing a `.json` export from Downloads puts the file's name
   beside the button, fills the box and shows the preview ("N subjects · …") without a second tap;
@@ -570,13 +570,13 @@ an app bug. Wear the same pair of shoes every run.
 
 ---
 
-## V09-OTA — it updates itself on its own, and says so once
+## V05-OTA — it updates itself on its own, and says so once
 
 The loop WS4 adds is only provable on a phone: a check nobody tapped, a restart the user chose, and
 one sentence on the launch after the bundle actually changed. The publish must carry the same runtime
 as the build (`0.3.1`) and the `preview` channel, exactly as V031.4.
 
-### V09-OTA.1 — the resume check runs without a tap
+### V05-OTA.1 — the resume check runs without a tap
 **Look at** Settings → About. Leave the sheet open, background the app (home press), wait ten seconds,
 bring it back.
 - Check: no new row or spinner appears — the check is silent — and the phone shows no error. On a
@@ -585,7 +585,7 @@ bring it back.
   is the way to see this, not the screen).
 **PASS / FAIL: ______**
 
-### V09-OTA.2 — Update now (restart) is the only way the app restarts
+### V05-OTA.2 — Update now (restart) is the only way the app restarts
 **Look at** Settings → About → Updates with a newer publish on the channel. Tap **Check for updates**.
 - Check: the line reads `Update available — downloaded and ready to install.` and a second button
   **Update now (restart)** appears beside **Check for updates**. Tapping it restarts the app into the
@@ -593,8 +593,8 @@ bring it back.
   Nothing restarts on its own — the app must not reload while a class is being marked.
 **PASS / FAIL: ______**
 
-### V09-OTA.3 — the sentence appears once, on the launch that applied it
-**Look at** the launch right after an update was downloaded (either after V09-OTA.2's restart, or a
+### V05-OTA.3 — the sentence appears once, on the launch that applied it
+**Look at** the launch right after an update was downloaded (either after V05-OTA.2's restart, or a
 cold start following the download).
 - Check: a toast reads `You’re now on Margin <new version>` exactly once. Kill and reopen the app
   again: the toast does not reappear, and About's version line names the update rather than `built in`.

@@ -4,7 +4,7 @@ import { Btn, Hair, Row, Txt } from '../ui/kit';
 import { Section } from '../screens/common';
 import { toast } from '../store/store';
 import { APP_VERSION } from '../domain/version';
-import { applyUpdate, checkForUpdate, otaAvailable, versionLine, type CheckResult } from '../services/ota';
+import { applyUpdate, checkForUpdate, otaAvailable, updateStaged, versionLine, type CheckResult } from '../services/ota';
 
 /**
  * The owner's support link, and the ONE line he fills in.
@@ -35,8 +35,11 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
   /* The Updates row's own state: what the last check said, and nothing else. A check from this page is
      one network round-trip only ever started by a tap; the app also checks by itself on launch and on
      resume (throttled, see `checkOnForeground`), and that result is deliberately not mirrored here —
-     this row reports what IT asked for, and a background check landing mid-visit cannot rewrite it. */
-  const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>('idle');
+     this row reports what IT asked for, and a background check landing mid-visit cannot rewrite it.
+     The one exception is where the row STARTS: a resume check may already have downloaded an update
+     while this page was closed, and opening on `idle` would hide the only way to install it short of
+     a relaunch. So a staged download opens the page on `ready`, restart button and all. */
+  const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>(() => (updateStaged() ? 'ready' : 'idle'));
   /** One check per tap. `checkForUpdate` is total and answers rather than throwing, so there is no
    *  catch here — the result line is the whole report. */
   const check = async () => { if (ota === 'checking') return; setOta('checking'); setOta(await checkForUpdate()); };

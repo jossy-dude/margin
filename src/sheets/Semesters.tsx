@@ -12,7 +12,7 @@ import { FONT } from '../tokens/theme';
 /**
  * The terms, one active and the rest kept.
  *
- * v0.9 made the semester a row rather than a pair of settings, and this is the page where that row can
+ * v0.5 made the semester a row rather than a pair of settings, and this is the page where that row can
  * be seen and changed. It answers the three questions the old Attendance control could not: which term
  * is running (name, range and days left), what came before, and how to move on — with the archive's
  * keep-attendance choice stated before anything is cleared.

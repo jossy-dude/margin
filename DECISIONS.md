@@ -21,7 +21,7 @@ problems, so W2 still relies on your Expo Go observations — but they pin layou
 
 **Resolved 2026-10-16 (owner): (a)** — self-captured baselines stand; image judgement runs through
 MiMo V2.6 Flash (`vision-critic`, `user-tester`) since the orchestrator text models do not read images.
-Done: `reports/vision-baseline.md`.
+Done: `docs/archive/reports/vision-baseline.md`.
 
 ## D2 — "study_sessions" vs the existing focus_session table
 
@@ -111,6 +111,11 @@ complete medallion, and "if glanceability is the worry, fix it inside (a), not b
 
 **Answer:** _(awaiting Jossy — "D6: a" keeps what is shipped; "D6: b" is a small swap)_
 
+**Note 2026-11-01 (v0.5): moot once the Focus screen is rebuilt.** The v0.5 spec (section H) redesigns
+the Focus screen from scratch around large typewriter digits, keeping only the timer engine. Neither the
+taped slip nor the in-face readout survives that redesign, so this question no longer needs an answer.
+Option (a) stays in effect until the rebuild lands. Kept as history.
+
 ## D7 — The tour teaches an attendance gesture that only works on one screen
 
 The audit (UX-3) walked the tutorial's "attendance is one tap and then a hold": it holds on the By-subject
@@ -130,6 +135,11 @@ editing, which the flows have used since v1 — not a change to make inside a po
 
 **Answer:** _(awaiting Jossy — "D7: a" / "D7: b" / "D7: c")_
 
+**Note 2026-11-01 (v0.5): moot once onboarding is rebuilt.** The v0.5 spec (section C) deletes the
+coach-mark tour and replaces it with a five-page introduction that does not teach this gesture, so the
+copy this question was about goes away. Whether Today and By-subject should share one attendance gesture
+is a Today design question for v0.5 (spec section G), not this entry. Kept as history.
+
 ## D8 — 12/24h times: an in-app toggle vs following the device's own preference
 
 The brief asked for a "12/24h device setting". Two honest readings, and they cannot both be v1:
@@ -147,7 +157,7 @@ wrong; the device probe is the part we can't check from here.
 
 ## D9 — W5's full-screen ringing: which native shape, and what ships first
 
-The W5 mechanism investigation (dossier: `reports/w5-d0-mechanism.md`, verdict in `STATE.md`) found two
+The W5 mechanism investigation (dossier: `docs/archive/reports/w5-d0-mechanism.md`, verdict in `STATE.md`) found two
 of the three mechanisms already inside `expo-notifications@57.0.21` — exact `DATE` triggers
 (`setExactAndAllowWhileIdle` when `canScheduleExactAlarms()`, else the honest inexact window) and boot
 re-arm (the module's own `BOOT_COMPLETED` receiver → `setupScheduledNotifications`) — but **full-screen
@@ -233,10 +243,15 @@ half-copied JSON. The import therefore:
   time: the import button stays disabled and the sheet prints the row and the field. Unknown keys are a
   warning and are ignored, because an AI will always add one.
 - **is paste-only.** No file picker, no new dependency: the source is a language model's answer, which
-  is text on a clipboard.
+  is text on a clipboard. _(Superseded 2026-11-01: see the v0.5 note below.)_
 
 **Answer:** as built (v0.3.1-A). If a "replace" mode is ever wanted it must be a separate, explicitly
 armed action with its own undo.
+
+**Note 2026-11-01 (v0.5): "paste-only" is superseded.** v0.5 imports through a file picker as well as
+paste, for JSON and CSV (spec section B4; the picker landed in the WS1 import commit). The source is no
+longer only a language model's answer on a clipboard, but also an export file or a spreadsheet saved as
+CSV. The merge rule above (upsert by id, never delete) still stands.
 
 ## D12 — The spiral: which way the ink goes
 

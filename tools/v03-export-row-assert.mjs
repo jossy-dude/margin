@@ -1,6 +1,6 @@
-/* v0.9 / WS3 (persistence & uninstall survival) — the export row, as a browser can honestly see it.
+/* v0.5 / WS3 (persistence & uninstall survival) — the export row, as a browser can honestly see it.
  *
- *   node tools/v03-export-row-assert.mjs [--url http://localhost:8098] [--out .shots/v09]
+ *   node tools/v03-export-row-assert.mjs [--url http://localhost:8098] [--out .shots/v05]
  *
  * One context, 412x915, walking the app like a finger:
  *   1 — Settings root still carries the Data & export door the row hangs under
@@ -24,7 +24,7 @@ import { mkdirSync } from 'node:fs';
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(`--${n}`); return i === -1 ? d : argv[i + 1]; };
 const URL_ = arg('url', 'http://localhost:8098');
-const OUT = arg('out', '.shots/v09');
+const OUT = arg('out', '.shots/v05');
 const W = 412, H = 915;
 mkdirSync(OUT, { recursive: true });
 
@@ -58,7 +58,7 @@ await p.goto(URL_, { waitUntil: 'networkidle', timeout: 240_000 });
 await p.locator('[data-testid="tab-week"]').first().waitFor({ state: 'attached', timeout: 90_000 });
 await p.waitForTimeout(5000);
 
-/* Same tap rules as tools/v031-assert.mjs and tools/v09-semester-assert.mjs: RNW answers Pressability on
+/* Same tap rules as tools/v031-assert.mjs and tools/v05-semester-assert.mjs: RNW answers Pressability on
    POINTERDOWN, the Book keeps every screen mounted (`display:none` when hidden, so no box), and controls
    can sit below the fold inside a sheet's ScrollView. */
 const tapLoc = async (loc) => {
@@ -227,7 +227,7 @@ const rowText = await p.evaluate((sel) => {
 ok('2c', rowText.includes('Export before uninstalling'), `the title is printed (${JSON.stringify(rowText.slice(0, 60))})`);
 ok('2d', /Uninstalling erases/.test(rowText) && /Auto Backup only restores it if the phone had backed it up/.test(rowText) && /JSON/.test(rowText),
   'the warning says what uninstalling costs, what Auto Backup can and cannot promise, and that the copy is JSON');
-/* The v0.9 plan (V4) says Android has no keep-data dialog, so promising one is the lie to catch. */
+/* The release spec (V4 in the v0.9 draft, B3 in v0.5) says Android has no keep-data dialog, so promising one is the lie to catch. */
 ok('2e', !/keep your data/i.test(rowText) && !/ask you (whether )?to keep/i.test(rowText) && !/will (still )?be (here|there) after you uninstall/i.test(rowText),
   'the copy promises no keep-data dialog Android cannot show');
 

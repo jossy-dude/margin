@@ -1,18 +1,22 @@
 // Deterministic synthesis of every UI sound. Seeded noise => byte-identical output on every run.
 //
-//   node scripts/synth-sounds.mjs              -> rewrites assets/sounds-candidates/ (the audition set)
-//   node scripts/synth-sounds.mjs --live       -> rewrites assets/sounds/ (only once the set is approved)
+//   node scripts/synth-sounds.mjs --only a,b         -> regenerates those sounds in assets/sounds/, merging the manifest
+//   node scripts/synth-sounds.mjs --all              -> rewrites every sound in assets/sounds/ (`--live` is an alias)
+//   node scripts/synth-sounds.mjs --all --out <dir>  -> writes a full audition set plus INDEX.txt into <dir> instead
 //
-// The live folder is never touched by a bare run. Every recipe is built from the same material
-// vocabulary: card stock, masking tape, pencil, rubber stamps and a knurled brass dial.
+// assets/sounds/ is the one sound folder: the app requires it, and ui.test.ts measures it. The tracked
+// assets/sounds-candidates/ scratch copy is gone (v0.5 housekeeping), so auditions go to an `--out` folder
+// outside the repo. A bare run writes nothing and prints this usage: the shipped set was balanced by ear and a
+// full regeneration does not reproduce it byte for byte, so rewriting all of it has to be asked for by name.
+// Every recipe is built from the same material vocabulary: card stock, masking tape, pencil, rubber stamps
+// and a knurled brass dial.
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const SR = 44100;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIVE = join(HERE, '..', 'assets', 'sounds');
-const CAND = join(HERE, '..', 'assets', 'sounds-candidates');
 
 const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const mk = (sec) => new Float64Array(Math.ceil(sec * SR));
@@ -193,17 +197,25 @@ function encode(data) {
   return { buf: Buffer.concat([h, pcm]), clip, dc: sum / n };
 }
 
-const live = process.argv.includes('--live');
-const OUT = live ? LIVE : CAND;
-mkdirSync(OUT, { recursive: true });
-
 /* `--only <name>[,<name>]` regenerates just those sounds and merges their rows into the existing manifest
- * instead of rewriting it. The live set is an APPROVED set: each file's peak was balanced by ear against
- * the others, so a full `--live` run re-grades all 28 and silently changes the mix. Use `--only` when one
- * sound's recipe changed. A bare run still writes every candidate, which is the audition path. */
-const onlyArg = process.argv.indexOf('--only');
-const ONLY = onlyArg > -1 ? process.argv[onlyArg + 1].split(',').map((s) => s.trim()) : null;
+ * instead of rewriting it. The shipped set is an APPROVED set: each file's peak was balanced by ear against
+ * the others, so a full `--all` run re-grades all 28 and silently changes the mix. Use `--only` when one
+ * sound's recipe changed, and `--all --out <dir>` to audition a whole new set without touching the shipped one.
+ * `--live` was the flag that used to opt into assets/sounds/; it is kept as an alias of `--all`. */
+const argv = process.argv.slice(2);
+const flagValue = (name) => { const i = argv.indexOf(name); return i > -1 ? (argv[i + 1] ?? '') : null; };
+const onlyArg = flagValue('--only'), outArg = flagValue('--out');
+const ONLY = onlyArg ? onlyArg.split(',').map((s) => s.trim()).filter(Boolean) : null;
+const ALL = argv.includes('--all') || argv.includes('--live');
+if ((!ONLY && !ALL) || outArg === '') {
+  console.error('usage: node scripts/synth-sounds.mjs (--only <name>[,<name>] | --all) [--out <dir>]\n'
+    + '  writes to assets/sounds/ unless --out names another folder; see the header of this file.');
+  process.exit(1);
+}
 if (ONLY) for (const n of ONLY) if (!S[n]) { console.error(`unknown sound '${n}'`); process.exit(1); }
+const OUT = outArg ? resolve(outArg) : LIVE;
+const live = OUT === LIVE;
+mkdirSync(OUT, { recursive: true });
 const NAMES = ONLY ?? Object.keys(S);
 
 const rows = [], manifest = ONLY && existsSync(join(OUT, 'manifest.json')) ? JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8')) : {};

@@ -86,8 +86,20 @@ export function otaAvailable(): boolean {
 
 /** True only after THIS session downloaded an update it has not reloaded into yet. `ready` in the UI
  *  and this flag are set by the same successful fetch, so the Restart button cannot reload into a
- *  bundle nobody downloaded. */
+ *  bundle nobody downloaded.
+ *
+ *  It is deliberately sticky until the reload itself (`applyUpdate`) or a fresh launch clears it. A
+ *  foreground check can download an update silently, and a later Check from About then asks the same
+ *  old running bundle: the channel still says "available" while the fetch answers `isNew: false`,
+ *  because there is nothing left to download — the new bundle is already on disk. Writing that
+ *  answer into the flag (`pending = fetched.isNew`) erased a real, staged download, printed "you are
+ *  on the newest version" and shut the restart gate. Staged stays staged. */
 let pending = false;
+
+/** Is a downloaded update waiting for a reload? The About page seeds its row from this, because a
+ *  resume check can stage an update while that page is closed — otherwise the row would open on
+ *  "idle" and the only way to install an update that is already downloaded would be to boot again. */
+export function updateStaged(): boolean { return pending; }
 
 /** Record the downloaded update so the NEXT launch can say it landed.
  *
@@ -100,18 +112,22 @@ async function rememberApplied(id: string | undefined) {
   try { await kv.set(APPLIED_VERSION_KEY, id); } catch { /* bookkeeping only */ }
 }
 
-/** Check the channel once, without reloading: `ready` is a download waiting for the next launch. */
+/** Check the channel once, without reloading: `ready` is a download waiting for the next launch.
+ *
+ *  `ready` is returned whenever a download is staged, even if this particular check found nothing new:
+ *  the bundle on disk is real, so "you are on the newest version" would be a lie and the restart gate
+ *  must stay open. Only the download path can raise the flag; nothing here lowers it. */
 export async function checkForUpdate(): Promise<CheckResult> {
   const u = updates();
   if (!u || !otaAvailable()) return 'unavailable';
   try {
     const check = await u.checkForUpdateAsync();
-    if (!check.isAvailable) { pending = false; return 'current'; }
-    const fetched = await u.fetchUpdateAsync();
-    pending = fetched.isNew;
-    if (!fetched.isNew) return 'current';
-    await rememberApplied(fetched.manifest?.id);
-    return 'ready';
+    if (check.isAvailable) {
+      const fetched = await u.fetchUpdateAsync();
+      pending = pending || fetched.isNew;
+      if (fetched.isNew) await rememberApplied(fetched.manifest?.id);
+    }
+    return pending ? 'ready' : 'current';
   } catch { return 'error'; }
 }
 
@@ -127,7 +143,12 @@ export async function checkOnForeground(throttleMs = 300_000): Promise<OtaStatus
   try {
     if (!otaAvailable()) return 'unavailable';
     const now = Date.now();
-    if (now - lastCheckAt < throttleMs) return 'throttled';
+    /* A phone whose clock is moved BACK (a timezone fix, NTP correction, the user setting it by hand)
+       makes `now - lastCheckAt` negative, and a negative number is "inside the window": the throttle
+       would then hold for as long as the clock was wrong — a day, after a day's step. A backwards step
+       is not a window at all, so the check runs and the new time becomes the new floor. */
+    const dt = now - lastCheckAt;
+    if (dt >= 0 && dt < throttleMs) return 'throttled';
     lastCheckAt = now;
     return await checkForUpdate();
   } catch { return 'error'; }
@@ -148,11 +169,16 @@ export async function applyUpdate(): Promise<void> {
 
 /** The launch-after sentence, or `null`.
  *
- *  Fires only when the applied marker names the bundle that is running right now, then consumes the
- *  marker before returning, so one applied update is announced exactly once — never on the launch that
- *  downloaded it, never twice, and never when the reload was refused and the old bundle came back.
- *  `APP_VERSION` in the sentence is read from the running bundle, which is precisely why it is the new
- *  number: it is the bundle that was applied. Total like everything else here. */
+ *  Fires only when the applied marker names the bundle that is running right now. `APP_VERSION` in the
+ *  sentence is read from the running bundle, which is precisely why it is the new number: it is the
+ *  bundle that was applied. Total like everything else here.
+ *
+ *  **Reading does NOT consume.** The marker used to be deleted here, before the caller had drawn
+ *  anything, and the caller was `hydrate()` — which runs while the splash is still up, behind a font
+ *  load, with `toast()`'s own 2.6 s timer already running. A slow launch meant the sentence expired
+ *  unseen AND the marker was gone, so nothing could ever retry it. Deletion is now a separate act
+ *  (`consumeAppliedUpdate`) that the mounted shell performs *after* it has shown the toast: a launch
+ *  that never reaches a screen keeps the news for the next one. */
 export async function announceAppliedUpdate(): Promise<string | null> {
   if (!otaAvailable()) return null;
   try {
@@ -160,9 +186,17 @@ export async function announceAppliedUpdate(): Promise<string | null> {
     if (!applied) return null;
     const running = updates()?.updateId ?? null;
     if (!running || running !== applied) return null;
-    try { await kv.set(APPLIED_VERSION_KEY, null); } catch { /* repeats next launch rather than losing the sentence */ }
     return `You’re now on Margin ${APP_VERSION}`;
   } catch { return null; }
+}
+
+/** Retire the applied marker, once its sentence has actually been shown.
+ *
+ *  Separate from the read above on purpose (see the comment there). Best effort: a KV that cannot be
+ *  written leaves the marker in place, so the sentence repeats on the next launch rather than being
+ *  lost — the opposite failure to the one the split fixes. Never throws. */
+export async function consumeAppliedUpdate(): Promise<void> {
+  try { await kv.set(APPLIED_VERSION_KEY, null); } catch { /* repeats next launch rather than losing the sentence */ }
 }
 
 /** The About line: the version this JS bundle was built as, the runtime it is allowed to run on, and

@@ -241,7 +241,7 @@ export class SqliteRepository implements Repository {
   }
   private closed = false;
 
-  /* ── semesters (v0.9) ─────────────────────────────────────────────────────────────────────────── */
+  /* ── semesters (v0.5) ─────────────────────────────────────────────────────────────────────────── */
   /* A term read as the app sees it. The columns are snake_case and `active` is an INTEGER; one place
      does that translation, so a field added to the row later cannot be picked up by some readers and
      silently dropped by others. */

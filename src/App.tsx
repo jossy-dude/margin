@@ -27,7 +27,7 @@ import { FocusScreen } from './screens/Focus';
 import { Coach } from './ui/onboard/Coach';
 import { hasRealRows } from './ui/onboard/coach';
 import { TOUR_VERSION, toured } from './domain/defaults';
-import { getState, set, useStore, wireLifecycle, act, boot } from './store/store';
+import { getState, set, useStore, useUpdateAnnouncement, wireLifecycle, act, boot } from './store/store';
 import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudio } from './services/audio';
 
@@ -46,8 +46,13 @@ const guarded = (route: string, C: React.ComponentType) => {
 const TodayGuarded = guarded('Today', TodayScreen), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
 const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('Stats', StatsScreen), FocusGuarded = guarded('Focus', FocusScreen);
 
-function Shell() {
+/** Exported only so `test/ota-loop` can draw the real shell and see the update sentence on screen. */
+export function Shell() {
   const { c } = useTheme();
+  /* "You're now on Margin X", said HERE and not in `App` or `hydrate`: those run while the splash is
+     still up, and the toast's 2.6 s would expire unseen. `Shell` only mounts once `Gate` is past the
+     splash, and its `Overlay` child is what draws the toast. */
+  useUpdateAnnouncement();
   // While a sheet is open the navigator must not be reachable: `accessibilityViewIsModal` on the sheet is
   // iOS-only, so on Android the background is hidden explicitly here (background content must not be reachable
   // while a sheet is open). `ui/Overlay` marks itself `yes` over the same condition so the sheet stays readable.

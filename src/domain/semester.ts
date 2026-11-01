@@ -97,7 +97,7 @@ export function semesterOf(s: Range): SemesterSpan {
 /**
  * A stored term as the range type every other helper already speaks.
  *
- * This is the bridge between the `semesters` row (v0.9's one active term) and the decade of range
+ * This is the bridge between the `semesters` row (v0.5's one active term) and the decade of range
  * checks that read `settings.semesterStart`/`semesterEnd`: both go through `semesterOf`, so an
  * open-ended term, an end before the start, and a malformed start all mean here what they mean there
  * — one rule, not a second one that only the Semesters page believes.

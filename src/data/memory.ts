@@ -62,7 +62,7 @@ export class MemoryRepository implements Repository {
   async pendingOutbox(limit = 200) { return this.ob.slice(0, limit); }
   async ackOutbox(upTo: number) { this.ob = this.ob.filter((r) => r.seq > upTo); }
 
-  /* ── semesters (v0.9) — the same four answers as the SQLite adapter ───────────────────────────
+  /* ── semesters (v0.5) — the same four answers as the SQLite adapter ───────────────────────────
    * Ordering, the one-active invariant and the settings mirror are re-implemented here rather than
    * shared, because the contract test runs both adapters against ONE expectation: if the two ever
    * disagree, that test is where it shows. A repository with no active term heals with today's term

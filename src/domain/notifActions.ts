@@ -133,7 +133,7 @@ export function statusHint(ns: QueueStatus | null): string {
 export const KIND_WORD: Record<string, string> = { class: 'heads-up', ended: 'class ended', task: 'task', exam: 'exam', start: 'start' };
 /* ───── exact vs inexact: what the app can and cannot know ───── */
 /** Android reads whether this phone will grant exact alarms with `AlarmManager.canScheduleExactAlarms()`,
- *  and nothing in the installed dependencies exposes it to JS (see `reports/w5-d0-mechanism.md` §4). So
+ *  and nothing in the installed dependencies exposes it to JS (see `docs/archive/reports/w5-d0-mechanism.md` §4). So
  *  this is the state the app is honestly in until W5b adds the native read: it says it does not know,
  *  and quotes every reminder as a window instead of the minute the planner picked. */
 export const EXACT_ALARM_UNKNOWN = 'This phone will not tell the app whether exact alarms are allowed, so the times below are windows, not promises.';

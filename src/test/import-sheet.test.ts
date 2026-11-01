@@ -182,7 +182,7 @@ describe('the import page', () => {
     expect(s.text()).toContain('Import 2 rows');
   });
 
-  /* F1 round 4 / v0.9: the subject row merges over C1, and the variant now has a table of its own —
+  /* F1 round 4 / v0.5: the subject row merges over C1, and the variant now has a table of its own —
      so the preview must claim BOTH rows, because both are really written (WS2 wired the write). */
   it('a file whose subject is on the phone offers that row and its variant, and both are really written', async () => {
     const s = await mount(); // "DB Systems" is already on the phone as C1
