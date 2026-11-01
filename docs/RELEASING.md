@@ -51,24 +51,29 @@ device test in `docs/DEVICE_CHECKLIST.md` passes.
 The runtime version follows `app.json → version` (`runtimeVersion.policy: appVersion`), so an update
 reaches only installs of the same version (0.5.0). Anything that changes native code needs a new APK.
 
-Publish (needs `EXPO_TOKEN` in the environment, or `eas login`):
+Publish from GitHub Actions (the owner never builds locally): **Actions → OTA update → Run workflow**,
+action `publish`, one line of message. Or from a terminal:
 
 ```sh
-npx eas-cli update --channel preview --message "0.5.x: what changed"
+gh workflow run ota-publish.yml --ref v2-improvements -f action=publish -f message="0.5.x: what changed"
 ```
+
+The run stops before publishing if `app.json`'s version, the APK's `expo_runtime_version` and
+`APP_VERSION` disagree (that means native changes the installed APKs do not have), and it runs the full
+gate first. It needs the `EXPO_TOKEN` secret.
 
 Check it reached the phone: open Margin, background it and come back (the check runs on resume, at most
 every five minutes), then reopen it. About shows the update and a one-line "You're now on…" toast appears.
 
-**Roll back** (pick one):
+**Roll back** — the same workflow, two ways:
+
+- action `republish` with the `group` id of the last good update (from the EAS dashboard or the earlier
+  run's log): that update becomes the newest again;
+- action `rollback-to-embedded`: every phone goes back to the JS built into its APK.
 
 ```sh
-# point the channel back at the previous update group
-npx eas-cli update:rollback --channel preview
-# or republish a known-good group
-npx eas-cli update:republish --group <group-id> --channel preview
-# or send every phone back to the JS embedded in its APK
-npx eas-cli update:roll-back-to-embedded --channel preview --runtime-version 0.5.0
+gh workflow run ota-publish.yml -f action=republish -f group=<group-id> -f message="back to 0.5.1"
+gh workflow run ota-publish.yml -f action=rollback-to-embedded -f message="back to the APK's JS"
 ```
 
 A phone that received a bad update recovers on its next launch after the rollback is published.

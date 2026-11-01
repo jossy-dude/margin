@@ -6,7 +6,6 @@ import { hasRealRows } from '../domain/rows';
 import type { ImportPlan } from '../domain/importPlan';
 import { recordCrash } from '../services/problems';
 import { configureFx } from '../services/fx';
-import { checkOnForeground } from '../services/ota';
 import { applySnapshot, getState, set, type State } from './core';
 import { openRepository } from './openRepository';
 import { db, ensureRepo, R, reportSaveFailure } from './persist';
@@ -22,11 +21,10 @@ export async function hydrate(r: Repository) {
     applySnapshot(snap); configureFx(getState().settings);
     const rows = await reconcileSemesters();
     set({ ready: true, now: Date.now(), semesters: rows ?? [] }); resync(1500);
-    /* v0.9 WS4: this launch asks the channel once. Fire-and-forget — a check must never sit between
-       the user and the first frame — and total, so it needs no catch here. The OTHER half of the loop,
-       the "you’re now on Margin X" sentence, is NOT said here: `hydrate` runs while the splash is up,
-       so the shell says it once it is actually mounted (`useUpdateAnnouncement`). */
-    void checkOnForeground();
+    /* No JS update check at launch (D5): the build checks natively on every launch
+       (`EXPO_UPDATES_CHECK_ON_LAUNCH=ALWAYS`), before any JS runs, and a second request from here only
+       doubled the traffic. Resume checks (throttled) live in `lifecycle.ts`; the "you're now on…"
+       sentence is said by the mounted shell (`useUpdateAnnouncement`). */
   } catch (e) { set({ error: String((e as Error)?.message ?? e), ready: true }); }
 }
 /** What App.tsx runs to bring the app up — the open-and-decide step v0.1 grew.

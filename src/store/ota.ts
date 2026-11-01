@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { recordCrash } from '../services/problems';
-import { announceAppliedUpdate, bindOtaKv, consumeAppliedUpdate } from '../services/ota';
+import { announceAppliedUpdate, bindOtaKv, consumeAppliedUpdate, rememberApplied, useNativeUpdates } from '../services/ota';
 import { getState, useStore } from './core';
-import { R } from './persist';
+import { db, R } from './persist';
 import { toast } from './toast';
 
 /* ───── self-update (v0.9 WS4) ───────────────────────────────────────────────────────────────────
@@ -11,9 +11,13 @@ import { toast } from './toast';
  * the open repository's `setting` table. Both directions swallow: an update marker is bookkeeping, and
  * a boot that could not read it must still reach a screen. A failed write lands in the Problems log
  * like every other failed write. */
+/* The REAL repository, even while a sample session points `R()` at memory (D5): the marker is about
+   this phone's bundle, and a marker written into the sample's memory copy was gone on the next launch —
+   exactly the launch that should have said "you're now on…". */
+const kvRepo = () => db.real ?? R();
 bindOtaKv({
-  get: async (k) => { try { return await R().getKv(k); } catch { return null; } },
-  set: async (k, v) => { try { await R().setKv(k, v); } catch (e) { recordCrash(e, 'save', getState().route); } },
+  get: async (k) => { try { return await kvRepo().getKv(k); } catch { return null; } },
+  set: async (k, v) => { try { await kvRepo().setKv(k, v); } catch (e) { recordCrash(e, 'save', getState().route); } },
 });
 
 /** Say "you’re now on Margin X" — once, from a MOUNTED shell, and only then retire the marker.
@@ -49,6 +53,10 @@ export function useUpdateAnnouncement(): void {
       .catch(() => { /* the sentence is a courtesy; a boot is not allowed to fail for it */ });
   }, []);
   useEffect(() => { if (drawn) void consumeAppliedUpdate(); }, [drawn]);
+  /* An update the NATIVE launch check downloaded (no JS fetch involved) is remembered too, so the launch
+     that applies it can announce it. Same marker, same rule: written when the download is staged. */
+  const staged = useNativeUpdates()?.downloadedUpdate?.updateId;
+  useEffect(() => { if (staged) void rememberApplied(staged); }, [staged]);
 }
 /** Forget that this launch has announced. Only tests need this, like `resetOtaState`: a real launch
  *  starts with the flag down because the JS module is evaluated afresh. */

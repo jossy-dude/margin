@@ -4,7 +4,7 @@ import { Btn, Hair, Row, Txt } from '../ui/kit';
 import { Section } from '../screens/common';
 import { toast } from '../store/store';
 import { APP_VERSION } from '../domain/version';
-import { applyUpdate, checkForUpdate, otaAvailable, updateStaged, versionLine, type CheckResult } from '../services/ota';
+import { applyUpdate, checkForUpdate, otaAvailable, otaView, updateStaged, useNativeUpdates, versionLine, type CheckResult, type OtaView } from '../services/ota';
 
 /**
  * The owner's support link, and the ONE line he fills in.
@@ -39,10 +39,14 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
      The one exception is where the row STARTS: a resume check may already have downloaded an update
      while this page was closed, and opening on `idle` would hide the only way to install it short of
      a relaunch. So a staged download opens the page on `ready`, restart button and all. */
-  const [ota, setOta] = useState<CheckResult | 'idle' | 'checking'>(() => (updateStaged() ? 'ready' : 'idle'));
+  const [mine, setMine] = useState<CheckResult | 'idle' | 'checking'>(() => (updateStaged() ? 'ready' : 'idle'));
+  /* D5: the row is what THIS page asked for, read together with expo-updates' own state — so an update
+     the launch check downloaded by itself shows "ready" with its restart button, and a check that is
+     already running natively shows as checking instead of starting a second one. */
+  const native = useNativeUpdates(), ota = otaView(native, mine);
   /** One check per tap. `checkForUpdate` is total and answers rather than throwing, so there is no
    *  catch here — the result line is the whole report. */
-  const check = async () => { if (ota === 'checking') return; setOta('checking'); setOta(await checkForUpdate()); };
+  const check = async () => { if (ota === 'checking' || ota === 'downloading') return; setMine('checking'); setMine(await checkForUpdate()); };
   const support = supportUrl.trim();
 
   return (
@@ -84,8 +88,8 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
         {otaAvailable() ? (<>
           <Txt f="serif" s={15} c="mut">{versionLine()}</Txt>
           <Row>
-            <Btn small kind="ghost" label={ota === 'checking' ? 'Checking…' : 'Check for updates'} disabled={ota === 'checking'} onPress={() => void check()} />
-            {ota === 'ready' ? <Btn small label="Update now (restart)" onPress={() => void applyUpdate()} /> : null}
+            <Btn small kind="ghost" label={ota === 'checking' ? 'Checking…' : 'Check for updates'} disabled={ota === 'checking' || ota === 'downloading'} onPress={() => void check()} />
+            {ota === 'ready' ? <Btn small label="Update now (restart)" onPress={() => void applyUpdate(true)} /> : null}
           </Row>
           <Txt f="serif" s={14.5} c="mut">{OTA_LINE[ota]}</Txt>
         </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Updates are checked in the installed app; this browser build cannot update itself.' : 'This build cannot update itself. Updates must be enabled when the app is built.'}</Txt>}
@@ -107,12 +111,13 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
 }
 
 /** What the Updates block says after a check, one line, in the app's own voice. */
-const OTA_LINE: Record<CheckResult | 'idle' | 'checking', string> = {
+const OTA_LINE: Record<OtaView, string> = {
   idle: 'Checked automatically when the app opens.',
   checking: 'Checking…',
+  downloading: 'Downloading the update…',
   current: 'You are on the newest version.',
   ready: 'Update available — downloaded and ready to install.',
-  error: 'Could not reach the update service. Try again later.',
+  error: 'Couldn’t reach the update server. Check your connection and try again.',
   unavailable: 'Updates are switched off in this build.',
 };
 

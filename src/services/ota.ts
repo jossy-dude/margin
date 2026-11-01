@@ -32,6 +32,15 @@ interface UpdatesModule {
    *  the new bundle runs, which is why the applied marker stores it (see `APPLIED_VERSION_KEY`). */
   fetchUpdateAsync(): Promise<{ isNew: boolean; manifest?: { id?: string } }>;
   reloadAsync(): Promise<void>;
+  /** expo-updates' own state hook (D5): what the NATIVE side knows — including an update the launch
+   *  check downloaded before any JS ran, which no JS fetch of ours ever saw. */
+  useUpdates?: () => NativeUpdates;
+}
+/** The slice of `useUpdates()` the app reads. */
+export interface NativeUpdates {
+  isChecking?: boolean; isDownloading?: boolean; isUpdateAvailable?: boolean; isUpdatePending?: boolean;
+  checkError?: Error; downloadError?: Error; lastCheckForUpdateTimeSinceRestart?: Date;
+  downloadedUpdate?: { updateId?: string };
 }
 
 /** What a check can say. `ready` means it is downloaded and will be used on the next reload. */
@@ -107,7 +116,7 @@ export function updateStaged(): boolean { return pending; }
  *  update on the next launch even if the user never taps "Update now", so the launch that should be
  *  announced is the launch that actually applies it. A failed KV write is not a failed download and is
  *  swallowed — the worst outcome is a missing sentence, never an update reported as broken. */
-async function rememberApplied(id: string | undefined) {
+export async function rememberApplied(id: string | undefined) {
   if (!id) return;
   try { await kv.set(APPLIED_VERSION_KEY, id); } catch { /* bookkeeping only */ }
 }
@@ -161,10 +170,35 @@ export function resetOtaState(): void { lastCheckAt = Number.NEGATIVE_INFINITY; 
 /** Reload into a downloaded update, and only then. Never called by itself — the user asks, because a
  *  reload in the middle of marking attendance would lose the gesture they were making. Best effort:
  *  a reload that the platform refuses leaves the app running and the update still pending. */
-export async function applyUpdate(): Promise<void> {
-  if (!pending || !otaAvailable()) return;
+export async function applyUpdate(staged = false): Promise<void> {
+  if (!(pending || staged) || !otaAvailable()) return;
+  const was = pending;
   pending = false;
-  try { await updates()!.reloadAsync(); } catch { pending = true; }
+  try { await updates()!.reloadAsync(); } catch { pending = was || staged; }
+}
+
+/* ── the native state, as one word (D5) ─────────────────────────────────────────────────────────
+ * `useUpdates()` is expo-updates' own view: the launch check that runs natively before any JS, a
+ * download it staged, an error. Reading it means About shows "ready" for an update the phone fetched by
+ * itself, and that the marker below is written for that update too — before this, only a fetch made BY
+ * JS wrote the marker, so an update the launch check installed was never announced. */
+export type OtaView = 'unavailable' | 'idle' | 'checking' | 'downloading' | 'current' | 'ready' | 'error';
+export function otaView(n: NativeUpdates | null, mine: CheckResult | 'idle' | 'checking' = 'idle'): OtaView {
+  if (!n) return mine === 'checking' ? 'checking' : mine === 'unavailable' ? 'unavailable' : mine;
+  if (n.isUpdatePending || mine === 'ready' || pending) return 'ready';
+  if (n.isChecking || mine === 'checking') return 'checking';
+  if (n.isDownloading) return 'downloading';
+  if (mine === 'error' || n.checkError || n.downloadError) return 'error';
+  if (mine === 'current' || (n.lastCheckForUpdateTimeSinceRestart && !n.isUpdateAvailable)) return 'current';
+  return 'idle';
+}
+/** The hook implementation is chosen once, on first use, and never changes for the life of the JS
+ *  runtime — so the same hooks run in the same order on every render, as React requires. Off native, or
+ *  in a build with updates switched off, it is a constant `null`. */
+let nativeHook: (() => NativeUpdates | null) | undefined;
+export function useNativeUpdates(): NativeUpdates | null {
+  nativeHook ??= otaAvailable() && typeof updates()?.useUpdates === 'function' ? () => updates()!.useUpdates!() : () => null;
+  return nativeHook();
 }
 
 /** The launch-after sentence, or `null`.

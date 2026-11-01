@@ -1,0 +1,96 @@
+name: OTA update
+
+# By hand only, from the Actions tab: publish a JS update to the `preview` channel, republish a known-good
+# update group, or send every phone back to the JS embedded in its APK. Needs the EXPO_TOKEN secret
+# (expo.dev → Access tokens). Native code never travels this way; that needs a new APK (release-apk.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'publish = this commit as a new update · republish = an earlier group again · rollback-to-embedded = back to the APK''s own JS'
+        type: choice
+        options: [publish, republish, rollback-to-embedded]
+        default: publish
+      message:
+        description: 'One line for the update (shown in the EAS dashboard)'
+        type: string
+        required: true
+      group:
+        description: 'republish only: the update group id to publish again'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# Two publishes to one channel at once would race for "latest".
+concurrency:
+  group: ota-preview
+  cancel-in-progress: false
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Free text arrives through the environment, never interpolated into a script.
+      ACTION: ${{ inputs.action }}
+      MSG: ${{ inputs.message }}
+      GROUP: ${{ inputs.group }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The runtime trap (docs/plan.md §6): an update is only safe on phones whose APK has the same
+      # runtime. The update's runtime is app.json's version (policy appVersion); the APK's is the
+      # committed strings.xml value. If they differ, this commit carries native changes the installed
+      # APKs do not have, and publishing would crash them — so the run stops here.
+      - name: Runtime guard
+        id: runtime
+        run: |
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8")).expo;
+            const xml = fs.readFileSync("android/app/src/main/res/values/strings.xml", "utf8");
+            const apk = (xml.match(/name="expo_runtime_version"[^>]*>([^<]+)</) || [])[1];
+            const code = (fs.readFileSync("src/domain/version.ts", "utf8").match(/APP_VERSION\s*=\s*["\x27]([^"\x27]+)/) || [])[1];
+            if (app.runtimeVersion?.policy !== "appVersion") { console.error("runtimeVersion policy is not appVersion"); process.exit(1); }
+            if (!apk || apk !== app.version || code !== app.version) {
+              console.error(`Runtime mismatch: app.json ${app.version}, APK strings.xml ${apk}, APP_VERSION ${code}. Build a new APK instead.`);
+              process.exit(1);
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${app.version}\n`);
+            console.log(`Runtime ${app.version} matches the APK.`);
+          '
+
+      - name: Gate
+        if: env.ACTION == 'publish'
+        run: npm run check
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish
+        if: env.ACTION == 'publish'
+        run: eas update --channel preview --platform android --message "$MSG" --non-interactive
+
+      - name: Republish
+        if: env.ACTION == 'republish'
+        run: |
+          case "$GROUP" in
+            ''|*[!0-9a-fA-F-]*) echo "group must be an update group id (hex and dashes)"; exit 1 ;;
+          esac
+          eas update:republish --group "$GROUP" --message "$MSG" --non-interactive
+
+      - name: Roll back to the embedded JS
+        if: env.ACTION == 'rollback-to-embedded'
+        run: eas update:roll-back-to-embedded --channel preview --platform android --runtime-version "${{ steps.runtime.outputs.version }}" --message "$MSG" --non-interactive
