@@ -20,7 +20,22 @@ next session, after the surface work (S1–S7, P1) it would judge.
 | 12 | Manifest | `SYSTEM_ALERT_WINDOW` and legacy storage are removed with `tools:node="remove"`, so a library cannot merge them back. | ok | done (`9557519`) |
 | 13 | Perf | Pages mount on first visit; To-do draws 60 cards with *Show more*. The coach tour still navigates to its target pages before pointing at them, so first-visit mounting does not hide a target, but confirm on device. | verify | done (`c4c4815`) |
 | 14 | Tests | One suite logs "Cannot log after tests are done" from jest-expo's lazy `fetch` global. It does not fail the run. | nit | open |
-| 15 | Scope | Not started: D1 (migration 5, variants), D2 (`margin/2` import/export), D3, D5 (OTA on `useUpdates`), U1, U2, S1–S7, N1–N3 (Rive, notifications/DND, widgets), O1 (Teddy), P1, the Playwright user-tester pass, `ota-publish.yml`. | release-blocking for the full v0.5 brief | open |
+| 15 | Scope | Done 2026-11-01 (session 2, solo, no subagents): D1 migration 5 + variants, D2 margin/2 lossless import/export, D3 import page, D4 rest (roll-over dates, read-only past terms), D5 useUpdates + `ota-publish.yml`, N1 Rive/Nitro + `modules/margin-native`, U1 typed inputs (Stepper deleted), U2 inks/dark card stock/ruling/tape, S1 repro, S2 Today slot/After/Week lanes/Due. **Not started:** S3 instruments elapsed-dim, S4 subjects redesign (detail sheet, rooms chips, bar picker, "make variant" UI), S5 "+" sheet, S6 Focus, S7 sound, O1 onboarding (Teddy), N2 live countdown/DND JS + Settings rows, N3 widgets, P1 polish, V1/V2 review. | release-blocking for the full v0.5 brief | open |
 
 **Must-fix before tagging:** #15 (scope), and the owner's device test (`docs/DEVICE_CHECKLIST.md`, last
 section), which is the only proof for #1, #10 and #13.
+
+## Session 2 notes (2026-11-01)
+
+- **NCP1 build:** the first build-only `dev` APK run (41314249832) failed at 15 min with `OutOfMemoryError: Metaspace`
+  in `lintVitalAnalyzeRelease`, then hung to the 45-min limit. Fixed in `e47e2d8` (Gradle 4 GB / 1.5 GB Metaspace, release
+  lint-vital off, Kotlin in-process, step timeout 60, job 75). Re-run pending at the end of the session.
+- **Web harness:** Metro's file watcher does not pick up edits in this environment; restart the server (`--clear`) before
+  every browser assert, or it serves stale code.
+- **Browser asserts added:** `tools/v05-inputs-assert.mjs`, `v05-today-assert.mjs` (clock pinned Mon 10:15),
+  `v05-theme-shots.mjs`; `v05-import/semester-assert.mjs` updated. Frames in `docs/references/v0.5/`.
+- **Deviation from the plan:** D2's split of `importPlan.ts` into `domain/import/*` was not done; the raw reader was made
+  lossless in place (round-trip test proves it). Revisit only if import grows again.
+- **UNVERIFIED-ON-DEVICE (add to the owner's list):** time-ruler detent click/haptic and flick settle; Teddy renders in
+  Diagnostics; live countdown notification + swipe-dismiss memory; DND policy access; migration 5 on the owner's v0.1.0 data
+  ("LR-601, LR-303" splits into two rooms); dark grain fibres and tape at real density.
