@@ -178,7 +178,8 @@ describe('the import page', () => {
     const field = s.r.root.findAll((n) => n.props?.accessibilityLabel === 'JSON to import')[0]!;
     await act(async () => { (field.props as { onChangeText: (v: string) => void }).onChangeText('name,room\nDB Systems,B12\nMaths,A1\n'); });
     await s.press('import-check');
-    expect(s.text()).toContain('2 subjects (1 new, 1 updated)');
+    // v0.5 D3: the preview is a ledger — the count and its split are two cells of one line now
+    expect(s.text()).toContain('2 subjects1 new, 1 updated');
     expect(s.text()).toContain('Import 2 rows');
   });
 
@@ -190,8 +191,8 @@ describe('the import page', () => {
     const onlyVariants = JSON.stringify({ courses: [{ name: 'DB Systems', variants: [{ name: 'Lab' }] }] });
     await act(async () => { (field.props as { onChangeText: (v: string) => void }).onChangeText(onlyVariants); });
     await s.press('import-check');
-    expect(s.text()).toContain('1 subject (1 updated)');
-    expect(s.text()).toContain('1 variant (1 new)'); // the phone had no variants before this file
+    expect(s.text()).toContain('1 subject1 updated');
+    expect(s.text()).toContain('1 variant1 new'); // the phone had no variants before this file
     expect(s.text()).toContain('Import 2 rows');
     const commit = s.r.root.findAll((n) => n.props?.testID === 'import-commit' && typeof n.props?.onPressIn === 'function')[0]!;
     expect((commit.props as { disabled?: boolean }).disabled).toBe(false);
@@ -214,11 +215,25 @@ describe('the import page', () => {
     });
     await act(async () => { (field.props as { onChangeText: (v: string) => void }).onChangeText(week); });
     await s.press('import-check');
-    expect(s.text()).toContain('1 subject (1 updated)');
+    expect(s.text()).toContain('1 subject1 updated');
     expect(s.text()).toContain('Skipped (not written): 1 attendance mark');
     expect(s.text()).not.toContain('problems stop the import');
     const commit = s.r.root.findAll((n) => n.props?.testID === 'import-commit' && typeof n.props?.onPressIn === 'function')[0]!;
     expect((commit.props as { disabled?: boolean }).disabled).toBe(false);
+  });
+
+  it('a large picked file is shown as a slip, planned from memory, and Paste instead brings the box back', async () => {
+    const tasks = Array.from({ length: 400 }, (_, i) => ({ title: `Task number ${i} with a long enough title`, course: 'DB Systems', due: '2026-10-20T23:59' }));
+    picker.__state.result = { canceled: false, assets: [{ name: 'big.json', uri: 'file:///cache/big.json' }] };
+    fs.__state.text = JSON.stringify({ courses: [{ name: 'DB Systems' }], tasks });
+    const s = await mount();
+    await s.press('import-pick');
+    expect(s.text()).toContain('big.json');
+    expect(s.text()).toContain('read from the file, not shown');
+    expect(s.text()).toContain('400 tasks');
+    expect(s.r.root.findAll((n) => n.props?.accessibilityLabel === 'JSON to import')).toHaveLength(0);
+    await s.press('import-clear');
+    expect(s.r.root.findAll((n) => n.props?.accessibilityLabel === 'JSON to import').length).toBeGreaterThan(0);
   });
 
   it('pasting still works, through the same preview', async () => {

@@ -570,7 +570,8 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
     expect(check).toBeDefined();
     await act(async () => { (check!.props as { onPress: () => void }).onPress(); });
     const t = s.text();
-    expect(t).toContain('1 subject (1 new) · 1 class (1 new) · 1 day mark (1 new) · 1 task (1 new) · 1 mark (1 new)');
+    // v0.5 D3: the preview is a ledger, so each line's count and split are adjacent cells, not a sentence
+    expect(t).toContain('1 subject1 new1 class1 new1 day mark1 new1 task1 new1 mark1 new');
     expect(t).not.toContain('1 subjects');
   });
 

@@ -118,7 +118,12 @@ const labelOf = async (sel) => { const l = p.locator(sel).first(); return (await
  *  instead of matching a substring of the line next to it. */
 const previewLines = async () => {
   const all = await texts();
-  const counts = all.find((t) => /^\d+ [a-z]/.test(t) && /\((?:.*\bnew\b|.*\bupdated\b|add or update)\)/.test(t)) ?? '';
+  /* v0.5 D3: the preview is a ledger, one `import-line-*` row per dataset with the count and its split in
+     two cells; rebuilt here into the old `1 subject (1 new) · …` sentence so every check below reads it. */
+  const counts = await p.$$eval('[data-testid^="import-line-"]', (els) => els.map((e) => {
+    const parts = [...e.children].map((c) => (c.textContent ?? '').trim()).filter(Boolean);
+    return parts[1] ? `${parts[0]} (${parts[1]})` : parts[0] ?? '';
+  }).join(' · '));
   const skippedLine = all.find((t) => t.startsWith('Skipped (not written):')) ?? '';
   return { counts, skippedLine };
 };
@@ -238,7 +243,7 @@ await check();
 text = await pageText();
 ok('6a', !(await has('Which table is this?')), 'the header names its table, so nothing is asked back');
 ok('6b', !/\d+ problems? stop the import/i.test(text), 'the upcoming row is not a problem that stops the import');
-ok('6c', /1 attendance mark \(1 new\)/.test(text), `the finished class is previewed as a new mark ("${(text.match(/1 attendance mark[^|]*/) || [''])[0].trim()}")`);
+ok('6c', /1 attendance mark \(1 new\)/.test((await previewLines()).counts), `the finished class is previewed as a new mark ("${(await previewLines()).counts}")`);
 ok('6d', /Skipped \(not written\): 1 attendance mark/.test(text), 'the upcoming row is named as skipped');
 ok('6e', (await enabled('[data-testid="import-commit"]')) === true, 'Import is enabled for the row that can be written');
 ok('6f', (await labelOf('[data-testid="import-commit"]')) === 'Import 1 row', `and it counts only that row (${JSON.stringify(await labelOf('[data-testid="import-commit"]'))})`);

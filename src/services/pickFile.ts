@@ -1,5 +1,5 @@
-import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
+import type * as DocumentPickerNs from 'expo-document-picker';
+import type * as FileSystemNs from 'expo-file-system';
 
 /**
  * The picker door into Settings → Data → Import: the phone's own document picker, then the file's text.
@@ -22,16 +22,22 @@ export interface PickedFile { name: string; text: string }
  *  hidden from the person looking for it. */
 const TYPES = ['application/json', 'text/json', 'text/csv', 'text/comma-separated-values', 'application/csv', 'text/plain'];
 
+/* Required on the first pick, not at module load (v0.5 D3): Settings → Import is reached through the
+   app shell, so a top-level import loaded the picker's native module on every cold start for a page most
+   launches never open. Same pattern as `services/ota.ts`. */
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- loaded on the first pick, not at startup (D3); Metro needs the literal paths
+const native = () => ({ picker: require('expo-document-picker') as typeof DocumentPickerNs, fs: require('expo-file-system') as typeof FileSystemNs });
+
 export async function pickImportFile(): Promise<PickedFile | null> {
-  const res = await DocumentPicker.getDocumentAsync({ type: TYPES, copyToCacheDirectory: true, multiple: false });
+  const res = await native().picker.getDocumentAsync({ type: TYPES, copyToCacheDirectory: true, multiple: false });
   if (res.canceled) return null;
   const asset = res.assets?.[0];
   if (!asset) return null;
   return { name: asset.name, text: await readText(asset) };
 }
 
-async function readText(asset: DocumentPicker.DocumentPickerAsset): Promise<string> {
+async function readText(asset: DocumentPickerNs.DocumentPickerAsset): Promise<string> {
   const web = (asset as { file?: { text?: () => Promise<string> } }).file;
   if (typeof web?.text === 'function') return web.text();
-  return new File(asset.uri).text();
+  return new (native().fs.File)(asset.uri).text();
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { Btn, Row, Txt } from '../ui/kit';
+import { Btn, HandBox, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
 import { useTheme } from '../ui/theme-context';
 import { FONT } from '../tokens/theme';
@@ -26,21 +26,27 @@ const SAMPLE = `{
 const WORD: Record<string, readonly [string, string]> = {
   courses: ['subject', 'subjects'], meetings: ['class', 'classes'], tasks: ['task', 'tasks'], notices: ['note', 'notes'],
   attendance: ['attendance mark', 'attendance marks'], dayMarks: ['day mark', 'day marks'], marks: ['mark', 'marks'],
-  adjusts: ['curve', 'curves'], variants: ['variant', 'variants'],
+  adjusts: ['curve', 'curves'], variants: ['variant', 'variants'], focus: ['focus session', 'focus sessions'],
+  trips: ['trip', 'trips'], alarms: ['alarm', 'alarms'], semesters: ['past term', 'past terms'],
 };
 const word = (key: string, n: number) => { const w = WORD[key]; return w ? w[n === 1 ? 0 : 1] : key; };
 const total = (plan: ImportPlan) => Object.values(plan.counts).reduce((a, b) => a + b, 0);
 
-/** One dataset's line: how many rows are written and — only where the plan could look at what is
- *  already on the phone — how many of those are new and how many replace a row. Where it could not,
+/** One dataset's ledger line: how many rows are written, and — only where the plan could look at what
+ *  is already on the phone — how many of those are new and how many replace a row. Where it could not,
  *  it says "add or update" rather than calling a re-import "new". */
-function describe(key: string, d: DatasetCount): string | null {
+function describe(key: string, d: DatasetCount): { what: string; split: string } | null {
   if (!d.write) return null;
-  const name = `${d.write} ${word(key, d.write)}`;
-  if (d.add === null || d.update === null) return `${name} (add or update)`;
-  const split = [d.add ? `${d.add} new` : '', d.update ? `${d.update} updated` : ''].filter(Boolean).join(', ');
-  return split ? `${name} (${split})` : name;
+  const what = `${d.write} ${word(key, d.write)}`;
+  if (d.add === null || d.update === null) return { what, split: 'add or update' };
+  return { what, split: [d.add ? `${d.add} new` : '', d.update ? `${d.update} updated` : ''].filter(Boolean).join(', ') };
 }
+/** Above this many characters a picked file is not put in the paste box: a multiline TextInput lays
+ *  out every glyph on every keystroke, and a term's export is easily 300 kB. The file is shown as a
+ *  slip (name, size, lines) and planned straight from memory. */
+const BIG = 20_000;
+const sizeOf = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} kB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const linesOf = (t: string) => { let n = 1; for (let i = 0; i < t.length; i++) if (t.charCodeAt(i) === 10) n++; return n; };
 
 /** Rows the file carried that this import will not write — a class that has not happened, a cell that
  *  could not be read. Every dataset is named here: a skip the preview hides is a row the user loses
@@ -89,6 +95,8 @@ export function ImportPage() {
   const [text, setText] = useState(''), [plan, setPlan] = useState<ImportPlan | null>(null), [busy, setBusy] = useState(false);
   /** The picked file's name, and the parsed table when a CSV needs a second pass with the table chosen. */
   const [name, setName] = useState<string | undefined>(undefined), [csv, setCsv] = useState<CsvTable | null>(null), [pickErr, setPickErr] = useState('');
+  /** A picked file too big for the box: its text, kept out of the TextInput (see `BIG`). */
+  const [big, setBig] = useState<string | null>(null);
 
   const rows = plan ? total(plan) : 0;
   const notWritten = plan ? skipped(plan) : '';
@@ -111,13 +119,15 @@ export function ImportPage() {
   };
   const choose = (dataset: DatasetKind) => { if (csv) setPlan(planCsv(csv.header, csv.rows, dataset, options(onPhone))); };
 
-  const check = () => preview(text, name);
+  const check = () => preview(big ?? text, name);
+  const clearBig = () => { setBig(null); setName(undefined); setPlan(null); setCsv(null); };
   const pick = async () => {
     setPickErr('');
     try {
       const file = await pickImportFile();
       if (!file) return;
-      setName(file.name); setText(file.text); setPlan(null); setCsv(null);
+      const large = file.text.length > BIG;
+      setName(file.name); setText(large ? '' : file.text); setBig(large ? file.text : null); setPlan(null); setCsv(null);
       preview(file.text, file.name);
     } catch (e) {
       setPickErr(`Couldn't read that file: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
@@ -139,6 +149,13 @@ export function ImportPage() {
         <Txt f="serif" s={15} c="mut" numberOfLines={1} style={{ flexShrink: 1 }}>{name ?? 'or paste below'}</Txt>
       </Row>
       {pickErr ? <Txt f="serif" s={14.5} c="bad">{pickErr}</Txt> : null}
+      {big !== null ? (
+        <HandBox seed="import-slip" fill={c.card} style={{ padding: 12, gap: 4 }}>
+          <Txt f="bold" s={20} numberOfLines={1}>{name}</Txt>
+          <Txt f="type" s={13} c="mut">{sizeOf(big.length)} · {linesOf(big).toLocaleString()} lines · read from the file, not shown</Txt>
+          <Row style={{ marginTop: 4 }}><Btn small kind="ghost" icon="x" label="Paste instead" testID="import-clear" onPress={clearBig} /></Row>
+        </HandBox>
+      ) : <>
       <Label>JSON or CSV</Label>
       <TextInput
         value={text} onChangeText={(v) => { setText(v); setPlan(null); setName(undefined); setCsv(null); }}
@@ -146,8 +163,9 @@ export function ImportPage() {
         placeholder={SAMPLE} placeholderTextColor={c.mut} accessibilityLabel="JSON to import"
         style={{ fontFamily: FONT.type, fontSize: 13, lineHeight: 18, color: c.ink, minHeight: 150, textAlignVertical: 'top', padding: 8, borderWidth: 1.4, borderColor: c.rule }}
       />
+      </>}
       <Row>
-        <Btn small label="Check" icon="check" testID="import-check" disabled={busy || !text.trim()} onPress={check} />
+        <Btn small label="Check" icon="check" testID="import-check" disabled={busy || !(big ?? text).trim()} onPress={check} />
         <Btn small kind="primary" label={label} testID="import-commit" disabled={busy || !canImport} onPress={() => void run()} />
         {busy ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}
       </Row>
@@ -164,7 +182,14 @@ export function ImportPage() {
       {plan ? (
         <View style={{ gap: 6 }}>
           <Label>What this file carries</Label>
-          <Txt f="bold" s={19}>{rows ? Object.entries(plan.breakdown).map(([k, d]) => describe(k, d)).filter((x) => x !== null).join(' · ') : 'No rows'}</Txt>
+          {/* A ledger, not a run-on sentence: one line per dataset, the count in the hand, the split in the
+              typewriter, ruled like the page under it. */}
+          {rows ? Object.entries(plan.breakdown).map(([k, d]) => [k, describe(k, d)] as const).filter((x): x is [string, { what: string; split: string }] => x[1] !== null).map(([k, l], i) => (
+            <View key={k} testID={`import-line-${k}`} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingVertical: 3, borderTopWidth: i ? 1 : 0, borderColor: c.rule }}>
+              <Txt f="bold" s={19} style={{ flex: 1 }}>{l.what}</Txt>
+              {l.split ? <Txt f="type" s={13} c="mut">{l.split}</Txt> : null}
+            </View>
+          )) : <Txt f="bold" s={19}>No rows</Txt>}
           {notWritten ? <Txt f="serif" s={15} c="mut">Skipped (not written): {notWritten}</Txt> : null}
           {plan.profileName ? <Txt f="serif" s={15.5} c="mut">Profile {plan.profileName}</Txt> : null}
           {semester ? <Txt f="serif" s={15.5} c="mut">Semester {semesterLabel(plan.snapshot.settings ?? {})}</Txt> : null}
