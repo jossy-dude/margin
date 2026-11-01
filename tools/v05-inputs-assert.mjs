@@ -108,7 +108,7 @@ const enabled = async (sel) => {
 
 const valueOf = (sel) => p.locator(sel).first().inputValue().catch(() => null);
 const steppers = async () => (await labels()).filter((l) => /^(Increase|Decrease) /.test(l ?? '')).length;
-const shot = (n) => p.screenshot({ path: `${OUT}/v0.5_inputs-${n}.png` });
+const shot = (n) => p.screenshot({ path: `${OUT}/v0.5_inputs-${n}.jpg`, type: 'jpeg', quality: 88 });
 const openSettings = async () => { await tap('[data-testid="open-settings"]'); await p.waitForTimeout(1400); };
 const close = async () => { await tap('[data-testid="sheet-close"]'); await p.waitForTimeout(900); };
 
