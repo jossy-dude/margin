@@ -293,3 +293,25 @@ describe('a roll-over, end to end', () => {
     expect((await r.load()).settings.semesterStart).toBe('2026-10-05');
   });
 });
+
+/* v0.5 D4 — the read-only viewer reads a closed term back as numbers: each subject's final average (with
+   its curve), the classes it was present for out of those marked (cancelled ones are not held), tasks
+   finished, and focus time. */
+describe('termSummary', () => {
+  it('reads a closed term back as averages, attendance, tasks and focus', () => {
+    const { buildSnapshot: build, readSnapshot: read, termSummary: summary } = jest.requireActual('../domain/archive') as typeof import('../domain/archive');
+    const course = { id: 'DB', name: 'Database', rooms: [], teacher: '', goal: null, sort: 0, demo: false };
+    const mk = (id: string, score: number) => ({ id, courseId: 'DB', name: id, score, weight: 50, on: true, sort: 0, demo: false });
+    const att = (key: string, status: 'p' | 'a' | 'c' | 'l') => ({ key, status, at: 0, reason: '' });
+    const task = (id: string, status: 0 | 2) => ({ id, title: id, courseId: 'DB', kind: 'assignment' as const, dueAt: null, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status, createdAt: 0, completedAt: null, reminders: [], subtasks: [], demo: false });
+    const json = build([course], [], {
+      '2026-03-02|08:30|DB': att('2026-03-02|08:30|DB', 'p'), '2026-03-09|08:30|DB': att('2026-03-09|08:30|DB', 'l'),
+      '2026-03-16|08:30|DB': att('2026-03-16|08:30|DB', 'a'), '2026-03-23|08:30|DB': att('2026-03-23|08:30|DB', 'c'),
+    }, [mk('a', 70), mk('b', 90)], [task('t1', 2), task('t2', 0)], {}, [], {
+      adjusts: { DB: 5 }, focus: [{ id: 'f', taskId: null, courseId: 'DB', startedAt: 0, endedAt: 1, focusSec: 5400, breakSec: 0, overSec: 0, rounds: 1, planMin: 90, mode: 'focus', completed: true, demo: false }],
+    });
+    const s = summary(read(json)!);
+    expect(s.subjects).toEqual([{ id: 'DB', name: 'Database', average: 85, marks: 2, here: 2, held: 3, tasks: 2, tasksDone: 1 }]);
+    expect(s).toMatchObject({ tasks: 2, tasksDone: 1, focusMin: 90, notes: 0 });
+  });
+});

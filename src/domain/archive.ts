@@ -1,6 +1,8 @@
 import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, SubjectVariant, Task } from './types';
 import { newSemesterRange } from './semester';
 import { uid } from './time';
+import { parseOccKey } from './attendance';
+import { total } from './grades';
 
 /**
  * The archived shape of a term.
@@ -93,5 +95,34 @@ export function newSemester(now: number): SemesterRow {
   return {
     id: uid('sem'), name: semesterName(start), start, end, active: true,
     snapshotJson: null, createdAt: new Date(now).toISOString(), archivedAt: null,
+  };
+}
+
+/** One subject's line in an archived term's read-only summary. */
+export interface TermSubject { id: string; name: string; average: number | null; marks: number; here: number; held: number; tasksDone: number; tasks: number }
+export interface TermSummary { subjects: TermSubject[]; tasksDone: number; tasks: number; focusMin: number; notes: number }
+/**
+ * What a closed term amounts to, from its frozen snapshot alone (D4's read-only viewer): per subject the
+ * final average (with the curve it had), the classes marked present out of those marked at all, and the
+ * tasks finished; plus the term's focus time. Attendance is counted from the explicit records the term
+ * kept — the "inferred here" rule needs the live clock and is not replayed for history. Cancelled classes
+ * are not held classes. Pure, so the page and the test read the same numbers.
+ */
+export function termSummary(env: ArchiveEnvelope): TermSummary {
+  const d = env.datasets;
+  const subjects = d.courses.map((c): TermSubject => {
+    const marks = d.marks.filter((m) => m.courseId === c.id);
+    let here = 0, held = 0;
+    for (const a of Object.values(d.attendance)) {
+      const k = parseOccKey(a.key);
+      if (!k || k.courseId !== c.id || a.status === 'c' || a.status === 't') continue;
+      held++; if (a.status === 'p' || a.status === 'l' || a.status === 'n') here++;
+    }
+    const ts = d.tasks.filter((t) => t.courseId === c.id);
+    return { id: c.id, name: c.name, average: total(marks, d.adjusts[c.id] ?? 0), marks: marks.length, here, held, tasks: ts.length, tasksDone: ts.filter((t) => t.status === 2).length };
+  });
+  return {
+    subjects, tasks: d.tasks.length, tasksDone: d.tasks.filter((t) => t.status === 2).length, notes: d.notices.length,
+    focusMin: Math.round(d.focus.reduce((a, f) => a + f.focusSec, 0) / 60),
   };
 }

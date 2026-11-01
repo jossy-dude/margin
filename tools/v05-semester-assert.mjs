@@ -251,7 +251,9 @@ await p.waitForTimeout(1200);
 text = await pageText();
 ok('6b', (await fieldValue('[data-testid="semester-active-name"]')) === 'Semester 2026', `a new term is active (${JSON.stringify(await fieldValue('[data-testid="semester-active-name"]'))})`);
 ok('6c', text.includes('Autumn 2026') && text.includes('7 Sep – 20 Dec 2026'), 'the archived term keeps its own name and range');
-ok('6d', text.includes('Snapshot kept with this term') && !text.includes('No earlier semesters yet.'), 'the archived term is listed with its snapshot');
+// v0.5 D4: an archived term with a readable snapshot is a row that opens (enabled), not a sentence
+const openable = async () => p.locator('[data-testid^="semester-past-"]:not([aria-disabled="true"])').count();
+ok('6d', (await openable()) === 1 && !text.includes('No earlier semesters yet.'), 'the archived term is listed with its snapshot');
 const todayLine = `${calendar.today.split(' ').slice(0, 2).join(' ')}`;
 ok('6e', text.includes(todayLine), `the new term starts today, ${JSON.stringify(todayLine)}`);
 await p.screenshot({ path: `${OUT}/07-after-keep.png` });
@@ -275,10 +277,22 @@ await p.waitForTimeout(1200);
 const toast = (await texts()).find((t) => t.includes('archived') && !t.startsWith('No earlier')) ?? '';
 ok('7c', !!toast && !toast.includes('attendance kept'), `Start fresh does not claim to have kept attendance (${JSON.stringify(toast)})`);
 text = await pageText();
-const kept = (await texts()).filter((t) => t === 'Snapshot kept with this term').length;
+const kept = await openable();
 ok('7d', kept === 2 && text.includes('Autumn 2026'), `both rolled-over terms are listed with their snapshots (${kept})`);
 ok('7e', (await fieldValue('[data-testid="semester-active-name"]')) === 'Semester 2026', 'a third term is active');
 await p.screenshot({ path: `${OUT}/09-two-archived.png` });
+
+/* 7f–7h (v0.5 D4): an earlier term opens in place as a read-only summary of what it amounted to. The
+   first archive is the sample term, so it has subjects, marks and tasks to show. */
+const past = p.locator('[data-testid^="semester-past-"]');
+ok('7f', (await past.count()) >= 2, `each earlier term is a tappable row (${await past.count()})`);
+await past.last().scrollIntoViewIfNeeded().catch(() => {});
+await past.last().click();
+await p.waitForTimeout(500);
+const opened = await pageText();
+ok('7g', /tasks? done/.test(opened) && /%|—/.test(opened), 'the summary shows averages and the tasks finished');
+ok('7h', (await p.locator('[data-testid^="semester-past-"] >> xpath=..//input').count()) === 0, 'nothing in the summary is editable');
+await p.screenshot({ path: `${OUT}/10-past-term-open.png` });
 
 /* ── honest gaps ────────────────────────────────────────────────────────────────────────────────── */
 uv('a roll-over on the real database: force-quit between the archive and the clear, reopen, and confirm the term is still listed with its snapshot');

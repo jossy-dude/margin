@@ -143,7 +143,9 @@ export async function setActiveRange(semesterStart: string, semesterEnd: string)
  *  owner chooses whether attendance goes with them), create the next term and make it active. The
  *  order matters — the archive is written before anything is cleared, and the next row exists before
  *  it becomes the one the app reads, so a kill in between leaves history, never a lost term. */
-export async function rollOverSemester(keepAttendance: boolean) {
+/** `range` is the next term's dates as the roll-over sheet asked for them (D4); absent = today plus the
+ *  15-week seed, as before. */
+export async function rollOverSemester(keepAttendance: boolean, range?: { start: string; end: string }) {
   const st = getState();
   const active = st.semesters.find((x) => x.active);
   if (!active) return;
@@ -151,7 +153,8 @@ export async function rollOverSemester(keepAttendance: boolean) {
     const snapshotJson = buildSnapshot(st.courses, st.meetings, st.attendance, st.marks, st.tasks, st.settings, st.variants, { notices: st.notices, dayMarks: st.dayMarks, adjusts: st.adjusts, focus: st.focus });
     await R().saveSemester({ ...active, active: false, snapshotJson, archivedAt: new Date().toISOString() });
     await R().clearActiveSchedule(keepAttendance);
-    const next = newSemester(getState().now);
+    const seeded = newSemester(getState().now);
+    const next = range && isYmd(range.start) ? { ...seeded, start: range.start, end: range.end, name: semesterName(range.start) } : seeded;
     await R().saveSemester(next);
     await R().setActiveSemester(next.id);
     applySnapshot(await R().load(), true);
