@@ -231,3 +231,31 @@ describeIfNative('Android Auto Backup carries the planner to a new install', () 
     }
   });
 });
+
+describeIfNative('v0.5 release engineering (R1)', () => {
+  const manifest = read('app', 'src', 'main', 'AndroidManifest.xml');
+  const gradle = read('app', 'build.gradle');
+  const perm = (name: string) => {
+    const tag = manifest.match(new RegExp(`<uses-permission[^>]*android:name="android\\.permission\\.${name}"[^>]*/>`))?.[0] ?? '';
+    return { 'tools:node': /tools:node="([^"]+)"/.exec(tag)?.[1] };
+  };
+
+  it('ships as 0.5.0, version code 4', () => {
+    expect(appJson.expo.version).toBe('0.5.0');
+    expect(gradle).toMatch(/versionCode 4\b/);
+    expect(gradle).toContain('versionName "0.5.0"');
+  });
+
+  it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {
+    for (const name of ['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'SYSTEM_ALERT_WINDOW']) {
+      expect({ name, node: perm(name)?.['tools:node'] }).toEqual({ name, node: 'remove' });
+    }
+  });
+
+  it('the dev variant installs beside the real app under its own label; release refuses to build without the key', () => {
+    expect(gradle).toMatch(/marginVariant == 'dev'\) \{\s*applicationIdSuffix '\.dev'\s*manifestPlaceholders = \[appLabel: 'Margin dev'\]/);
+    expect(manifest).toContain('android:label="${appLabel}"');
+    expect(gradle).toContain("throw new GradleException('variant=release needs MARGIN_KEYSTORE_PATH");
+    expect(gradle).not.toMatch(/storePassword System\.getenv\('ANDROID_KEYSTORE_PASSWORD'\) \?:/); // no fallback password
+  });
+});

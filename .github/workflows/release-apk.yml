@@ -4,6 +4,12 @@ name: Release APK
 # Not on every push.
 on:
   workflow_dispatch:
+    inputs:
+      variant:
+        description: 'dev = debug key, app.marginalia.planner.dev (installs beside the real app) · over = debug key on the real id (installs over v0.1.0/0.3.1) · release = the release key from secrets'
+        type: choice
+        options: [dev, over, release]
+        default: dev
   push:
     tags: ['v*']
 
@@ -42,13 +48,37 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Built from the committed android/ folder — no `expo prebuild`. A debug build is a DEV CLIENT:
-      # it boots Expo's "start a server" screen and loads the app from a laptop. A release build bundles
-      # the JS inside the APK and boots straight into the app — that is the deliverable. It is signed
-      # with the debug keystore committed in android/app/debug.keystore, so it installs over a debug
-      # install without a signature conflict.
+      # Built from the committed android/ folder — no `expo prebuild`. Always `assembleRelease`: the JS is
+      # bundled inside the APK and it boots straight into the app. The variant picks the id and the key
+      # (android/app/build.gradle): dev and over use the committed debug keystore, release the owner's key.
+      # A tag build is always the release key; a by-hand run builds the variant asked for.
+      - name: Pick the variant
+        id: variant
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then V=release; else V="${{ inputs.variant || 'dev' }}"; fi
+          echo "variant=$V" >> "$GITHUB_OUTPUT"
+          echo "Building variant: $V"
+
+      # The keystore exists only for the length of this job, in the runner's temp folder, never in the tree.
+      - name: Decode the release key
+        if: steps.variant.outputs.variant == 'release'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::variant=release needs the ANDROID_KEYSTORE_BASE64 secret (docs/RELEASING.md)"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/margin-release.keystore"
+          echo "MARGIN_KEYSTORE_PATH=$RUNNER_TEMP/margin-release.keystore" >> "$GITHUB_ENV"
+
       - name: Build APK
-        run: cd android && ./gradlew assembleRelease --no-daemon --stacktrace
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cd android && ./gradlew assembleRelease -PmarginVariant=${{ steps.variant.outputs.variant }} --no-daemon --stacktrace
+
+      - name: Remove the release key
+        if: always() && steps.variant.outputs.variant == 'release'
+        run: rm -f "$RUNNER_TEMP/margin-release.keystore"
 
       - name: Name the APK
         id: name
@@ -59,7 +89,7 @@ jobs:
             VERSION="v$(node -p "require('./app.json').expo.version")"
           fi
           SRC=android/app/build/outputs/apk/release/app-release.apk
-          DST="margin-${VERSION}-android.apk"
+          DST="margin-${VERSION}-${{ steps.variant.outputs.variant }}-android.apk"
           cp "$SRC" "$DST"
           echo "file=${DST}" >> "$GITHUB_OUTPUT"
           ls -l "$DST"
@@ -68,7 +98,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: margin-android-apk
+          name: margin-android-apk-${{ steps.variant.outputs.variant }}
           path: margin-*-android.apk
           if-no-files-found: error
 

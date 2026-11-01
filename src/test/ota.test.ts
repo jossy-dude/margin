@@ -317,9 +317,9 @@ describe('the update that was applied says so, once', () => {
   it('reads the sentence without consuming the marker, and consumes it only on request', async () => {
     await downloaded();
     mockUpdates.updateId = 'update-2';
-    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.5.0');
     expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2'); // still there: readable again
-    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.5.0');
     await consumeAppliedUpdate();
     expect(kvStore.has(APPLIED_VERSION_KEY)).toBe(false);
     expect(await announceAppliedUpdate()).toBeNull();
@@ -349,7 +349,7 @@ describe('the update that was applied says so, once', () => {
     mockUpdates.updateId = 'update-2';
     const readOnly: OtaKv = { get: fakeKv.get, set: async () => { throw new Error('disk full'); } };
     bindOtaKv(readOnly);
-    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.3.1');
+    expect(await announceAppliedUpdate()).toBe('You’re now on Margin 0.5.0');
     await expect(consumeAppliedUpdate()).resolves.toBeUndefined(); // a failed delete repeats, never throws
     expect(kvStore.get(APPLIED_VERSION_KEY)).toBe('update-2'); // the REAL store still holds it
   });
@@ -357,21 +357,21 @@ describe('the update that was applied says so, once', () => {
 
 describe('the About line names what is actually running', () => {
   it('says `built in` when no update was published after the build', () => {
-    expect(versionLine()).toBe('Margin 0.3.1 · runtime 0.3.1 · built in');
+    expect(versionLine()).toBe('Margin 0.5.0 · runtime 0.3.1 · built in');
   });
 
   it('shows the update id, shortened, when one is in use', () => {
     mockUpdates.updateId = '3f9a1c2e-0000-4000-8000-000000000000';
-    expect(versionLine()).toBe('Margin 0.3.1 · runtime 0.3.1 · update 3f9a1c2e');
+    expect(versionLine()).toBe('Margin 0.5.0 · runtime 0.3.1 · update 3f9a1c2e');
   });
 
   it('names the runtime it was built against', () => {
     mockUpdates.runtimeVersion = '0.3.2';
-    expect(versionLine()).toBe('Margin 0.3.1 · runtime 0.3.2 · built in');
+    expect(versionLine()).toBe('Margin 0.5.0 · runtime 0.3.2 · built in');
   });
 
   it('prints the plain version on web', () => {
     asWeb(true);
-    expect(versionLine()).toBe('Margin 0.3.1');
+    expect(versionLine()).toBe('Margin 0.5.0');
   });
 });

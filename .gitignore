@@ -17,3 +17,9 @@ Thumbs.db
 
 # sound scratch directory (audit M8)
 assets/sounds-candidates/
+
+# Signing keys never enter the repository; the debug key is the one exception (it is public by design).
+*.keystore
+*.jks
+!android/app/debug.keystore
+*.b64

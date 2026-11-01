@@ -153,7 +153,7 @@ describe('the applied-update sentence waits for a screen, and is not consumed be
     await act(async () => { live = TestRenderer.create(React.createElement(Announcer)); });
     await act(async () => { await flush(); });
 
-    expect(getState().toast?.text).toBe('You’re now on Margin 0.3.1');
+    expect(getState().toast?.text).toBe('You’re now on Margin 0.5.0');
     expect(await repo.getKv(APPLIED_VERSION_KEY)).toBeNull(); // consumed AFTER the toast was shown
 
     /* A remount (a theme change, the tour closing) must not say it again. */
@@ -170,7 +170,7 @@ describe('the applied-update sentence waits for a screen, and is not consumed be
      `Overlay`, and the claim is checked by what a user would see: the sentence on screen, and the
      marker retired only once it was. */
   it('the drawn shell puts the sentence on screen, and retires the marker only after that', async () => {
-    const sentence = 'You’re now on Margin 0.3.1';
+    const sentence = 'You’re now on Margin 0.5.0';
     const repo = new MemoryRepository();
     await repo.setKv(APPLIED_VERSION_KEY, 'update-2');
     mockUpdates.updateId = 'update-2';

@@ -81,6 +81,10 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+/** dev | over | release — see defaultConfig. */
+def marginVariant = (findProperty('marginVariant') ?: 'over').toString()
+if (!(marginVariant in ['dev', 'over', 'release'])) throw new GradleException("marginVariant must be dev, over or release, not ${marginVariant}")
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -96,11 +100,25 @@ android {
         // app.json's `version` (the JS `APP_VERSION` is separate and was already 0.3.1). They were still
         // 0.2.0/2 — the next build would have installed as a version older than its own code, and Android's
         // app info would have named the wrong build during the very update test that has to tell them apart.
-        versionCode 3
-        versionName "0.3.1"
+        versionCode 4
+        versionName "0.5.0"
 
         ndk {
             abiFilters 'arm64-v8a'
+        }
+
+        // The launcher label; the `dev` variant overrides it so the two installs can be told apart.
+        manifestPlaceholders = [appLabel: '@string/app_name']
+
+        /* v0.5 (R1) build variants, chosen by `-PmarginVariant=` (the APK workflow's `variant` input):
+             over    — the debug key on the real id: installs OVER an existing v0.1.0/0.3.1 (the default,
+                       and what every earlier build was);
+             dev     — the debug key on `app.marginalia.planner.dev`, labelled "Margin dev": installs
+                       BESIDE the real app, so testing never touches the owner's data;
+             release — the owner's release key (from the environment; see docs/RELEASING.md). */
+        if (marginVariant == 'dev') {
+            applicationIdSuffix '.dev'
+            manifestPlaceholders = [appLabel: 'Margin dev']
         }
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -112,15 +130,29 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Never committed: the workflow decodes the keystore secret into $RUNNER_TEMP and exports these.
+            def ks = System.getenv('MARGIN_KEYSTORE_PATH')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (marginVariant == 'release') {
+                // A release-variant build without the key must fail, not quietly fall back to the debug key.
+                if (!System.getenv('MARGIN_KEYSTORE_PATH')) throw new GradleException('variant=release needs MARGIN_KEYSTORE_PATH and the key passwords (docs/RELEASING.md)')
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
