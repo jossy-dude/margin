@@ -10,11 +10,11 @@
  * `<program>-<section>.json`, and add an entry below. Ids inside a pack must be unique to it (an export's ids
  * already are).
  */
+import { drb2503 } from './drb2503';
+
 export interface Pack { id: string; program: string; section: string; title: string; data: () => unknown }
 
-export const PACKS: Pack[] = [
-  /* e.g. { id: 'drb2603-a', program: 'DRB2603', section: 'A', title: 'DRB2603 · Section A', data: () => require('./drb2603-a.json') }, */
-];
+export const PACKS: Pack[] = (['A', 'B', 'C'] as const).map((sec) => ({ id: `drb2503-${sec.toLowerCase()}`, program: 'DRB2503', section: sec, title: `DRB2503 · Section ${sec}`, data: () => drb2503(sec) }));
 
 export const programs = (packs: readonly Pack[] = PACKS) => [...new Set(packs.map((p) => p.program))];
 export const sectionsOf = (program: string, packs: readonly Pack[] = PACKS) => packs.filter((p) => p.program === program);

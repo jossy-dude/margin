@@ -24,7 +24,8 @@ const M: Meeting[] = [
 ];
 const snap = (): Snapshot => ({ ...seedSnapshot(NOW), courses: C, meetings: M, variants: V, settings: { ...seedSnapshot(NOW).settings, semesterStart: '2026-09-07', semesterEnd: '2027-01-15', name: 'Jossy' } });
 
-afterEach(() => { stopResync(); PACKS.length = 0; });
+const BUILT_IN = [...PACKS];
+afterEach(() => { stopResync(); PACKS.length = 0; PACKS.push(...BUILT_IN); });
 
 describe('Share timetable', () => {
   it('carries only the timetable, never the sample rows or anything personal', () => {
@@ -60,5 +61,19 @@ describe('a built-in pack', () => {
     await hydrate(new MemoryRepository(() => NOW));
     expect(await storeAct.applyPack('nope')).toBe(false);
     expect(getState().toast?.text).toContain('not in this build');
+  });
+});
+
+describe('DRB2503, sections A–C (built in)', () => {
+  it('each section imports cleanly as 5 subjects, 12 weekly classes and the Database Lab', () => {
+    // read the real registry (not the test-pushed ones above)
+    const { drb2503 } = jest.requireActual<typeof import('../domain/packs/drb2503')>('../domain/packs/drb2503');
+    for (const sec of ['A', 'B', 'C'] as const) {
+      const plan = parseImport(JSON.stringify(drb2503(sec)), { courses: [], meetings: [], tasks: [], attendance: {}, dayMarks: {}, marks: [], variants: [], now: NOW });
+      expect({ sec, problems: plan.problems, warnings: plan.warnings }).toEqual({ sec, problems: [], warnings: [] });
+      expect([plan.counts.courses, plan.counts.meetings]).toEqual([5, 12]);
+      const raw = (drb2503(sec) as { raw: { meetings: Meeting[] } }).raw;
+      expect(raw.meetings.filter((m) => m.variantId).length).toBe(2); // two lab sessions a week
+    }
   });
 });

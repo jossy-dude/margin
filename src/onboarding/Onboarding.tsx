@@ -42,9 +42,12 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const settings = useStore((s) => s.settings);
   const [page, setPage] = useState(0), [name, setName] = useState(settings.name ?? ''), [typing, setTyping] = useState(false);
   const [range, setRange] = useState({ semesterStart: settings.semesterStart, semesterEnd: settings.semesterEnd });
-  const [door, setDoor] = useState<OnboardDoor>(PACKS.length ? 'class' : firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
+  const [door, setDoor] = useState<OnboardDoor>(firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
   const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<ScrapCue | null>(null), [steer, setSteer] = useState(false);
   const x = useSharedValue(0), gx = useSharedValue(0), gy = useSharedValue(0.2), leave = useSharedValue(0);
+  /* how far each hero page is scrolled, so Scrap rides up with the page instead of covering its words */
+  const y0 = useSharedValue(0), y4 = useSharedValue(0);
+  const onY0 = useAnimatedScrollHandler({ onScroll: (e) => { y0.set(e.contentOffset.y); } }), onY4 = useAnimatedScrollHandler({ onScroll: (e) => { y4.set(e.contentOffset.y); } });
   const pager = useRef<Animated.ScrollView>(null), gone = useRef(false), touch = useRef({ x: 0, y: 0, t: 0 }), steerT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const play = useCallback((kind: ScrapCueKind) => setCue((q) => ({ kind, n: (q?.n ?? 0) + 1 })), []);
 
@@ -115,7 +118,8 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
     gone.current = true;
     Keyboard.dismiss();
     /* "Pick your class" without a section picked is the same as setting it up by hand. */
-    const dd: OnboardDoor = d === 'class' && !pack ? (firstRun ? 'hand' : 'keep') : d;
+    /* a section picked on the last page wins: it IS where the timetable comes from */
+    const dd: OnboardDoor = pack ? 'class' : d === 'class' ? (firstRun ? 'hand' : 'keep') : d;
     const choice = { door: dd, name, semesterStart: range.semesterStart, semesterEnd: range.semesterEnd, pack };
     const done = () => { void act.finishOnboarding(choice); };
     if (reduce) { done(); return; }
@@ -141,12 +145,12 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const heroShell = (i: number, top: number, art: React.ReactNode, body: React.ReactNode) => (
     <View key={i} style={{ width: W, height: H, overflow: 'hidden' }}>
       <Drift x={x} i={i} W={W}>{art}</Drift>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ minHeight: H }}>
+      <Animated.ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={i === 0 ? onY0 : onY4} contentContainerStyle={{ minHeight: H }}>
         <View style={{ height: top }} />
         <TornSheet seed={`ob-sheet-${i}`} style={{ flexGrow: 1 }}>
           <View style={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: FOOT + ins.bottom + 12 }}><Words x={x} i={i} W={W}>{body}</Words></View>
         </TornSheet>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 
@@ -196,7 +200,6 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           </HandBox>
           <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where does your timetable come from?</Txt>
           <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); play('nod'); setMood(d === 'sample' ? 'happy' : d === 'import' || d === 'class' ? 'curious' : 'idle'); }} />
-          {door === 'class' ? <ClassPicker value={pack} onChange={(id) => { setPack(id); fx.select(); setMood('happy'); play('hop'); }} /> : null}
         </>)}
         {heroShell(4, hero5 - 6, <>
           <Art name="sun" w={120} style={{ position: 'absolute', left: -34, top: ins.top + 44 }} />
@@ -218,11 +221,19 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
               : perm === 'unavailable' ? <PermNote tone="mut" text="This build cannot send reminders (the web preview). On the phone, this asks once." />
               : <Btn kind="primary" icon="bell" label="Allow reminders" onPress={() => { void ask(); }} />}
           </View>
+          {PACKS.length ? (
+            <View style={{ marginTop: 22, gap: 6 }}>
+              <Txt f="bold" s={20} accessibilityRole="header">One more thing — I&apos;m a nice guy</Txt>
+              <Txt f="serif" s={15.5} c="mut">If you are in DRB2503, your timetable is already here: pick your section and every subject, room and lab is set up for you.</Txt>
+              <ClassPicker value={pack} onChange={(id) => { setPack(pack === id ? null : id); fx.select(); setMood('happy'); play('celebrate'); }} />
+              {pack ? <PermNote tone="ok" text="Done. Anything can change later: long-press a class on Week to move its room, its time or its day." /> : null}
+            </View>
+          ) : null}
         </>)}
       </Animated.ScrollView>
 
       {/* Scrap, above every page. */}
-      <Walker x={x} W={W} anchors={anchors} reduce={reduce}>
+      <Walker x={x} W={W} anchors={anchors} reduce={reduce} y0={y0} y4={y4}>
         <Scrap size={SZ} mood={mood} cue={cue} lookX={gx} lookY={gy} attentive={steer || (page === 2 && typing)} />
       </Walker>
 
@@ -276,7 +287,6 @@ function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; on
 }
 
 const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
-  { id: 'class', icon: 'grad', title: 'Pick your class', line: 'Your section\'s subjects and weekly classes, ready made.', tint: 'blush', packs: true },
   { id: 'import', icon: 'import', title: 'Bring a file', line: 'Import a JSON or CSV export, or paste one in.', tint: 'sky' },
   { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, then add your subjects with +.', tint: 'sage', first: true },
   { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample semester, just for this session.', tint: 'sand', first: true },
@@ -313,12 +323,13 @@ function ClassPicker({ value, onChange }: { value: string | null; onChange: (id:
 }
 
 /** Scrap's travel between page anchors: position and size follow the pager exactly, with a hop in between. */
-function Walker({ x, W, anchors, reduce, children }: { x: SharedValue<number>; W: number; anchors: { cx: number; cy: number; s: number }[]; reduce: boolean; children: React.ReactNode }) {
+function Walker({ x, W, anchors, reduce, children, y0, y4 }: { x: SharedValue<number>; W: number; anchors: { cx: number; cy: number; s: number }[]; reduce: boolean; children: React.ReactNode; y0: SharedValue<number>; y4: SharedValue<number> }) {
   const xs = anchors.map((_, i) => i * W), cxs = anchors.map((a) => a.cx), cys = anchors.map((a) => a.cy), ss = anchors.map((a) => a.s);
   const st = useAnimatedStyle(() => {
     const v = x.get(), f = v / W - Math.floor(v / W), arc = reduce ? 0 : -Math.sin(f * Math.PI) * 54;
     const cx = interpolate(v, xs, cxs, 'clamp'), cy = interpolate(v, xs, cys, 'clamp'), s = interpolate(v, xs, ss, 'clamp');
-    return { transform: [{ translateX: cx - SZ / 2 }, { translateY: cy - SZH / 2 + arc }, { scale: s }, { rotate: `${Math.sin(f * Math.PI) * -8}deg` }] };
+    const lift = y0.get() * Math.max(0, 1 - v / W) + y4.get() * Math.max(0, 1 - Math.abs(v - 4 * W) / W);
+    return { transform: [{ translateX: cx - SZ / 2 }, { translateY: cy - SZH / 2 + arc - lift }, { scale: s }, { rotate: `${Math.sin(f * Math.PI) * -8}deg` }] };
   });
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: SZ, height: SZH }, st]}>{children}</Animated.View>;
 }
