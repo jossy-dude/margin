@@ -16,7 +16,7 @@ const SRC = {
   'scrap-cream': require('../../../assets/paper/art-scrap-cream.webp'), 'scrap-sky': require('../../../assets/paper/art-scrap-sky.webp'),
   'scrap-sand': require('../../../assets/paper/art-scrap-sand.webp'), 'scrap-sage': require('../../../assets/paper/art-scrap-sage.webp'),
   leaf: require('../../../assets/paper/art-leaf.webp'), 'leaf-sage': require('../../../assets/paper/art-leaf-sage.webp'),
-  ruled: require('../../../assets/paper/art-ruled.webp'), 'ruled-wide': require('../../../assets/paper/art-ruled-wide.webp'), tape: require('../../../assets/paper/art-tape.webp'),
+  ruled: require('../../../assets/paper/art-ruled.webp'), 'ruled-wide': require('../../../assets/paper/art-ruled-wide.webp'), tape: require('../../../assets/paper/art-tape.webp'), 'disc-denim': require('../../../assets/paper/art-disc-denim.webp'),
 } as const;
 export type ArtName = keyof typeof SRC;
 

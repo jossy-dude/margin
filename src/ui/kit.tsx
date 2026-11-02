@@ -116,7 +116,9 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
      a sheet is TORN (a white core along the tear, no outline), a small control is cut with SCISSORS (a
      smooth pill with a faint hand). `cut` overrides the size rule. */
   const collage = look === 'collage', mode = collage ? cut ?? (Math.min(sz.w, sz.h) >= 64 && !dashed && fill !== 'transparent' ? 'torn' : 'cut') : null;
-  const pillR = Math.min(sz.h / 2, 22), pill = useMemo(() => ({ h: [pillR, pillR, pillR, pillR], v: [pillR, pillR, pillR, pillR] }), [pillR]);
+  /* Scissors round a WIDE control into a pill (a button, a chip); a squarer box (a timetable block, a day
+     cell, a check box) only has its corners softened, or it turns into a bubble. */
+  const pillR = sz.w >= sz.h * 1.6 ? Math.min(sz.h / 2, 22) : Math.min(8, sz.h / 4, sz.w / 4), pill = useMemo(() => ({ h: [pillR, pillR, pillR, pillR], v: [pillR, pillR, pillR, pillR] }), [pillR]);
   const d = useMemo(() => (mode === 'torn' ? '' : handPath(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
   const torn = useMemo(() => (mode === 'torn' ? tornPaths(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
   const onLayout = (e: { nativeEvent: { layout: { width: number; height: number } } }) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); };

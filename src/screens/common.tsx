@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { BEAT, EASE, HandBox, Icon, Txt } from '../ui/kit';
 import { PaperBg } from '../ui/PaperBg';
+import { Scrap } from '../ui/mascot/Scrap';
+import { useScreenLive } from '../ui/live';
+import type { ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { addDays, fmtDur, fmtTime, startOfDay } from '../domain/time';
@@ -46,7 +49,16 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
 export const Section = ({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) => (
   <View style={{ gap: 8 }}><View style={{ flexDirection: 'row', alignItems: 'center' }}><Txt f="bold" s={24} style={{ flex: 1 }} accessibilityRole="header">{title}</Txt>{right}</View>{children}</View>
 );
-export function Empty({ text, icon = 'note' }: { text: string; icon?: string }) {
+/** An empty state. In the collage Scrap stands in for the icon, with a mood that fits the news (nothing due
+ *  is good news; no classes is a quiet day); the words are the same either way, and they carry the meaning. */
+export function Empty({ text, icon = 'note', mood }: { text: string; icon?: string; mood?: ScrapMood }) {
+  const { look } = useTheme(), live = useScreenLive();
+  if (look === 'collage' && mood) return (
+    <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Scrap size={62} mood={mood} awake={live} />
+      <Txt f="serif" s={16.5} c="mut" style={{ flex: 1 }}>{text}</Txt>
+    </HandBox>
+  );
   return <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 18, alignItems: 'center', gap: 6 }}><Icon name={icon} size={30} /><Txt f="serif" s={17} c="mut" style={{ textAlign: 'center' }}>{text}</Txt></HandBox>;
 }
 export const STATUS_GLYPH: Record<AttStatus, string> = { p: '✓', l: 'L', n: 'L', a: '✕', s: 'S', c: '–', t: '–' };

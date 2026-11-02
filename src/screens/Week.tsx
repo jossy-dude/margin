@@ -3,6 +3,7 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BEAT, Btn, EASE, HandBox, Icon, Row, Txt } from '../ui/kit';
+import { subjectTint } from '../ui/collage/tint';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
@@ -17,7 +18,8 @@ import { fx } from '../services/fx';
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks };
-  const { c } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
+  /* In the collage each class is a slip of its subject's own paper (the colour it has everywhere else). */
+  const { c, look, tints } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
   const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 0.95, H = (end - start) * PX;
   const gw = width - 32, tw = 30, cw = (gw - tw) / 7, hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start / 60 + i);
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
@@ -83,7 +85,7 @@ export function WeekScreen() {
                   return (
                     <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
                       style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
-                      <HandBox seed={key} fill={x ? c.paper : hexA(c.acc, 0.2)} stroke={x ? c.mut : c.acc} shadow={false} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
+                      <HandBox seed={key} fill={x ? c.paper : look === 'collage' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={x ? c.mut : look === 'collage' ? undefined : c.acc} shadow={look === 'collage' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
                         {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{roomOf(meeting, course, st.variants)}</Txt>}
 </HandBox>

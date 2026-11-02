@@ -54,7 +54,7 @@ export function GradesScreen() {
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
   return (
     <Page title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
-      {rows.length === 0 && <Empty icon="grad" text="No subjects yet. Add one to start tracking marks and attendance." />}
+      {rows.length === 0 && <Empty icon="grad" mood="curious" text="No subjects yet. Add one to start tracking marks and attendance." />}
       {rows.map(({ course, marks, adj, tot, need }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10 }}>
           <Pressable onPress={() => act.open({ t: 'course', id: course.id })} accessibilityRole="button" accessibilityLabel={`${course.name}. Edit subject.`} onLongPress={() => act.open({ t: 'meeting', courseId: course.id })}>

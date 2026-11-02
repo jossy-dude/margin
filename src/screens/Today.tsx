@@ -481,7 +481,7 @@ export function TodayScreen() {
         </View>
       </Section>
       <Section title={fmtDay(sel, now)}>
-        {selOcc.length === 0 ? <Empty icon="today" text="No classes. Add one from the + button." /> : selOcc.map(({ date, meeting }) => {
+        {selOcc.length === 0 ? <Empty icon="today" mood="sleepy" text="No classes. Add one from the + button." /> : selOcc.map(({ date, meeting }) => {
           const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), a = atTime(date.getTime(), meeting.start), b = occEnd(date.getTime(), meeting), live = now >= a && now < b && !isCancelled(e), key = occKey(ymd(date), meeting), col = statusColor(e.status, c), range = `${fmtTime(a, hour12)}–${fmtTime(b, hour12)}`;
           return (
             <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${spokenStatus(e)}. Opens attendance.`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}>
@@ -511,7 +511,7 @@ export function TodayScreen() {
           </HStrip>)}
       </Section>
       <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
-        {due.empty ? <Empty icon="tasks" text="Nothing due. Nice. Tap + when something is set." /> : <>
+        {due.empty ? <Empty icon="tasks" mood="happy" text="Nothing due. Nice. Tap + when something is set." /> : <>
           {due.overdue.length > 0 && <><Txt f="bold" s={18} c="bad" accessibilityRole="header">Overdue</Txt>{due.overdue.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
             {due.moreOverdue > 0 && <Btn small kind="ghost" label={`${due.moreOverdue} more overdue`} onPress={() => act.go('Tasks')} />}</>}
           {due.today.length > 0 && <><Txt f="bold" s={18} accessibilityRole="header">Due today</Txt>{due.today.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</>}

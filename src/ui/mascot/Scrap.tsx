@@ -51,14 +51,16 @@ export interface ScrapProps {
   lookY?: SharedValue<number>;
   /** The screen is steering the eyes right now (a finger down, typing): no idle glances until it stops. */
   attentive?: boolean;
+  /** Off (`false`) on a page that is mounted but not on screen: no breathing, blinking or glances run there. */
+  awake?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
 const img = (w: number, h: number, k: number, x = 0, y = 0) => ({ position: 'absolute' as const, left: x * k, top: y * k, width: w * k, height: h * k });
 
-export function Scrap({ size, mood = 'idle', cue = null, lookX, lookY, attentive = false, style, testID }: ScrapProps) {
-  const { c } = useTheme(), reduce = useReduceMotion(), k = size / SCRAP_W, m = MOODS[mood];
+export function Scrap({ size, mood = 'idle', cue = null, lookX, lookY, attentive = false, awake = true, style, testID }: ScrapProps) {
+  const { c } = useTheme(), reduceMotion = useReduceMotion(), reduce = reduceMotion || !awake, k = size / SCRAP_W, m = MOODS[mood];
   /* Gaze. External shared values win; otherwise an internal pair that the idle loop moves. */
   const ownX = useSharedValue(0), ownY = useSharedValue(0.15), gx = lookX ?? ownX, gy = lookY ?? ownY;
   const lidTop = useSharedValue(m.lidTop), lidLow = useSharedValue(m.lidLow), blink = useSharedValue(0);
