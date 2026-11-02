@@ -13,6 +13,8 @@ import { effective, nextStatus, occKey, occurrencesBetween, attendanceRate } fro
 import { DW, atTime, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
 import { semesterFirstDay, semesterLabel } from '../domain/semester';
 import type { Course } from '../domain/types';
+import { subjectTint } from '../ui/collage/tint';
+import { hexA } from '../tokens/theme';
 
 function AttendanceGrid({ course }: { course: Course }) {
   const locked = useStore((s) => s.settings.lockAttendance), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
@@ -46,23 +48,39 @@ function AttendanceGrid({ course }: { course: Course }) {
     </View>
   );
 }
+/** The total as a strip of ink across the card, with the goal as a notch: how far there is still to go reads at a glance. */
+function GoalBar({ total, goal }: { total: number; goal: number | null }) {
+  const { c } = useTheme(), t = Math.max(0, Math.min(100, total)), g = goal === null ? null : Math.max(0, Math.min(100, goal));
+  return (
+    <View accessible accessibilityLabel={`Total ${Math.round(total)}${g !== null ? `, goal ${g}` : ''}`} style={{ height: 12, justifyContent: 'center' }}>
+      <View style={{ height: 8, borderRadius: 2, backgroundColor: hexA(c.ink, 0.08), overflow: 'hidden' }}><View style={{ width: `${t}%`, height: 8, backgroundColor: g !== null && t < g ? c.warn : c.acc }} /></View>
+      {g !== null ? <View style={{ position: 'absolute', left: `${g}%`, top: 0, width: 2.5, height: 12, marginLeft: -1.25, borderRadius: 1, backgroundColor: c.ink }} /> : null}
+    </View>
+  );
+}
+
 export function GradesScreen() {
   const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings);
   const st = { courses, marks, adjusts };
-  const { c } = useTheme();
+  const { c, tints } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
   return (
     <Page title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
       {rows.length === 0 && <Empty icon="grad" mood="curious" text="No subjects yet. Add one to start tracking marks and attendance." />}
       {rows.map(({ course, marks, adj, tot, need }) => (
-        <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10 }}>
+        <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
+          {/* the subject's own paper, as a tab on the card — the colour it has on Week, the + desk and Focus */}
+          <View pointerEvents="none" style={{ position: 'absolute', top: -9, left: 16, transform: [{ rotate: '-2deg' }] }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <HandBox seed={`gtab-${course.id}`} fill={subjectTint(course.id, tints)} cut="cut" style={{ width: 54, height: 20 }} />
+          </View>
           <Pressable onPress={() => act.open({ t: 'course', id: course.id })} accessibilityRole="button" accessibilityLabel={`${course.name}. Edit subject.`} onLongPress={() => act.open({ t: 'meeting', courseId: course.id })}>
             <Row style={{ flexWrap: 'nowrap' }}>
               <View style={{ flex: 1 }}><Txt f="marker" s={24} numberOfLines={2}>{course.name}</Txt><Txt f="serif" s={15} c="mut">{[roomsLabel(course), course.teacher].filter(Boolean).join(' · ') || 'Add a class to set its room'}</Txt></View>
               <View style={{ alignItems: 'center', minWidth: 74 }}><Txt f="marker" s={34} c={tot !== null && course.goal && tot < course.goal ? 'warn' : 'ink'}>{tot === null ? '—' : Math.round(tot)}</Txt><Txt f="bold" s={17} c="mut">{letter(tot)}</Txt></View>
             </Row>
           </Pressable>
+          {tot !== null ? <GoalBar total={tot} goal={course.goal} /> : null}
           {course.goal ? <Txt f="bold" s={17} c={need && !need.feasible ? 'bad' : need?.reached ? 'ok' : 'mut'}>{need === null ? `Goal ${course.goal}% ${tot !== null && tot >= course.goal ? 'reached' : '— everything is marked'}` : need.reached ? `Goal ${course.goal}% already safe` : need.feasible ? `For ${course.goal}%: average ${Math.ceil(need.need)}% on the remaining ${need.weightLeft}%` : `Goal ${course.goal}% is out of reach (${Math.round(need.need)}% needed)`}</Txt> : null}
           <View style={{ gap: 8 }}>
             {marks.map((m) => (

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Btn, Chip, EASE, Field, HandBox, HStrip, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
 import { DurationField, NumberField, TimeField } from '../ui/fields';
@@ -16,6 +16,8 @@ import { DW, fmtDur, fmtWhen, fromMin, hm, uid, startOfDay } from '../domain/tim
 import { workload } from '../domain/reminders';
 import type { AttStatus, Course, DayStatus, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
 import { fx } from '../services/fx';
+import { hexA } from '../tokens/theme';
+import { STATUS_GLYPH, statusColor } from '../screens/common';
 
 const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'exam', l: 'Exam', i: 'exam' }, { k: 'deadline', l: 'Deadline', i: 'timer' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'other', l: 'Other', i: 'pencil' }];
 const PRI = ['None', 'Low', 'Medium', 'High'];
@@ -120,6 +122,23 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
 }
 
 /* ───── class / day status ───── */
+/** One attendance choice, as the stamp it leaves: its glyph in a ring of its own colour, the word beside it, and
+ *  the current one inked solid. The colours are the ones every attendance cell in the app already uses. */
+function StampChoice({ s, on, onPress }: { s: AttStatus; on: boolean; onPress: () => void }) {
+  const { c } = useTheme(), col = statusColor(s, c);
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${ST[s]}${on ? ', currently set' : ''}`} accessibilityState={{ selected: on }} onPress={() => { fx.stamp(s); onPress(); }}>
+      <HandBox seed={`stamp-${s}`} fill={on ? hexA(col, 0.16) : c.card} stroke={on ? col : undefined} cut="cut" shadow={!on} style={{ minHeight: 54, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 2.2, borderColor: col, backgroundColor: on ? col : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }] }}>
+          <Txt f="marker" s={16} c={on ? c.card : col} maxFontSizeMultiplier={FS_STAMP}>{STATUS_GLYPH[s]}</Txt>
+        </View>
+        <Txt f="bold" s={17} style={{ flex: 1 }} numberOfLines={2}>{ST[s]}</Txt>
+      </HandBox>
+    </Pressable>
+  );
+}
+const FS_STAMP = 1.3;
+
 export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }> }) {
   const dayMarks = useStore((s) => s.dayMarks), attendance = useStore((s) => s.attendance);
   const st = { dayMarks, attendance };
@@ -132,7 +151,7 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {/* `Btn` has no selected state of its own, so the current mark is spelled out in the label: without
             it TalkBack says "Here", "Late", ... seven times and never says which one is already set. */}
-        {opts.map((s) => <View key={s} style={{ width: '47%', flexGrow: 1 }}><Btn kind={cur === s ? 'primary' : 'ghost'} label={ST[s]} a11y={`${ST[s]}${cur === s ? ', currently set' : ''}`} onPress={() => { if (isDay) act.setDay(spec.date, s as DayStatus, why); else act.setAtt(spec.key, s, why); close(); }} /></View>)}
+        {opts.map((s) => <View key={s} style={{ width: '47%', flexGrow: 1 }}><StampChoice s={s} on={cur === s} onPress={() => { if (isDay) act.setDay(spec.date, s as DayStatus, why); else act.setAtt(spec.key, s, why); close(); }} /></View>)}
       </View>
       <Field label="Reason (optional)" value={why} onChangeText={setWhy} placeholder="e.g. bus broke down" />
       {(isDay ? st.dayMarks[spec.date] : st.attendance[spec.key]) && <Btn kind="ghost" icon="x" label="Back to automatic" onPress={() => { if (isDay) act.clearDay(spec.date); else act.clearAtt(spec.key); close(); }} />}

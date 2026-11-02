@@ -649,6 +649,29 @@ The web build shows all of this (frames in `.shots/look`, `.shots/ob`, `.shots/f
 
 ---
 
+## V05-LOOK2 — the owner's nit-pick pass (UNVERIFIED-ON-DEVICE)
+
+- **V05-LOOK2.1 The deck counts down to class.** Before a class starts, Today's bar fills toward the bell
+  and agrees with the small start disc; at the bell it becomes the class. **PASS / FAIL: ______**
+- **V05-LOOK2.2 Clock faces.** Settings → Look & feel → Clock face shows nine. Pick each new one; look for:
+  Half Moon's escape wheel jumping each second and its seconds hand ticking with a small overshoot; the
+  Sunburst's spears drifting; Atelier Filigree's small seconds ticking; the Fob Watch swinging gently on its
+  chain. The older faces' second hands now step finely (eight beats a second). **PASS / FAIL: ______**
+- **V05-LOOK2.3 Stats reads like a report.** Headline figures and one sentence, then one section per question;
+  numbers and sentences agree with what you know of your week. **PASS / FAIL: ______**
+- **V05-LOOK2.4 Tags, notes, stamps.** To-do cards wear a kind tag (projects show a second sheet behind; exams a
+  round check); urgent notes are blush with a bell that shakes now and then; the class sheet's choices are
+  stamps. **PASS / FAIL: ______**
+- **V05-LOOK2.5 A whole subject in one sheet.** + → Subject: add rooms, add weekly classes (one as Lab), Save.
+  Look for: Week shows every class, the lab is its own variant, editing the subject shows the rows again.
+  **PASS / FAIL: ______**
+- **V05-LOOK2.6 Share timetable.** Settings → Data → Share timetable → import the file on a second install (or
+  after Reset): the subjects, rooms and weekly classes come back, nothing else. **PASS / FAIL: ______**
+- **V05-LOOK2.7 About.** The GitHub button and the Gursha button open their pages in the browser; the Gursha
+  eyes keep sliding over to stare at the button. **PASS / FAIL: ______**
+
+---
+
 ## Owner's final device test (v0.5.0)
 
 Do these in order, on the phone that has v0.1.0 with your real data. Write PASS/FAIL beside each.
