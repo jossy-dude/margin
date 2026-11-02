@@ -10,7 +10,6 @@ import { fx } from '../services/fx';
 import { hexA } from '../tokens/theme';
 import { afterClose } from './after';
 import { FS, sheetFit } from './fit';
-import { useCoachSlot } from './onboard/coach';
 
 export type SheetCloser = (after?: () => void) => void;
 
@@ -79,7 +78,6 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
   /* The tour's second stop is the ✕ on this sheet, so it needs the node and not a description of it.
      The panel variant is not registered: the tour is a phone tour, and a desktop panel that is never
      pointed at must not answer a slot the overlay would then draw a hole in the middle of nowhere for. */
-  const tourClose = useCoachSlot('sheet-close');
   /* Armed from a LAYOUT effect, not a passive one — the same rule as the page placement in
      `navigation/Book.tsx`: a passive effect waits for the commit to paint, so the first frame was the
      sheet parked a full travel off-screen with the dim at zero and the present only starting on the
@@ -190,7 +188,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
                 <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
                   {back ? <Pressable testID="sheet-back" accessibilityRole="button" accessibilityLabel="Back" onPress={back} hitSlop={8} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 }}><Icon name="back" /></Pressable> : null}
                   <Txt f="marker" s={25} maxFontSizeMultiplier={FS} numberOfLines={2} style={{ flex: 1 }} accessibilityLiveRegion="polite">{title}</Txt>
-                  <Pressable testID="sheet-close" ref={tourClose} accessibilityRole="button" accessibilityLabel="Close" onPress={() => close()} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
+                  <Pressable testID="sheet-close" accessibilityRole="button" accessibilityLabel="Close" onPress={() => close()} hitSlop={10} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 }}><Icon name="x" /></Pressable>
                 </View>
               </View>
             </GestureDetector>

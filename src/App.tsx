@@ -10,6 +10,10 @@ import { Newsreader_400Regular_Italic } from '@expo-google-fonts/newsreader/400R
 import { Newsreader_600SemiBold_Italic } from '@expo-google-fonts/newsreader/600SemiBold_Italic';
 import { PermanentMarker_400Regular } from '@expo-google-fonts/permanent-marker/400Regular';
 import { SpecialElite_400Regular } from '@expo-google-fonts/special-elite/400Regular';
+import { BricolageGrotesque_400Regular } from '@expo-google-fonts/bricolage-grotesque/400Regular';
+import { BricolageGrotesque_600SemiBold } from '@expo-google-fonts/bricolage-grotesque/600SemiBold';
+import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque/800ExtraBold';
+import { DMMono_500Medium } from '@expo-google-fonts/dm-mono/500Medium';
 import { ThemeProvider, useTheme } from './ui/theme-context';
 import { CrashBoundary } from './ui/CrashBoundary';
 import { ScreenBoundary } from './ui/ScreenBoundary';
@@ -24,9 +28,9 @@ import { TasksScreen } from './screens/Tasks';
 import { GradesScreen } from './screens/Grades';
 import { StatsScreen } from './screens/Stats';
 import { FocusScreen } from './screens/Focus';
-import { Coach } from './ui/onboard/Coach';
-import { hasRealRows } from './ui/onboard/coach';
-import { TOUR_VERSION, toured } from './domain/defaults';
+import { Onboarding } from './onboarding/Onboarding';
+import { hasRealRows } from './domain/rows';
+import { toured } from './domain/defaults';
 import { getState, set, useStore, useUpdateAnnouncement, wireLifecycle, act, boot } from './store/store';
 import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudio } from './services/audio';
@@ -169,7 +173,7 @@ function Gate() {
   const done = toured(onboarded);
   /* Frozen on the render that mounts the tour. An upgrading device full of a term's real marks answers
      `true` here and is never offered the destructive close, and neither is anything taken through once. */
-  if (!done && firstRun.current === null) firstRun.current = !launched.current && !hasRealRows();
+  if (!done && firstRun.current === null) firstRun.current = !launched.current && !hasRealRows(getState());
   /* A ref cannot be narrowed by the assignment above (it is mutable), so the value crosses into the
      render as a local — which is also the honest shape: this is one frozen decision, not a live read. */
   const first = firstRun.current ?? false;
@@ -184,7 +188,7 @@ function Gate() {
   return (
     <View style={{ flex: 1 }}>
       <Shell />
-      {!done && <Coach firstRun={first} onFinish={(how) => { firstRun.current = false; void act.adoptDemo(how !== 'started').then(() => act.setSettings({ onboarded: TOUR_VERSION })); }} />}
+      {!done && <Onboarding firstRun={first} />}
     </View>
   );
 }
@@ -196,7 +200,8 @@ const Splash = () => {
 
 /** Module scope so the map identity is stable: `useFonts` re-runs its effect on every render if handed a
  *  fresh object literal. Loading imperatively also lets a failure be reported and retried. */
-const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Italic, Newsreader_600SemiBold_Italic, PermanentMarker_400Regular, SpecialElite_400Regular };
+const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Italic, Newsreader_600SemiBold_Italic, PermanentMarker_400Regular, SpecialElite_400Regular,
+  BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, DMMono_500Medium };
 
 /** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
  *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Btn, HandBox, Icon, Reveal, Row, Txt } from '../ui/kit';
+import { Btn, HandBox, Icon, Reveal, Row, Txt, faceOf } from '../ui/kit';
 import { Section } from '../screens/common';
 import { SemesterRange } from '../ui/SemesterRange';
 import { activeSemester, daysLeft, newSemesterRange, semesterLabel } from '../domain/semester';
@@ -9,7 +9,6 @@ import type { SemesterRow } from '../domain/types';
 import { plural } from '../domain/time';
 import { act, useStore } from '../store/store';
 import { useTheme } from '../ui/theme-context';
-import { FONT } from '../tokens/theme';
 
 /**
  * The terms, one active and the rest kept.
@@ -24,7 +23,7 @@ import { FONT } from '../tokens/theme';
  * Nothing on it can be edited; it is the term as it was closed.
  */
 export function SemestersPage() {
-  const { c } = useTheme();
+  const th = useTheme(), { c } = th;
   const rows = useStore((s) => s.semesters), now = useStore((s) => s.now);
   const active = rows.find((x) => x.active) ?? null;
   const archived = rows.filter((x) => !x.active);
@@ -61,7 +60,7 @@ export function SemestersPage() {
           maxLength={40}
           returnKeyType="done"
           onSubmitEditing={() => void rename()}
-          style={{ fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 4, borderBottomWidth: 1.4, borderBottomColor: c.ink }}
+          style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, borderBottomWidth: 1.4, borderBottomColor: c.ink }}
         />
         <Txt f="serif" s={15.5} c="mut">{semesterLabel({ semesterStart: active.start, semesterEnd: active.end })} · {leftLine}</Txt>
         <Row>

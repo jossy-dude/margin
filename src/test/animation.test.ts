@@ -442,7 +442,10 @@ describe('re-entrancy retargets rather than snaps', () => {
 
   it('the paper background does not fade itself in on arrival', () => {
     // Every page mounts a `PaperBg`; a background that animates on mount is a second page transition.
-    expect(paperBg).toContain('useSharedValue(tex === \'grain\' ? 1 : 0)');
+    // Rationale (collage look): the grain's starting strength is now `grainOn(tex)` (all of it under
+    // `grain`, a little under the crumple), still seeded from the setting itself on the first frame.
+    expect(paperBg).toContain('useSharedValue(grainOn(tex))');
+    expect(paperBg).toContain("crum = useSharedValue(tex === 'crumple' ? 1 : 0)");
     expect(paperBg).toContain('const first = !seenRule.current;');
     expect(paperBg).toContain('const first = !seenTex.current;');
   });
@@ -460,11 +463,14 @@ describe('re-entrancy retargets rather than snaps', () => {
     // With the default `texture: 'grain'`, holding the photograph mounted forever cost every one of
     // the six always-mounted pages a full-screen tiled bitmap under a blend mode that no frame shows.
     // Both layers exist for the cross-fade's 220 ms and no longer.
-    expect(paperBg).toContain("{(tex === 'grain' || cross) &&");
+    // Rationale (collage look): the crumple is a third texture with its own mount, and the grain now also
+    // mounts (faintly) under the crumple, so its condition is the strength it would be drawn at.
+    expect(paperBg).toContain("{(tex === 'crumple' || cross) &&");
+    expect(paperBg).toContain('{(grainOn(tex) > 0 || cross) &&');
     expect(paperBg).toContain("{(tex === 'photo' || cross) &&");
     expect(paperBg).toContain('setTimeout(() => setCross(false), PAPER_MS)');
     // …and the fade itself still starts from the settings, so the first frame after a change is correct
-    expect(paperBg).toContain("useSharedValue(tex === 'grain' ? 1 : 0)");
+    expect(paperBg).toContain('useSharedValue(grainOn(tex))');
   });
 });
 
@@ -653,10 +659,12 @@ describe('the picker page renders all 17 kinds at once', () => {
   });
 });
 
-describe('the tour is replayable from Settings', () => {
+/* Rationale (collage onboarding): the coach tour became a five-page introduction, so the row and its page
+   say "introduction" and "Show it now". The mechanism pinned here is unchanged: one number, written 0. */
+describe('the introduction is replayable from Settings', () => {
   it('there is a row for it on the root page, and it says which state it is in', async () => {
     const s = await mount([]);
-    expect(s.json()).toContain('Show the tour again');
+    expect(s.json()).toContain('Show the introduction again');
     expect(s.json()).toContain('Not seen yet');
   });
 
@@ -666,15 +674,15 @@ describe('the tour is replayable from Settings', () => {
     // Cast for the same reason `Settings.tsx` casts: `Settings.onboarded` is A4's field and its patch to
     // the shared `src/domain/types.ts` has not landed. See `qa/HANDOFF-A6.md`.
     await act(async () => { set({ settings: { ...getState().settings, onboarded: TOUR_VERSION } as Settings }); });
-    expect(s.json()).toContain('Finished — it is replayable');
+    expect(s.json()).toContain('Five pages with Scrap');
   });
 
   it('its page offers the run button, and running it writes 0 and closes the sheet', async () => {
     const s = await mount(['tour']);
-    expect(s.json()).toContain('Run it now');
+    expect(s.json()).toContain('Show it now');
     expect((getState().settings as Settings & { onboarded?: number }).onboarded).not.toBe(0);
     const press = live!.root.findAll((n) => typeof n.type !== 'string' && (n.props as { accessibilityRole?: string }).accessibilityRole === 'button')
-      .find((n) => ((n.props as { accessibilityLabel?: string }).accessibilityLabel ?? '').startsWith('Run it now'));
+      .find((n) => ((n.props as { accessibilityLabel?: string }).accessibilityLabel ?? '').startsWith('Show it now'));
     expect(press).toBeDefined();
     await act(async () => { (press as unknown as { props: { onPress: () => void } }).props.onPress(); });
     // Writing 0 is the whole replay mechanism: the gate in App.tsx is one predicate over one number.

@@ -109,7 +109,9 @@ describe('the palette invariants that are not contrast', () => {
     expect(lum(palettes.refined.light.desk)).toBeGreaterThan(lum(palettes.original.light.desk));
   });
   it('every palette keeps its own values: both names still exist and all four modes are populated', () => {
-    expect(Object.keys(palettes).sort()).toEqual(['original', 'refined']);
+    // Rationale (collage look): a third palette joined the two, and it is the new default; the two old
+    // ones are kept, untouched, and still selectable.
+    expect(Object.keys(palettes).sort()).toEqual(['collage', 'original', 'refined']);
     for (const p of Object.values(palettes)) for (const mode of ['light', 'dark'] as const) expect(p[mode].paper).toMatch(/^#[0-9A-F]{6}$/i);
   });
 });

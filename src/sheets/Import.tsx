@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { Btn, HandBox, Row, Txt } from '../ui/kit';
+import { Btn, HandBox, Row, Txt, faceOf } from '../ui/kit';
 import { Label } from '../ui/Sheet';
 import { useTheme } from '../ui/theme-context';
-import { FONT } from '../tokens/theme';
 import {
   DATASETS, detectDataset, detectImportFormat, parseImportFile, planCsv, type DatasetCount, type DatasetKind, type ImportPlan,
 } from '../domain/importPlan';
@@ -84,7 +83,7 @@ const DATASET_LABEL: Record<DatasetKind, string> = {
  * preview and the same merge-only commit, so there is no second way for rows to arrive.
  */
 export function ImportPage() {
-  const { c } = useTheme();
+  const th = useTheme(), { c } = th;
   /* Every table a CSV can name by id, key or date, so a re-import merges over the row already here
      and the preview can say how many rows are new. Six selectors rather than the whole state so a
      clock tick elsewhere does not re-render the page. */
@@ -161,7 +160,7 @@ export function ImportPage() {
         value={text} onChangeText={(v) => { setText(v); setPlan(null); setName(undefined); setCsv(null); }}
         multiline autoCapitalize="none" autoCorrect={false} spellCheck={false}
         placeholder={SAMPLE} placeholderTextColor={c.mut} accessibilityLabel="JSON to import"
-        style={{ fontFamily: FONT.type, fontSize: 13, lineHeight: 18, color: c.ink, minHeight: 150, textAlignVertical: 'top', padding: 8, borderWidth: 1.4, borderColor: c.rule }}
+        style={{ ...faceOf(th, 'type', 13), lineHeight: 18, color: c.ink, minHeight: 150, textAlignVertical: 'top', padding: 8, borderWidth: 1.4, borderColor: c.rule }}
       />
       </>}
       <Row>

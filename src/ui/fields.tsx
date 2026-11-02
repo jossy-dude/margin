@@ -3,10 +3,10 @@ import { TextInput, View, type AccessibilityActionEvent, type LayoutChangeEvent 
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withDecay, withTiming } from 'react-native-reanimated';
 import Svg, { Line, Path } from 'react-native-svg';
-import { FONT, RS } from '../tokens/theme';
+import { RS } from '../tokens/theme';
 import { clamp, fmtDur, fmtTime, parseClock, parseDuration, parseNumber } from '../domain/time';
 import { fx } from '../services/fx';
-import { Chip, HandBox, HStrip, Txt } from './kit';
+import { Chip, HandBox, HStrip, Txt, faceOf } from './kit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { FS } from './fit';
 
@@ -59,7 +59,7 @@ export interface NumberFieldProps {
 }
 /** A real numeric input: the number pad, a unit beside it, the value clamped into range on commit. */
 export function NumberField({ value, onChange, min, max, decimals = 0, unit, emptyLabel, label, width }: NumberFieldProps) {
-  const { c } = useTheme(), [focus, setFocus] = useState(false);
+  const th = useTheme(), { c } = th, [focus, setFocus] = useState(false);
   const shown = value === null ? '' : String(Number(value.toFixed(decimals)));
   const d = useDraft(shown);
   const commit = () => {
@@ -78,7 +78,7 @@ export function NumberField({ value, onChange, min, max, decimals = 0, unit, emp
         keyboardType={decimals > 0 || min < 0 ? 'numbers-and-punctuation' : 'number-pad'} returnKeyType="done" selectTextOnFocus
         placeholder={emptyLabel} placeholderTextColor={c.mut} selectionColor={c.acc} maxLength={8}
         accessibilityLabel={`${label}${value === null ? (emptyLabel ? `, ${emptyLabel}` : '') : `, ${shown}${unit ? ` ${unit}` : ''}`}`} testID={`num-${tid(label)}`}
-        maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 4, textAlign: 'right' }}
+        maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, textAlign: 'right' }}
       />
       {unit ? <Txt f="serif" s={16} c="mut">{unit}</Txt> : null}
     </Box>
@@ -97,7 +97,7 @@ export interface DurationFieldProps {
 }
 /** A length of time: a few chips for the usual answers, and a box that reads "90", "1h30", "2d". */
 export function DurationField({ value, onChange, presets, min, max, noneLabel, label }: DurationFieldProps) {
-  const { c } = useTheme(), [focus, setFocus] = useState(false);
+  const th = useTheme(), { c } = th, [focus, setFocus] = useState(false);
   const none = value === null || (noneLabel !== undefined && value === 0);
   const shown = none ? '' : fmtDur(value as number);
   const d = useDraft(shown);
@@ -122,7 +122,7 @@ export function DurationField({ value, onChange, presets, min, max, noneLabel, l
           returnKeyType="done" autoCapitalize="none" autoCorrect={false} selectTextOnFocus maxLength={16}
           placeholder={noneLabel ?? 'e.g. 1h30'} placeholderTextColor={c.mut} selectionColor={c.acc}
           accessibilityLabel={`${label}, ${none ? noneLabel ?? 'not set' : shown}. Type minutes, or like 1h30 or 2d`} testID={`dur-${tid(label)}`}
-          maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 4 }}
+          maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4 }}
         />
       </Box>
     </View>
@@ -152,7 +152,7 @@ export interface TimeFieldProps {
  * flick travels and settles on the nearest five; reduce-motion snaps without the glide.
  */
 export function TimeField({ value, onChange, min = 0, max = 1435, hour12 = false, label, ruler = true }: TimeFieldProps) {
-  const { c } = useTheme(), [focus, setFocus] = useState(false), [live, setLive] = useState<number | null>(null);
+  const th = useTheme(), { c } = th, [focus, setFocus] = useState(false), [live, setLive] = useState<number | null>(null);
   const at = live ?? value;
   const shown = fmtTime(new Date(2000, 0, 1, Math.floor(at / 60), at % 60).getTime(), hour12);
   const d = useDraft(shown);
@@ -171,7 +171,7 @@ export function TimeField({ value, onChange, min = 0, max = 1435, hour12 = false
           value={d.text} onChangeText={d.edit} onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); commit(); }} onSubmitEditing={commit}
           keyboardType="numbers-and-punctuation" returnKeyType="done" autoCapitalize="none" autoCorrect={false} selectTextOnFocus maxLength={8}
           selectionColor={c.acc} accessibilityLabel={`${label}, ${shown}. Type a time like 930`} testID={`time-${tid(label)}`}
-          maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 4, textAlign: 'center' }}
+          maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, textAlign: 'center' }}
         />
       </Box>
       {ruler ? <TimeRuler value={value} min={min} max={max} hour12={hour12} label={label} onLive={setLive} onCommit={(v) => { setLive(null); if (v !== value) onChange(v); }} /> : null}

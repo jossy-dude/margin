@@ -81,7 +81,7 @@ export interface NotifSettings {
 }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
-  pen: 'warm' | 'graphite' | 'red' | 'blue'; palette: 'refined' | 'original'; texture: 'grain' | 'photo' | 'none';
+  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'refined' | 'original'; texture: 'crumple' | 'grain' | 'photo' | 'none';
   clock: string; bar: string; semesterStart: string;
   /** The last day of term, `YYYY-MM-DD`; `''` means open-ended, which is the default. A settings KV
    *  row written before v0.3.1 has no such key, so `withDefaults` fills the empty string in — no SQL
@@ -102,6 +102,9 @@ export interface Settings {
    *  needs no migration. It is a version stamp rather than a boolean so replay is one write of `0` — there is
    *  no second source of truth that can disagree with it. */
   onboarded?: number;
+  /** Which generation of the default look this settings row has been moved to (2 = the collage). Absent on
+   *  a row written before the collage existed; `withDefaults` moves such a row over once. See there. */
+  lookV?: number;
   notif: NotifSettings;
 }
 export interface Snapshot {

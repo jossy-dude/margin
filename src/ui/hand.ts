@@ -53,3 +53,59 @@ export function tornTape(w: number, h: number, seed: number): string {
   const l = DEPTH, rgt = w - DEPTH;
   return `M${l.toFixed(1)} 0L${rgt.toFixed(1)} 0${end(rgt + DEPTH * 0.5, 1)}L${rgt.toFixed(1)} ${h}L${l.toFixed(1)} ${h}${end(l - DEPTH * 0.5, -1)}Z`;
 }
+
+/**
+ * A torn paper edge (the collage look). Real torn paper wanders at three scales — the hand's pull, the
+ * fibres giving way in clumps, and the single fibres — and it tears INWARD from where a cut would have
+ * been, so the shape stays inside its box. Returns the face and, torn by a different hand of the same
+ * paper, the white core that shows along the tear wherever the face's tear ran further in.
+ *
+ * Pure and memoisable per (w, h, seed): the edge is stable across renders, so a card tears the same way
+ * every time it is drawn.
+ */
+export function tornPaths(w: number, h: number, seed: number, depth = 2.4, corner = 5): { face: string; core: string } {
+  if (w < 8 || h < 8) return { face: '', core: '' };
+  const c = { h: [corner, corner * 0.6, corner, corner * 0.8], v: [corner * 0.8, corner, corner * 0.6, corner] };
+  const pts = outline(w, h, c, 2.6), n = pts.length, r = rnd(seed);
+  /* 1-D value noise around the perimeter, wrapping: periodic so the start of the path meets its end. */
+  const octave = (period: number) => { const k = Math.max(3, Math.round(n / period)), v = Array.from({ length: k }, () => r()); return (i: number) => { const u = (i / n) * k, a = Math.floor(u), f = u - a, s = f * f * (3 - 2 * f); return (v[a % k]! * (1 - s) + v[(a + 1) % k]! * s); }; };
+  const big = octave(26), mid = octave(8), fine = octave(2.4), rimA = octave(14), rimB = octave(4);
+  const faceD = new Array<number>(n), coreD = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const tear = depth * (0.95 * big(i) + 0.55 * mid(i) + 0.4 * fine(i) + 0.15 * r());
+    faceD[i] = tear;
+    /* The core tears with the face but not exactly: where its own noise runs ahead it is hidden under the
+       face, where it lags it shows as a white lip up to ~1.6 depth wide. */
+    coreD[i] = Math.max(0, tear - depth * (1.25 * rimA(i) + 0.45 * rimB(i) - 0.55));
+  }
+  const path = (d: number[]) => {
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const [x, y] = pts[i]!, [x0, y0] = pts[(i - 1 + n) % n]!, [x1, y1] = pts[(i + 1) % n]!;
+      const tx = x1 - x0, ty = y1 - y0, tl = Math.hypot(tx, ty) || 1, nx = -ty / tl, ny = tx / tl;
+      const X = Math.min(w, Math.max(0, x + nx * d[i]!)), Y = Math.min(h, Math.max(0, y + ny * d[i]!));
+      s += `${i ? 'L' : 'M'}${X.toFixed(1)} ${Y.toFixed(1)}`;
+    }
+    return s + 'Z';
+  };
+  return { face: path(faceD), core: path(coreD) };
+}
+
+/**
+ * One torn EDGE across a width (a divider, the top of a sheet laid over art): the face's edge and, torn a
+ * little behind it, the white core that shows along it. Both are open polylines from x = 0 to x = w at a
+ * base height of `depth`; callers close them into whatever shape they fill. Pure and stable per seed.
+ */
+export function tornEdge(w: number, seed: number, depth = 6): { face: [number, number][]; core: [number, number][] } {
+  if (w < 4) return { face: [], core: [] };
+  const r = rnd(seed), n = Math.max(8, Math.round(w / 2.6));
+  const octave = (len: number) => { const k = Math.max(2, Math.round(n / len)), v = Array.from({ length: k + 1 }, () => r()); return (i: number) => { const u = (i / n) * k, a = Math.floor(u), f = u - a, s = f * f * (3 - 2 * f); return v[a]! * (1 - s) + v[Math.min(k, a + 1)]! * s; }; };
+  const big = octave(40), mid = octave(11), fine = octave(3), rim = octave(18);
+  const face: [number, number][] = [], core: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const x = (i / n) * w, y = depth * (0.9 * big(i) + 0.5 * mid(i) + 0.35 * fine(i) + 0.12 * r());
+    face.push([x, y]);
+    core.push([x, Math.max(0, y - depth * (0.2 + 0.9 * rim(i)))]);
+  }
+  return { face, core };
+}

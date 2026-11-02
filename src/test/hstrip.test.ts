@@ -47,7 +47,10 @@ describe('horizontal strips announce that they scroll (BUG-026)', () => {
 
   it('no call site suppresses the scroll indicator on its own any more', () => {
     // The class-wide invariant: the offending prop may only appear inside HStrip itself.
-    const offenders = srcFiles.filter((f) => f.endsWith('.tsx') && /showsHorizontalScrollIndicator=\{false\}/.test(readFileSync(f, 'utf8')) && !f.endsWith(join('ui', 'kit.tsx')));
+    // Rationale for the one exception (collage onboarding): a PAGED view (`pagingEnabled`) is not a strip
+    // that hides that it scrolls — it carries its own page indicator (01–05) — so a line that pages is
+    // allowed to drop the bar. A plain horizontal strip still has to go through HStrip.
+    const offenders = srcFiles.filter((f) => f.endsWith('.tsx') && readFileSync(f, 'utf8').split('\n').some((l) => /showsHorizontalScrollIndicator=\{false\}/.test(l) && !/pagingEnabled/.test(l)) && !f.endsWith(join('ui', 'kit.tsx')));
     expect(offenders).toEqual([]);
   });
 

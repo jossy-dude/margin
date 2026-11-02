@@ -67,16 +67,20 @@ const opened = () => { expect(mockCb.opened).not.toBeNull(); return mockCb.opene
 const received = () => { expect(mockCb.received).not.toBeNull(); return mockCb.received!; };
 
 describe('the rebuild the store drives', () => {
-  /* First on purpose: `askedPermission` is module state, so the ask can only be counted from a boot
-     that has not happened yet in this file. */
-  it('asks the phone for permission exactly once, on the first rebuild', async () => {
+  /* Rationale (v0.5 C, collage onboarding): the rebuild used to ask once by itself. The system prompt now
+     only ever follows its explanation — the onboarding's reminders page or Settings → Reminders — so a
+     rebuild NEVER asks, and a phone that was never asked plans nothing until the user allows it. */
+  it('never asks the phone for permission by itself, however often the app rebuilds', async () => {
     mockPerm.read = 'undetermined'; // a phone that has never been asked
     await boot();
     const asks = () => mockEnsure.mock.calls.filter((c) => c[0] === true).length;
-    expect({ asked: asks(), synced: mockSync.mock.calls.length }).toEqual({ asked: 1, synced: 1 });
+    expect({ asked: asks(), synced: mockSync.mock.calls.length }).toEqual({ asked: 0, synced: 0 });
     resync(0); await settle(10);
     resync(0); await settle(10);
-    expect(asks()).toBe(1); // …and never again, however often the app rebuilds
+    expect(asks()).toBe(0); // …however often the app rebuilds
+    mockPerm.read = 'granted'; // the user allowed it (onboarding or Settings)
+    resync(0); await settle(10);
+    expect(mockSync.mock.calls.length).toBe(1); // and the next rebuild plans
     expect(mockEnsure.mock.calls.some((c) => c[0] === false)).toBe(true); // it still *reads*, every time
   });
 

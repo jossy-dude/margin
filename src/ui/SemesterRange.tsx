@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { Row, Toggle, Txt } from './kit';
+import { Row, Toggle, Txt, faceOf } from './kit';
 import { Label } from './Sheet';
 import { isYmd, semesterLabel, suggestEnd, validRange } from '../domain/semester';
 import { useTheme } from './theme-context';
-import { FONT } from '../tokens/theme';
 
 type Part = 'y' | 'm' | 'd';
 type DateDraft = Record<Part, string>;
@@ -153,7 +152,7 @@ function DatePart({ which, part, value, width, maxLength, onChangeText, onFocus,
   which: 'start' | 'end'; part: Part; value: string; width: number; maxLength: number;
   onChangeText: (v: string) => void; onFocus: () => void; onBlur: () => void;
 }) {
-  const { c } = useTheme();
+  const th = useTheme(), { c } = th;
   const word = part === 'y' ? 'Year' : part === 'm' ? 'Month' : 'Day';
   return (
     <View style={{ gap: 2 }}>
@@ -169,7 +168,7 @@ function DatePart({ which, part, value, width, maxLength, onChangeText, onFocus,
         placeholder={part === 'y' ? '2026' : part === 'm' ? '09' : '07'}
         testID={`semester-${which}-${part === 'y' ? 'year' : part === 'm' ? 'month' : 'day'}`}
         accessibilityLabel={`semester ${which} ${part === 'y' ? 'year' : part === 'm' ? 'month' : 'day'}`}
-        style={{ width, textAlign: 'center', fontFamily: FONT.handBold, fontSize: 22, color: c.ink, paddingVertical: 4, paddingHorizontal: 0, borderBottomWidth: 1.4, borderBottomColor: c.ink }}
+        style={{ width, textAlign: 'center', ...faceOf(th, 'bold', 22), color: c.ink, paddingVertical: 4, paddingHorizontal: 0, borderBottomWidth: 1.4, borderBottomColor: c.ink }}
       />
     </View>
   );

@@ -60,7 +60,11 @@ describe('the native paper tiles with a grid, not with resizeMode="repeat"', () 
     // width) and the `backgroundSize` interpolation, so pinning those again here would double-book them.
     // What only native needs is that `Tiles` is handed that same pair, which is what the two arms and
     // this declaration line together prove.
-    expect(code).toMatch(/const GRAIN_PX = 256, PHOTO_PX = 520;/);
+    // Rationale (collage look): the crumpled sheet joined grain and photo as a third tile, and it is not
+    // square (512 × 900 dp, one screen tall so a page never shows it repeat), so it carries a width and a
+    // height. The two old constants are unchanged; the crumple arm is handed both of its own.
+    expect(code).toMatch(/const GRAIN_PX = 256, PHOTO_PX = 520, CRUMPLE_W = 512, CRUMPLE_H = 900;/);
+    expect(code).toContain('<Tiles src={CRUMPLE_SRC} px={CRUMPLE_W} ph={CRUMPLE_H} />');
   });
 });
 

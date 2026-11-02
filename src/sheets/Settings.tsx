@@ -38,7 +38,7 @@ import type { Settings } from '../domain/types';
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The tour', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -218,7 +218,7 @@ export function SettingsSheet() {
         the one-tap version for the moment somebody is about to uninstall. */}
     <ExportRow disabled={!!busy} onPress={() => void doExport('json', 'share')} />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
-    <Nav icon="note" label="Show the tour again" hint={`${toured(onboarded) ? 'Finished — it is replayable' : 'Not seen yet'}`} to="tour" />
+    <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five pages with Scrap' : 'Not seen yet'}`} to="tour" />
     <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />
     {/* Reset stays last: it is the only row on this page that destroys something, so it must never be
         the row a thumb lands on while reaching for the row above it. */}
@@ -411,9 +411,9 @@ export function SettingsSheet() {
   if (page === 'semesters') body = <SemestersPage />;
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
-    <Txt f="serif" s={16} c="mut">The tour runs the first time this app opens, over the app itself rather than instead of it: it rings the real +, the real sheet close, the real gear, the tab bar, a timetable block, a task row and the real Focus dial — which it waits for you to drag. Every step has a Next and a Skip, and nothing on it changes your data.</Txt>
-    <Btn kind="ghost" icon="play" label="Run it now" onPress={() => { replay(0); act.close(); }} />
-    <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You finished build ${TOUR_VERSION} of it. Running it again changes nothing about your data.` : 'You have not seen it yet, so it will run the next time this app opens anyway.'}</Txt>
+    <Txt f="serif" s={16} c="mut">Five pages with Scrap: what Margin is, how it is laid out, your name, your term and where your timetable comes from, and reminders. Seen again from here, it offers to keep your planner exactly as it is, so nothing about your data changes unless you choose an import.</Txt>
+    <Btn kind="ghost" icon="play" label="Show it now" onPress={() => { replay(0); act.close(); }} />
+    <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You have seen build ${TOUR_VERSION} of it.` : 'You have not seen it yet, so it opens the next time the app does anyway.'}</Txt>
   </>);
   /* The page used to be `about`, and used to carry the version line and the Updates block as well.
      Those moved to About, where "what build is this" belongs; what is left is the one action the whole

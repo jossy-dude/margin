@@ -2,8 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { Clipboard, View } from 'react-native';
 import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
-import { Mascot } from '../onboarding/Mascot';
-import { MASCOT_CREDIT } from '../onboarding/mascot';
+import { Scrap } from '../ui/mascot/Scrap';
+import { MOODS, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
 import { getState, toast } from '../store/store';
@@ -28,6 +28,19 @@ const when = (ms: number) => {
 };
 
 /** Settings → Diagnostics. Read-only apart from Clear: a copy of existing text components, no new UI language. */
+/** Scrap, live, with every mood and cue on a button: if he blinks, looks around and hops, the animation
+ *  engine and the paper bitmaps both work on this phone. */
+function MascotCheck() {
+  const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<{ kind: ScrapCueKind; n: number } | null>(null);
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={{ alignItems: 'center', paddingTop: 8 }}><Scrap size={170} mood={mood} cue={cue} testID="diag-mascot" /></View>
+      <Row style={{ flexWrap: 'wrap', gap: 6 }}>{(Object.keys(MOODS) as ScrapMood[]).map((m) => <Btn key={m} small kind={m === mood ? 'primary' : 'ghost'} label={m} onPress={() => setMood(m)} />)}</Row>
+      <Row style={{ flexWrap: 'wrap', gap: 6 }}>{(['hop', 'celebrate', 'wow', 'nod', 'shake'] as ScrapCueKind[]).map((k) => <Btn key={k} small kind="ink" label={k} onPress={() => setCue((c) => ({ kind: k, n: (c?.n ?? 0) + 1 }))} />)}</Row>
+    </View>
+  );
+}
+
 export function DiagnosticsPage() {
   const { c } = useTheme();
   const [list, setList] = useState<CrashEntry[]>(readCrashes);
@@ -72,10 +85,7 @@ export function DiagnosticsPage() {
       )}
       <Hair />
       <Label>Mascot check</Label>
-      <Row style={{ flexWrap: 'nowrap', gap: 12 }}>
-        <Mascot size={96} testID="diag-mascot" />
-        <Txt f="serif" s={14.5} c="mut" style={{ flex: 1 }}>The onboarding bear, live. If he blinks and looks around, the animation engine works on this phone. {MASCOT_CREDIT}.</Txt>
-      </Row>
+      <MascotCheck />
       <Label>What gets recorded</Label>
       <Txt f="serif" s={14.5} c="mut">
         The error message, its stack, the page you were on, the time, the app version and whether it happened before or after the app finished starting. No task, mark or note content is ever copied into the log.

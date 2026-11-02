@@ -16,13 +16,14 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run boundaries"
   },
   "dependencies": {
+    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
     "@expo-google-fonts/caveat": "^0.4.2",
+    "@expo-google-fonts/dm-mono": "^0.4.2",
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo-google-fonts/permanent-marker": "^0.4.0",
     "@expo-google-fonts/special-elite": "^0.4.1",
     "@expo/metro-runtime": "~57.0.16",
     "@react-navigation/native": "^7.5.0",
-    "@rive-app/react-native": "0.5.9",
     "expo": "^57.0.26",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",
@@ -43,7 +44,6 @@
     "react": "^19.2.3",
     "react-native": "^0.86.3",
     "react-native-gesture-handler": "~2.32.0",
-    "react-native-nitro-modules": "0.36.5",
     "react-native-reanimated": "^4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",

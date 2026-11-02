@@ -81,7 +81,9 @@ describe('every npm script runs something that exists (BUG-012)', () => {
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
         if (!/^\s*(\*|\/\/|\/\*)/.test(line)) return;
         for (const m of line.matchAll(/\b(?:scripts|assets)\/[\w./-]+\.(?:mjs|cjs|js|ts|sh|png|jpg)\b/g)) {
-          if (!existsSync(join(root, m[0]!))) claims.push(`${rel}:${i + 1}  ${m[0]}`);
+          // A path in a comment is read from the repository root (`scripts/…`, `assets/…` live there), and
+          // also accepted under src/ for the few comments that were written relative to it.
+          if (!existsSync(join(root, m[0]!)) && !existsSync(join(root, '..', m[0]!))) claims.push(`${rel}:${i + 1}  ${m[0]}`);
         }
       });
     }

@@ -21,8 +21,10 @@ export const DEFAULT_NOTIF: NotifSettings = {
   lockText: true,
 };
 
+/** The default look's generation; see `lookUpgrade` below. Declared before the defaults that read it. */
+export const LOOK_V = 2;
 export const DEFAULT_SETTINGS: Settings = {
-  name: '', theme: 'auto', paper: 'dots', pen: 'warm', palette: 'refined', texture: 'grain',
+  name: '', theme: 'auto', paper: 'plain', pen: 'denim', palette: 'collage', texture: 'crumple', lookV: LOOK_V,
   clock: 'rb', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
@@ -33,10 +35,23 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const withDefaults = (s: Partial<Settings>): Settings => ({
-  ...DEFAULT_SETTINGS, ...s,
+  ...DEFAULT_SETTINGS, ...s, ...lookUpgrade(s),
   soundVol: { ...DEFAULT_SETTINGS.soundVol, ...(s.soundVol ?? {}) },
   notif: { ...DEFAULT_NOTIF, ...(s.notif ?? {}) },
 });
+
+/**
+ * The collage look replaces the notebook as the default, and a phone that already has a settings row holds
+ * the OLD defaults explicitly (`palette: 'refined'`, `texture: 'grain'`, …) — merging new defaults under it
+ * would change nothing. So a row that predates the collage (`lookV` absent) is moved over once: palette and
+ * texture to the collage's, the pen to denim if it was still the old default, the paper to plain if it was
+ * still the old dots. A choice made after that (`lookV` present) is never touched again, and the old
+ * palettes, pens and textures all stay selectable in Settings.
+ */
+function lookUpgrade(s: Partial<Settings>): Partial<Settings> {
+  if ((s.lookV ?? 0) >= LOOK_V || (s.palette === undefined && s.texture === undefined)) return {};
+  return { palette: 'collage', texture: 'crumple', pen: !s.pen || s.pen === 'warm' ? 'denim' : s.pen, paper: !s.paper || s.paper === 'dots' ? 'plain' : s.paper, lookV: LOOK_V };
+}
 
 /* ───── the onboarding tour ─────
  *
@@ -45,7 +60,7 @@ export const withDefaults = (s: Partial<Settings>): Settings => ({
  * again) and there is no second piece of state anywhere — no `onboardingVisible`, no modal, no
  * route. The gate in `App.tsx` is a single predicate: `!toured(settings.onboarded)`.
  *
- * `TOUR_VERSION` is bumped whenever the screen list in `ui/onboard/screens.ts` changes, and every
+ * `TOUR_VERSION` is bumped whenever the onboarding's pages (`src/onboarding/`) change, and every
  * phone is shown the new tour exactly once more. Bump it when a screen is *added or reworded*; do
  * not bump it to nag anyone.
  *
@@ -55,7 +70,9 @@ export const withDefaults = (s: Partial<Settings>): Settings => ({
  * no entry in `DEFAULT_SETTINGS`: absent means "has not seen it". A default of `0` would be the
  * same answer, bought with a schema field that every existing settings row would be missing.
  */
-export const TOUR_VERSION = 1;
+/* 2 = the five-page onboarding with Scrap (the collage look). It replaced the ten-step coach tour, so
+   every phone that finished build 1 is shown it once more. */
+export const TOUR_VERSION = 2;
 
 /** Has this phone finished the current tour? `undefined` (a settings row written before the tour
  *  existed, or a fresh install) means no. */

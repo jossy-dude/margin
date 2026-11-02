@@ -1,7 +1,7 @@
 import type { Repository } from '../data/repository';
 import { MemoryRepository } from '../data/memory';
 import { seedSnapshot } from '../data/seed';
-import { toured } from '../domain/defaults';
+import { TOUR_VERSION, toured } from '../domain/defaults';
 import { hasRealRows } from '../domain/rows';
 import type { ImportPlan } from '../domain/importPlan';
 import { recordCrash } from '../services/problems';
@@ -10,7 +10,8 @@ import { applySnapshot, getState, set, type State } from './core';
 import { openRepository } from './openRepository';
 import { db, ensureRepo, R, reportSaveFailure } from './persist';
 import { resync } from './reminders';
-import { carryImportedRange, loadSemesters, reconcileSemesters } from './semesters';
+import { carryImportedRange, loadSemesters, reconcileSemesters, setActiveRange } from './semesters';
+import { setSettings } from './actions/entities';
 import { toast } from './toast';
 
 /* ───── hydrate ───── */
@@ -165,4 +166,27 @@ export async function adoptDemo(keepSamples: boolean) {
   resync(0);
 }
 
-export const sessionActions = { purgeDemo, importPlan, resetAll, adoptDemo };
+/** Where the onboarding's data page sent the user. `sample` keeps the sample semester for this session,
+ *  `hand` starts empty, `import` starts empty and opens Import (file or paste), `keep` is a replay on a
+ *  planner that already holds the user's own data: nothing about the data changes. */
+export type OnboardDoor = 'sample' | 'hand' | 'import' | 'keep';
+export interface OnboardChoice { door: OnboardDoor; name: string; semesterStart: string; semesterEnd: string }
+
+/**
+ * Leave the onboarding. In this order, because each step writes where the previous one left the store:
+ *  1. the name and term go into the session first, so a first run's hand-over carries them to the real file;
+ *  2. the session is adopted (a no-op on a replay, which already runs on the real file);
+ *  3. the term is written through the active semester row, which the settings mirror alone would not move;
+ *  4. only then is the onboarding marked done — a kill before this point shows it again, never half-applies it.
+ */
+export async function finishOnboarding(o: OnboardChoice) {
+  const s0 = getState().settings, name = o.name.trim().slice(0, 40), moved = o.semesterStart !== s0.semesterStart || o.semesterEnd !== s0.semesterEnd;
+  setSettings({ name, ...(db.demo && moved ? { semesterStart: o.semesterStart, semesterEnd: o.semesterEnd } : {}) });
+  if (o.door !== 'keep') await adoptDemo(o.door === 'sample');
+  const s1 = getState().settings;
+  if (o.semesterStart && (o.semesterStart !== s1.semesterStart || o.semesterEnd !== s1.semesterEnd)) await setActiveRange(o.semesterStart, o.semesterEnd);
+  setSettings({ onboarded: TOUR_VERSION });
+  if (o.door === 'import') set({ sheet: { t: 'settings' }, settingsPath: ['data', 'import'] });
+}
+
+export const sessionActions = { purgeDemo, importPlan, resetAll, adoptDemo, finishOnboarding };

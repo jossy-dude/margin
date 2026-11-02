@@ -10,11 +10,15 @@ import { MARGIN } from '../tokens/theme';
 
 const GRAIN_SRC = require('../../assets/textures/grain.png');
 const PHOTO_SRC = require('../../assets/textures/t1.jpg');
+/* The collage's crumpled sheet (scripts/paper-art.mjs): crease facets as black and white on transparency,
+   so it lays over any paper colour with plain alpha and looks the same on every platform. */
+const CRUMPLE_SRC = require('../../assets/paper/crumple.webp');
 /* Web-only URLs for the two textures, resolved once at module scope by `expo-asset`, which is the
    accessor that works on react-native-web (`Image.resolveAssetSource` is native-only). Native never
    reads these and pays nothing for them. */
 const GRAIN_WEB = Asset.fromModule(GRAIN_SRC).uri;
 const PHOTO_WEB = Asset.fromModule(PHOTO_SRC).uri;
+const CRUMPLE_WEB = Asset.fromModule(CRUMPLE_SRC).uri;
 
 /**
  * The paper itself: base colour + ruling pattern + texture. Pages, sheets and Settings all use it, so a texture change shows everywhere at once.
@@ -63,15 +67,15 @@ const RULED = 28;
  *
  *  Native does not come through here at all: it tiles with the explicit grid in `Tiles`, at the same
  *  `px` these constants give the web — see the note above `Tiles` for why it is not a `resizeMode`. */
-const GRAIN_PX = 256, PHOTO_PX = 520;
+const GRAIN_PX = 256, PHOTO_PX = 520, CRUMPLE_W = 512, CRUMPLE_H = 900;
 const WEB = Platform.OS === 'web';
-const tiled = (uri?: string, px = GRAIN_PX) => ({ backgroundImage: uri ? `url("${uri}")` : undefined, backgroundRepeat: 'repeat', backgroundSize: `${px}px ${px}px` } as never);
+const tiled = (uri?: string, px = GRAIN_PX, ph = px) => ({ backgroundImage: uri ? `url("${uri}")` : undefined, backgroundRepeat: 'repeat', backgroundSize: `${px}px ${ph}px` } as never);
 
 /** The texture layer is window-sized whatever container it sits in, so it clips itself to its paper —
  *  without this a `PaperBg` inside a smaller sheet would paint its tiles over the paper around it. */
 const CLIP = { overflow: 'hidden' } as const;
 
-const tileStyle = (col: number, row: number, px: number): ImageStyle => ({ position: 'absolute', left: col * px, top: row * px, width: px, height: px });
+const tileStyle = (col: number, row: number, px: number, ph = px): ImageStyle => ({ position: 'absolute', left: col * px, top: row * ph, width: px, height: ph });
 
 /**
  * The native texture: an explicit grid of `Image`s, one per tile.
@@ -110,25 +114,29 @@ const tileStyle = (col: number, row: number, px: number): ImageStyle => ({ posit
  * `PaperBg` lives in a container that is that size or smaller, so the grid always covers its paper, and
  * anything past the paper's own edge is cut by `CLIP`.
  */
-function Tiles({ src, px, tint }: { src: number; px: number; tint?: string }) {
+function Tiles({ src, px, ph = px, tint }: { src: number; px: number; ph?: number; tint?: string }) {
   const { width, height } = useWindowDimensions();
-  const cols = Math.ceil(width / px), rows = Math.ceil(height / px);
+  const cols = Math.ceil(width / px), rows = Math.ceil(height / ph);
   return (
     <>
       {Array.from({ length: cols * rows }, (_, i) => {
         const col = i % cols;
-        return <Image key={i} source={src} resizeMode="stretch" tintColor={tint} style={tileStyle(col, (i - col) / cols, px)} />;
+        return <Image key={i} source={src} resizeMode="stretch" tintColor={tint} style={tileStyle(col, (i - col) / cols, px, ph)} />;
       })}
     </>
   );
 }
+
+/** How much of the fibre grain a texture setting carries: all of it for `grain`, a little under the
+ *  collage's crumple (crumpled paper still has fibre), none otherwise. */
+const grainOn = (tex: string) => (tex === 'grain' ? 1 : tex === 'crumple' ? 0.45 : 0);
 
 export function PaperBg({ card = false }: { card?: boolean }) {
   const { c, dark } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), tex = useStore((s) => s.settings.texture);
   const id = useId();
   /* Seeded from the settings themselves, so the very first painted frame is already correct — a
      background that fades in on arrival is a page transition wearing a second, slower one. */
-  const rule = useSharedValue(1), grain = useSharedValue(tex === 'grain' ? 1 : 0), photo = useSharedValue(tex === 'photo' ? 1 : 0);
+  const rule = useSharedValue(1), grain = useSharedValue(grainOn(tex)), photo = useSharedValue(tex === 'photo' ? 1 : 0), crum = useSharedValue(tex === 'crumple' ? 1 : 0);
   /* One ref PER effect. A single shared flag would be written by whichever effect ran first, and the
      second one would then believe it was a change and animate a layer that had only just mounted. */
   const seenRule = useRef(false), seenTex = useRef(false);
@@ -143,16 +151,18 @@ export function PaperBg({ card = false }: { card?: boolean }) {
   useEffect(() => {
     const first = !seenTex.current;
     seenTex.current = true;
-    if (first) { grain.set(tex === 'grain' ? 1 : 0); photo.set(tex === 'photo' ? 1 : 0); return; }
+    if (first) { grain.set(grainOn(tex)); photo.set(tex === 'photo' ? 1 : 0); crum.set(tex === 'crumple' ? 1 : 0); return; }
     /* Hold both layers for the length of the cross-fade, then drop the one that is not showing. Under
        reduce-motion the opacities snap, but the mounting still runs the two-window dance, so the
        incoming texture never blinks out from under a one-frame swap. */
     setCross(true);
     const t = setTimeout(() => setCross(false), PAPER_MS);
-    grain.set(reduce ? (tex === 'grain' ? 1 : 0) : withTiming(tex === 'grain' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
+    const g = grainOn(tex);
+    grain.set(reduce ? g : withTiming(g, { duration: PAPER_MS, easing: EASE }));
+    crum.set(reduce ? (tex === 'crumple' ? 1 : 0) : withTiming(tex === 'crumple' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
     photo.set(reduce ? (tex === 'photo' ? 1 : 0) : withTiming(tex === 'photo' ? 1 : 0, { duration: PAPER_MS, easing: EASE }));
     return () => clearTimeout(t);
-  }, [tex, reduce, grain, photo]);
+  }, [tex, reduce, grain, photo, crum]);
   const ruleStyle = useAnimatedStyle(() => ({ opacity: rule.get() }));
   /* Grain per theme (v0.5 U2). The bitmap is black flecks on transparency: on cream they are the
      paper's pulp, but on dark card stock black flecks vanish into the sheet and the page read as flat
@@ -161,6 +171,9 @@ export function PaperBg({ card = false }: { card?: boolean }) {
      because pale fibres on a dark ground read fainter than dark ones on a light ground. */
   const grainStyle = useAnimatedStyle(() => ({ opacity: interpolate(grain.get(), [0, 1], [0, c.grain * (dark ? 0.7 : 0.8)]) }));
   const photoStyle = useAnimatedStyle(() => ({ opacity: photo.get() * c.photo }));
+  /* The crumple tile already carries its own strength (facet alpha ≤ 0.34); dark paper shows ridges more
+     than creases, so it is drawn a little lighter there. A card (`card`) is flatter paper than the page. */
+  const crumStyle = useAnimatedStyle(() => ({ opacity: crum.get() * (card ? 0.35 : dark ? 0.62 : 0.5) }));
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: card ? c.card : c.paper }]}>
       {paper !== 'plain' && (
@@ -183,7 +196,10 @@ export function PaperBg({ card = false }: { card?: boolean }) {
       {/* `pointerEvents: none` on the outer view keeps both layers inert, and neither ever sits above
           content because the whole component is behind it. The cross-fade window holds both; the
           settled state mounts only the texture the setting names. */}
-      {(tex === 'grain' || cross) && (WEB
+      {(tex === 'crumple' || cross) && (WEB
+        ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, crumStyle, tiled(CRUMPLE_WEB, CRUMPLE_W, CRUMPLE_H)]} />
+        : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, CLIP, crumStyle]}><Tiles src={CRUMPLE_SRC} px={CRUMPLE_W} ph={CRUMPLE_H} /></Animated.View>)}
+      {(grainOn(tex) > 0 || cross) && (WEB
         /* On the web, `Image resizeMode="repeat"` sizes its element to the *image* — a 256 px square —
            rather than to `absoluteFill`, so the grain arrives as one dense tile in the top-left corner
            and clean paper everywhere else. The texture looked like a rendering fault rather than like

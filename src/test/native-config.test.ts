@@ -262,8 +262,8 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
 /* v0.5 N1: the in-repo module `modules/margin-native` ships in the APK by autolinking (Expo searches
    `modules/` by default), so its manifest is merged into the app's. These pins are what the live
-   countdown and the Focus silent switch need from it, and what Metro needs to bundle the mascot. */
-describe('the margin-native module and the Rive asset', () => {
+   countdown and the Focus silent switch need from it. */
+describe('the margin-native module', () => {
   const mod = (...p: string[]) => readFileSync(join(ROOT, 'modules', 'margin-native', ...p), 'utf8');
   it('registers its module class for Android only', () => {
     const cfg = JSON.parse(mod('expo-module.config.json')) as { platforms: string[]; android: { modules: string[] } };
@@ -277,9 +277,15 @@ describe('the margin-native module and the Rive asset', () => {
     expect(m).toContain('android.permission.POST_PROMOTED_NOTIFICATIONS');
     expect(m).toMatch(/<receiver android:name="app\.marginalia\.nativebits\.LiveDismissReceiver" android:exported="false"\/>/);
   });
-  it('Metro bundles .riv files, and the mascot is a real Rive file', () => {
-    expect(readFileSync(join(ROOT, 'metro.config.js'), 'utf8')).toContain("assetExts.push('riv')");
-    expect(readFileSync(join(ROOT, 'assets', 'rive', 'teddy.riv')).subarray(0, 4).toString('latin1')).toBe('RIVE');
+  /* Rationale for the change (collage look): the Rive mascot (Teddy) and its runtime were removed when the
+     owner asked for a cut-paper mascot instead. Scrap is drawn from bundled WebP bitmaps, so no native
+     animation runtime ships at all, and nothing may quietly bring the old one back. */
+  it('ships no Rive runtime and no .riv asset hook (Scrap is paper bitmaps)', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@rive-app/react-native']).toBeUndefined();
+    expect(pkg.dependencies['react-native-nitro-modules']).toBeUndefined();
+    expect(readFileSync(join(ROOT, 'metro.config.js'), 'utf8')).not.toContain("assetExts.push('riv')");
   });
+
 });
 

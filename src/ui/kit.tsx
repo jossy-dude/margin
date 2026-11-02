@@ -2,8 +2,8 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { RG, RS, FONT, TAPE, hexA, type Colors } from '../tokens/theme';
-import { handPath, hashSeed, tornTape, type Corners } from './hand';
+import { RG, RS, TAPE, PAPER, hexA, type Colors, type FontKey, type TypeMap } from '../tokens/theme';
+import { handPath, hashSeed, tornPaths, tornTape, type Corners } from './hand';
 import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
@@ -88,7 +88,11 @@ export function usePressIn(action: () => void, opts?: { onLift?: boolean }) {
   return [down, lift] as const;
 }
 
-type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';const FAM: Record<FontKey, string> = { hand: FONT.hand, bold: FONT.handBold, serif: FONT.serif, serifB: FONT.serifB, marker: FONT.marker, type: FONT.type };
+/** The text roles a screen can ask for; the theme's look decides the face (see `TypeMap` in tokens/theme). */
+export type { FontKey } from '../tokens/theme';
+/** `{ fontFamily, fontSize, letterSpacing }` for a role at a requested size, for the places that style a
+ *  `TextInput` or SVG text directly instead of going through `Txt`. */
+export function faceOf(t: { type: TypeMap }, f: FontKey, s: number) { const fc = t.type[f]; return { fontFamily: fc.fam, fontSize: +(s * fc.k).toFixed(2), letterSpacing: fc.track }; }
 /** `testID` fallback. On RN Android a `testID` surfaces as `resource-id` in a `uiautomator` dump, which is how the
  *  QA agents find an element without guessing at its bounds, so every interactive element gets one. It is derived
  *  from the same string that is already the accessibility label, so no call site has to change and the id always
@@ -96,17 +100,54 @@ type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type';const FA
 const tid = (s?: string) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 export interface TxtProps extends TextProps { f?: FontKey; s?: number; c?: keyof Colors | string; style?: StyleProp<TextStyle> }
 export function Txt({ f = 'hand', s = 18, c = 'ink', style, ...p }: TxtProps) {
-  const { c: col } = useTheme(), color = (col as unknown as Record<string, string>)[c] ?? c;
-  return <Text {...p} allowFontScaling style={[{ fontFamily: FAM[f], fontSize: s, color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, style]} />;
+  const th = useTheme(), color = (th.c as unknown as Record<string, string>)[c] ?? c, fc = th.type[f];
+  /* The line box is computed from the REQUESTED size, the glyphs from the scaled one: a role re-faced by the
+     look keeps the exact height it had, so swapping the notebook hand for the collage grotesque moves nothing. */
+  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, style]} />;
 }
 
-export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<ViewStyle>; fill?: string; stroke?: string; seed?: string | number; corners?: Corners; sw?: number; shadow?: boolean; amp?: number; dashed?: boolean }
+export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<ViewStyle>; fill?: string; stroke?: string; seed?: string | number; corners?: Corners; sw?: number; shadow?: boolean; amp?: number; dashed?: boolean;
+  /** Collage only: force a surface to be torn (a sheet) or scissor-cut (a control) instead of deciding by size. */
+  cut?: 'torn' | 'cut' }
 /** A card with a hand-cut outline (elliptical corners + wobble) and a hard offset shadow, drawn once per size. */
-export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed }: HandBoxProps) {
-  const { c } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
-  const d = useMemo(() => handPath(sz.w, sz.h, corners, sd, amp), [sz.w, sz.h, corners, sd, amp]);
+export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed, cut }: HandBoxProps) {
+  const { c, look, dark } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
+  /* The collage cuts a surface one of two ways, the way paper actually gets cut: anything big enough to be
+     a sheet is TORN (a white core along the tear, no outline), a small control is cut with SCISSORS (a
+     smooth pill with a faint hand). `cut` overrides the size rule. */
+  const collage = look === 'collage', mode = collage ? cut ?? (Math.min(sz.w, sz.h) >= 64 && !dashed && fill !== 'transparent' ? 'torn' : 'cut') : null;
+  const pillR = Math.min(sz.h / 2, 22), pill = useMemo(() => ({ h: [pillR, pillR, pillR, pillR], v: [pillR, pillR, pillR, pillR] }), [pillR]);
+  const d = useMemo(() => (mode === 'torn' ? '' : handPath(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
+  const torn = useMemo(() => (mode === 'torn' ? tornPaths(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
+  const onLayout = (e: { nativeEvent: { layout: { width: number; height: number } } }) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); };
+  if (collage) {
+    const face = torn ? torn.face : d, bare = fill === 'transparent' || dashed;
+    /* No ink outlines on paper — except where a line MEANS something: a ghost or dashed drop-zone has
+       no paper to show, and a coloured stroke (selection, live, late) is a mark, not an edge. A flat
+       chip with no lift is drawn with a faint pencil line so it does not vanish into the card it sits on. */
+    const mark = stroke && stroke !== c.ink ? stroke : bare ? hexA(c.ink, dashed ? 0.5 : 0.62) : !shadow ? hexA(c.ink, 0.22) : null;
+    const tab = torn && stroke && stroke !== c.ink ? stroke : null;
+    return (
+      <View style={[{ position: 'relative', zIndex: 0 }, style]} onLayout={onLayout}>
+        {face !== '' && (
+          <Svg width={sz.w + 9} height={sz.h + 7} style={{ position: 'absolute', left: -4, top: -1, zIndex: -1 }} pointerEvents="none" viewBox={`-4 -1 ${sz.w + 9} ${sz.h + 7}`}>
+            {shadow && !bare && <>
+              <Path d={torn ? torn.core : face} transform="translate(1.6 3.6)" fill={hexA(c.shadow, dark ? 0.32 : 0.07)} />
+              <Path d={torn ? torn.core : face} transform="translate(0.7 1.6)" fill={hexA(c.shadow, dark ? 0.3 : 0.09)} />
+            </>}
+            {/* A coloured mark on a torn sheet is a strip of that paper tucked under its left edge, not a line
+                traced round the tear (which reads as a jagged border). */}
+            {torn && !bare && tab && <Path d={`M-3.5 6L7 7.5V${Math.max(8, sz.h - 6)}L-2.5 ${Math.max(8, sz.h - 8)}Z`} fill={tab} />}
+            {torn && !bare && <Path d={torn.core} fill={dark ? hexA(c.ink, 0.3) : PAPER.core} fillOpacity={dark ? 1 : 0.95} />}
+            <Path d={face} fill={bare ? 'none' : fill ?? c.card} stroke={torn && !bare ? 'none' : mark ?? 'none'} strokeWidth={mark ? (stroke && stroke !== c.ink ? sw : 1.3) : 0} strokeLinejoin="round" strokeDasharray={dashed ? '6 5' : undefined} />
+          </Svg>
+        )}
+        {children}
+      </View>
+    );
+  }
   return (
-    <View style={[{ position: 'relative', zIndex: 0 }, style]} onLayout={(e) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); }}>
+    <View style={[{ position: 'relative', zIndex: 0 }, style]} onLayout={onLayout}>
       {d !== '' && (
         <Svg width={sz.w + 4} height={sz.h + 4} style={[StyleSheet.absoluteFill, { zIndex: -1 }]} pointerEvents="none" viewBox={`-1 -1 ${sz.w + 4} ${sz.h + 4}`}>
           {shadow && <Path d={d} transform="translate(2.4 2.8)" fill={hexA(c.shadow, 0.16)} />}
@@ -288,14 +329,14 @@ export function Toggle({ value, onChange, label, hint, disabled }: { value: bool
  * (RN 0.76+, and this app is 0.86 on the New Architecture, which `transformOrigin` requires).
  */
 export function Field({ label, style, multiline, ...p }: TextInputProps & { label?: string }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), [focus, setFocus] = useState(false), k = useSharedValue(0);
+  const th = useTheme(), { c } = th, reduce = useReduceMotion(), [focus, setFocus] = useState(false), k = useSharedValue(0);
   useEffect(() => { k.set(reduce || focus ? 1 : 0); if (!reduce) k.set(withTiming(focus ? 1 : 0, { duration: STEP, easing: EASE })); }, [focus, reduce, k]);
   const rule = useAnimatedStyle(() => ({ transform: [{ scaleX: k.get() }] }));
   return (
     <View style={style as StyleProp<ViewStyle>}>
       {label ? <Txt f="serif" s={14.5} c="mut" style={{ marginBottom: 2 }}>{label}</Txt> : null}
       <TextInput {...p} testID={tid(label ?? p.placeholder)} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
-        style={{ fontFamily: FONT.handBold, fontSize: 24, color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: 1.4, borderBottomColor: c.ink }} />
+        style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: 1.4, borderBottomColor: c.ink }} />
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />
     </View>
   );

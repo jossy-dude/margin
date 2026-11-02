@@ -48,7 +48,7 @@ export async function refreshNotifLog() {
 }
 /** Everything the Delivery page compares to decide whether the plan actually moved. */
 const planSig = (p: PlanInfo) => `${p.count}|${p.deferred}|${p.shifted}|${p.next?.id ?? ''}|${p.moved.map((m) => `${m.at}:${m.why}`).join()}||${p.dropped.map((d) => d.why).join()}`;
-let syncTimer: ReturnType<typeof setTimeout> | null = null, askedPermission = false;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
 /** Drop a queued rebuild. A debounce that outlives the thing that asked for it is the whole defect:
  *  it fired after jest had torn its module registry down and took the worker with it, and in the app it
  *  can schedule against a repository that has since been re-opened. */
@@ -63,7 +63,8 @@ export function resync(delay = 700) {
     if (db.demo) return;
     const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12 });
     let perm = await notifs.ensurePermission(false);
-    if (perm === 'undetermined' && !askedPermission && s.settings.notif.enabled) { askedPermission = true; perm = await notifs.ensurePermission(true); }
+    /* No automatic ask (v0.5 C): the system prompt only ever follows its explanation — the onboarding's
+       reminders page, or Settings → Reminders → Allow. A planner that was never asked simply plans nothing. */
     if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); schedNotifs(r.planned); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
     // Only notify subscribers when something visible actually changed — every mutation calls resync(),
     // and most recompute to the same plan (e.g. edits that don't move any reminder).
