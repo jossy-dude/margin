@@ -123,10 +123,8 @@ describe('the one element id the dial engine emits is per-instance', () => {
     for (const rel of ['screens/Week.tsx', 'screens/Focus.tsx', 'ui/DayBar.tsx', 'ui/instruments/InstrumentBar.tsx', 'ui/PaperBg.tsx', 'ui/kit.tsx']) {
       expect({ rel, hardcoded: /id="[A-Za-z][\w-]*"/.test(code(rel)) }).toEqual({ rel, hardcoded: false });
     }
-    // Focus's one pattern is now per-instance and XML-legal
-    const focus = readFileSync(join(__dirname, '..', 'screens', 'Focus.tsx'), 'utf8');
-    expect(focus).toMatch(/useId\(\)\.replace\(\/\[\^a-zA-Z0-9_-\]\/g, ''\)/);
-    expect(focus).toContain('fill={`url(#${hid})`}');
+    // Rationale (Focus redesign, collage): Focus draws no SVG pattern at all any more, so the per-instance id
+    // it used to need is gone with it; the no-hardcoded-id check above still covers the file.
   });
 });
 

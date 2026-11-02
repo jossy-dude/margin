@@ -21,6 +21,8 @@ export const navActions = {
    *  one the user tapped for, so there is no second hop to watch. */
   openSettingsAt(page: string) { fx.tap(); set({ sheet: { t: 'settings' }, settingsPath: ['appearance', page] }); },
   close() { set({ sheet: null }); },
+  /** Open Settings straight onto a page, with the real path behind it so Back walks out of it. */
+  openSettingsPath(path: string[]) { fx.tap(); set({ sheet: { t: 'settings' }, settingsPath: path }); },
   settingsPush(p: string) { fx.select(); set((s) => ({ settingsPath: [...s.settingsPath, p] })); },
   settingsPop() { set((s) => ({ settingsPath: s.settingsPath.slice(0, -1) })); },
 };

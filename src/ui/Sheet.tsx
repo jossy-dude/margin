@@ -5,6 +5,7 @@ import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValu
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HandBox, Icon, Txt } from './kit';
 import { PaperBg } from './PaperBg';
+import { TornSheet } from './collage/Torn';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
 import { hexA } from '../tokens/theme';
@@ -68,7 +69,7 @@ const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
  *  live callback. `scrollKey` keys the ScrollView, so a sheet that swaps sub-pages (Settings) opens
  *  each page at the top instead of inheriting the last page's scroll position. */
 export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back, closeRef, scrollKey }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null; closeRef?: React.RefObject<SheetCloser | null>; scrollKey?: string }) {
-  const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c } = useTheme(), reduce = useReduceMotion();
+  const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c, look } = useTheme(), reduce = useReduceMotion();
   const variant = useSheetVariant(), panel = variant === 'panel';
   /** One value, two distances. A sheet's travel is the window's own height; a panel's is its own width
    *  (`PANEL_W`). Normalising the travel to 0..1 rather than branching the style keeps the close path
@@ -180,7 +181,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
           </Animated.View>
         ) : (
         <Animated.View importantForAccessibility={gone ? 'no-hide-descendants' : 'yes'} pointerEvents={gone ? 'none' : 'auto'} style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
-          <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={c.ink}>
+          <Surface collage={look === 'collage'} cap={cap} ink={c.ink}>
             <PaperBg card />
             <GestureDetector gesture={pan}>
               <View style={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 6 }} accessible accessibilityRole="header" accessibilityLabel={title}>
@@ -194,11 +195,17 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
             </GestureDetector>
             <ScrollView key={scrollKey ?? 's'} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : Math.max(ins.bottom, 12) + 10, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
             {footer ? <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 10) + 6 }}>{footer}</View> : null}
-          </HandBox>
+          </Surface>
         </Animated.View>
         )}
       </View>
     </>
   );
+}
+/** The sheet's paper. The notebook cuts it with rounded top corners and an ink edge; the collage tears it off
+ *  the pad, so its top is a torn edge with the white core showing and a soft shadow on the dimmed app. */
+function Surface({ collage, cap, ink, children }: { collage: boolean; cap: number; ink: string; children: React.ReactNode }) {
+  if (collage) return <TornSheet seed="sheet" depth={6} lift crumple={0} style={{ flexShrink: 1, maxHeight: cap }} bodyStyle={{ flexGrow: 0, flexShrink: 1 }}>{children}</TornSheet>;
+  return <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={ink}>{children}</HandBox>;
 }
 export const Label = ({ children }: { children: React.ReactNode }) => <Txt f="serif" s={15} c="mut" style={{ marginBottom: -4, marginTop: 2 }}>{children}</Txt>;

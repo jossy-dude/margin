@@ -84,10 +84,13 @@ describe('the deferred navigation goes through the sheet, not a bare timer', () 
   });
 
   it('both focus buttons use it, and no raw timer survives', () => {
-    expect(forms).toContain('close(() => act.focusOpen(null))');
+    // Rationale (collage "+" sheet): the Add sheet moved to its own file (sheets/AddSheet.tsx) and now files
+    // the session under the chosen subject, so its call carries the subject id. Still routed through close().
+    const add = readFileSync(join(__dirname, '..', 'sheets', 'AddSheet.tsx'), 'utf8');
+    expect(add).toContain('close(() => act.focusOpen(null, cid))');
     expect(forms).toContain('close(() => act.focusOpen(existing.id))');
-    expect(forms).not.toMatch(/setTimeout\(\(\) => act\.focusOpen/);
-    expect(forms.split('act.focusOpen').length - 1).toBe(2); // exactly the two buttons, both routed
+    for (const f of [forms, add]) expect(f).not.toMatch(/setTimeout\(\(\) => act\.focusOpen/);
+    expect(forms.split('act.focusOpen').length - 1 + add.split('act.focusOpen').length - 1).toBe(2); // exactly the two buttons, both routed
   });
 
   it('the follow-up runs after the sheet has closed, not before', () => {

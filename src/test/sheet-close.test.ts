@@ -306,7 +306,8 @@ describe('editing a sample row makes it the user\'s own (the flag clears on save
  */
 describe('no form reaches for its own closer through a context its own child provides', () => {
   it('no body calls the context hook, and all seven take the ref their own Sheet fills', () => {
-    const src = readFileSync(join(__dirname, '..', 'sheets', 'forms.tsx'), 'utf8');
+    // Rationale (collage "+" sheet): the Add sheet moved to sheets/AddSheet.tsx; the seven forms are read together.
+    const src = readFileSync(join(__dirname, '..', 'sheets', 'forms.tsx'), 'utf8') + readFileSync(join(__dirname, '..', 'sheets', 'AddSheet.tsx'), 'utf8');
     /* `useSheetClose` contains the substring `useSheet`, so the guard looks for the *call* and for a
        destructuring of the bare hook: either would be a body reading the context default again. */
     expect(src).not.toMatch(/useSheet\s*\(\s*\)/);

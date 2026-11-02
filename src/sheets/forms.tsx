@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { Btn, Chip, EASE, Field, HandBox, HStrip, Icon, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
+import { Btn, Chip, EASE, Field, HandBox, HStrip, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
 import { DurationField, NumberField, TimeField } from '../ui/fields';
 import { Label, Sheet, useSheetClose } from '../ui/Sheet';
 import { latch } from '../ui/latch';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
-import { FS } from '../ui/fit';
 import { WhenPicker, nextHome } from './WhenPicker';
 import { act, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE } from '../domain/attendance';
@@ -61,36 +60,6 @@ function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: nu
 export function CourseChips({ value, onChange, none = 'No subject' }: { value: string | null; onChange: (v: string | null) => void; none?: string | null }) {
   const courses = useStore((s) => s.courses), { c } = useTheme();
   return <HStrip gap={8} bg={c.card}>{none !== null && <Chip label={none} on={value === null} onPress={() => onChange(null)} />}{courses.map((c) => <Chip key={c.id} label={c.name} on={value === c.id} onPress={() => onChange(c.id)} />)}</HStrip>;
-}
-
-/* ───── Add: big tiles in the thumb zone ───── */
-export function AddSheet() {
-  const { closeRef, close } = useSheetClose(), { c } = useTheme();
-  const courses = useStore((s) => s.courses);
-  /* A mark belongs to a subject, so its tile only leads anywhere once one exists. Hidden rather than
-     disabled: a greyed tile that cannot say why is worse than a sheet that lists what can be added.
-     Typed on the array itself: `SheetSpec`'s literal `t` would widen to `string` through `.filter`. */
-  const all: { l: string; i: string; to: SheetSpec }[] = [
-    { l: 'Assignment', i: 'tasks', to: { t: 'task', kind: 'assignment' } }, { l: 'Exam', i: 'exam', to: { t: 'task', kind: 'exam' } }, { l: 'Reading', i: 'book', to: { t: 'task', kind: 'reading' } }, { l: 'Project', i: 'flag', to: { t: 'task', kind: 'project' } },
-    { l: 'Class', i: 'week', to: { t: 'meeting' } }, { l: 'Mark', i: 'grades', to: { t: 'mark', courseId: '' } }, { l: 'Note', i: 'note', to: { t: 'notice' } }, { l: 'Subject', i: 'grad', to: { t: 'course' } },
-  ];
-  const tiles = all.filter((t) => t.l !== 'Mark' || courses.length > 0);
-  return (
-    <Sheet title="Add" onClose={act.close} maxH={0.6} closeRef={closeRef}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {tiles.map((t, i) => (
-          <View key={t.l} style={{ width: '23%', flexGrow: 1 }}>
-            <Btn kind="ghost" a11y={`Add ${t.l}`} onPress={() => act.open(t.to.t === 'mark' ? { t: 'mark', courseId: courses[0]?.id ?? '' } : t.to)} style={{ minHeight: 86 }} label="" />
-            {/* `pointerEvents="none"` only stops touches — the icon and label here were still a second,
-                separate node for TalkBack on top of the button's own label. Hidden from accessibility so each
-                tile announces once, as "Add <thing>" (every button announces one label). */}
-            <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 4, transform: [{ rotate: `${(i % 3 - 1) * 1.2}deg` }] }}><Icon name={t.i} size={28} color={c.acc} /><Txt f="bold" s={17} maxFontSizeMultiplier={FS}>{t.l}</Txt></View>
-          </View>
-        ))}
-      </View>
-      <Btn label="Start a focus session" icon="timer" kind="ink" onPress={() => close(() => act.focusOpen(null))} />
-    </Sheet>
-  );
 }
 
 /* ───── Task / exam / reading / project form ───── */

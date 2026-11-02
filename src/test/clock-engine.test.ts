@@ -194,20 +194,7 @@ describe('B. every centre artifact has its own velocity', () => {
    it — deliberately, and this note is what says so. What remains is the part of the contract that outlived the
    mechanism: the number itself never moves, and no frame is burned while nothing is counting. */
 describe('C. the countdown still never pulses, and never burns frames it does not need', () => {
-  it('the numeral never moves: nothing in the Focus dial scales the readout', () => {
-    const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
-    // the old countdown was `scale: 1 + tick.value * 0.045` on the readout; that shape is gone for good
-    expect(focus).not.toMatch(/scale:\s*1\s*\+\s*tick\.value/);
-    // and the readout's type and size are untouched
-    expect(focus).toContain('<Txt f="type" s={27}');
-    // the escapement it replaced is gone for good too — no wheel, no index, no release kick — named by its
-    // identifiers so the prose comments that document the redesign cannot false-positive this
-    expect(focus).not.toMatch(/escapementAngle|ESC_TEETH|ESC_DEG|ESC_PATH|ESC_INDEX|escBox|escS\b/);
-    // and the dial's edge is what carries the countdown now: a feather veil over the face's clip, and a rim
-    // ring driven by the same elapsed fraction the invisible hatch sector used to be
-    expect(focus).toContain('fill={`url(#${hid})`}');
-    expect(focus).toContain('strokeDasharray={`${PROG_C * prog} ${PROG_C}`}');
-  });
+  /* Retired with the Focus redesign (collage): the Focus page no longer has a dial, a taped readout slip or a progress rim; the countdown is set as plain numerals that never scale. The clock faces themselves are still pinned above and below. */
 
   it('the frame loops are gated: a hidden or still dial runs no frames', () => {
     const clock = readFileSync(join(__dirname, '../ui/clock/ClockFace.tsx'), 'utf8');
@@ -397,39 +384,5 @@ describe('E. the hand angles take the timezone offset as an argument', () => {
     expect(src).toMatch(/setInterval\(read, 60_000\)/);
   });
 
-  it('the countdown hand sweeps the whole dial exactly once per round, and only ever forwards', () => {
-    // Reported against a real device as "it just moves back and forth". It wasn't an oscillation — it was
-    // two separate faults stacking: the hand's real progress was 0.1° a second while a per-second kick of
-    // 1.6° fired over it, landing forward and retreating *past* its own start, so the only motion the eye
-    // caught was the retreat; and the hand's angle was a 6°-a-minute minute mark, so a 25-minute round
-    // travelled 150° and wound backwards from V to XII instead of sweeping the dial.
-    const focus = readFileSync(join(__dirname, '../screens/Focus.tsx'), 'utf8');
-
-    // running: the leading edge of the elapsed ring — 0 at Start, 360 at the end, any round length
-    expect(focus).toContain('const ang = live ? (1 - leftMs / (min * 60_000 || 1)) * 360 : (min >= 60 ? min % 60 || 60 : min) * 6;');
-    // setting: untouched, because the drag maps to it directly and to the minutes it is changing
-    expect(focus).toContain('(min >= 60 ? min % 60 || 60 : min) * 6;');
-    // one formula behind both the arc and its leading edge, so the two cannot be made to disagree
-    expect(focus).toContain('const progDeg = live ? ang : 0');
-    // the hand carries nothing but the countdown now, and the props whose only job was the kick went with it
-    expect(focus).toContain('rotate: `${hand.value}deg`');
-    expect(focus).not.toContain('jolt.value');
-    expect(focus).not.toContain('jolt = useSharedValue');
-    expect(focus).toContain('function Dial({ min, phase, leftMs, editable, onChange }');
-
-    const ang = (min: number, leftMs: number) => (1 - leftMs / (min * 60_000 || 1)) * 360;
-    for (const min of [5, 25, 45, 90, 240]) {
-      const total = min * 60_000;
-      expect(ang(min, total)).toBeCloseTo(0, 6);        // Start: at 12
-      expect(ang(min, total / 2)).toBeCloseTo(180, 6);  // halfway: opposite 12, whatever the round's length
-      expect(ang(min, 0)).toBeCloseTo(360, 6);          // the end: back at 12, having gone right round once
-      let prev = -1;
-      for (let f = 0; f <= 10; f++) {
-        const a = ang(min, total - (total * f) / 10);
-        expect(a).toBeCloseTo((360 * f) / 10, 6);
-        expect(a).toBeGreaterThanOrEqual(prev);         // never backwards — that is the reported symptom
-        prev = a;
-      }
-    }
-  });
+  /* Retired with the Focus redesign (collage): the Focus page draws no hand; elapsed time is a row of minute ticks that dim (screens/Focus.tsx `Ticks`). The timer's own arithmetic is pinned in the domain timer tests, unchanged. */
 });

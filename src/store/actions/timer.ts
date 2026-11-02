@@ -14,11 +14,21 @@ function applyEvents(ev: string[]) {
 
 /* focus timer */
 export const timerActions = {
-  focusOpen(taskId: string | null) {
+  /** `courseId` files a free session under a subject (the "+" sheet's subject, Focus's own picker). */
+  focusOpen(taskId: string | null, courseId: string | null = null) {
     const st0 = getState();
     const t = taskId ? st0.tasks.find((x) => x.id === taskId) : null, st = st0.settings;
-    if (st0.timer.phase === 'set' || !st0.timer.running) set({ timer: initTimer({ planMin: t?.estimateMin ? Math.min(240, Math.max(5, Math.round(t.estimateMin / 5) * 5)) : st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId, courseId: t?.courseId ?? null, title: t?.title ?? 'Free focus' }) });
+    if (st0.timer.phase === 'set' || !st0.timer.running) set({ timer: initTimer({ planMin: t?.estimateMin ? Math.min(240, Math.max(5, Math.round(t.estimateMin / 5) * 5)) : st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId, courseId: t?.courseId ?? courseId, title: t?.title ?? 'Free focus' }) });
     set({ focusTaskId: taskId }); go('Focus');
+  },
+  /** What the session is for, chosen before it starts. A session's subject is what Stats and the Focus log
+   *  count it under, so it is fixed once the round is running (the record would otherwise split one sitting
+   *  between two subjects). A task chosen earlier stays only if it belongs to the new subject. */
+  timerSetSubject(courseId: string | null) {
+    const st = getState(); if (st.timer.phase !== 'set') return;
+    const c = courseId ? st.courses.find((x) => x.id === courseId) : null, task = st.tasks.find((x) => x.id === st.timer.taskId);
+    const keep = task && task.courseId === courseId ? task : null;
+    set((s) => ({ timer: { ...s.timer, courseId: c ? c.id : null, taskId: keep?.id ?? null, title: keep?.title ?? c?.name ?? 'Free focus' }, focusTaskId: keep?.id ?? null }));
   },
   timerSetMin(min: number) { set((s) => ({ timer: setMinutes(s.timer, min) })); },
   timerSetFlow(flow: boolean) { set((s) => ({ timer: { ...s.timer, flow } })); },
@@ -30,7 +40,8 @@ export const timerActions = {
   },
   timerBreak() { const now = Date.now(), t = startBreak(getState().timer, now); if (t.phase !== 'break') { fx.denied(); return; } set({ timer: t }); fx.breakStart(); void notifs.scheduleFocusEnd(now + t.breakLeftMs, 'Break is over', 'Back to it when you are ready.'); },
   timerBackNow() { const now = Date.now(), t = endBreak(getState().timer, now); set({ timer: t }); fx.peel(); setTimeout(() => fx.fall(), 350); if (t.running) void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · done.`); },
-  timerFinish(save = true) {
+  /** `quiet`: the caller shows its own receipt (Focus's saved card), so the toast would say it twice. */
+  timerFinish(save = true, quiet = false) {
     const now = Date.now(), sum = save ? finish(getState().timer, now) : null; void notifs.cancelFocusEnd();
     /* `finish` refuses a session with less than a minute of focus, and the refusal is the whole point: the
        row would say a study session happened when nothing did, and it would land in the export and the
@@ -38,7 +49,7 @@ export const timerActions = {
        a few seconds in and got no toast, no ring movement and no Stats change, so the one-minute rule was
        invisible (audit UX-2). It now states itself. `save === false` is the discard path, where silence is
        the intent, so it stays silent. */
-    if (sum) { addSession(sum); toast(`Saved ${Math.round(sum.focusSec / 60)} min of focus`); }
+    if (sum) { addSession(sum); if (!quiet) toast(`Saved ${Math.round(sum.focusSec / 60)} min of focus`); }
     else if (save) toast('Under a minute, so nothing was saved');
     const st = getState().settings, tm = getState().timer;
     set({ timer: initTimer({ planMin: st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId: tm.taskId, courseId: tm.courseId, title: tm.title }) });

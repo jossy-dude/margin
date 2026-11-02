@@ -31,6 +31,39 @@ export function focusBySubject(sessions: FocusSession[], courses: Course[]): { i
   const m = new Map<string, number>(); for (const s of sessions) { const k = s.courseId ?? '_'; m.set(k, (m.get(k) ?? 0) + s.focusSec / 60); }
   return [...m.entries()].map(([id, min]) => ({ id, name: id === '_' ? 'Personal' : (courses.find((c) => c.id === id)?.name ?? id), min: Math.round(min) })).sort((a, b) => b.min - a.min);
 }
+/**
+ * What you have studied, for the Focus page: today, this week (Monday first, like the timetable) per subject
+ * with the most-studied first, the subject a session would add to, and the day streak. Minutes are summed
+ * from seconds before rounding, so twelve 4.6-minute sessions read as 55, not 60.
+ */
+export interface FocusSummary {
+  todayMin: number; weekMin: number; lastWeekMin: number;
+  week: { id: string; name: string; min: number; sessions: number }[];
+  top: { id: string; name: string; min: number } | null;
+  streak: number;
+  recent: FocusSession[];
+}
+export function focusSummary(sessions: FocusSession[], courses: Course[], now = Date.now()): FocusSummary {
+  const day0 = startOfDay(now), wd = (new Date(now).getDay() + 6) % 7, week0 = addDays(day0, -wd), last0 = addDays(week0, -7);
+  const name = (id: string) => (id === '_' ? 'Something else' : courses.find((c) => c.id === id)?.name ?? 'A removed subject');
+  let today = 0, week = 0, last = 0;
+  const per = new Map<string, { sec: number; n: number }>();
+  for (const s of sessions) {
+    if (s.startedAt >= day0) today += s.focusSec;
+    if (s.startedAt >= week0) {
+      week += s.focusSec;
+      const k = s.courseId ?? '_', e = per.get(k) ?? { sec: 0, n: 0 };
+      per.set(k, { sec: e.sec + s.focusSec, n: e.n + 1 });
+    } else if (s.startedAt >= last0) last += s.focusSec;
+  }
+  const rows = [...per.entries()].map(([id, e]) => ({ id, name: name(id), min: Math.round(e.sec / 60), sessions: e.n })).filter((r) => r.min > 0).sort((a, b) => b.min - a.min || a.name.localeCompare(b.name));
+  const days = focusMinutesByDay(sessions, lastDays(60, now));
+  return {
+    todayMin: Math.round(today / 60), weekMin: Math.round(week / 60), lastWeekMin: Math.round(last / 60),
+    week: rows, top: rows.find((r) => r.id !== '_') ?? null, streak: streak(days).current,
+    recent: [...sessions].sort((a, b) => b.startedAt - a.startedAt).slice(0, 4),
+  };
+}
 /** 0..4 intensity for heatmap cells (0 = nothing); relative to the max so sparse data still shows shape */
 export const level = (v: number, max: number) => (v <= 0 || max <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil((v / max) * 4))));
 export function streak(values: number[]): { current: number; best: number } {

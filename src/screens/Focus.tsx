@@ -1,306 +1,53 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Platform, Pressable, StyleSheet, View, useWindowDimensions, type View as RNView } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Pressable, ScrollView, StatusBar, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { ClockFace } from '../ui/clock/ClockFace';
-import { HandBox, Icon, Tape, Txt } from '../ui/kit';
+import { HandBox, HStrip, Icon, Toggle, Txt, usePressIn } from '../ui/kit';
+import { NumberField } from '../ui/fields';
+import { PaperBg } from '../ui/PaperBg';
+import { Scrap } from '../ui/mascot/Scrap';
+import { subjectTint } from '../ui/collage/tint';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
+import { FS } from '../ui/fit';
 import { act, getState, toast, useStore } from '../store/store';
-import { canBreak, view, MIN_BREAK_AFTER_MS, FLOW_OVER_CAP_MS } from '../domain/timer';
-import { fmtClock, fmtDur } from '../domain/time';
+import { canBreak, view, MIN_BREAK_AFTER_MS, FLOW_OVER_CAP_MS, type Summary } from '../domain/timer';
+import { fmtClock, fmtDur, fmtTime } from '../domain/time';
+import { focusSummary, type FocusSummary } from '../domain/analytics';
+import { AMBIENT, hexA } from '../tokens/theme';
 import { fx } from '../services/fx';
-import { handPath } from '../ui/hand';
-import { hexA } from '../tokens/theme';
 
-const PAGE = require('../../assets/images/page.jpg');
-function Box({ children, style, seed, fill, sw = 2.5, shadow = true }: { children?: React.ReactNode; style?: object; seed: string; fill?: string; sw?: number; shadow?: boolean }) {
-  const { c } = useTheme();
-  return <HandBox seed={seed} fill={fill ?? c.card} sw={sw} amp={1.5} shadow={shadow} style={style}>{children}</HandBox>;
-}
-/** One shrink drives every dial figure: the first on-device look at v0.1 read the whole instrument
- *  oversized, so the dial now draws at 75 % of its design size. Nothing below was re-eyeballed for
- *  it — every clearance was measured against the face's centre, and the dial is re-hung from exactly
- *  that centre (217, 491), so they all keep; most gain, because the rim moves away from what is
- *  below it, not towards. */
-const SHRINK = 0.75;
-/** The pointer is drawn on the dial's ORIGINAL design frame (282 units) and scaled by the box it
- *  sits in, via viewBox: its stem, arrowhead and hub were set in that frame, and scaling the whole
- *  drawing cannot drift a second copy of the dial's size the way re-derived numbers could. */
-const DRAW = 282, DRAW_C = DRAW / 2;
-const D = DRAW * SHRINK, C0 = D / 2;
-/** The readout is a hand-cut slip of paper taped below the dial. It used to ride a capsule concentric with
- *  the face (before that, a disc pasted over it), and any shape at the centre hides the one thing the face is
- *  for: the guilloché and the two rosette lattices the dial is there to show. Off the face and onto the page, the
- *  number costs the artwork nothing. Nothing about the number itself changed: same face, same size. */
-const SLIP_W = 152, SLIP_H = 38, SLIP_SEED = 6421;
-/** The slot the slip takes is measured, not eyeballed. The face is 236 wide and centred in the 282-unit dial
- *  box at (left 76, top 350), so its drawn edge is canvas y ≈ 609 and its **feather** — the visible torn rim —
- *  is the halo veil out to r ≈ 122 from the dial centre (217, 491). [Design-frame numbers, as measured at the
- *  W3 review; v0.1's 0.75 dial re-hangs on the same centre (217, 491) and scales every figure below it, so the
- *  rim is now 91.5 out and its edge ≈ 579 — away from the slip, which is why every clearance hereafter grew.] A first pass put the slip's top at 612,
- *  which left the tape's rotated corner at y ≈ 610.4, x ≈ 192.4: 121.9 from the dial centre, i.e. *inside* the
- *  fade that reads as the rim. The corner now sits at ≈ 617.0,
- *  **134.3** from the centre — 12.3 clear of the feather radius, against the 3 the design asked for (both
- *  numbers measured in the browser by `tools/w3-assert.mjs`, assertion 4).
+/* ──────────────────────────────────────────────────────────────────────────────────────────────────────
+ * Focus, redesigned (v0.5 collage): a timer that gets out of the way.
  *
- *  The room for that comes from two places, in this order: `SLIP_H` drops 42 → 38 (the readout's own line box
- *  is 32, so it keeps 3 units either side), and `CLUSTER_DROP` takes the cluster 22 — inside the 26 the review
- *  allowed. `subText` is therefore at 662 and the slip's bottom at 656, so the slip→status gap is the same 6 it
- *  was: the review's one "do not tighten this" instruction, held exactly. Everything below `subText` moves 2,
- *  and the lowest control still ends at canvas y 867 with 134 units of page under it (measured on the device
- *  checklist's build path). */
-const SLIP_TOP = 618, SLIP_LEFT = 217 - SLIP_W / 2, CLUSTER_DROP = 22;
-/** Four different corner radii, like every other cut sheet on the page — a slip cut by hand is not a rectangle. */
-const SLIP_RAD = { h: [9, 6, 11, 7], v: [7, 11, 6, 9] } as const;
-/** The tape moved out of the readout's way rather than the readout out of the tape's: at 46 wide from `left: 8`
- *  its rotated box reached slip-local x ≈ 55.6, while the countdown ("25 min", measured 83.2 wide) is centred
- *  on the paper and so starts at 34.4 — the two overlapped, and the first glyph sat on the tape's right end
- *  (vision review W3). Narrower, and overhanging the paper's left edge the way every other tape on the page
- *  does (`BreakSticker` −14, the task card −11), it now ends at ≈ 29.6 while `SLIP_PAD_LEFT` moves the number's
- *  centre to 76 → 46.2: a **16.6**-unit gap where the standard asked for 8 (measured, assertion 5), with the
- *  number's right edge still 22 units inside the torn edge. */
-const TAPE_W = 40, TAPE_LEFT = -12, SLIP_PAD_LEFT = 24;
-/** The face is see-through now: the page's own paper and grain read through the artwork, which is the whole
- *  reason the readout left it. Only the face — the feather veil, the progress rim and the pointer stay at full
- *  opacity, because they are what dissolve the face's circular clip edge into the page in both themes.
- *  The see-through constant is theme-split at the dial (`faceOp`): light keeps the 0.86 the design was
- *  tuned with, dark lifts the artwork to 0.95, because dark grounds the page far deeper (the two scrims on
- *  `FocusScreen` sink to 0.9) and a face faded that far reads as mud over it rather than as ink. */
-/** the clock face IS the dial: it fills the pan, so nothing decorative sits between the artwork and the
- *  dial's edge. What used to be a knurled bed ring + four outer numerals + a hatch sector is gone (the
- *  escapement's teeth read as red dots and the ring as clutter); the edge is now a feather — a
- *  halo-coloured radial veil over the last few units of artwork — and progress rides the rim as a slim
- *  accent ring, which is legible where the sector inside the face never was. */
-const FACE = 236 * SHRINK, FACE_BOX = FACE + 3, FACE_R = FACE / 2;
-/** the veil reaches past the clip (FEATHER_R − (FACE_R + 2) = 1 unit here, 2 in the full-size design)
- *  so full halo covers the seam itself — and because every figure scales by one SHRINK, the stop
- *  fractions that paint the full-halo band stay anchored around the seam on their own */
-const FEATHER_R = 122 * SHRINK;
-const PROG_R = 135 * SHRINK, PROG_W = 6, PROG_C = 2 * Math.PI * PROG_R;
-const RAD = { h: [48, 48, 48, 48], v: [48, 48, 48, 48] } as const;
-
-/* ── what carries the countdown now ────────────────────────────────────────────────────────────────────────
-   The escapement (rotating toothed wheel, its index bar, the per-second release kick) and the knurled bed
-   with its 60 ticks and four outer numerals were dropped with the dial redesign: the teeth
-   read as red dots and the ring as clutter, and the face itself had to be the dial — integrated, feathered
-   at its edge, not a photograph pasted inside a mechanism. Motion stays where it still says something: the
-   pointer's sweep, the slip's tick wash, the last-ten-seconds red pen border round that slip, and
-   the rim ring that shows elapsed time where a sector inside the face never could be read. Nothing on the face
-   scales — the numeral is the thing being read.
-
-   The pointer's *per-second jolt* went with the countdown fix. It was a 1.6° kick every whole second,
-   and the thing it was meant to decorate moved 0.1° a second — sixteen times smaller — so the kick
-   landed forward and retreated past its own starting point. What the eye caught was that retreat: a
-   hand that twitched back and forth and appeared never to decrease. The tick survives where it is
-   actually legible, as the slip's paper flash and the sound; the hand now carries only the countdown. */
-
-function Dial({ min, phase, leftMs, editable, onChange }: { min: number; phase: string; leftMs: number; editable: boolean; onChange: (m: number, vel: number) => void }) {
-  const { c, dark } = useTheme(), face = useStore((s) => s.settings.clock), focused = useScreenLive(), reduce = useReduceMotion();
-  const ref = useRef<RNView>(null), cx = useSharedValue(0), cy = useSharedValue(0), raw = useSharedValue(min), last = useSharedValue(0), cur = useSharedValue(min), hand = useSharedValue(0), drag = useSharedValue(0);
-  /* The tour's dial step rings this same node — the one `measure` uses to find the dial's own centre, so
-     the ring and the drag agree about where the control is without a second measurement of it. */
-  const measure = useCallback(() => { ref.current?.measureInWindow((x, y, w, h) => { cx.value = x + w / 2; cy.value = y + h / 2; }); }, [cx, cy]);
-  /* Where the hand points, and it has meant two different things in the two states the dial has.
-
-     **Setting** — the chosen duration on a 60-minute dial: 6° a minute, so the drag that changes it is
-     read in the same units as the number it is changing, and 90 min wraps to 30, the angle it shares
-     with every hour and a half. This mapping is untouched and the drag still drives it directly.
-
-     **Running** — the leading edge of the elapsed ring, not a minute mark. One clockwise revolution per
-     round whatever the round's length, from 12 back to 12.
-
-     Running used the same 6°-a-minute mapping as setting, which meant a 25-minute round travelled
-     150° and wound *backwards*, from V to XII — a third of the dial, in reverse, at 0.1° a second:
-     far too slow to read as motion and never arriving anywhere. Tied to the ring instead, the hand
-     sweeps the whole dial exactly once per round and sits at the far edge of the arc that says how far
-     into the round you are, so the two never disagree about the same quantity. */
-  const live = phase !== 'set';
-  const ang = live ? (1 - leftMs / (min * 60_000 || 1)) * 360 : (min >= 60 ? min % 60 || 60 : min) * 6;
-  /* The dial has always been `accessibilityRole="adjustable"` with an `accessibilityValue` and
-     increment/decrement actions, and TalkBack has always read it. The web build did not: React Native Web
-     0.21 maps the four `aria-*` value props (and the flat `accessibilityValueNow`-style ones) and reads
-     nothing at all out of the RN-shaped `accessibilityValue` *object*, so the audit's probe found
-     `role=slider` with no value in the DOM and arrows that did nothing (audit UX-5).
-     These two objects are web-only on purpose. On native the RN-shaped `accessibilityValue` below is
-     untouched, so Android announces exactly what it announced before: the same role, the same label and
-     the same value text. Adding `aria-valuemin`/`max` there instead would have been the *alias* path —
-     `View.js` folds them back into `accessibilityValue` — and would have handed Android a RangeInfo the
-     dial has never had. The fix the audit asked for is a web one and stays one. */
-  const dialMin = 5, dialMax = 240, dialNow = live ? Math.ceil(leftMs / 60_000) : min;
-  const dialValue = `${live ? dialNow + ' minutes left' : min + ' minutes'}`;
-  const webValue: { 'aria-valuemin'?: number; 'aria-valuemax'?: number; 'aria-valuenow'?: number; 'aria-valuetext'?: string } =
-    Platform.OS === 'web' ? { 'aria-valuemin': dialMin, 'aria-valuemax': dialMax, 'aria-valuenow': dialNow, 'aria-valuetext': dialValue } : {};
-  /** Web only, and only while the dial is editable: RNW forwards `onKeyDown` on a `View` and honours
-     `tabIndex`, so the slider answers the arrow keys every other slider on the platform answers. The step
-     is the ±5 the accessibility actions already move by. `tabIndex` is deliberately not set on native,
-     where it would add an input-focus stop this control has never had. */
-  const webKeys: { tabIndex?: 0; onKeyDown?: (e: { key?: string; preventDefault?: () => void }) => void } =
-    Platform.OS === 'web' && editable
-      ? { tabIndex: 0, onKeyDown: (e) => { const d = e.key === 'ArrowUp' ? 5 : e.key === 'ArrowDown' ? -5 : 0; if (!d) return; e.preventDefault?.(); onChange(Math.max(dialMin, Math.min(dialMax, min + d)), 300); } }
-      : {};
-  useEffect(() => { raw.value = min; cur.value = min; }, [min, raw, cur]);
-  /* Always a glide, running and setting alike — a 220 ms ease over an angle that moves 0.24° a second is
-     what makes a per-second step read as a continuous sweep instead of a tick. Reduce-motion is the
-     instant path, so the sweep is the thing being removed rather than the countdown behind it. */
-  useEffect(() => { if (drag.value) return; hand.value = reduce ? ang : withTiming(ang, { duration: 220, easing: Easing.out(Easing.cubic) }); }, [ang, live, reduce, hand, drag]);
-  const pan = Gesture.Pan().enabled(editable).minDistance(0)
-    .onBegin((e) => { drag.value = 1; last.value = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; })
-    .onUpdate((e) => {
-      const a = (Math.atan2(e.absoluteY - cy.value, e.absoluteX - cx.value) * 180) / Math.PI; let d = a - last.value; if (d > 180) d -= 360; if (d < -180) d += 360; last.value = a;
-      const before = raw.value; raw.value = Math.max(5, Math.min(240, raw.value + d / 6)); hand.value = (raw.value % 60 || 60) * 6;
-      const snap = Math.round(raw.value / 5) * 5;
-      if (snap !== cur.value) { cur.value = snap; runOnJS(onChange)(snap, Math.abs(e.velocityX) + Math.abs(e.velocityY)); } else if ((raw.value === 5 || raw.value === 240) && before !== raw.value) runOnJS(onChange)(snap, -1);
-    })
-    .onFinalize(() => { drag.value = 0; hand.value = withTiming(((cur.value % 60) || 60) * 6, { duration: 160 }); });
-  const handS = useAnimatedStyle(() => ({ transform: [{ rotate: `${hand.value}deg` }] }));
-  /** labels sit on the torn photograph, so their halo has to be the colour of what is actually behind them — the
-   *  page in light, the darkened page in dark. `c.paper` in dark is near-black, so the halo was doing nothing.
-   *  The feather veil is painted in the same halo for the same reason: it is what lets the face's circular clip
-   *  edge dissolve into the page in both themes instead of reading as a pasted photograph. */
-  const halo = dark ? c.desk : c.paper, ink = c.ink, faceOp = dark ? 0.95 : 0.86;
-  /* The ring is the same quantity as the hand — one formula, so the arc and its leading edge can never
-     be made to disagree by someone changing one of them. It is 0 while the dial is only being set. */
-  const progDeg = live ? ang : 0, prog = progDeg / 360;
-  /** Per-instance, and sanitised. `useId()` is the right source of uniqueness — it is what `PaperBg` and
-   *  `HStrip` already use — but React's ids can contain characters that are not legal in an XML name, and this
-   *  markup is parsed as XML. A bare element id resolving another element's `url(#…)` is
-   *  exactly this failure; this veil's gradient is the last one left in a screen. */
-  const hid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
-  const feather = useMemo(() => <Defs><RadialGradient id={hid}>
-    <Stop offset="0.934" stopColor={halo} stopOpacity="0" />
-    <Stop offset="0.967" stopColor={halo} stopOpacity="1" />
-    <Stop offset="1" stopColor={halo} stopOpacity="1" />
-  </RadialGradient></Defs>, [halo, hid]);
-  const pointer = useMemo(() => <Svg width={D} height={D} viewBox={`0 0 ${DRAW} ${DRAW}`}><Path d={`M${DRAW_C} ${DRAW_C + 14}L${DRAW_C} 54`} stroke={ink} strokeWidth={3} strokeLinecap="round" /><Path d={`M${DRAW_C} 34L${DRAW_C + 6.5} 58L${DRAW_C - 6.5} 58Z`} fill={ink} /><Circle cx={DRAW_C} cy={DRAW_C} r={6.5} fill={ink} /></Svg>, [ink]);
-  return (
-    <GestureDetector gesture={pan}>
-      <View testID="focus-dial" collapsable={false} onTouchStart={measure} style={{ position: 'absolute', left: 217 - C0, top: 491 - C0, width: D, height: D }} accessible accessibilityRole="adjustable" accessibilityLabel="Focus minutes. Swipe up or down to change." accessibilityValue={{ text: dialValue }}
-        {...webValue} {...webKeys}
-        accessibilityActions={editable ? [{ name: 'increment' }, { name: 'decrement' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'increment') onChange(Math.min(240, min + 5), 300); else onChange(Math.max(5, min - 5), 300); }}>
-        <View ref={ref} onLayout={measure} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: D, height: D }} />
-        {/* the one lift off full opacity on the dial: the artwork is what the dial is there to show, and the paper
-            and grain of the page read through it. The veil, the rim ring and the pointer below are NOT faded —
-            they are what feathers the face's clip edge into the page in both themes. */}
-        <View testID="focus-dial-face" style={{ position: 'absolute', left: C0 - FACE_R, top: C0 - FACE_R, width: FACE_BOX, height: FACE_BOX, borderRadius: FACE_R + 2, overflow: 'hidden', opacity: faceOp }}><ClockFace id={face} size={FACE} hands={false} live={focused} /></View>
-        {/* the veil feathers the face's clip edge into the page; the rim ring shows elapsed time where the old
-            hatch sector inside the face could never be read. Both sit under the pointer and the slip below. */}
-        <Svg width={D} height={D} style={{ position: 'absolute' }} pointerEvents="none">
-          {feather}
-          <Circle cx={C0} cy={C0} r={FEATHER_R} fill={`url(#${hid})`} />
-          <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={hexA(ink, 0.16)} strokeWidth={PROG_W} />
-          {prog > 0 && <Circle cx={C0} cy={C0} r={PROG_R} fill="none" stroke={c.acc} strokeWidth={PROG_W} strokeLinecap="round" strokeDasharray={`${PROG_C * prog} ${PROG_C}`} transform={`rotate(-90 ${C0} ${C0})`} />}
-        </Svg>
-        <Animated.View testID="focus-hand" pointerEvents="none" style={[{ position: 'absolute', width: D, height: D }, handS]}>{pointer}</Animated.View>
-      </View>
-    </GestureDetector>
-  );
-}
-
-/** The time, on a slip of paper taped below the dial — the readout now, so it inherits every motion the old
- *  capsule on the face carried, one home each, and each collapsed under reduce-motion exactly as its old form
- *  was:
+ * Before a round it is a quiet sheet: what you are studying (a subject, chosen first), how long, and what you
+ * have studied this week. During a round it is just the time, very large, and the controls under your thumb.
+ * Leave it alone for a few seconds and it dims like a phone's resting screen: near-black, only the numbers,
+ * drifting a little so nothing burns in. A touch wakes it.
  *
- *   · the per-tick wash (`tick`): the slip's paper flashes `hl` with the audible tick, the same 13 % lift it
- *     had on the face, dead at 0 under reduce-motion;
- *   · the last ten seconds (`warnOn`): a red pen border drawn round the slip, mounted only while the warning
- *     holds, so the last 10 s are announced by a border as they were by the red ring;
- *   · the flow-overtime flood (`wash`): the accent fills the slip and drains, once, when a round runs past its
- *     cap — the same 42 % flood the capsule carried.
- *
- *  The paper is a hand-cut outline from the same `handPath` primitive `HandBox` and `BreakSticker` are drawn
- *  with, because the three overlays must share the paper's exact edge — a rounded View laid over a wobbled
- *  outline shows its own corners the moment the paper flashes. */
-function TimeLabel({ readout, warnOn, tick, wash }: { readout: string; warnOn: boolean; tick: SharedValue<number>; wash: SharedValue<number> }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), warnSV = useSharedValue(0);
-  useEffect(() => { if (warnOn && !reduce) warnSV.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 300 })); }, [warnOn, reduce, warnSV]);
-  const d = useMemo(() => handPath(SLIP_W, SLIP_H, SLIP_RAD, SLIP_SEED, 1.5), []);
-  /* one shape, four inks: the paper, the tick flash, the overtime flood and the warn border must be the same
-     outline or the hand-cut edge shows through the overlays. `sheet` is the 2-unit bleed the stroke needs. */
-  const sheet = { position: 'absolute', left: -2, top: -2, width: SLIP_W + 4, height: SLIP_H + 4 } as const;
-  const inked = (p: React.ComponentProps<typeof Path>) => <Svg width={SLIP_W + 4} height={SLIP_H + 4} viewBox={`-2 -2 ${SLIP_W + 4} ${SLIP_H + 4}`}><Path d={d} {...p} /></Svg>;
-  const tickS = useAnimatedStyle(() => ({ opacity: reduce ? 0 : tick.value * 0.13 }));
-  const washS = useAnimatedStyle(() => ({ opacity: wash.value * 0.42 }));
-  const warnS = useAnimatedStyle(() => ({ opacity: 0.62 + warnSV.value * 0.38 }));
-  return (
-    <View testID="focus-time" pointerEvents="none" style={{ position: 'absolute', left: SLIP_LEFT, top: SLIP_TOP, width: SLIP_W, height: SLIP_H, paddingLeft: SLIP_PAD_LEFT, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={SLIP_W + 4} height={SLIP_H + 4} style={sheet} viewBox={`-2 -2 ${SLIP_W + 4} ${SLIP_H + 4}`}>
-        <Path d={d} transform="translate(2.2 2.8)" fill={hexA(c.shadow, 0.2)} />
-        <Path d={d} fill={c.card} stroke={c.ink} strokeWidth={2.1} strokeLinejoin="round" />
-      </Svg>
-      <Animated.View style={[sheet, tickS]}>{inked({ fill: c.hl })}</Animated.View>
-      <Animated.View style={[sheet, washS]}>{inked({ fill: c.acc })}</Animated.View>
-      {warnOn && <Animated.View style={[sheet, warnS]}>{inked({ fill: 'none', stroke: c.bad, strokeWidth: 2.6 })}</Animated.View>}
-      {/* one strip of tape, over the slip's top-left corner and out past its edge, rotated the way a hand tears
-          it — sat low enough that its rotated corner clears the face's feathered rim by a measured margin */}
-      <Tape testID="focus-tape" w={TAPE_W} rot={-12} style={{ left: TAPE_LEFT, top: 3 }} />
-      <Txt f="type" s={27} testID="focus-time-text" style={{ letterSpacing: -0.8 }} accessibilityLiveRegion="none">{readout}</Txt>
-    </View>
-  );
-}
+ * The engine is unchanged (domain/timer.ts: presets, flow overrun, breaks after five minutes, rounds), and so
+ * are keep-awake and the session row written on finish (`act.timerFinish`). Every session is filed under the
+ * subject it was started for, which is what the study log below and Stats count.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-function BreakSticker({ leftMs, totalMs, falling, onGone, onBack, nudge }: { leftMs: number; totalMs: number; falling: boolean; onGone: () => void; onBack: () => void; nudge: number }) {
-  const { c } = useTheme(), reduce = useReduceMotion(), p = useSharedValue(0), sw = useSharedValue(0), wig = useSharedValue(0), size = 96;
-  useEffect(() => { if (nudge && !falling && !reduce) wig.value = withSequence(withTiming(1, { duration: 70 }), withTiming(-1, { duration: 110 }), withTiming(0.7, { duration: 90 }), withTiming(-0.5, { duration: 90 }), withTiming(0, { duration: 90 })); }, [nudge, falling, reduce, wig]);
-  useEffect(() => {
-    if (!falling) return;
-    if (reduce) { p.value = withTiming(1, { duration: 200 }, (d) => { if (d) runOnJS(onGone)(); }); return; }
-    sw.value = withSequence(withTiming(-1, { duration: 200 }), withTiming(0.8, { duration: 240 }), withTiming(-0.55, { duration: 220 }), withTiming(0.3, { duration: 200 }), withTiming(0, { duration: 160 }));
-    p.value = withSequence(withTiming(0, { duration: 1000 }), withTiming(1, { duration: 1050, easing: Easing.in(Easing.quad) }, (d) => { if (d) runOnJS(onGone)(); }));
-  }, [falling]); // eslint-disable-line react-hooks/exhaustive-deps
-  const st = useAnimatedStyle(() => {
-    const swing = sw.value * 24 + wig.value * 9, k = p.value, flutter = Math.sin(k * Math.PI * 3.2) * 46 * k, rot = swing + interpolate(k, [0, 1], [0, 160]);
-    return { transformOrigin: '14% 5%', transform: [{ translateX: flutter }, { translateY: k * 640 }, { rotate: `${rot}deg` }], opacity: interpolate(k, [0, 0.8, 1], [1, 1, 0]) };
-  });
-  const d = React.useMemo(() => handPath(size, size, RAD, 77, 1.6), []);
-  const prog = totalMs ? 1 - leftMs / totalMs : 0, R = 38, circ = 2 * Math.PI * R;
-  return (
-    <Animated.View style={[{ position: 'absolute', left: 332, top: 540, width: size, height: size, zIndex: 20 }, st]}>
-      <Pressable onPress={onBack} disabled={falling} accessibilityRole="button" accessibilityLabel={`Break, ${fmtClock(leftMs / 1000)} left. Tap to go back to work.`} style={{ width: size, height: size, transform: [{ rotate: '4deg' }] }}>
-        <Svg width={size + 8} height={size + 8} style={{ position: 'absolute' }} viewBox={`-2 -2 ${size + 8} ${size + 8}`}>
-          <Path d={d} transform="translate(3 4)" fill={hexA(c.shadow, 0.28)} /><Path d={d} fill={c.card} stroke={c.ink} strokeWidth={1.8} />
-          <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={hexA(c.ink, 0.18)} strokeWidth={4} />
-          <Circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={c.acc} strokeWidth={4} strokeLinecap="round" strokeDasharray={`${circ * prog} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        </Svg>
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 22, alignItems: 'center' }}><Icon name="coffee" size={18} color={c.ink} /><Txt f="type" s={19} style={{ marginTop: 2 }}>{fmtClock(leftMs / 1000)}</Txt><Txt f="serif" s={11.5} c="mut">tap = back to work</Txt></View>
-        <Tape w={50} rot={-30} style={{ left: -14, top: 2 }} />
-      </Pressable>
-    </Animated.View>
-  );
-}
+const PRESETS = [25, 45, 50, 90], AWAKE_MS = 9000;
 
-export function FocusScreen({ fit }: { fit?: number } = {}) {
-  /* Focus is the one screen whose "am I live" does double duty: the tick cadence, keep-awake, the
-     BACK handler and the tik/tok gate all keyed off `route === 'Focus'` — a store subscription that,
-     with every page kept mounted, would re-render the whole focus screen on every tap anywhere. The
-     navigator context carries the same truth for a tap's cost of a boolean flip. */
-  /* Settings are read field by field, and `sheet` is not subscribed at all: the one place it is read is the
-     back-handler below, which takes it from `getState()` at press time. A whole-`settings` selector here
-     cost this screen a re-render per sheet open/close and per write anywhere in Settings
-     (RC-1); the dial keeps its own `settings.clock` leaf. */
-  const timer = useStore((s) => s.timer), fev = useStore((s) => s.fev), tickOn = useStore((s) => s.settings.tickOn), soundOn = useStore((s) => s.settings.soundOn), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses);
-  const st = { timer, fev, tasks, courses };
+export function FocusScreen() {
+  /* Whether this page is the one on screen comes from the navigator's context, never a store-route
+     subscription (every page stays mounted; watching `s.route` would re-render all of them on every tap). */
   const focused = useScreenLive();
-  /* `focused` is the only cadence gate: a hidden Focus owns no 1 Hz commit even while a round runs —
-     the timer's own state lives in the store and keeps counting, and coming back re-aligns `now`
-     immediately (see `useNow`), so nothing on screen can be stale. */
-  const { c, dark } = useTheme(), { width, height } = useWindowDimensions(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), now = useNow(focused ? 1000 : 30_000), s = fit ?? Math.min(width / 440, height / 1001), t = st.timer, v = view(t, now), g = v.state;
-  const task = st.tasks.find((x) => x.id === t.taskId), course = st.courses.find((x) => x.id === t.courseId), topOff = ins.top / s;
-  const stamp = useSharedValue(0), [stampN, setStampN] = useState(1), [ghost, setGhost] = useState<null | { total: number }>(null), prev = useRef(t.phase), lastSec = useRef(0), [nudge, setNudge] = useState(0), [live, setLive] = useState(''), tickSV = useSharedValue(0), wash = useSharedValue(0);
-  const editable = t.phase === 'set';
-  /** flow overtime is capped: past the cap the clock is frozen, so the page must stop pretending to count */
-  const frozen = t.running && t.phase === 'focus' && v.leftMs === 0 && v.overMs >= FLOW_OVER_CAP_MS;
-  /** the last ten seconds are announced by a red pen border round the time, not only by a blip — read off the
-   *  advanced state (`g`), not the store, or the warning would never fire while the round runs */
-  const warnOn = t.running && t.phase === 'focus' && g.focusLeftMs > 0 && g.focusLeftMs <= 10_000;
+  const { c, tints } = useTheme(), ins = useSafeAreaInsets(), { width: W } = useWindowDimensions(), reduce = useReduceMotion();
+  const t = useStore((s) => s.timer), fev = useStore((s) => s.fev), soundOn = useStore((s) => s.settings.soundOn), tickOn = useStore((s) => s.settings.tickOn);
+  const courses = useStore((s) => s.courses), tasks = useStore((s) => s.tasks), sessions = useStore((s) => s.focus), brkMin = useStore((s) => s.settings.breakMin), brkN = useStore((s) => s.settings.breaksPerRound);
+  const now = useNow(focused ? 1000 : 30_000), v = view(t, now), g = v.state;
+  const course = courses.find((x) => x.id === t.courseId), task = tasks.find((x) => x.id === t.taskId);
+  const live = t.phase !== 'set';
+  const [saved, setSaved] = useState<null | { s: Summary; sum: FocusSummary }>(null), minute = Math.floor(now / 60_000);
+  const lastSec = useRef(0), stamp = useSharedValue(0);
+
   useEffect(() => { act.timerPump(now); }, [now]);
-  /* `expo-keep-awake` rejects on the web — the Screen Wake Lock API is permission-gated and the browser
-     answers "not activated yet" — and an unhandled rejection there takes the whole screen down with it.
-     `.catch(() => undefined)` because a browser that will not hold the screen awake is not a failure
-     this screen should report; the timer keeps its own state either way. */
+  /* Keep the screen on while a round runs (unchanged). */
   useEffect(() => {
     if (!focused) return;
     if (t.running) void activateKeepAwakeAsync('focus').catch(() => undefined);
@@ -308,106 +55,308 @@ export function FocusScreen({ fit }: { fit?: number } = {}) {
     return () => { void Promise.resolve(deactivateKeepAwake('focus')).catch(() => undefined); };
   }, [t.running, focused]);
   useEffect(() => { const h = BackHandler.addEventListener('hardwareBackPress', () => { if (focused && !getState().sheet) { act.go('Today'); return true; } return false; }); return () => h.remove(); }, [focused]);
-  useEffect(() => { // old-clock tik / tok each second while a round is running (never while the clock is frozen)
-    if (!focused || !t.running || t.phase !== 'focus' || !tickOn || frozen) return; const sec = Math.floor(now / 1000); if (sec !== lastSec.current) { lastSec.current = sec; fx.tick(sec % 2 === 0); tickSV.value = withSequence(withTiming(1, { duration: 40 }), withTiming(0, { duration: 160 })); }
-  }, [now, t.running, t.phase, tickOn, focused, tickSV, frozen]);
-  /* eslint-disable react-hooks/set-state-in-effect -- timer events and phase transitions are discrete events, not derived state */
-  useEffect(() => { // events from the timer drive the stamp, the nudge wiggle/wash, the sticker falling and the spoken announcements
-    const e = st.fev; if (!e || Date.now() - e.at > 1500) return;
-    if (e.k === 'roundDone') { setStampN(t.rounds); setLive(`Round ${t.rounds} done`); stamp.value = 0; stamp.value = reduce ? withSequence(withTiming(1, { duration: 120 }), withTiming(1, { duration: 1500 }), withTiming(0, { duration: 300 })) : withSequence(withTiming(1, { duration: 460, easing: Easing.bezier(0.2, 1.5, 0.3, 1) }), withTiming(1, { duration: 1500 }), withTiming(0, { duration: 400 })); }
-    if (e.k === 'warn10') setLive('10 seconds left');
-    if (e.k === 'nudge') { setNudge((n) => n + 1); wash.value = withSequence(withTiming(1, { duration: reduce ? 200 : 150 }), withTiming(0, { duration: reduce ? 520 : 640 })); }
-  }, [st.fev]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the sticker outlives the break phase so it can swing and fall; this is an event (phase transition), not derived state
-  useEffect(() => { if (prev.current === 'break' && t.phase !== 'break') setGhost({ total: t.breakMs }); prev.current = t.phase; }, [t.phase, t.breakMs]);
-  const stampS = useAnimatedStyle(() => ({ opacity: stamp.value, transform: [{ rotate: '-11deg' }, { scale: interpolate(stamp.value, [0, 1], [1.7, 1]) }] }));
-  /* eslint-enable react-hooks/set-state-in-effect */
-  const phaseLabel = t.phase === 'set' ? 'ready' : t.phase === 'break' ? 'on a break' : v.flowing && v.overMs > 0 ? `flow +${Math.floor(v.overMs / 60_000)}m` : t.running ? 'focusing' : v.roundDone ? 'round done' : 'paused', rn = t.rounds + (t.phase === 'set' || v.roundDone ? (t.phase === 'set' ? 1 : 0) : 1) || 1;
-  const bigText = t.phase === 'set' ? `${t.planMin} min` : t.phase === 'break' ? fmtClock(v.breakLeftMs / 1000) : v.roundDone && v.overMs > 0 ? `+${fmtClock(v.overMs / 1000)}` : fmtClock(v.leftMs / 1000);
-  const subText = t.phase === 'set' ? 'ready when you are' : t.phase === 'break' ? 'break, main clock paused' : frozen ? `flow capped at ${Math.round(FLOW_OVER_CAP_MS / 60_000)} min` : v.roundDone && !t.running ? 'round complete' : t.running ? `${fmtDur(Math.max(1, Math.round(t.planMin - g.focusElapsedMs / 60_000)))} to go` : 'paused';
-  const goLabel = t.phase === 'set' ? 'Start' : t.phase === 'break' ? 'On break' : t.running ? 'Pause' : v.roundDone ? 'Next round' : 'Resume';
-  const onGo = () => { if (t.phase === 'break') { fx.denied(); return; } const wasRunning = t.running; const n = act.timerToggle(); if (!wasRunning && n.running) fx.start(); else fx.clack(); };
-  const breakGate = canBreak(g) ? '' : g.phase === 'break' ? 'Already on a break.' : g.phase !== 'focus' ? 'Start a round first.' : !g.running ? 'Paused — resume the round to take a break.' : g.breaksUsed >= g.breaksAllowed ? 'No breaks left this round.' : `Breaks unlock after ${Math.round(MIN_BREAK_AFTER_MS / 60_000)} min of focus.`;
-  return (
-    <View style={{ flex: 1, backgroundColor: c.paper }}>
-      {/* The page fills the screen; only the content is in the fixed 440×1001 frame the dial is laid out in.
-          The photograph used to live *inside* that frame, so any phone whose proportions differ from
-          440:1001 showed a band of bare paper along its edges — which is every phone.
+  /* The old clock's tick, only while a focus round counts down and only if wanted. */
+  const frozen = t.running && t.phase === 'focus' && v.leftMs === 0 && v.overMs >= FLOW_OVER_CAP_MS;
+  useEffect(() => {
+    if (!focused || !t.running || t.phase !== 'focus' || !tickOn || frozen) return;
+    const sec = Math.floor(now / 1000); if (sec !== lastSec.current) { lastSec.current = sec; fx.tick(sec % 2 === 0); }
+  }, [now, t.running, t.phase, tickOn, focused, frozen]);
+  /* Timer events: the round-done stamp is inked; what a screen reader hears is derived from the event. */
+  const said = fev && now - fev.at < 6000 ? (fev.k === 'roundDone' ? `Round ${t.rounds} done` : fev.k === 'warn10' ? '10 seconds left' : fev.k === 'breakDone' ? 'Break over' : '') : '';
+  useEffect(() => {
+    if (!fev || Date.now() - fev.at > 1500) return;
+    if (fev.k === 'roundDone') {
+      stamp.set(0); stamp.set(reduce ? withSequence(withTiming(1, { duration: 1 }), withTiming(1, { duration: 1600 }), withTiming(0, { duration: 200 })) : withSequence(withTiming(1, { duration: 420, easing: Easing.bezier(0.2, 1.5, 0.3, 1) }), withTiming(1, { duration: 1500 }), withTiming(0, { duration: 380 })));
+    }
+  }, [fev, reduce, stamp]);
 
-          It is given the window's own dimensions rather than `StyleSheet.absoluteFill`: a box pinned by
-          left/right/top/bottom has no definite size to crop against, and React Native Web then leaves the
-          image at its intrinsic 841×1870 — which draws the top-left scrap of collage across a third of the
-          screen and pushes the rest of the page off the bottom. `cover` crops rather than letterboxing, and
-          the collage it has to keep is in the corners, where a few pixels of crop at the sides cost nothing. */}
-      <Image source={PAGE} style={{ position: 'absolute', left: 0, top: 0, width, height }} resizeMode="cover" />
-      {/* Dark is a material, not a filter. A single mid-alpha scrim left the photograph at roughly half its own
-          luminance, and cream `c.ink` on that fails 4.5:1 — so the label halos and the dial's feather veil
-          (both painted in `desk` in dark) had nothing to match and the page read as the light one with the
-          brightness pulled down. Two layers off the theme's own desk do the work instead: a deep scrim that
-          takes the page to a ground ink can be read on, then a thin lift of the theme's paper so the
-          photograph's own relief survives as a plate rather than disappearing into a brown.
-          On the device the 0.82 the first pass sunk to was not deep enough — the photograph's grain simulated
-          through the ink read as noise ("very grainy") — so the sink deepened to 0.9, the lift thinned to
-          0.05, and the dial's artwork (the only faded element) lifts to 0.95 in dark to keep its ink. */}
-      {dark && (
-        <>
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.desk, opacity: 0.9 }]} />
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.paper, opacity: 0.05 }]} />
-        </>
-      )}
-      <View style={{ width: 440 * s, height: 1001 * s, overflow: 'hidden', alignSelf: 'center' }}>
-        <View style={{ width: 440, height: 1001, transformOrigin: '0% 0%', transform: [{ scale: s }] }}>
-          <Box seed="rnd" style={{ position: 'absolute', left: 32, top: 6 + topOff, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8, transform: [{ rotate: '-1.5deg' }] }}>
-            <Txt f="bold" s={19} accessibilityLiveRegion="polite">Round {rn} · {phaseLabel}</Txt>
-            <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1, 2, 3].map((i) => <View key={i} style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.6, borderColor: c.ink, backgroundColor: i < t.rounds % 4 || (t.rounds > 0 && t.rounds % 4 === 0) ? c.ink : 'transparent' }} />)}</View>
-          </Box>
-          <Pressable onPress={() => act.open({ t: 'settings' })} accessibilityRole="button" accessibilityLabel="Settings" style={{ position: 'absolute', right: 118, top: 8 + topOff }}><Box seed="set" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="gear" size={22} color={c.ink} /></Box></Pressable>
-          <Pressable onPress={() => act.go('Today')} accessibilityRole="button" accessibilityLabel="Back to Today" style={{ position: 'absolute', right: 66, top: 8 + topOff }}><Box seed="back" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="back" size={22} color={c.ink} /></Box></Pressable>
-          <Pressable onPress={() => { act.setSettings({ soundOn: !soundOn }); }} accessibilityRole="switch" accessibilityState={{ checked: soundOn }} accessibilityLabel="Sounds" style={{ position: 'absolute', right: 14, top: 8 + topOff }}><Box seed="snd" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="sound" size={22} color={soundOn ? c.ink : c.mut} /></Box></Pressable>
-          <Box seed="task" style={{ position: 'absolute', left: 32, top: 259, width: 386, paddingHorizontal: 15, paddingTop: 11, paddingBottom: 10, transform: [{ rotate: '-1deg' }] }}>
-            <Tape w={46} rot={-24} style={{ left: -11, top: -6 }} />
-            <Txt f="serifB" s={17} style={{ alignSelf: 'flex-start', borderBottomWidth: 1.5, borderBottomColor: c.ink, paddingBottom: 1 }}>{course?.name ?? 'Personal'}</Txt>
-            <Txt f="marker" s={21} style={{ marginTop: 5, marginRight: 84 }} numberOfLines={2}>{task?.title ?? (t.title || 'Free focus')}</Txt>
-            <Pressable onPress={() => act.timerSwap()} disabled={!editable} accessibilityRole="button" accessibilityLabel={`Swap task, now ${task?.title ?? 'free focus'}`} style={{ position: 'absolute', right: 10, bottom: 9, minHeight: 32, paddingHorizontal: 4, justifyContent: 'center', opacity: editable ? 1 : 0.4 }}><Txt f="bold" s={15} c="mut" style={{ borderBottomWidth: 1.5, borderStyle: 'dashed', borderBottomColor: c.mut }}>swap task</Txt></Pressable>
-          </Box>
-          {/* the dial always counts the focus clock: on a break the main clock is paused, so `focusLeftMs`
-              is the right number in both phases and the dial never restarts behind the break sticker.
-              It comes from the advanced state, not the store: the store only commits on events, so the
-              ring, the pointer hand and the last-10-seconds ring all froze if they read `t`. */}
-          <Dial min={t.planMin} phase={t.phase} leftMs={g.focusLeftMs} editable={editable}
-            onChange={(m, vel) => { if (vel < 0) { fx.bump(); return; } if (m !== t.planMin) { act.timerSetMin(m); fx.detent(vel); } }} />
-          {/* the readout, off the face and onto the page: a slip below the dial's edge, clear of the face circle */}
-          <TimeLabel readout={bigText} warnOn={warnOn} tick={tickSV} wash={wash} />
-          <Txt f="serifB" s={12.5} c="mut" pointerEvents="none" style={{ position: 'absolute', left: 60, top: 640 + CLUSTER_DROP, width: 320, textAlign: 'center', textShadowColor: c.paper, textShadowRadius: 4 }}>{subText}</Txt>
-          <Txt f="hand" s={15} pointerEvents="none" style={{ position: 'absolute', left: 360, top: 352, transform: [{ rotate: '6deg' }], textShadowColor: c.paper, textShadowRadius: 4, width: 90 }}>{'focus doesn\'t\nhappen by\naccident'}</Txt>
-          <View style={{ position: 'absolute', left: 56, top: 672 + CLUSTER_DROP, width: 360, flexDirection: 'row', gap: 7, alignItems: 'stretch' }}>
-            {[25, 45, 50, 90].map((m) => { const on = t.planMin === m; return (
-              <Pressable key={m} disabled={!editable} onPress={() => { act.timerSetMin(m); fx.detent(500); act.setSettings({ focusPresetMin: m }); }} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !editable }} accessibilityLabel={`${m} minutes`} style={{ flex: 1, minWidth: 44, opacity: editable ? 1 : 0.55 }}>
-                <Box seed={`op${m}`} fill={on ? c.ink : c.card} shadow={on} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Txt f="bold" s={20} c={on ? 'card' : 'ink'}>{m}</Txt><Txt f="hand" s={11} c={on ? 'card' : 'mut'} style={{ marginTop: -2 }}>min</Txt></Box>
-              </Pressable>); })}
-            <Pressable onPress={() => { act.timerSetFlow(!t.flow); act.setSettings({ focusFlow: !t.flow }); fx.toggle(!t.flow); }} accessibilityRole="switch" accessibilityState={{ checked: t.flow }} accessibilityLabel="Flow mode: keep going after the round ends" style={{ flex: 1.5 }}>
-              <Box seed="flow" fill={t.flow ? c.ink : c.card} shadow={t.flow} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }}><View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: t.flow ? c.card : 'transparent', borderWidth: 1.6, borderColor: t.flow ? c.card : c.ink }} /><Txt f="bold" s={17} c={t.flow ? 'card' : 'ink'}>{t.flow ? 'Flow on' : 'Flow off'}</Txt></Box>
-            </Pressable>
+  /* ── the resting screen ──
+     While a round or a break is running, nine seconds without a touch dims the page to the ambient face. */
+  const [awake, setAwake] = useState(true), sleepT = useRef<ReturnType<typeof setTimeout> | null>(null), dim = useSharedValue(0);
+  const canRest = live && (t.running || t.phase === 'break') && focused && !saved;
+  /* A touch (or starting) wakes the page and re-arms the dim; the timer is armed again whenever resting
+     becomes possible (a round starts, a break ends) without anyone touching anything. */
+  const wake = useCallback(() => {
+    if (sleepT.current) clearTimeout(sleepT.current);
+    setAwake(true);
+    if (canRest) sleepT.current = setTimeout(() => setAwake(false), AWAKE_MS);
+  }, [canRest]);
+  useEffect(() => {
+    if (!canRest) return;
+    const id = setTimeout(() => setAwake(false), AWAKE_MS);
+    sleepT.current = id;
+    return () => clearTimeout(id);
+  }, [canRest]);
+  const ambient = canRest && !awake;
+  useEffect(() => { dim.set(reduce ? (ambient ? 1 : 0) : withTiming(ambient ? 1 : 0, { duration: ambient ? 1400 : 260, easing: Easing.inOut(Easing.quad) })); }, [ambient, reduce, dim]);
+  /* Where the resting numbers sit: a few dp somewhere else every minute, so nothing stays lit on one spot. */
+  const drift = useMemo(() => ({ x: ((minute * 37) % 41) - 20, y: ((minute * 53) % 61) - 30 }), [minute]);
+  const onTouch = (_e: GestureResponderEvent) => { if (!awake) fx.select(); wake(); };
+
+  /* ── what the big number says ── */
+  const big = t.phase === 'set' ? fmtClock(t.planMin * 60) : t.phase === 'break' ? fmtClock(v.breakLeftMs / 1000) : v.roundDone && v.overMs > 0 ? `+${fmtClock(v.overMs / 1000)}` : fmtClock(v.leftMs / 1000);
+  const over = t.phase === 'focus' && v.roundDone && v.overMs > 0;
+  const status = t.phase === 'break' ? `Break · back at ${fmtTime(now + v.breakLeftMs)}`
+    : frozen ? `Flow capped at ${Math.round(FLOW_OVER_CAP_MS / 60_000)} min — end when you are ready`
+    : over ? 'Flow — the round is done, you kept going'
+    : v.roundDone && !t.running ? `Round ${t.rounds} done`
+    : t.running ? `Until ${fmtTime(now + v.leftMs)} · ${t.flow ? 'flow on' : 'stops at zero'}`
+    : live ? 'Paused' : '';
+  const breakGate = canBreak(g) ? '' : g.phase === 'break' ? 'Already on a break.' : g.phase !== 'focus' ? 'Start a round first.' : !g.running ? 'Resume the round to take a break.' : g.breaksUsed >= g.breaksAllowed ? 'No breaks left this round.' : `Breaks open after ${Math.round(MIN_BREAK_AFTER_MS / 60_000)} min of focus.`;
+  const left = Math.max(0, t.breaksAllowed - g.breaksUsed);
+
+  const start = () => { const n = act.timerToggle(); if (n.running) fx.start(); else fx.clack(); wake(); };
+  const end = () => {
+    const s = act.timerFinish(true, true); fx.clack();
+    if (s) setSaved({ s, sum: focusSummary([...getState().focus], getState().courses, Date.now()) });
+  };
+  const summary = useMemo(() => focusSummary(sessions, courses, minute * 60_000), [sessions, courses, minute]);
+
+  const stampS = useAnimatedStyle(() => ({ opacity: stamp.get(), transform: [{ rotate: '-8deg' }, { scale: interpolate(stamp.get(), [0, 1], [1.5, 1]) }] }));
+  const dimS = useAnimatedStyle(() => ({ opacity: dim.get() * 0.97 }));
+  const restS = useAnimatedStyle(() => ({ opacity: dim.get() }));
+  const awakeS = useAnimatedStyle(() => ({ opacity: 1 - dim.get() * 0.9 }));
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.paper }} onTouchStart={onTouch}>
+      <PaperBg />
+      {ambient && <StatusBar hidden animated />}
+      <Animated.View style={[{ flex: 1 }, awakeS]}>
+        {/* ── header ── */}
+        <View style={{ paddingTop: ins.top + 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center' }}>
+          <RoundBtn icon="back" label="Back to Today" onPress={() => act.go('Today')} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Txt f="type" s={12} c="mut" maxFontSizeMultiplier={FS} style={{ letterSpacing: 2.4 }} accessibilityLiveRegion="polite">
+              {t.phase === 'set' ? 'FOCUS' : t.phase === 'break' ? 'BREAK' : `ROUND ${Math.max(1, t.rounds + (v.roundDone ? 0 : 1))}`}
+            </Txt>
           </View>
-          <Pressable onPress={onGo} accessibilityRole="button" accessibilityLabel={goLabel} style={{ position: 'absolute', left: 138, top: 736 + CLUSTER_DROP, width: 196, transform: [{ rotate: '-0.6deg' }] }}>
-            <Box seed="go" fill={t.phase === 'break' ? c.card : c.ink} style={{ minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 }}><Icon name={t.running && t.phase === 'focus' ? 'pause' : 'play'} size={24} color={t.phase === 'break' ? c.ink : c.card} sw={2.4} /><Txt f="bold" s={27} c={t.phase === 'break' ? 'ink' : 'card'}>{goLabel}</Txt></Box>
-          </Pressable>
-          <Pressable onPress={() => { if (t.phase === 'set') { act.go('Today'); return; } act.timerFinish(true); fx.clack(); }} accessibilityRole="button" accessibilityLabel={t.phase === 'set' ? 'Leave focus' : 'End session and save'} style={{ position: 'absolute', left: 181, top: 800 + CLUSTER_DROP, transform: [{ rotate: '1deg' }] }}>
-            <Box seed="end" fill="transparent" shadow={false} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}><Txt f="bold" s={19}>{t.phase === 'set' ? 'leave' : 'end session'}</Txt></Box>
-          </Pressable>
-          <Pressable onPress={() => { if (canBreak(g)) act.timerBreak(); else { fx.denied(); toast(breakGate); } }} accessibilityRole="button" accessibilityState={{ disabled: !canBreak(g) }} accessibilityLabel={`Take a break, ${Math.max(0, t.breaksAllowed - g.breaksUsed)} left. ${breakGate}`} style={{ position: 'absolute', left: 52, top: 806 + CLUSTER_DROP, transform: [{ rotate: '-1.5deg' }] }}>
-            <Box seed="brk" fill={c.card} shadow={false} sw={2} style={{ minHeight: 38, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: canBreak(g) ? 1 : 0.55 }}><Icon name="coffee" size={17} color={c.ink} /><Txt f="bold" s={16}>break · {fmtDur(Math.round(t.breakMs / 60_000))}</Txt></Box>
-          </Pressable>
-          {(t.phase === 'break' || ghost) && <BreakSticker leftMs={ghost ? 0 : v.breakLeftMs} totalMs={ghost ? ghost.total : t.breakTotalMs} falling={!!ghost} nudge={nudge} onGone={() => setGhost(null)} onBack={() => act.timerBackNow()} />}
-          <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 88, top: 404, width: 264, height: 170, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: c.bad, borderRadius: 14 }, stampS]}>
-            <View style={{ position: 'absolute', left: 5, right: 5, top: 5, bottom: 5, borderWidth: 2.5, borderColor: c.bad, borderRadius: 9 }} />
-            <Txt f="bold" s={29} style={{ color: c.bad, textTransform: 'uppercase', letterSpacing: 1.4, textAlign: 'center' }}>Round done</Txt><Txt f="type" s={16} style={{ color: c.bad, letterSpacing: 2.5 }}>{stampN}</Txt>
-          </Animated.View>
-          {/* the stamp is silent to a screen reader, so the round is spoken here (invisible, polite, never per-second) */}
-          <Txt f="bold" s={13} accessibilityLiveRegion="polite" style={{ position: 'absolute', left: 6, bottom: 6, opacity: 0 }}>{live}</Txt>
+          <RoundBtn icon="sound" label="App sounds" on={soundOn} onPress={() => { act.setSettings({ soundOn: !soundOn }); }} />
         </View>
-      </View>
-      <View style={{ flex: 1 }} />
+
+        {t.phase === 'set' ? (
+          <SetUp W={W} courses={courses} cid={t.courseId} taskTitle={task?.title ?? null} planMin={t.planMin} flow={t.flow} brk={{ min: brkMin, n: brkN }} summary={summary} tints={tints} />
+        ) : (
+          <View style={{ flex: 1, paddingHorizontal: 24 }}>
+            <View style={{ alignItems: 'center', marginTop: 18 }}>
+              <SubjectTag name={course?.name ?? 'Something else'} tint={course ? subjectTint(course.id, tints) : c.card} />
+              {task ? <Txt f="serif" s={16} c="mut" numberOfLines={1} style={{ marginTop: 6 }}>{task.title}</Txt> : null}
+            </View>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Txt f="type" s={big.length > 5 ? 84 : 104} c={over ? 'acc' : t.phase === 'break' ? 'ok' : 'ink'} maxFontSizeMultiplier={1.15} adjustsFontSizeToFit numberOfLines={1}
+                style={{ lineHeight: big.length > 5 ? 96 : 118, letterSpacing: -2 }} accessibilityRole="timer" accessibilityLabel={`${t.phase === 'break' ? 'Break' : over ? 'Over by' : 'Remaining'} ${big}`}>{big}</Txt>
+              <Ticks total={t.phase === 'break' ? Math.round(t.breakTotalMs / 60_000) : t.planMin} p={t.phase === 'break' ? v.breakProgress : v.progress} tone={t.phase === 'break' ? c.ok : c.ink} width={Math.min(W - 48, 380)} />
+              <Txt f="serif" s={17} c="mut" style={{ marginTop: 16, textAlign: 'center' }} accessibilityLiveRegion="polite">{status}</Txt>
+            </View>
+            {/* ── the thumb row ── */}
+            <View style={{ paddingBottom: ins.bottom + 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' }}>
+              {t.phase === 'break'
+                ? <SideBtn icon="x" label="End" sub="save" onPress={end} />
+                : <SideBtn icon="coffee" label="Break" sub={canBreak(g) ? `${left} left` : left ? 'not yet' : 'none left'} dim={!canBreak(g)} onPress={() => { if (canBreak(g)) { act.timerBreak(); wake(); } else { fx.denied(); toast(breakGate); } }} />}
+              {t.phase === 'break'
+                ? <MainBtn icon="play" label="Back to it" onPress={() => { act.timerBackNow(); wake(); }} />
+                : <MainBtn icon={t.running && !v.roundDone ? 'pause' : 'play'} label={t.running && !v.roundDone ? 'Pause' : v.roundDone ? 'Next round' : 'Resume'} onPress={start} />}
+              {t.phase === 'break' ? <View style={{ width: 64 }} /> : <SideBtn icon="check" label="End" sub="save" onPress={end} />}
+            </View>
+          </View>
+        )}
+        {t.phase === 'set' && (
+          <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: ins.bottom + 18 }}>
+            <StartBtn label={course ? `Start · ${course.name}` : 'Start'} onPress={start} />
+          </View>
+        )}
+      </Animated.View>
+
+      {/* the round-done stamp, inked onto the page and lifted off again */}
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: W / 2 - 120, top: '30%', width: 240, paddingVertical: 14, alignItems: 'center', borderWidth: 3, borderColor: c.bad, borderRadius: 12 }, stampS]}>
+        <Txt f="marker" s={30} c="bad" style={{ textTransform: 'uppercase', letterSpacing: 1 }}>Round done</Txt>
+        <Txt f="type" s={16} c="bad">{`No. ${t.rounds}`}</Txt>
+      </Animated.View>
+
+      {/* ── the resting face ── */}
+      <Animated.View pointerEvents={ambient ? 'auto' : 'none'} style={[{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: AMBIENT.ground }, dimS]} accessibilityElementsHidden={!ambient} importantForAccessibility={ambient ? 'yes' : 'no-hide-descendants'}>
+        <Animated.View style={[{ flex: 1, alignItems: 'center', justifyContent: 'center', transform: [{ translateX: drift.x }, { translateY: drift.y }] }, restS]}>
+          <Txt f="type" s={big.length > 5 ? 72 : 88} c={AMBIENT.ink} maxFontSizeMultiplier={1.1} style={{ opacity: 0.62, letterSpacing: -2 }} accessibilityLabel={`${big} remaining. Touch to wake.`}>{big}</Txt>
+          <Txt f="hand" s={15} c={AMBIENT.ink} style={{ opacity: 0.34, marginTop: 6 }}>{t.phase === 'break' ? 'break' : course?.name ?? 'focus'}</Txt>
+        </Animated.View>
+      </Animated.View>
+
+      {saved && <Saved s={saved.s} sum={saved.sum} courseName={courses.find((x) => x.id === saved.s.courseId)?.name ?? 'Something else'} onDone={() => setSaved(null)} />}
+      <Txt f="bold" s={13} accessibilityLiveRegion="polite" style={{ position: 'absolute', left: 6, bottom: 6, opacity: 0 }}>{said}</Txt>
     </View>
+  );
+}
+
+/* ── before a round ──────────────────────────────────────────────────────────────────────────────────── */
+
+function SetUp({ W, courses, cid, taskTitle, planMin, flow, brk, summary, tints }: {
+  W: number; courses: { id: string; name: string }[]; cid: string | null; taskTitle: string | null; planMin: number; flow: boolean; brk: { min: number; n: number }; summary: FocusSummary; tints: ReturnType<typeof useTheme>['tints'];
+}) {
+  const { c } = useTheme(), [custom, setCustom] = useState(!PRESETS.includes(planMin));
+  /* The subject chosen when the page opened leads the strip, so it is never scrolled out of sight; the order
+     is fixed then, so tapping another tab never shuffles the row under the finger. */
+  const [lead] = useState(cid), order = useMemo(() => { const f = courses.find((x) => x.id === lead); return f ? [f, ...courses.filter((x) => x !== f)] : courses; }, [courses, lead]);
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18, gap: 18 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={{ gap: 10 }}>
+        <Txt f="marker" s={32} accessibilityRole="header">What are you studying?</Txt>
+        <HStrip gap={7}>
+          {order[0] && order[0].id === lead ? <Tab label={order[0].name} on={cid === order[0].id} tint={subjectTint(order[0].id, tints)} onPress={() => act.timerSetSubject(order[0]!.id)} /> : null}
+          <Tab label="Something else" on={cid === null} tint={c.card} onPress={() => act.timerSetSubject(null)} />
+          {order.filter((x) => x.id !== lead).map((x) => <Tab key={x.id} label={x.name} on={cid === x.id} tint={subjectTint(x.id, tints)} onPress={() => act.timerSetSubject(x.id)} />)}
+        </HStrip>
+        {taskTitle ? <Txt f="serif" s={15} c="mut">Working on <Txt f="serif" s={15}>{taskTitle}</Txt></Txt> : null}
+      </View>
+
+      <View style={{ alignItems: 'center', gap: 12 }}>
+        <Txt f="type" s={86} maxFontSizeMultiplier={1.15} style={{ lineHeight: 100, letterSpacing: -2 }} accessibilityLabel={`${planMin} minutes`}>{fmtClock(planMin * 60)}</Txt>
+        <View style={{ flexDirection: 'row', gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {PRESETS.map((m) => <Tab key={m} label={`${m}`} on={!custom && planMin === m} tint={c.card} onPress={() => { setCustom(false); act.timerSetMin(m); act.setSettings({ focusPresetMin: m }); fx.detent(500); }} />)}
+          <Tab label="Other" on={custom} tint={c.card} onPress={() => setCustom(true)} />
+        </View>
+        {custom ? <NumberField label="Minutes" value={planMin} min={5} max={240} unit="min" width={Math.min(W - 40, 220)} onChange={(m) => { if (m) { act.timerSetMin(m); act.setSettings({ focusPresetMin: m }); } }} /> : null}
+      </View>
+
+      <HandBox seed="focus-opts" fill={c.card} style={{ paddingHorizontal: 14, paddingVertical: 6 }}>
+        <Toggle value={flow} label="Keep going after the round" hint="Flow: the time counts on past zero, up to 15 minutes" onChange={(f) => { act.timerSetFlow(f); act.setSettings({ focusFlow: f }); fx.toggle(f); }} />
+        <Pressable accessibilityRole="button" accessibilityLabel={`Breaks: ${brk.n} per round, ${brk.min} minutes each. Change`} onPress={() => act.openSettingsPath(['focus'])} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Icon name="coffee" size={20} color={c.mut} />
+          <Txt f="hand" s={18} style={{ flex: 1 }}>{`${brk.n} ${brk.n === 1 ? 'break' : 'breaks'} a round, ${fmtDur(brk.min)} each`}</Txt>
+          <Txt f="bold" s={16} c="acc">Change</Txt>
+        </Pressable>
+      </HandBox>
+
+      <StudyLog summary={summary} tints={tints} />
+    </ScrollView>
+  );
+}
+
+/** This week, by subject: the "what am I actually studying" the timer exists to answer. */
+function StudyLog({ summary: s, tints }: { summary: FocusSummary; tints: ReturnType<typeof useTheme>['tints'] }) {
+  const { c } = useTheme(), max = Math.max(1, ...s.week.map((w) => w.min));
+  return (
+    <HandBox seed="focus-log" fill={c.card} style={{ padding: 16, gap: 12 }}>
+      <Txt f="bold" s={21} accessibilityRole="header">Your study log</Txt>
+      <View style={{ flexDirection: 'row' }}>
+        <Stat k="Today" v={fmtDur(s.todayMin)} />
+        <Stat k="This week" v={fmtDur(s.weekMin)} />
+        <Stat k="Streak" v={`${s.streak} ${s.streak === 1 ? 'day' : 'days'}`} />
+      </View>
+      {s.week.length === 0 ? (
+        <Txt f="serif" s={15.5} c="mut">Nothing logged this week yet. Pick a subject and start — every session lands here, filed under it.</Txt>
+      ) : (
+        <View style={{ gap: 9 }}>
+          {s.top ? <Txt f="serif" s={15.5} c="mut">Most studied this week: <Txt f="serif" s={15.5}>{s.top.name}</Txt></Txt> : null}
+          {s.week.slice(0, 6).map((w, i) => (
+            <View key={w.id} style={{ gap: 3 }} accessible accessibilityLabel={`${w.name}: ${fmtDur(w.min)} in ${w.sessions} ${w.sessions === 1 ? 'session' : 'sessions'}`}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: w.id === '_' ? c.card : subjectTint(w.id, tints), borderWidth: 1, borderColor: hexA(c.ink, 0.3) }} />
+                <Txt f="hand" s={17} numberOfLines={1} style={{ flex: 1 }}>{w.name}</Txt>
+                <Txt f="type" s={15} c="mut">{fmtDur(w.min)}</Txt>
+              </View>
+              <View style={{ height: 10, borderRadius: 2, backgroundColor: hexA(c.ink, 0.07), overflow: 'hidden' }}>
+                {/* Accent ink so a bar reads on card at 3:1 whatever the subject's paper; the leader is full strength. */}
+                <View style={{ width: `${Math.max(4, (w.min / max) * 100)}%`, height: 10, borderRadius: 2, backgroundColor: w.id === '_' ? hexA(c.ink, 0.4) : i === 0 ? c.acc : hexA(c.acc, 0.6) }} />
+              </View>
+            </View>
+          ))}
+          {s.lastWeekMin > 0 ? <Txt f="serif" s={14} c="mut">{s.weekMin >= s.lastWeekMin ? `Up on last week (${fmtDur(s.lastWeekMin)}).` : `Last week: ${fmtDur(s.lastWeekMin)}.`}</Txt> : null}
+        </View>
+      )}
+    </HandBox>
+  );
+}
+const Stat = ({ k, v }: { k: string; v: string }) => (
+  <View style={{ flex: 1, gap: 1 }}><Txt f="type" s={20}>{v}</Txt><Txt f="serif" s={13.5} c="mut">{k}</Txt></View>
+);
+
+/* ── after a round: the receipt ─────────────────────────────────────────────────────────────────────── */
+
+function Saved({ s, sum, courseName, onDone }: { s: Summary; sum: FocusSummary; courseName: string; onDone: () => void }) {
+  const { c } = useTheme(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), y = useSharedValue(reduce ? 0 : 1);
+  useEffect(() => { if (!reduce) y.set(withSpring(0, { duration: 520, dampingRatio: 0.78 })); }, [reduce, y]);
+  const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() * 420 }, { rotate: `${y.get() * 6 - 1}deg` }] }));
+  const row = sum.week.find((w) => w.id === (s.courseId ?? '_')), isTop = !!sum.top && sum.top.id === s.courseId;
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: hexA(c.shadow, 0.35), justifyContent: 'flex-end', padding: 16, paddingBottom: ins.bottom + 20 }} accessibilityViewIsModal>
+      <Animated.View style={st}>
+        <HandBox seed="focus-saved" fill={c.card} style={{ padding: 18, gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Scrap size={78} mood="proud" cue={{ kind: 'hop', n: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Txt f="type" s={13} c="acc" style={{ letterSpacing: 2 }}>SESSION SAVED</Txt>
+              <Txt f="marker" s={30} accessibilityRole="header">{fmtDur(Math.max(1, Math.round(s.focusSec / 60)))} of {courseName}</Txt>
+            </View>
+          </View>
+          <Txt f="serif" s={16} c="mut">
+            {row ? `${fmtDur(row.min)} on it this week, across ${row.sessions} ${row.sessions === 1 ? 'session' : 'sessions'}.` : ''}{isTop ? ' Your most studied subject this week.' : ''}{s.breakSec >= 60 ? ` Breaks: ${fmtDur(Math.round(s.breakSec / 60))}.` : ''}
+          </Txt>
+          <StartBtn label="Done" icon="check" onPress={onDone} />
+        </HandBox>
+      </Animated.View>
+    </View>
+  );
+}
+
+/* ── small parts ─────────────────────────────────────────────────────────────────────────────────────── */
+
+function Tab({ label, on, tint, onPress }: { label: string; on: boolean; tint: string; onPress: () => void }) {
+  const { c } = useTheme(), [aIn, aLift] = usePressIn(() => { fx.select(); onPress(); });
+  return (
+    <Pressable accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={label} onPressIn={aIn} onPress={aLift} hitSlop={4}>
+      <HandBox seed={`ftab-${label}`} fill={on ? c.ink : tint} cut="cut" shadow={on} style={{ minHeight: 40, minWidth: 48, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', maxWidth: 230 }}>
+        <Txt f="bold" s={17} c={on ? 'paper' : 'ink'} numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt>
+      </HandBox>
+    </Pressable>
+  );
+}
+function SubjectTag({ name, tint }: { name: string; tint: string }) {
+  return <HandBox seed={`stag-${name}`} fill={tint} cut="cut" style={{ minHeight: 36, paddingHorizontal: 16, justifyContent: 'center', maxWidth: 300 }}><Txt f="bold" s={17} numberOfLines={1}>{name}</Txt></HandBox>;
+}
+/** Elapsed time dims; it never slides a marker (the bar rule the whole app keeps). One tick a minute up to an
+ *  hour, one per five minutes beyond. */
+function Ticks({ total, p, tone, width }: { total: number; p: number; tone: string; width: number }) {
+  const n = Math.max(1, total <= 60 ? total : Math.ceil(total / 5));
+  return (
+    <View style={{ width, flexDirection: 'row', gap: n > 40 ? 2 : 3, marginTop: 14 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: n }, (_, i) => <View key={i} style={{ flex: 1, height: 16, borderRadius: 2, backgroundColor: tone, opacity: (i + 1) / n <= p + 1e-6 ? 0.16 : 0.85 }} />)}
+    </View>
+  );
+}
+function RoundBtn({ icon, label, onPress, on = true }: { icon: string; label: string; onPress: () => void; on?: boolean }) {
+  const { c } = useTheme();
+  return (
+    <Pressable accessibilityRole={label === 'App sounds' ? 'switch' : 'button'} accessibilityState={label === 'App sounds' ? { checked: on } : undefined} accessibilityLabel={label} onPress={onPress} hitSlop={6} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name={icon} size={24} color={on ? c.ink : c.mut} />
+      {!on ? <View style={{ position: 'absolute', width: 26, height: 2, backgroundColor: c.mut, transform: [{ rotate: '-40deg' }] }} /> : null}
+    </Pressable>
+  );
+}
+function MainBtn({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), [aIn, aLift] = usePressIn(onPress);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
+  return (
+    <Pressable testID="focus-main" accessibilityRole="button" accessibilityLabel={label} onPressIn={() => { aIn(); s.set(reduce ? 1 : withTiming(0.93, { duration: 90 })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 260, dampingRatio: 0.55 }))} onPress={aLift} style={{ alignItems: 'center', gap: 6 }}>
+      <Animated.View style={st}><HandBox seed={`main-${icon}`} fill={c.ink} cut="cut" style={{ width: 84, height: 84, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={32} color={c.paper} sw={2.4} /></HandBox></Animated.View>
+      <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>{label}</Txt>
+    </Pressable>
+  );
+}
+function SideBtn({ icon, label, sub, onPress, dim }: { icon: string; label: string; sub: string; onPress: () => void; dim?: boolean }) {
+  const { c } = useTheme(), [aIn, aLift] = usePressIn(onPress);
+  return (
+    <Pressable testID={`focus-${label.toLowerCase()}`} accessibilityRole="button" accessibilityLabel={`${label}, ${sub}`} accessibilityState={{ disabled: !!dim }} onPressIn={aIn} onPress={aLift} style={{ alignItems: 'center', gap: 4, width: 76, opacity: dim ? 0.5 : 1 }}>
+      <HandBox seed={`side-${icon}`} fill={c.card} cut="cut" style={{ width: 58, height: 58, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={24} color={c.ink} /></HandBox>
+      <Txt f="bold" s={15} maxFontSizeMultiplier={FS}>{label}</Txt>
+      <Txt f="serif" s={12.5} c="mut" maxFontSizeMultiplier={FS}>{sub}</Txt>
+    </Pressable>
+  );
+}
+function StartBtn({ label, onPress, icon = 'play' }: { label: string; onPress: () => void; icon?: string }) {
+  const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), [aIn, aLift] = usePressIn(onPress);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
+  return (
+    <Pressable testID={label === 'Done' ? 'focus-done' : 'focus-start'} accessibilityRole="button" accessibilityLabel={label} onPressIn={() => { aIn(); s.set(reduce ? 1 : withTiming(0.97, { duration: 90 })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 240, dampingRatio: 0.6 }))} onPress={aLift}>
+      <Animated.View style={st}><HandBox seed="focus-start" fill={c.ink} cut="cut" style={{ minHeight: 60, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}><Icon name={icon} size={22} color={c.paper} sw={2.2} /><Txt f="bold" s={22} c="paper" numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt></HandBox></Animated.View>
+    </Pressable>
   );
 }

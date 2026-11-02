@@ -102,6 +102,10 @@ export const SECOND = { light: '#8A4B27', dark: '#C0663A' } as const;
  *  shows along a tear (bleached pulp is white whatever the dye), and the ink and hint of a cream scrap that
  *  is cream in both themes (the onboarding's ruled strip), so its writing must not follow the theme. */
 export const PAPER = { core: '#FFFFFF', scrapInk: '#232428', scrapHint: '#8A847A' } as const;
+/** Focus's ambient face (the screen dimmed while a round runs and nobody touches it): the same in both
+ *  themes on purpose, because it is the phone resting, not a page. Near-black so an OLED panel is mostly
+ *  off; the numerals a warm paper-white at reduced strength (the screen still reads at a glance, 9.7:1). */
+export const AMBIENT = { ground: '#0B0C0E', ink: '#D9D3C7' } as const;
 export const TAPE = {
   light: { fill: '#E7D9AE99', edge: '#B8A56E55', shadow: '#2A241C1A', shine: '#FFFFFF59' },
   dark: { fill: '#C9B98F55', edge: '#C9B98F66', shadow: '#00000052', shine: '#FFFFFF1F' },
