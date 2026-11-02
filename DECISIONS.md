@@ -277,6 +277,37 @@ keeps the 1 Hz tick.
 
 **Answer:** as built (v0.3.1-B), frames in `.shots/v031/spiral-{light,dark}.png`.
 
+## D13 — The collage: a new default look, a paper mascot, and what stayed a cut
+
+**Owner, 2026-11-01:** the v0.5 build "is ass"; asked for a completely redesigned, calmer Focus that rests
+like a dimmed home screen and tracks what is studied most; a "+" pop-up that feels like paper; a new theme,
+texture, colour and accent; a 2-D mascot in the spirit of a torn-paper collage reference (Snip) instead of
+the Rive bear, "very high effort", with uneven torn-paper dividers and a crushed-paper look; an onboarding
+that takes its minimalism and background art from two references (Ancient Time, a coffee app), five full
+pages that set the term up; and an app that feels more fluid. Keep the old, but a complete upgrade.
+
+**Answered (built):**
+- **Palette `collage`** (default; `refined` and `original` kept): off-white recycled paper, bright card,
+  charcoal ink, denim accent pen, a denim command deck, and pale subject papers (`TINTS`). A one-time
+  `lookV` move puts existing installs on it; a later choice sticks.
+- **Texture `crumple`**: crease facets from a triangulated height field (scripts/paper-art/crumple.js),
+  not noise. All paper art is rendered offline to WebP by `scripts/paper-art.mjs`; the phone runs no filter.
+- **Type per look**: Bricolage Grotesque + DM Mono in the collage; the notebook keeps Caveat/Marker/Special
+  Elite. Line boxes are computed from the requested size, so no layout moved.
+- **Edges**: big surfaces tear (white core, soft lift), small controls are scissor-cut; sheets, the nav
+  (kraft) and onboarding's hero use full-width torn edges as dividers.
+- **Mascot: Scrap**, a dog-eared scrap of denim paper, built from generated bitmaps and moved on the UI
+  thread. This **supersedes O8 (Teddy, Rive)**: Rive and Nitro are removed; the rule "no hand-authored SVG
+  art" is set aside by the owner's own request for a collage mascot, and Scrap is raster paper, not SVG.
+- **Onboarding**: five pages replace the coach tour (TOUR_VERSION 2); nothing is written until the end.
+- **Focus**: rebuilt on the same engine; ambient rest after 9 s; sessions filed by subject (`focusSummary`).
+- **Page switches stay a cut.** A landing animation was tried and reverted: the owner's earlier report that
+  pages arrived "sooo long" after a tap is why a page wrapper never animates (perf-placement.test.ts). The
+  fluid motion lives inside pages and in the chrome (the nav's sliding scrap) instead.
+
+**Open:** the owner's reference image for the clock faces ("they need a bit more extra") did not arrive;
+the faces are unchanged until it does.
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._

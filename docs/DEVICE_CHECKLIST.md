@@ -615,6 +615,40 @@ cold start following the download).
 
 ---
 
+## V05-LOOK — the collage: paper, Scrap, onboarding, Focus, the + desk (UNVERIFIED-ON-DEVICE)
+
+The web build shows all of this (frames in `.shots/look`, `.shots/ob`, `.shots/focus`, `.shots/add`,
+`.shots/nav`); only a phone can judge the type rendering, the texture at real density and the motion.
+
+- **V05-LOOK.1 The look moved over by itself.** Update an install that had the old notebook look. Look for:
+  the collage on first launch (off-white crumpled paper, Bricolage headings, a denim Today card, a kraft
+  strip at the bottom); Settings → Look & feel still offers Refined and Original, and choosing one sticks
+  after a restart. **PASS / FAIL: ______**
+- **V05-LOOK.2 Crumpled paper, not noise.** Any page, light and dark. Look for: soft crease facets you can
+  see but read through; no visible seam where the texture repeats while scrolling a long To-do.
+  **PASS / FAIL: ______**
+- **V05-LOOK.3 Torn edges hold up.** Today's cards, a sheet's top edge, the kraft nav. Look for: a white
+  fibre line along the tears in light, a pale one in dark; no jagged ink outlines on paper.
+  **PASS / FAIL: ______**
+- **V05-LOOK.4 Scrap is alive and cheap.** Onboarding page 1 and Settings → Diagnostics → Mascot check.
+  Look for: he blinks, glances around, follows a finger, hops when tapped, and "celebrate" flickers his body
+  like a cut-out; scrolling stays smooth with him on screen. **PASS / FAIL: ______**
+- **V05-LOOK.5 Onboarding, five pages.** Settings → Show the introduction again (or a fresh install). Look
+  for: swiping moves Scrap from page to page with a hop; typing a name makes him read along; page 4's
+  doors (import / by hand / sample on a fresh install, keep / import on a replay) do what they say; the
+  notification prompt appears only after tapping Allow on page 5. **PASS / FAIL: ______**
+- **V05-LOOK.6 Focus rests.** Start a round and put the phone down. Look for: after ~9 s the screen goes
+  near-black with only the time, dim, drifting a little each minute; the status bar hides; a touch wakes it;
+  the screen never turns itself off during the round. **PASS / FAIL: ______**
+- **V05-LOOK.7 Focus files the session.** Pick a subject, run past a minute, End. Look for: the saved card
+  names the subject and its week total; the study log on the Focus page and Stats → Focus by subject both
+  include it. **PASS / FAIL: ______**
+- **V05-LOOK.8 The + desk.** Tap +. Look for: the slips are dealt in and lift on touch; the subject you
+  are in class for is preselected; with no subjects, Class / Mark / Exam say why and offer New subject.
+  **PASS / FAIL: ______**
+
+---
+
 ## Owner's final device test (v0.5.0)
 
 Do these in order, on the phone that has v0.1.0 with your real data. Write PASS/FAIL beside each.
@@ -627,12 +661,12 @@ Do these in order, on the phone that has v0.1.0 with your real data. Write PASS/
 3. **Release key plus import.** (After you create the key, `docs/RELEASING.md` §1.) Uninstall, install
    `margin-v0.5.0-release-android.apk`, import the export from step 1. Look for: every row comes back;
    the import toast counts them.
-4. **Onboarding with Teddy.** On a fresh install (or Settings → replay the tour). Look for: the mascot
-   animates, follows typing, covers its eyes on a password-style field, and celebrates at the end. If
-   the tour still shows the coach marks instead, Teddy has not shipped in this build — note it.
-5. **The notification ask.** First launch after onboarding. Look for: Android asks once for
-   notifications; denying it leaves the app usable, and Settings → Reminders → Delivery status says
-   reminders are off and why.
+4. **Onboarding with Scrap.** On a fresh install (or Settings → Show the introduction again). Look for:
+   five pages; Scrap blinks, follows your finger and your typing, hops between pages and celebrates at the
+   end (V05-LOOK.4–5).
+5. **The notification ask.** Onboarding page 5. Look for: Android asks only after you tap Allow
+   reminders, never on its own; denying it leaves the app usable, and Settings → Reminders → Delivery
+   status says reminders are off and why.
 6. **Do Not Disturb.** If the build has the DND option: enable it, start a class or focus round. Look
    for: DND turns on and off with it. If there is no such option, note "not in this build".
 7. **The live countdown.** Start a focus round, lock the phone. Look for: the round's notification with

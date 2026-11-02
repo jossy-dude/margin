@@ -233,6 +233,20 @@ line), U1 inputs, U2 theme, S1–S7 surfaces and sound, N1 native scaffolding (R
 onboarding with Teddy, N2 notifications/DND, N3 widgets, P1 design pass, Phase 3 review. The owner's
 final device test is at the end of `docs/DEVICE_CHECKLIST.md`.
 
+### The collage pass (2026-11-01/02, DECISIONS D13)
+
+Owner direction after installing the v0.5 dev build: a new look, a paper mascot, a calmer Focus, a paper "+"
+sheet, a five-page onboarding, more fluid. Done and committed: `09364d8` (palette, texture, type, torn
+edges, paper-art generator, Scrap, onboarding, Rive removed), `61de7e7` (Focus rebuilt with ambient rest and
+the study log; the "+" desk; torn sheet tops), `258da59` (kraft nav strip, torn denim +, subject papers on
+Week, Scrap in empty states). Gate green at each: 88 suites / 1,430 tests, typecheck, lint, depcruise.
+Device checks are `docs/DEVICE_CHECKLIST.md` §V05-LOOK. Web dev server for this work: `localhost:8097`
+(the older one on 8098 had a stale watcher). Frames: `.shots/{look,ob,focus,add,nav}`.
+
+Still open from this pass: the clock faces' "bit more extra" (waiting for the owner's reference image);
+a P1-style polish of the remaining pages in the collage (Grades, Stats, Settings pages) beyond what the
+shared kit already changed.
+
 ## Earlier next steps (v0.3.x)
 
 - **v0.3.1 closed** (`5136499` + `6f5bb63`, both local — nothing pushed, nothing built). The owner
