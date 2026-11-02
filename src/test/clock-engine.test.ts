@@ -77,14 +77,18 @@ describe('A. nothing is drawn thinner than the rasteriser can render', () => {
   });
 
   it('numerals never fall below 8 device px, because below that they are a smudge and not a numeral', () => {
-    for (const f of FACES) {
-      const big = Number(staticSvg(f, palOf(f, 'refined', 'light'), 'Newsreader', 400).match(/font-size="([\d.]+)"/)![1]);
-      const small = Number(staticSvg(f, palOf(f, 'refined', 'light'), 'Newsreader', 96).match(/font-size="([\d.]+)"/)![1]);
-      expect(big).toBeGreaterThanOrEqual(f.ns);
-      expect(small).toBeGreaterThanOrEqual((200 / 96) * 8);
-      expect(small).toBeGreaterThan(big); // a 96 dp picker gets a proportionally larger numeral
+    // Rationale (collage pass): read the LARGEST font size (the hours; a face may also carry a smaller minute
+    // ring), and skip Sunburst, whose hours are cartouches and which carries no numerals at all.
+    const big = (f: (typeof FACES)[number], px: number) => Math.max(...[...staticSvg(f, palOf(f, 'refined', 'light'), 'Newsreader', px).matchAll(/font-size="([\d.]+)"/g)].map((m) => Number(m[1])));
+    for (const f of FACES.filter((x) => x.id !== 'sun')) {
+      const b4 = big(f, 400), s96 = big(f, 96);
+      expect(b4).toBeGreaterThanOrEqual(f.ns);
+      expect(s96).toBeGreaterThanOrEqual((200 / 96) * 8);
+      expect(s96).toBeGreaterThan(b4); // a 96 dp picker gets a proportionally larger numeral
     }
+    expect(staticSvg(FACES.find((x) => x.id === 'sun')!, palOf(FACES[0]!, 'refined', 'light'), 'Newsreader', 96)).not.toContain('<text');
   });
+
 
   it('a dense weave thins with the plate instead of merging into a grey disc, and gains weight as it thins', () => {
     // 20 half-pixel ellipses in a 96 px dial is a grey circle. Fewer, heavier lines is what a rose engine does on
@@ -117,7 +121,7 @@ describe('B. every centre artifact has its own velocity', () => {
   it('every face moves something — no centre may ship as a still engraving', () => {
     // Celtic Knot was the exception: it shipped as a static engraving among four instruments,
     // pinned as such by this test. It turns now, like the rest.
-    expect(moving.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']);
+    expect(moving.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's', 'hm', 'sun', 'af', 'fob']); // Rationale: the four new faces each move a part too
     expect(spinLayers('c', pal, 200).map((l) => l.key)).toEqual(['knot', 'cog']);
   });
 
@@ -133,7 +137,9 @@ describe('B. every centre artifact has its own velocity', () => {
 
   it('no face that moves more than one part moves them all at one speed', () => {
     const multi = moving.filter((f) => spinLayers(f.id, pal, 200).filter((l) => !l.osc).length > 1).map((f) => f.id);
-    expect(multi).toEqual(['rb', 'c', 's']);  // these have more than one turning part
+    // Rationale (collage pass): Guilloché gained a bead ring turning against its wheel, and Sunburst turns its rays
+    // one way and its star the other.
+    expect(multi).toEqual(['g', 'rb', 'c', 's', 'sun']);  // these have more than one turning part
     for (const id of multi) {
       // signed, not magnitude: Rosette's two lattices run at +16 and −16, which is two velocities and one figure.
       // Collapsing to |dps| would call that a uniform spin, which is exactly what it is not.
@@ -184,7 +190,9 @@ describe('B. every centre artifact has its own velocity', () => {
     const k = 236 / 200, CAP_R = 22;
     expect(ART_R * k).toBeGreaterThan(CAP_R + 12);
     // and the artifact is on every face that has one, so no face can ship with a centre the readout swallows
-    for (const id of ['g', 'rb'] as FaceId[]) expect(spinLayers(id, palOf(FACES[0]!, 'refined', 'light'), 236).map((l) => l.R * k).every((r) => r > CAP_R)).toBe(true);
+    // Rationale (Focus redesign): no capsule sits on a face any more, so only each face's MAIN artifact is held to
+    // this size — the small accents added on top (Rosette's star, Guilloché's jewel ring) are meant to be small.
+    for (const id of ['g', 'rb'] as FaceId[]) expect((spinLayers(id, palOf(FACES[0]!, 'refined', 'light'), 236)[0]!.R) * k > CAP_R).toBe(true);
   });
 });
 
@@ -311,10 +319,11 @@ describe('the gear lock held', () => {
 });
 
 describe('the face list itself', () => {
-  it('still ships five, in Settings order, with the two light-native faces first', () => {
-    expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']);
+  // Rationale (collage pass): the five keep their order and lead the list; the owner's four references follow.
+  it('ships the five, in Settings order, with the two light-native faces first, then the four new ones', () => {
+    expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's', 'hm', 'sun', 'af', 'fob']);
     expect(FACES.slice(0, 2).map((f) => f.native)).toEqual(['light', 'light']);
-    expect(FACES.map((f) => f.id).every((id) => ['g', 'rb', 'c', 'sl', 's'].includes(id as FaceId))).toBe(true);
+    expect(FACES.map((f) => f.id).every((id) => ['g', 'rb', 'c', 'sl', 's', 'hm', 'sun', 'af', 'fob'].includes(id as FaceId))).toBe(true);
   });
 });
 /**

@@ -1,4 +1,5 @@
 import { DIAL, SECOND, type Colors } from '../../tokens/theme';
+import { FILIGREE_SUB, FOB, escapeWheel, filigree, fob, halfMoon, subSecondsHand, sunRays, sunStar, sunburst } from './extra';
 
 /**
  * Dial engine — a TypeScript port of the clock-variations engine. Pure: it returns SVG strings (viewBox -100 -100 200 200 unless noted),
@@ -9,14 +10,30 @@ import { DIAL, SECOND, type Colors } from '../../tokens/theme';
  * this line and faces.test.ts's pinned id list change together.
  */
 export interface Pal { ink: string; dial: string; accent: string; second: string }
-export interface FaceSpec { id: FaceId; n: string; native: 'light' | 'dark'; ns: number; nr: number; tk: 'line' | 'dot'; rings: number[]; nosec?: boolean; drop6?: boolean }
-export type FaceId = 'g' | 'rb' | 'c' | 'sl' | 's' | 'or';
+/**
+ * `geo` puts the hands' pivot and reach somewhere other than a full-plate dial (a smaller dial inside crests,
+ * a watch hanging below its chain): `r` scales the hands, `cx/cy` moves their pivot. `hand` picks the hand
+ * drawing. `beat` is how the second hand moves — `mech` is a mechanical watch's 8 beats a second, `tick` is a
+ * wall clock's one step a second with a small overshoot, `sweep` a smooth glide. `subsec` draws the seconds on
+ * a small dial instead of the centre. `swing` hangs the whole face from the top of the plate and swings it.
+ */
+export interface FaceSpec {
+  id: FaceId; n: string; native: 'light' | 'dark'; ns: number; nr: number; tk: 'line' | 'dot'; rings: number[]; nosec?: boolean; drop6?: boolean;
+  geo?: { r: number; cx: number; cy: number }; hand?: 'classic' | 'fleur' | 'spade'; beat?: 'sweep' | 'mech' | 'tick';
+  subsec?: { x: number; y: number; r: number }; swing?: { deg: number; period: number };
+}
+export type FaceId = 'g' | 'rb' | 'c' | 'sl' | 's' | 'or' | 'hm' | 'sun' | 'af' | 'fob';
 export const FACES: FaceSpec[] = [
-  { id: 'g', n: 'Guilloché Ivory', native: 'light', ns: 12.5, nr: 68, tk: 'line', rings: [58] },
-  { id: 'rb', n: 'Rosette Blanc', native: 'light', ns: 11.5, nr: 75, tk: 'line', rings: [62, 58] },
-  { id: 'c', n: 'Celtic Knot', native: 'dark', ns: 12, nr: 74, tk: 'line', rings: [60, 56] },
+  { id: 'g', n: 'Guilloché Ivory', native: 'light', ns: 12.5, nr: 68, tk: 'line', rings: [58], beat: 'mech' },
+  { id: 'rb', n: 'Rosette Blanc', native: 'light', ns: 11.5, nr: 75, tk: 'line', rings: [62, 58], beat: 'mech' },
+  { id: 'c', n: 'Celtic Knot', native: 'dark', ns: 12, nr: 74, tk: 'line', rings: [60, 56], beat: 'mech' },
   { id: 'sl', n: 'Scales and Lily', native: 'dark', ns: 11, nr: 75, tk: 'dot', rings: [62], nosec: true, drop6: true },
-  { id: 's', n: 'Skeleton Movement', native: 'dark', ns: 11, nr: 78, tk: 'line', rings: [] },
+  { id: 's', n: 'Skeleton Movement', native: 'dark', ns: 11, nr: 78, tk: 'line', rings: [], beat: 'mech' },
+  /* the second family (owner's references, collage pass): their character is around the time, not in it */
+  { id: 'hm', n: 'Half Moon Iron', native: 'light', ns: 15, nr: 70.5, tk: 'line', rings: [], hand: 'fleur', beat: 'tick' },
+  { id: 'sun', n: 'Sunburst Engraving', native: 'light', ns: 9, nr: 60, tk: 'line', rings: [], geo: { r: 0.56, cx: 0, cy: 0 }, beat: 'mech' },
+  { id: 'af', n: 'Atelier Filigree', native: 'light', ns: 11, nr: 41, tk: 'line', rings: [], geo: { r: 0.68, cx: 0, cy: 0 }, hand: 'fleur', beat: 'tick', subsec: { x: 0, y: 30, r: 13 } },
+  { id: 'fob', n: 'Fob Watch', native: 'dark', ns: 10, nr: 40, tk: 'line', rings: [], geo: { r: 0.56, cx: 0, cy: 26 }, hand: 'spade', beat: 'tick', subsec: { x: 0, y: 51, r: 10 }, swing: { deg: 3, period: 3.6 } },
 ];
 export const faceById = (id: string): FaceSpec => FACES.find((f) => f.id === id) ?? (FACES[1] as FaceSpec);
 /** Dial palette for a face in a theme. The GROUND is a material, not a theme surface — see `DIAL` in
@@ -145,7 +162,9 @@ export const SKELETON: Gear[] = (() => {
 })();
 export const BALANCE = { x: 29, y: 33, period: 0.8, swing: 105 };
 
-export interface SpinLayer { key: string; x: number; y: number; R: number; svg: string; dps: number; osc?: { swing: number; period: number } }
+/** `tick`: the layer keeps real time and steps with the second hand's beat (an escape wheel, a small-seconds
+ *  hand); the host turns it from the clock, `dps` is its average speed (6 = once a minute). */
+export interface SpinLayer { key: string; x: number; y: number; R: number; svg: string; dps: number; osc?: { swing: number; period: number }; tick?: boolean }
 
 /* ── the two light-native centre figures, restored from the html engine (qa/COORDINATION.md §6 names it the source
    of truth for centre spinning artifacts). Both are drawn to a 48-unit radius so they fill the middle of the dial up
@@ -218,16 +237,24 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
   if (id === 'g') {
     const R = 31, arms = `<g fill="none" stroke="${engrave(pal, TONE.figure)}" stroke-width="${sw(px, 2)}">${each(12, (i) => `<line y1="-10" y2="-27" transform="rotate(${i * 30})"/>`)}<circle r="27" stroke-width="${sw(px, 1.6)}"/></g>`;
     const jewel = `<circle cy="-27" r="${f2(dot(px, 2.6))}" fill="${pal.accent}" stroke="${engrave(pal, 0.95)}" stroke-width="${sw(px, 0.7)}"/>`;
-    return [{ key: 'sun', x: 0, y: 0, R, svg: svg(arms + jewel, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -12 }];
+    /* and a ring of beads outside it turning the other way, one of them a jewel: the second cut a rose engine
+       leaves, and the second speed that makes the middle read as a movement */
+    const RB = 38, beads = each(24, (i) => { const [x, y] = P(35.5, (i * PI) / 12); return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${dot(px, i ? 1.15 : 2.1)}" fill="${i ? engrave(pal, TONE.figure) : pal.accent}"/>`; });
+    return [{ key: 'sun', x: 0, y: 0, R, svg: svg(arms + jewel, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -12 }, { key: 'beads', x: 0, y: 0, R: RB, svg: svg(beads, `${-RB} ${-RB} ${2 * RB} ${2 * RB}`), dps: 6 }];
   }
   // Rosette Blanc: the two lattices counter-rotate at equal and opposite speed, which is the whole
   // point of the figure — the weave is only alive while they slide through each other. 16 dps each (19 s a turn,
   // against): fast enough to see the lobes cross without staring, slow enough to stay an engraving.
   if (id === 'rb') {
     const R = ART_R + 1;
+    /* a jewelled eight-point star rides on top, turning slowly with neither lattice — the watchmaker's
+       signature at the centre of the weave */
+    const RS2 = 9, star = Array.from({ length: 16 }, (_, i) => P(i % 2 ? 2.8 : 7.6, (i * PI) / 8)).map(([x, y], i) => `${i ? 'L' : 'M'}${f1(x)} ${f1(y)}`).join('') + 'Z';
+    const starSvg = `<path d="${star}" fill="${pal.dial}" stroke="${engrave(pal, TONE.structure)}" stroke-width="${sw(px, 1.1)}" stroke-linejoin="round"/><circle r="${dot(px, 1.8)}" fill="${pal.accent}"/>`;
     return [
       { key: 'r1', x: 0, y: 0, R, svg: svg(ART.latOut(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 16 },
       { key: 'r2', x: 0, y: 0, R, svg: svg(ART.latIn(pal, px), `${-R} ${-R} ${2 * R} ${2 * R}`), dps: -16 },
+      { key: 'star', x: 0, y: 0, R: RS2, svg: svg(starSvg, `${-RS2} ${-RS2} ${2 * RS2} ${2 * RS2}`), dps: 6 },
     ];
   }
   // Celtic Knot used to be the one face with no movement at all — a static engraving among four instruments
@@ -259,6 +286,13 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
     const R = 15, body = `<circle r="14" fill="${pal.dial}"/><circle r="14" fill="none" stroke="${engrave(pal, .85)}" stroke-width="${sw(px, 1.4)}"/>${each(12, (i) => `<line y1="-12.5" y2="-10.5" stroke="${engrave(pal, .85)}" stroke-width="${sw(px, 1)}" transform="rotate(${i * 30})"/>`)}<path d="M0 3V-11" stroke="${pal.second}" stroke-width="${sw(px, 1.2)}" stroke-linecap="round"/><circle r="1.3" fill="${pal.second}"/>`;
     return [{ key: 'sub', x: 0, y: 36, R, svg: svg(body, `${-R} ${-R} ${2 * R} ${2 * R}`), dps: 6 }];
   }
+  /* the second family: an escape wheel that jumps once a second behind the iron hub; a sunburst whose spears
+     drift round as one ring with a small star turning against them; small seconds that tick on a sub-dial.
+     `tick` layers are turned by the host with the second hand's own beat, so they keep real time. */
+  if (id === 'hm') { const e = escapeWheel(pal, px); return [{ key: 'esc', x: 0, y: 0, R: e.R, svg: e.svg, dps: 6, tick: true }]; }
+  if (id === 'sun') { const r = sunRays(pal, px), st = sunStar(pal, px); return [{ key: 'rays', x: 0, y: 0, R: r.R, svg: r.svg, dps: 2 }, { key: 'star', x: 0, y: 0, R: st.R, svg: st.svg, dps: -8 }]; }
+  if (id === 'af') { const h = subSecondsHand(pal, px, 12); return [{ key: 'sub', x: FILIGREE_SUB.x, y: FILIGREE_SUB.y, R: h.R, svg: h.svg, dps: 6, tick: true }]; }
+  if (id === 'fob') { const h = subSecondsHand(pal, px, 9.4); return [{ key: 'sub', x: FOB.sub.x, y: FOB.sub.y, R: h.R, svg: h.svg, dps: 6, tick: true }]; }
   if (id === 'or') {
     const R = 47, ell = (i: number) => `<ellipse rx="46" ry="15" transform="rotate(${i * 11.25})"/>`;
     // two passes of one figure, each composited once as a group so the crossings inside a pass do not stack —
@@ -287,6 +321,10 @@ export function spinLayers(id: FaceId, pal: Pal, px = 200): SpinLayer[] {
  * a literal so the offline render and the tests keep a stable filename.
  */
 export function staticSvg(f: FaceSpec, pal: Pal, font: string, px = 200, uid = 'a'): string {
+  if (f.id === 'hm') return svg(halfMoon(pal, font, px, f.ns));
+  if (f.id === 'sun') return svg(sunburst(pal, px));
+  if (f.id === 'af') return svg(filigree(pal, font, px, f.ns));
+  if (f.id === 'fob') return svg(fob(pal, font, px, f.ns));
   const ink = pal.ink, o = (t: number) => `stroke="${engrave(pal, t)}" fill="none"`;
   let orn = '';
   if (f.id === 'g') orn = `${ART.guilloche(pal, px)}<circle r="30" ${o(TONE.sub)} stroke-width="${sw(px, 1.1)}"/>`;
@@ -359,12 +397,38 @@ export function handAngles(utcMs: number, offsetMs: number): { ha: number; ma: n
   return { ha: (ms / 3_600_000 % 12) * 30, ma: (ms / 60_000 % 60) * 6, sec: (ms % 60_000) / 1000 };
 }
 /** Hands point to 12 and rotate about the dial centre (the host view is the dial's size, so its centre is the pivot). */
-export function handSvg(kind: HandKind, pal: Pal, px = 200): string {
+export function handSvg(kind: HandKind, pal: Pal, px = 200, style: FaceSpec['hand'] = 'classic'): string {
   const L = kind === 'hour' ? 52 : kind === 'minute' ? 80 : 86, w = sw(px, kind === 'hour' ? 3.6 : kind === 'minute' ? 2.8 : 1.3);
+  if (style === 'fleur') return fleurHand(kind, pal, px, L);
+  if (style === 'spade') return spadeHand(kind, pal, px, L);
   if (kind === 'second') return svg(`<path d="M0 18V-${L}" stroke="${pal.second}" stroke-width="${w}" stroke-linecap="round"/><circle cy="${-L * 0.62}" r="3.2" fill="none" stroke="${pal.second}" stroke-width="${sw(px, 1.1)}"/><circle r="3.6" fill="${pal.second}" stroke="${pal.dial}" stroke-width="${sw(px, .9)}"/>`);
   const y = -L * 0.56, q = w * 2.1;
   return svg(`<path d="M0 ${f1(L * 0.14)}V${f1(y + q)}M0 ${f1(y - q)}V${f1(-L * 0.68)}" stroke="${pal.ink}" stroke-width="${w}" stroke-linecap="round"/><circle cy="${f1(y)}" r="${f1(q)}" fill="none" stroke="${pal.ink}" stroke-width="${f2(w * 0.8)}"/><path d="M0 ${-L}L${f1(w * 1.7)} ${f1(-L * 0.7)}L0 ${f1(-L * 0.63)}L${f1(-w * 1.7)} ${f1(-L * 0.7)}Z" fill="${pal.ink}"/><circle r="${f1(w * 1.7)}" fill="${pal.ink}"/>`);
 }
+/** Ornate hands for the iron and filigree faces: a scroll near the pivot, a fleur-de-lis near the tip; the
+ *  seconds hand is counterweighted with an arrow tip and a curled tail. */
+function fleurHand(kind: HandKind, pal: Pal, px: number, L: number): string {
+  if (kind === 'second') {
+    const c = pal.second;
+    return svg(`<path d="M0 22V-${L - 6}" stroke="${c}" stroke-width="${sw(px, 1.3)}" stroke-linecap="round"/><path d="M0 -${L}L-3.2 -${L - 8}L3.2 -${L - 8}Z" fill="${c}"/><circle cy="17" r="4.2" fill="${c}"/><path d="M0 22C-4 25 -5 30 -1 31" fill="none" stroke="${c}" stroke-width="${sw(px, 1.2)}" stroke-linecap="round"/><circle r="${dot(px, 3.2)}" fill="${c}"/>`);
+  }
+  const ink = pal.ink, w = sw(px, kind === 'hour' ? 3.4 : 2.4), t = L * (kind === 'hour' ? 0.72 : 0.78), lobe = kind === 'hour' ? 5.4 : 4.2;
+  return svg(`<path d="M0 ${f1(L * 0.12)}V-${f1(t)}" stroke="${ink}" stroke-width="${w}" stroke-linecap="round"/>` +
+    `<circle cy="${f1(-L * 0.3)}" r="${f1(lobe * 0.7)}" fill="none" stroke="${ink}" stroke-width="${sw(px, 1.3)}"/>` +
+    `<path d="M0 -${f1(t + lobe * 2.4)}C${f1(lobe * 0.7)} -${f1(t + lobe * 1.4)} ${f1(lobe * 0.6)} -${f1(t + lobe * 0.5)} 0 -${f1(t)}C-${f1(lobe * 0.6)} -${f1(t + lobe * 0.5)} -${f1(lobe * 0.7)} -${f1(t + lobe * 1.4)} 0 -${f1(t + lobe * 2.4)}Z" fill="${ink}"/>` +
+    `<path d="M0 -${f1(t + lobe * 0.4)}C-${f1(lobe * 1.6)} -${f1(t + lobe * 0.2)} -${f1(lobe * 1.8)} -${f1(t + lobe * 1.6)} -${f1(lobe * 0.7)} -${f1(t + lobe * 1.5)}M0 -${f1(t + lobe * 0.4)}C${f1(lobe * 1.6)} -${f1(t + lobe * 0.2)} ${f1(lobe * 1.8)} -${f1(t + lobe * 1.6)} ${f1(lobe * 0.7)} -${f1(t + lobe * 1.5)}" fill="none" stroke="${ink}" stroke-width="${sw(px, 1.4)}" stroke-linecap="round"/>` +
+    `<path d="M0 -${f1(t + lobe * 2.4)}V-${L}" stroke="${ink}" stroke-width="${sw(px, 1.4)}" stroke-linecap="round"/><circle r="${dot(px, 4.4)}" fill="${ink}"/>`);
+}
+/** Breguet-style spade hands for the fob watch: a thin shaft, a pierced spade, a fine tip. */
+function spadeHand(kind: HandKind, pal: Pal, px: number, L: number): string {
+  if (kind === 'second') return svg(`<path d="M0 14V-${L}" stroke="${pal.second}" stroke-width="${sw(px, 1.2)}" stroke-linecap="round"/><circle r="${dot(px, 2.6)}" fill="${pal.second}"/>`);
+  const ink = pal.ink, y = L * (kind === 'hour' ? 0.62 : 0.7), sp = kind === 'hour' ? 7 : 5.4;
+  return svg(`<path d="M0 ${f1(L * 0.14)}V-${f1(y)}" stroke="${ink}" stroke-width="${sw(px, kind === 'hour' ? 2.8 : 2)}" stroke-linecap="round"/>` +
+    `<path d="M0 -${f1(y - sp * 0.2)}C-${f1(sp)} -${f1(y + sp * 0.2)} -${f1(sp * 0.9)} -${f1(y + sp * 1.4)} 0 -${f1(y + sp * 1.9)}C${f1(sp * 0.9)} -${f1(y + sp * 1.4)} ${f1(sp)} -${f1(y + sp * 0.2)} 0 -${f1(y - sp * 0.2)}Z" fill="${ink}"/>` +
+    `<circle cy="-${f1(y + sp * 0.75)}" r="${f1(sp * 0.32)}" fill="${pal.dial}"/>` +
+    `<path d="M0 -${f1(y + sp * 1.9)}V-${L}" stroke="${ink}" stroke-width="${sw(px, 1.3)}" stroke-linecap="round"/><circle r="${dot(px, 3.6)}" fill="${ink}"/>`);
+}
+
 /** The dial plate and its spin layers, and *nothing else* — no hands at all.
  *
  *  This is the document a caller wants when the hands are not its own: the Focus dial and the onboarding
@@ -386,5 +450,8 @@ export function compositeSvg(f: FaceSpec, pal: Pal, font: string, t = { h: 10, m
   const strip = (s: string) => s.replace(/^<svg[^>]*>|<\/svg>$/g, '');
   const base = plateSvg(f, pal, font, px, uid, secs).replace(/^<svg[^>]*>|<\/svg>$/g, '');
   const ha = (t.h % 12) * 30 + t.m * 0.5, ma = t.m * 6 + t.s * 0.1, sa = t.s * 6;
-  return svg(`${base}<g transform="rotate(${ha})">${strip(handSvg('hour', pal, px))}</g><g transform="rotate(${ma})">${strip(handSvg('minute', pal, px))}</g>${f.nosec ? '' : `<g transform="rotate(${sa})">${strip(handSvg('second', pal, px))}</g>`}`);
+  /* the hands' pivot and reach follow the face's geometry; a face with small seconds has no centre seconds */
+  const g = f.geo ?? { r: 1, cx: 0, cy: 0 }, at = (a: number) => (f.geo ? `translate(${g.cx} ${g.cy}) scale(${g.r}) rotate(${a})` : `rotate(${a})`);
+  const hand = (k: HandKind) => strip(handSvg(k, pal, Math.max(40, px * g.r), f.hand));
+  return svg(`${base}<g transform="${at(ha)}">${hand('hour')}</g><g transform="${at(ma)}">${hand('minute')}</g>${f.nosec || f.subsec ? '' : `<g transform="${at(sa)}">${hand('second')}</g>`}`);
 }

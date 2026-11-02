@@ -22,7 +22,9 @@ describe('skeleton gear train (real meshing, not eyeballed)', () => {
   });
 });
 describe('faces', () => {
-  it('ships five distinct faces, none of the removed duplicates', () => { expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's']); expect(new Set(FACES.map((f) => f.n)).size).toBe(5); });
+  // Rationale (owner's references, collage pass): four faces joined the five — Half Moon Iron, Sunburst Engraving,
+  // Atelier Filigree and Fob Watch — appended after them, so the original order is unchanged.
+  it('ships nine distinct faces, none of the removed duplicates', () => { expect(FACES.map((f) => f.id)).toEqual(['g', 'rb', 'c', 'sl', 's', 'hm', 'sun', 'af', 'fob']); expect(new Set(FACES.map((f) => f.n)).size).toBe(9); });
   it('renders every face in both themes at three moments and writes them for the visual check', () => {
     mkdirSync('/tmp/faces', { recursive: true });
     // written at every size the app actually draws a face at: 96 (Settings picker), 124 (Today) and 400 (the
@@ -36,7 +38,7 @@ describe('faces', () => {
       }
     }
   });
-  it('every face declares a moving centre part (the static engraving is gone)', () => { const ids = (['g', 'rb', 'c', 'sl', 's'] as FaceId[]).filter((i) => spinLayers(i, dialPal(FACES[0]!, palettes.refined.light, false)).length); expect(ids).toEqual(['g', 'rb', 'c', 'sl', 's']); });
+  it('every face declares a moving part (the static engraving is gone)', () => { const all = FACES.map((f) => f.id), ids = (all as FaceId[]).filter((i) => spinLayers(i, dialPal(FACES[0]!, palettes.refined.light, false)).length); expect(ids).toEqual(all); });
   it('every moving part turns about the dial centre, inside its own viewBox', () => {
     const pal = dialPal(FACES[0]!, palettes.refined.light, false);
     for (const f of FACES) for (const l of spinLayers(f.id, pal)) {
@@ -134,7 +136,8 @@ describe('the one element id the dial engine emits is per-instance', () => {
  *  was the only place the prop could be exercised. `compositeSvg` is right for a picker thumbnail and wrong
  *  for a dial that draws its own hands, which is what `plateSvg` is for. */
 describe('hands={false} means no hands', () => {
-  const handCount = (s: string) => (s.match(/<g transform="rotate\([\d.-]+\)"><path/g) ?? []).length;
+  // a hand is a group turned about the pivot — moved and scaled first on a face with its own geometry (geo)
+  const handCount = (s: string) => (s.match(/<g transform="(?:translate\([^)]*\) scale\([^)]*\) )?rotate\([\d.-]+\)"><path/g) ?? []).length;
   it.each(FACES.map((f) => f.id))('%s: the plate carries no hand, the thumbnail carries all three', (id) => {
     const f = FACES.find((x) => x.id === id)!;
     const pal = dialPal(f, palettes.refined.light, false);
@@ -143,7 +146,7 @@ describe('hands={false} means no hands', () => {
     expect(handCount(plate)).toBe(0);
     // …and the plate is not simply "a composite with the hands chopped off": it still has the dial on it
     expect(plate.length).toBeGreaterThan(staticSvg(f, pal, 'Newsreader', 400, 'uid').length - 400);
-    expect(handCount(withHands)).toBe(f.nosec ? 2 : 3);
+    expect(handCount(withHands)).toBe(f.nosec || f.subsec ? 2 : 3); // small seconds are a layer on the sub-dial, not a centre hand
     // every hand that compositeSvg drew is exactly what plateSvg is missing
     expect(withHands.startsWith(plate.replace(/<\/svg>$/, ''))).toBe(true);
   });

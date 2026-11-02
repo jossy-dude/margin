@@ -243,7 +243,7 @@ export function SettingsSheet() {
     <Label>Texture</Label><Seg value={s.texture} opts={[['grain', 'Grain (new)'], ['photo', 'Original photo'], ['none', 'None']]} onChange={(v) => set({ texture: v })} />
   </>);
   if (page === 'clock') body = (<>
-    <Txt f="serif" s={15} c="mut">Five faces, each different at a glance. Every one works on cream and dark.</Txt>
+    <Txt f="serif" s={15} c="mut">Nine faces: the five engraved originals, then four whose character is around the time — an iron crescent, a sunburst, a filigree face and a fob watch on its chain. Every one works on light and dark paper.</Txt>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{FACES.map((f) => (
       <Pressable key={f.id} accessibilityRole="radio" accessibilityState={{ selected: s.clock === f.id }} accessibilityLabel={f.n} onPress={() => { set({ clock: f.id }); fx.select(); }} style={{ width: '31%', flexGrow: 1 }}>
         <HandBox seed={f.id} fill={s.clock === f.id ? c.hl : c.card} stroke={s.clock === f.id ? c.acc : c.ink} sw={s.clock === f.id ? 2.6 : 1.6} style={{ alignItems: 'center', padding: 8, gap: 4 }}><FaceThumb id={f.id} size={96} /><Txt f="bold" s={15} style={{ textAlign: 'center' }}>{f.n}</Txt></HandBox>
