@@ -19,6 +19,11 @@
  */
 export interface BarPeriod { start: number; end: number; label: string; cancelled?: boolean }
 
+/** The wait before a class, as a period the bars can draw: from `start - gapMs` to `start`. The deck draws this
+ *  while a class is "next up", so its bar counts down to the bell instead of sitting still (it then dims the
+ *  waited part like any running period). `gapMs` is floored at a minute. */
+export const waitPeriod = (start: number, gapMs: number, label: string): BarPeriod => ({ start: start - Math.max(60_000, gapMs), end: start, label });
+
 export type Phase = 'before' | 'running' | 'gap' | 'over';
 
 export interface Active {

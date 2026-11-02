@@ -16,6 +16,7 @@ import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
+import { PACKS } from '../domain/packs';
 import { DW, fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
 import { nudgeWord } from '../domain/timer';
 import { EXACT_ALARM_UNKNOWN, lockTextLine, logState, nextRingLine, noModuleNote, NO_MODULE_HINT, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
@@ -392,6 +393,17 @@ export function SettingsSheet() {
     {(['xlsx', 'csv', 'json'] as ExportFormat[]).map((f) => (
       <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
         <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
+    <Hair />
+    {/* A class's timetable, without anything personal: the file a classmate imports to have the whole week at
+        once, and the file a built-in class timetable is made from (domain/packs). */}
+    <Txt f="bold" s={20}>Share your class timetable</Txt>
+    <Txt f="serif" s={14.5} c="mut">Just the subjects, labs, rooms and weekly classes, plus the term dates. No attendance, marks, tasks or notes. A classmate imports it and their week is set up.</Txt>
+    <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport('timetable', 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport('timetable', 'share')} /></Row>
+    {PACKS.length ? (<>
+      <Txt f="bold" s={20} style={{ marginTop: 8 }}>Built-in class timetables</Txt>
+      <Txt f="serif" s={14.5} c="mut">Adds your section&apos;s subjects and weekly classes. Nothing you already have is removed.</Txt>
+      <Row style={{ flexWrap: 'wrap' }}>{PACKS.map((p) => <Btn key={p.id} small kind="ghost" label={p.title} onPress={() => void act.applyPack(p.id)} />)}</Row>
+    </>) : null}
     <Hair />
     <Nav icon="import" label="Import" hint="Paste a JSON export, or a compact file an AI wrote" to="import" />
     <Section title="Safety copies">

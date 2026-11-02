@@ -1,110 +1,139 @@
 import React, { useMemo, useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
-import Animated, { FadeOut } from 'react-native-reanimated';
 import { Chip, HandBox, HStrip, Row, Txt } from '../ui/kit';
-import { Heatmap, HBars, Hist24, Line2, Ring } from '../ui/charts';
-import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
+import { CalHeat, Figures, Headline, HourBars, MarkLine, Quiet, Sheet, SubjectBars } from '../ui/stats/parts';
+import { Scrap } from '../ui/mascot/Scrap';
+import { subjectTint } from '../ui/collage/tint';
+import { useNow, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { useStore } from '../store/store';
-import { Empty, Page, Section } from './common';
-import { HEAT_CELL_H, HEAT_GAP, heatRow } from '../ui/fit';
+import { HEAT_CELL_H } from '../ui/fit';
+import { Page } from './common';
 import * as A from '../domain/analytics';
-import { fmtDur, fmtHM, parseYmd, plural, startOfDay, weekdayOf } from '../domain/time';
+import { fmtDur, plural, startOfDay } from '../domain/time';
 import { ST } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
-const Card = ({ title, sub, children, seed }: { title: string; sub?: string; children: React.ReactNode; seed: string }) => (
-  <HandBox seed={seed} style={{ padding: 14, gap: 8 }}><View><Txt f="bold" s={22} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={14.5} c="mut">{sub}</Txt> : null}</View>{children}</HandBox>
-);
+/* ──────────────────────────────────────────────────────────────────────────────────────────────────────
+ * Stats, as a report (owner, collage pass: "the stats are useful but not shown properly"). Three figures and
+ * one sentence at the top; then one sheet per question — Are you showing up? Are you on top of work? Where
+ * does your study time go? When do you work best? How are your grades? — each answered in a sentence built
+ * from the numbers (domain/analytics, tested), then the evidence.
+ *
+ * Cost: the page is mounted once and kept. Data-only derivations are memoised on the data; the day series on
+ * the DAY; the attendance ones on `now`, because a class that has ended counts as "here" (BUG-014's rules).
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const WEEKS = 15;
+
 export function StatsScreen() {
   const focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
-  const { c } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions();
-  /* Frozen while this page is not the one on screen (audit M5): the tick re-derives nothing that is
-     visible, and a hidden page re-rendering every minute is what the always-mounted window costs. */
-  const live = useScreenLive(), now = useNow(live ? 60_000 : 0), iw = width - 32 - 28, [gc, setGc] = useState<string | null>(null);
-  /* The attendance heatmap's row geometry is width-derived, so it is recomputed whenever the window is.
-     28 equal cells beside a label only fit if the cells are sized from what the card actually has. */
-  const heat = heatRow(iw, 28);
-  /* Everything below is a full pass over the dataset, so it is split by what it actually depends on.
-     `useNow(live ? 60_000 : 0)` re-renders this screen every minute it is on screen; keying the
-     day-window work on the *day* rather than on `now` is what stops it running 1440 times a day for a
-     window that has not moved.
-     The three attendance derivations stay keyed on `now` on purpose: `effective()` infers "Here" once
-     a class has ended, so freezing them at midnight would leave a whole day reading as unmarked. */
+  const { c, tints } = useTheme(), { width } = useWindowDimensions();
+  const live = useScreenLive(), now = useNow(live ? 60_000 : 0), iw = width - 32 - 32, [gc, setGc] = useState<string | null>(null);
   const day = startOfDay(now);
-  const days = useMemo(() => A.lastDays(105, day), [day]), start = weekdayOf(parseYmd(days[0] as string));
+  const days = useMemo(() => A.lastDays(WEEKS * 7, day), [day]);
   const focusD = useMemo(() => A.focusMinutesByDay(focus, days), [focus, days]), doneD = useMemo(() => A.doneByDay(tasks, days), [tasks, days]);
-  const gCourse = gc ?? courses[0]?.id ?? '';
+  const gCourse = gc ?? courses.find((x) => marks.some((m) => m.courseId === x.id && m.score !== null))?.id ?? courses[0]?.id ?? '';
   const data = useMemo(() => ({
     ot: A.onTimeStats(tasks), fs: A.streak(focusD), ds: A.streak(doneD),
-    bySub: A.focusBySubject(focus, courses), gb: A.gradeBars(courses, marks, adjusts),
+    bySub: A.focusBySubject(focus, courses, days.length ? new Date(`${days[0]}T00:00:00`).getTime() : -Infinity), gb: A.gradeBars(courses, marks, adjusts),
     hours: A.doneByHour(tasks), fh: A.focusByHour(focus), series: A.markSeries(gCourse, marks),
-  }), [tasks, focus, courses, marks, adjusts, gCourse, focusD, doneD]);
-  const att = useMemo(() => ({
-    overall: A.overallAttendance(courses, meetings, attendance, dayMarks, 30, now),
-    rows: A.attendanceByCourse(courses, meetings, attendance, dayMarks, 60, now),
-    heat: A.attendanceHeat(courses, meetings, attendance, dayMarks, 28, now),
-  }), [courses, meetings, attendance, dayMarks, now]);
-  const { ot, fs, ds, bySub, gb, hours, fh, series } = data, attRows = att.rows, attHeat = att.heat, attOverall = att.overall;
-  const week = focusD.slice(-7).reduce((a, b) => a + b, 0), prev = focusD.slice(-14, -7).reduce((a, b) => a + b, 0), totalMin = focusD.reduce((a, b) => a + b, 0), totalDone = doneD.reduce((a, b) => a + b, 0);
+  }), [tasks, focus, courses, marks, adjusts, gCourse, focusD, doneD, days]);
+  const att = useMemo(() => {
+    const rows = A.attendanceByCourse(courses, meetings, attendance, dayMarks, 28, now);
+    return { rows, totals: A.attendanceTotals(rows), heat: A.attendanceHeat(courses, meetings, attendance, dayMarks, 28, now) };
+  }, [courses, meetings, attendance, dayMarks, now]);
+  const { ot, fs, ds, bySub, gb, hours, fh, series } = data;
+  const wk = A.weekOverWeek(focusD), totalMin = focusD.reduce((a, b) => a + b, 0), totalDone = doneD.reduce((a, b) => a + b, 0);
+  const fPeak = A.peakHour(fh), dPeak = A.peakHour(hours), at = (h: number | null) => (h === null ? null : A.hourTick(h, hour12));
   const hint = A.statsEmptyHint({ focusMinutes: totalMin, finished: totalDone });
-  const bestH = (h: number[]) => { const m = Math.max(...h); return m ? `${String(h.indexOf(m)).padStart(2, '0')}:00` : null; };
-  /* `bestH` stays the pure, clock-agnostic finder (the peak hour as `'HH:00'`); the printing happens here
-     so those sentences read in the app's own clock — `10:00 PM`, not a bare `22:00`. */
-  const bestFmt = (h: number[]) => { const s = bestH(h); return s ? fmtHM(s, hour12) : null; };
-  const lateWeeks = useMemo(() => tasks.filter((t) => t.status === 2 && t.completedAt && t.dueAt && t.completedAt > t.dueAt).length, [tasks]);
+  const nothing = totalMin === 0 && totalDone === 0 && att.totals.held === 0 && gb.every((g) => g.total === null);
+  const headline = A.statsHeadline({ focus: wk, done: { week: doneD.slice(-7).reduce((a, b) => a + b, 0) }, att: att.totals, onTime: ot, streak: fs.current });
+  const tint = (id: string) => (id === '_' ? c.card : subjectTint(id, tints));
+  const ticks = [0, 6, 12, 18, 23].map((h) => ({ h, label: A.hourTick(h === 23 ? 0 : h, hour12) })).slice(0, 4).concat([{ h: 23, label: hour12 ? '12 AM' : '24:00' }]);
+  const gCourseRow = courses.find((x) => x.id === gCourse), scale = A.markScale(series.map((s) => s.score), gCourseRow?.goal ?? null);
+  const graded = gb.filter((g) => g.total !== null);
+
   return (
-    <Page title="Stats" sub="Everything the app tracks, in one place">
-      {/* The one "the app woke up" moment on this screen, and the only entrance added here. It exits
-          rather than enters because that is the direction with meaning: the hint is here while there is
-          nothing to show and it leaves the moment there is. 180 ms, shorter than any enter in the app —
-          `make-interfaces-feel-better`'s "exits should be softer than enters" — and it is one small view,
-          not a per-card entrance. The rings behind it are already travelling to their new values
-          (`qa/MOTION-INVENTORY.md` §4.52), which is where the data arriving is actually felt. */}
-      {hint && <Animated.View exiting={FadeOut.duration(reduce ? 1 : 180)}><Empty icon="stats" text={hint} /></Animated.View>}
-      <Card seed="rings" title="At a glance" sub="Attendance is the last 30 days">
-        <HStrip gap={10} bg={c.card}>
-          <Ring value={attOverall.rate} label="Attendance" sub={`${attOverall.here}/${attOverall.held} classes`} />
-          <Ring value={ot.pct} label="On time" sub={`${ot.onTime}/${ot.total} tasks`} />
-          <Ring value={Math.min(1, week / 300)} label="Focus week" sub={`${fmtDur(week)} of 5h`} />
-          <Ring value={Math.min(1, fs.current / 7)} label="Focus streak" sub={`${fs.current} d · best ${fs.best}`} />
-        </HStrip>
-        <Txt f="serif" s={15.5} c="mut">{ot.avgLeadHours !== null ? `You finish on-time tasks about ${ot.avgLeadHours < 24 ? Math.round(ot.avgLeadHours) + ' h' : Math.round(ot.avgLeadHours / 24) + ' days'} before they are due. ` : ''}{prev ? `Focus is ${week >= prev ? 'up' : 'down'} ${Math.abs(Math.round(((week - prev) / prev) * 100))}% on last week. ` : ''}{lateWeeks ? `${lateWeeks} finished late.` : ''}</Txt>
-      </Card>
-      <Card seed="fheat" title="Focus heatmap" sub={`${fmtDur(totalMin)} in the last 15 weeks`}><Heatmap values={focusD} w={iw} startWd={start} unit=" min" /></Card>
-      <Card seed="dheat" title="Tasks finished" sub={`${totalDone} in the last 15 weeks · streak ${plural(ds.current, 'day')}`}><Heatmap values={doneD} w={iw} startWd={start} unit=" tasks" /></Card>
-      <Card seed="hh" title="When you work best" sub={bestFmt(fh) ? `Focus peaks around ${bestFmt(fh)}` : 'Start a focus session to see this'}><Hist24 values={fh} w={iw} /></Card>
-      <Card seed="th" title="When you tick things off" sub={bestFmt(hours) ? `Most tasks are finished around ${bestFmt(hours)}` : 'Finish a task to see this'}><Hist24 values={hours} w={iw} accent={c.ok} /></Card>
-      {bySub.length > 0 && <Card seed="sub" title="Focus by subject"><HBars items={bySub.slice(0, 6).map((s) => ({ label: s.name, value: s.min }))} w={iw} fmt={fmtDur} /></Card>}
-      <Card seed="att" title="Attendance by subject" sub="Last 60 days">
-        {attRows.length === 0 ? <Txt f="serif" s={16} c="mut">No classes yet.</Txt> : <HBars items={attRows.map((r) => ({ label: r.course.name, value: Math.round((r.rate ?? 0) * 100) }))} w={iw} fmt={(v) => `${v}%`} max={100} />}
-      </Card>
-      <Card seed="attheat" title="Attendance, last 4 weeks" sub="One row per subject, oldest to newest">
-        {attHeat.length === 0 ? <Txt f="serif" s={16} c="mut">No classes yet, so there is nothing to lay out here.</Txt> : (<>
-        {/* No horizontal ScrollView: 28 equal cells are sized from `iw` so the row fits the card exactly
-            (see `heatRow`). It used to be a fixed 70 dp label + 28 × 11 dp cells, which is 434 dp — wider
-            than the ~351 dp card — so every subject row's last cell was sliced by the right border, and
-            the label was clipped at 70 dp at the same time ("Intro to Ec…"). */}
-        <View style={{ gap: 6 }}>{attHeat.map((r) => (
-          <View key={r.course.id} style={{ flexDirection: 'row', alignItems: 'center', gap: HEAT_GAP }} accessible accessibilityLabel={`${r.course.name}: ${r.cells.filter((x) => x.status).map((x) => ST[x.status as keyof typeof ST]).join(', ')}`}>
-            <Txt f="serif" s={13} c="mut" style={{ width: heat.label }} numberOfLines={1}>{r.course.name}</Txt>
-            {r.cells.map((x) => { const col = x.status === 'a' ? c.bad : x.status === 'l' || x.status === 'n' ? c.warn : x.status === 's' ? c.ok : x.status === 'c' || x.status === 't' ? c.mut : c.ink; return <View key={x.date} style={{ width: heat.cell, height: HEAT_CELL_H, borderRadius: 3, borderWidth: 1, borderColor: hexA(c.ink, x.status ? 0.35 : 0.1), backgroundColor: x.status ? hexA(col, x.inferred ? 0.3 : 0.85) : 'transparent' }} />; })}
-          </View>))}</View>
-        <Row style={{ gap: 10 }}>{[[c.ink, 'here'], [c.warn, 'late'], [c.bad, 'absent'], [c.ok, 'sick'], [c.mut, 'cancelled']].map(([col, l]) => <Row key={l} style={{ gap: 4 }}><View style={{ width: 11, height: 11, borderRadius: 3, backgroundColor: col }} /><Txt f="serif" s={13} c="mut">{l}</Txt></Row>)}</Row>
+    <Page title="Stats" sub={nothing ? 'Fills in as you use the app' : 'This week, and the weeks behind it'}>
+      {nothing ? (
+        <HandBox seed="stats-empty" fill={c.card} style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <Scrap size={84} mood="curious" awake={live} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Txt f="bold" s={20}>Nothing to report — yet</Txt>
+            <Txt f="serif" s={15.5} c="mut">{hint ?? 'Mark a class, finish a task or run a focus session, and this page starts telling you how the term is going.'}</Txt>
+          </View>
+        </HandBox>
+      ) : (
+        <Headline line={headline} figures={[
+          { k: 'Focus this week', v: fmtDur(wk.week), sub: wk.change === null ? (wk.prev ? undefined : 'nothing last week') : `${wk.change >= 0 ? '+' : '−'}${Math.round(Math.abs(wk.change) * 100)}% on last week` },
+          { k: 'Attendance', v: att.totals.rate === null ? '—' : `${Math.round(att.totals.rate * 100)}%`, sub: att.totals.held ? `${att.totals.here} of ${att.totals.held}, 4 weeks` : 'no classes yet' },
+          { k: 'On time', v: ot.pct === null ? '—' : `${Math.round(ot.pct * 100)}%`, sub: ot.total ? `${ot.onTime} of ${plural(ot.total, 'task')}` : 'no due dates yet' },
+        ]} />
+      )}
+
+      <Sheet i={0} seed="st-att" kicker="Attendance · last 4 weeks" title="Are you showing up?" line={A.attendanceLine(att.totals, 28)}>
+        {att.heat.length === 0 ? <Quiet text="No classes in the timetable yet." /> : (<>
+          {att.rows.map((r) => {
+            const strip = att.heat.find((h) => h.course.id === r.course.id);
+            return (
+              <View key={r.course.id} style={{ gap: 5 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: tint(r.course.id), borderWidth: 1, borderColor: hexA(c.ink, 0.3) }} />
+                  <Txt f="hand" s={17} numberOfLines={1} style={{ flex: 1 }}>{r.course.name}</Txt>
+                  <Txt f="type" s={16} c={r.rate !== null && r.rate < 0.8 ? 'bad' : 'ink'}>{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</Txt>
+                </View>
+                {strip ? (
+                  <View style={{ flexDirection: 'row', gap: 2 }} accessible accessibilityLabel={`${r.course.name}, each class: ${strip.cells.filter((x) => x.status).map((x) => ST[x.status as keyof typeof ST]).join(', ') || 'none marked yet'}`}>
+                    {strip.cells.map((x) => {
+                      const col = x.status === 'a' ? c.bad : x.status === 'l' || x.status === 'n' ? c.warn : x.status === 's' ? c.ok : x.status === 'c' || x.status === 't' ? c.mut : c.ink;
+                      return <View key={x.date} style={{ flex: 1, height: HEAT_CELL_H * 0.8, borderRadius: 2, backgroundColor: x.status ? hexA(col, x.inferred ? 0.4 : 0.85) : x.cls ? hexA(c.ink, 0.12) : 'transparent', borderWidth: x.cls && !x.status ? 1 : 0, borderColor: hexA(c.ink, 0.2) }} />;
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+          <Row style={{ gap: 12, flexWrap: 'wrap' }}>{[[c.ink, 'here'], [c.warn, 'late'], [c.bad, 'absent'], [c.ok, 'sick'], [c.mut, 'cancelled']].map(([col, l]) => <Row key={l} style={{ gap: 4 }}><View style={{ width: 11, height: 11, borderRadius: 2, backgroundColor: hexA(col as string, 0.85) }} /><Txt f="serif" s={13} c="mut">{l}</Txt></Row>)}</Row>
         </>)}
-      </Card>
-      <Section title="Grades">
-        <Card seed="gb" title="Totals against goals">{gb.filter((g) => g.total !== null).length === 0 ? <Txt f="serif" s={16} c="mut">No marks yet.</Txt> : <HBars items={gb.filter((g) => g.total !== null).map((g) => ({ label: g.name, value: Math.round(g.total as number) }))} w={iw} fmt={(v) => `${v}`} max={100} />}</Card>
-        <Card seed="gl" title="Mark history" sub={courses.find((x) => x.id === gCourse)?.name}>
-          {courses.length === 0 ? <Txt f="serif" s={16} c="mut">No subjects yet. Add one to plot its marks.</Txt> : (<>
-            <HStrip gap={8} bg={c.card}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</HStrip>
-            {series.length ? <Line2 values={series.map((s) => s.score)} labels={series.map((s) => s.name)} w={iw} goal={courses.find((x) => x.id === gCourse)?.goal ?? null} /> : <Txt f="serif" s={16} c="mut">No scored marks for this subject.</Txt>}
-          </>)}
-        </Card>
-      </Section>
-      <Card seed="rem" title="Reminders" sub="What the app is set to deliver on this phone">
-        <Txt f="bold" s={19}>{plan ? `${plan.count} scheduled in the next 14 days${plan.shifted ? ` · ${plan.shifted} moved to stay out of class or quiet hours` : ''}${plan.deferred ? ` · ${plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
-      </Card>
+      </Sheet>
+
+      <Sheet i={1} seed="st-work" kicker={`Tasks · last ${WEEKS} weeks`} title="Are you on top of work?" line={A.tasksLine(ot, totalDone)}>
+        <Figures items={[
+          { k: 'finished', v: String(totalDone) },
+          { k: 'on time', v: ot.total ? `${ot.onTime}/${ot.total}` : '—', tone: 'ok' },
+          { k: 'late', v: String(ot.late), tone: ot.late ? 'bad' : undefined },
+          { k: 'day streak', v: `${ds.current}`, },
+        ]} />
+        {totalDone ? <CalHeat days={days} values={doneD} w={iw} tone={c.ok} unit=" tasks" /> : <Quiet text="Tick a task off and the calendar starts filling in." />}
+      </Sheet>
+
+      <Sheet i={2} seed="st-focus" kicker={`Focus · last ${WEEKS} weeks`} title="Where does your study time go?" line={A.focusLine(totalMin, bySub)}>
+        {bySub.length ? <SubjectBars w={iw} fmt={fmtDur} rows={bySub.slice(0, 7).map((s) => ({ id: s.id, name: s.id === '_' ? 'Not filed under a subject' : s.name, value: s.min, tint: tint(s.id) }))} /> : <Quiet text="Start a focus session for a subject and it shows up here." />}
+        {totalMin ? <CalHeat days={days} values={focusD} w={iw} tone={c.acc} unit=" min of focus" /> : null}
+        {totalMin ? <Figures items={[{ k: 'this week', v: fmtDur(wk.week) }, { k: 'last week', v: fmtDur(wk.prev) }, { k: 'day streak', v: `${fs.current}` }, { k: 'best streak', v: `${fs.best}` }]} /> : null}
+      </Sheet>
+
+      <Sheet i={3} seed="st-hours" kicker="By hour of day" title="When do you work best?" line={A.hoursLine(at(fPeak), at(dPeak))}>
+        {fPeak === null && dPeak === null ? <Quiet text="After a few sessions and finished tasks, your best hours show up here." /> : (<>
+          {fPeak !== null ? <View style={{ gap: 4 }} accessible accessibilityLabel={`Focus by hour, peak around ${at(fPeak)}`}><Txt f="bold" s={15}>Focus</Txt><HourBars values={fh} w={iw} tone={c.acc} ticks={ticks} /></View> : null}
+          {dPeak !== null ? <View style={{ gap: 4 }} accessible accessibilityLabel={`Tasks finished by hour, peak around ${at(dPeak)}`}><Txt f="bold" s={15}>Tasks finished</Txt><HourBars values={hours} w={iw} tone={c.ok} ticks={ticks} /></View> : null}
+        </>)}
+      </Sheet>
+
+      <Sheet i={4} seed="st-grades" kicker="Grades · weighted totals" title="How are your grades?" line={A.gradesLine(gb)}>
+        {graded.length ? <SubjectBars w={iw} max={100} fmt={(v) => `${Math.round(v)}`} rows={graded.map((g) => ({ id: g.id, name: g.name, value: g.total as number, tint: tint(g.id), goal: g.goal, note: g.goal != null ? `goal ${g.goal}` : undefined }))} /> : <Quiet text="No marks yet. Add one from the + and it shows up here." />}
+        {courses.length ? (<>
+          <Txt f="bold" s={17} style={{ marginTop: 4 }}>Mark history</Txt>
+          <HStrip gap={8} bg={c.card}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</HStrip>
+          {series.length ? <MarkLine w={iw} values={series.map((s) => s.score)} labels={series.map((s) => s.name)} scale={scale} goal={gCourseRow?.goal ?? null} /> : <Quiet text={`No scored marks for ${gCourseRow?.name ?? 'this subject'} yet.`} />}
+        </>) : null}
+      </Sheet>
+
+      <View style={{ paddingHorizontal: 4, gap: 2 }}>
+        <Txt f="bold" s={16}>Reminders</Txt>
+        <Txt f="serif" s={14.5} c="mut">{plan ? `${plan.count} scheduled in the next 14 days${plan.shifted ? ` · ${plan.shifted} moved to stay out of class or quiet hours` : ''}${plan.deferred ? ` · ${plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
+      </View>
     </Page>
   );
 }

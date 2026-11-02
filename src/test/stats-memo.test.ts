@@ -46,7 +46,7 @@ jest.mock('react-native-reanimated', () => {
     Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
-    withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
+    withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
     /* Layout-animation builders are called as `FadeOut.duration(n)` in production. */
     FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
   };
@@ -89,8 +89,9 @@ const DATA_ONLY = ['onTimeStats', 'focusBySubject', 'gradeBars', 'doneByHour', '
 describe('Stats does not re-derive the whole dataset on every render (BUG-014)', () => {
   it('renders the real page, so the counts below are not measuring a blank screen', async () => {
     const s = await mount();
-    expect(s.json()).toContain('At a glance');
-    expect(s.json()).toContain('Focus heatmap');
+    // Rationale (Stats rebuild): the page is now a report of questions; these two headings prove it rendered.
+    expect(s.json()).toContain('Are you showing up?');
+    expect(s.json()).toContain('Where does your study time go?');
     for (const name of DATA_ONLY) expect({ name, ran: countsOf()[name]! > 0 }).toEqual({ name, ran: true });
   });
 
@@ -136,7 +137,7 @@ describe('Stats does not re-derive the whole dataset on every render (BUG-014)',
     // These three must NOT move into the day bucket: `effective()` infers "Here" once a class has
     // ended, so freezing them at midnight would leave a whole day of classes reading as unmarked.
     const src = readFileSync(join(__dirname, '../screens/Stats.tsx'), 'utf8');
-    expect(src).toContain('overallAttendance');
+    expect(src).toContain('attendanceTotals'); // Rationale: one pass now — the totals are summed from the per-subject rows
     expect(src).toContain('attendanceByCourse');
     expect(src).toContain('attendanceHeat');
     expect(src).toContain('[courses, meetings, attendance, dayMarks, now]');

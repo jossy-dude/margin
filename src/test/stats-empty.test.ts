@@ -88,8 +88,12 @@ describe('the Stats empty-state hint actually fires (BUG-024)', () => {
 
   it('Stats renders the hint this function returns, and the AND guard is gone', () => {
     const src = readFileSync(join(__dirname, '../screens/Stats.tsx'), 'utf8');
+    // Rationale (Stats rebuild): with nothing at all the page shows Scrap and the hint; with half the data,
+    // each empty section says what fills it, instead of one hint above blank charts.
     expect(src).toContain('statsEmptyHint');
-    expect(src).toContain('text={hint}');
+    expect(src).toContain("{hint ?? '");
+    expect(src).toContain('Tick a task off and the calendar starts filling in.');
+    expect(src).toContain('Start a focus session for a subject and it shows up here.');
     expect(src).not.toContain('st.focus.length === 0 && st.tasks.every');
   });
 });

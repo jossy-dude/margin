@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { DayBar, type AnyBarKind } from '../ui/DayBar';
-import { Btn, HandBox, HStrip, Icon, Tape, Txt } from '../ui/kit';
+import { Btn, HandBox, HStrip, Icon, Txt } from '../ui/kit';
 import { handPath } from '../ui/hand';
 import { RunningTimer } from '../ui/RunningTimer';
 import { useNow, useTheme } from '../ui/theme-context';
@@ -15,6 +15,9 @@ import { roomOf } from '../domain/rooms';
 import { effective, dayBlock, isCancelled, occEnd, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
+import { waitPeriod } from '../ui/instruments/time';
+import { NoteCard } from '../ui/collage/NoteCard';
+import { sortNotes } from '../ui/collage/notes';
 import { FS } from '../ui/fit';
 import type { Course, SubjectVariant, Task } from '../domain/types';
 import { fx } from '../services/fx';
@@ -298,6 +301,11 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   const soon = d.state === 'soon' && d.period !== null;
   const prevEnd = soon ? periods.slice(0, d.at).filter((p) => !p.cancelled).pop()?.end ?? startOfDay(t) : 0;
   const gapMs = soon ? Math.max(60_000, d.period!.start - prevEnd) : 0;
+  /* Before a class starts, the bar counts down to it (owner: "the progress bar should move when it's until
+     class begins"): it draws the WAIT — the same window the start disc fills across — as the period, so the
+     bar and the disc agree, and the wait dims as it passes like every other bar. Once the class starts, the
+     bar is the class again. */
+  const shown = soon ? [waitPeriod(d.period!.start, gapMs, `until ${d.period!.label}`)] : barPeriods;
   return (
     <HandBox seed="deck" fill={c.deck} stroke={c.deck} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
       <SlabHatch ink={c.deckInk} />
@@ -379,7 +387,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           <StartCircle leftMs={Math.max(0, d.period!.start - t)} gapMs={gapMs} />
         </View>
       )}
-      <DayBar kind={bar} periods={barPeriods} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
+      <DayBar kind={bar} periods={shown} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
       {/* `.aft` — a dashed rule, then what the day does next. */}
       <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
         <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>After</Txt>
@@ -500,14 +508,7 @@ export function TodayScreen() {
             keeps `mut`. Pinned by `src/test/color-drift.test.ts` and the table in `src/test/ui.test.ts`. */}
         {st.notices.length === 0 ? <Empty text="Nothing pinned. Add a reminder to yourself." /> : (
           <HStrip gap={12} contentStyle={{ paddingTop: 8 }}>
-            {st.notices.map((n, i) => (
-              <Pressable key={n.id} accessibilityRole="button" accessibilityLabel={`Note: ${n.text}`} onPress={() => act.open({ t: 'notice', id: n.id })} style={{ transform: [{ rotate: `${(i % 3 - 1) * 1.6}deg` }] }}>
-                <HandBox seed={n.id} fill={n.priority >= 2 ? c.hl : c.card} style={{ width: 220, minHeight: 110, padding: 12, paddingTop: 16 }}>
-                  <Tape w={46} rot={-6} style={{ top: -9, left: 90 }} />
-                  <Txt f="serif" s={13.5} c={n.priority >= 2 ? c.ink : 'mut'}>{st.courses.find((x) => x.id === n.courseId)?.name ?? 'Reminder'}{n.priority >= 2 ? ' · important' : ''}</Txt>
-                  <Txt f="hand" s={19} numberOfLines={5}>{n.text}</Txt>
-                </HandBox>
-              </Pressable>))}
+            {sortNotes(st.notices, now).map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} live={focused} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
           </HStrip>)}
       </Section>
       <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>

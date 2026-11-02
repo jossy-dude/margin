@@ -65,12 +65,16 @@ describe('chart labels are bounded by pixels, never by a character count (BUG-03
     expect(charts).toMatch(/barW = Math\.max\(24, w - labelW - valW - 16\)/);
   });
 
-  it('Stats still renders one HBars per bar-card and no hand-sliced label of its own', () => {
-    // The four affected cards are all HBars or Line2 callers; a new character-budget slice in Stats
-    // would be the same defect reintroduced one layer up.
+  /* Rationale (Stats rebuild, collage pass): the page now draws its bars and its mark history with the
+     report parts in ui/stats/parts.tsx; the rule — labels bounded by pixels, never a character count — is
+     held over both files. */
+  it('Stats and its report parts slice no label to a character count', () => {
+    const parts = readFileSync(join(__dirname, '..', 'ui', 'stats', 'parts.tsx'), 'utf8');
     expect(stats).not.toMatch(CHAR_BUDGET);
-    expect([...stats.matchAll(/<HBars\b/g)]).toHaveLength(3);
-    expect([...stats.matchAll(/<Line2\b/g)]).toHaveLength(1);
+    expect(parts).not.toMatch(CHAR_BUDGET);
+    expect(parts).toMatch(/left: X\(i\) - slot \/ 2, width: slot/);
+    expect([...stats.matchAll(/<SubjectBars\b/g)]).toHaveLength(2);
+    expect([...stats.matchAll(/<MarkLine\b/g)]).toHaveLength(1);
   });
 
   it('the rule is not vacuous: it catches the exact truncations this fix removed', () => {

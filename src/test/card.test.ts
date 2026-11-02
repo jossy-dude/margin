@@ -337,7 +337,10 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     // …and it is the same `periods` array the bar was already drawn from.
     // v0.5 S2: the bar draws the selected day's periods minus the OTHER classes of a shared slot.
     expect(src).toContain('periods.filter((_, i) => !(d.slot.includes(i) && i !== d.at))');
-    expect(src).toContain('<DayBar kind={bar} periods={barPeriods}');
+    // Rationale (owner, collage pass): before a class the bar draws the WAIT (`waitPeriod`, behaviour-tested in
+    // instruments-wait.test.ts), and the class's periods again once it starts.
+    expect(src).toContain('const shown = soon ? [waitPeriod(d.period!.start, gapMs,');
+    expect(src).toContain('<DayBar kind={bar} periods={shown}');
   });
 
   it('the countdown ticks at 1 Hz only while Today is on screen', () => {

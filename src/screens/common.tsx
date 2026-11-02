@@ -86,14 +86,32 @@ export function nextWhen(start: number, now: number, h12 = false) {
   const rel = relDue(start, now, h12), at = fmtTime(start, h12);
   return rel.includes(at) ? rel : `at ${at} · ${rel}`;
 }
-const KIND_ICON: Record<Task['kind'], string> = { assignment: 'tasks', exam: 'exam', reading: 'book', project: 'flag', lab: 'lab', deadline: 'flag', other: 'pencil' };
+const KIND_ICON: Record<Task['kind'], string> = { assignment: 'tasks', exam: 'exam', reading: 'book', project: 'flag', lab: 'lab', deadline: 'timer', other: 'pencil' };
+/** What kind of thing a task is, said at a glance (owner: "I can't tell a simple to-do from a project"):
+ *  a paper tag in the kind's own paper colour, stuck on the card's top edge. `other` is the plain to-do. */
+export const KIND_TAG: Record<Task['kind'], { label: string; tint: 'sky' | 'blush' | 'sand' | 'sage' | 'cream' | 'hl' | 'card' }> = {
+  assignment: { label: 'Assignment', tint: 'sky' }, exam: { label: 'Exam', tint: 'blush' }, reading: { label: 'Reading', tint: 'sand' },
+  project: { label: 'Project', tint: 'sage' }, lab: { label: 'Lab', tint: 'cream' }, deadline: { label: 'Deadline', tint: 'hl' }, other: { label: 'To-do', tint: 'card' },
+};
+function KindTag({ kind, seed }: { kind: Task['kind']; seed: string }) {
+  const { c, tints } = useTheme(), k = KIND_TAG[kind], bg = k.tint === 'hl' ? c.hl : k.tint === 'card' ? c.card : tints[k.tint];
+  const tilt = (seed.charCodeAt(seed.length - 1) % 2 ? 2.4 : -2.4);
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: -10, right: 14, transform: [{ rotate: `${tilt}deg` }], zIndex: 2 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <HandBox seed={`tag-${seed}`} fill={bg} cut="cut" shadow style={{ height: 23, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Icon name={KIND_ICON[kind]} size={13} color={c.ink} sw={2} />
+        <Txt f="bold" s={13.5} maxFontSizeMultiplier={FS}>{k.label}</Txt>
+      </HandBox>
+    </View>
+  );
+}
 /** Memoized: a card only re-renders when its task object changes or the minute boundary flips (its text is
  *  minute-granular). Narrow selectors keep it off every unrelated store write, and it opens its own sheet so
  *  the parent can't hand it a fresh inline callback that would defeat the memo. `tour` is the slot id the
  *  tour's swipe step points at — handed by To-do and deliberately not by Today, so the ring lands on a row
  *  of the page the user is actually looking at. */
 export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now: number }) {
-  const { c } = useTheme();
+  const { c, tints } = useTheme();
   const reduce = useReduceMotion(), press = useSharedValue(1), check = useSharedValue(1);
   /* Press feedback on the card itself: the ripple is real but invisible — HandBox paints an opaque
      fill straight over it — so without the dip the only cue that a tap registered was the sheet opening.
@@ -109,12 +127,16 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
     <SwipeCard onComplete={() => act.toggleTask(t.id)} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
       <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
-        accessibilityRole="button" accessibilityLabel={`${t.title}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
-        <Animated.View style={face}>
+        accessibilityRole="button" accessibilityLabel={`${t.title}, ${KIND_TAG[t.kind].label.toLowerCase()}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
+        <Animated.View style={[face, { marginTop: 8 }]}>
+          {/* A project is bigger than one sheet: a second one peeks out behind it. */}
+          {t.kind === 'project' && !done ? <HandBox seed={`${t.id}-under`} fill={tints.sage} style={{ position: 'absolute', left: 6, right: -3, top: 5, bottom: -5, transform: [{ rotate: '1.2deg' }] }} /> : null}
           <HandBox seed={t.id} fill={done ? c.paper : c.card} stroke={late ? c.bad : c.ink} style={{ paddingLeft: 52, paddingRight: 12, paddingVertical: 11, minHeight: 66, opacity: done ? 0.78 : 1 }}>
+            <KindTag kind={t.kind} seed={t.id} />
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={`Mark ${t.title} ${done ? 'not done' : 'done'}`} onPress={() => act.toggleTask(t.id)} hitSlop={6} style={{ position: 'absolute', left: 4, top: 0, bottom: 0, width: 46, alignItems: 'center', justifyContent: 'center' }}
               onPressIn={() => check.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => check.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
-              <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: 2, borderColor: c.ink, backgroundColor: done ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-3deg' }] }, box]}>{done && <Icon name="check" size={20} color={c.card} sw={2.6} />}</Animated.View>
+              {/* An exam's box is round, like the stamp it will get; everything else is a square box. */}
+              <Animated.View style={[{ width: 28, height: 28, borderRadius: t.kind === 'exam' ? 14 : 7, borderWidth: 2, borderColor: c.ink, backgroundColor: done ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-3deg' }] }, box]}>{done && <Icon name="check" size={20} color={c.card} sw={2.6} />}</Animated.View>
             </Pressable>
             <Txt f="bold" s={22} style={done ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{t.title}</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 2 }}>

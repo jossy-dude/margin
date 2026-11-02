@@ -3,7 +3,8 @@ import { BackHandler, Keyboard, Platform, Pressable, ScrollView, TextInput, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { Btn, HandBox, Icon, Txt, faceOf } from '../ui/kit';
+import { Btn, Chip, HandBox, Icon, Txt, faceOf } from '../ui/kit';
+import { PACKS, programs, sectionsOf } from '../domain/packs';
 import { PaperBg } from '../ui/PaperBg';
 import { SemesterRange } from '../ui/SemesterRange';
 import { Art } from '../ui/collage/Art';
@@ -41,7 +42,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const settings = useStore((s) => s.settings);
   const [page, setPage] = useState(0), [name, setName] = useState(settings.name ?? ''), [typing, setTyping] = useState(false);
   const [range, setRange] = useState({ semesterStart: settings.semesterStart, semesterEnd: settings.semesterEnd });
-  const [door, setDoor] = useState<OnboardDoor>(firstRun ? 'hand' : 'keep'), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
+  const [door, setDoor] = useState<OnboardDoor>(PACKS.length ? 'class' : firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
   const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<ScrapCue | null>(null), [steer, setSteer] = useState(false);
   const x = useSharedValue(0), gx = useSharedValue(0), gy = useSharedValue(0.2), leave = useSharedValue(0);
   const pager = useRef<Animated.ScrollView>(null), gone = useRef(false), touch = useRef({ x: 0, y: 0, t: 0 }), steerT = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,13 +114,15 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
     if (gone.current) return;
     gone.current = true;
     Keyboard.dismiss();
-    const choice = { door: d, name, semesterStart: range.semesterStart, semesterEnd: range.semesterEnd };
+    /* "Pick your class" without a section picked is the same as setting it up by hand. */
+    const dd: OnboardDoor = d === 'class' && !pack ? (firstRun ? 'hand' : 'keep') : d;
+    const choice = { door: dd, name, semesterStart: range.semesterStart, semesterEnd: range.semesterEnd, pack };
     const done = () => { void act.finishOnboarding(choice); };
     if (reduce) { done(); return; }
     setMood('happy'); play('celebrate'); fx.done();
     /* The whole stack is lifted off the desk: up and away, the way a sheet is taken off a pad. */
     leave.set(withSequence(withTiming(0, { duration: 650 }), withTiming(1, { duration: 420, easing: Easing.in(Easing.cubic) }, (f) => { if (f) runOnJS(done)(); })));
-  }, [name, range, reduce, leave, play]);
+  }, [name, range, reduce, leave, play, pack, firstRun]);
 
   const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: -leave.get() * H * 1.05 }, { rotate: `${leave.get() * -4}deg` }] }));
   const skipDoor: OnboardDoor = firstRun ? 'sample' : 'keep';
@@ -192,7 +195,8 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
             <SemesterRange start={range.semesterStart} end={range.semesterEnd} onChange={(p) => setRange(p)} />
           </HandBox>
           <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where does your timetable come from?</Txt>
-          <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); play('nod'); setMood(d === 'sample' ? 'happy' : d === 'import' ? 'curious' : 'idle'); }} />
+          <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); play('nod'); setMood(d === 'sample' ? 'happy' : d === 'import' || d === 'class' ? 'curious' : 'idle'); }} />
+          {door === 'class' ? <ClassPicker value={pack} onChange={(id) => { setPack(id); fx.select(); setMood('happy'); play('hop'); }} /> : null}
         </>)}
         {heroShell(4, hero5 - 6, <>
           <Art name="sun" w={120} style={{ position: 'absolute', left: -34, top: ins.top + 44 }} />
@@ -271,7 +275,8 @@ function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; on
   );
 }
 
-const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream'; first?: boolean; later?: boolean }[] = [
+const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
+  { id: 'class', icon: 'grad', title: 'Pick your class', line: 'Your section\'s subjects and weekly classes, ready made.', tint: 'blush', packs: true },
   { id: 'import', icon: 'import', title: 'Bring a file', line: 'Import a JSON or CSV export, or paste one in.', tint: 'sky' },
   { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, then add your subjects with +.', tint: 'sage', first: true },
   { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample semester, just for this session.', tint: 'sand', first: true },
@@ -279,7 +284,7 @@ const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint:
 ];
 function Doors({ firstRun, value, onChange }: { firstRun: boolean; value: OnboardDoor; onChange: (d: OnboardDoor) => void }) {
   const { c, tints } = useTheme();
-  const list = DOORS.filter((d) => (firstRun ? !d.later : !d.first));
+  const list = DOORS.filter((d) => (firstRun ? !d.later : !d.first) && (!d.packs || PACKS.length > 0));
   return (
     <View style={{ gap: 8 }} accessibilityRole="radiogroup">
       {list.map((d, i) => { const on = d.id === value; return (
@@ -291,6 +296,19 @@ function Doors({ firstRun, value, onChange }: { firstRun: boolean; value: Onboar
           </HandBox>
         </Pressable>); })}
     </View>
+  );
+}
+
+/** The built-in class timetables (domain/packs): the program, then its sections. */
+function ClassPicker({ value, onChange }: { value: string | null; onChange: (id: string) => void }) {
+  const { c } = useTheme(), progs = programs(), [prog, setProg] = useState(progs[0] ?? '');
+  return (
+    <HandBox seed="ob-class" fill={c.card} style={{ padding: 12, gap: 8, marginTop: 8 }}>
+      <Txt f="serif" s={14.5} c="mut">Your program</Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{progs.map((p) => <Chip key={p} small label={p} on={p === prog} onPress={() => setProg(p)} />)}</View>
+      <Txt f="serif" s={14.5} c="mut">Your section</Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{sectionsOf(prog).map((p) => <Chip key={p.id} label={`Section ${p.section}`} on={value === p.id} onPress={() => onChange(p.id)} />)}</View>
+    </HandBox>
   );
 }
 

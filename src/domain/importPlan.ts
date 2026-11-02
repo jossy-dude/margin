@@ -176,7 +176,7 @@ const derived = (kind: string, key: string) => `imp-${kind}-${shortHash(key)}`;
 
 /** Every top-level key the two shapes may carry. Shape A's list is the export's own table names (see
  *  `toJson`) plus the envelope; anything else is reported, not guessed at. */
-const A_KEYS = new Set(['app', 'version', 'format', 'semesters', 'Variants', 'Semesters', 'exportedAt', 'raw', 'Summary', 'Courses', 'Timetable', 'Attendance', 'Day marks', 'Tasks', 'Subtasks', 'Reminders', 'Notices', 'Marks', 'Focus sessions', 'Trips', 'Alarms', 'Settings']);
+const A_KEYS = new Set(['app', 'version', 'format', 'pack', 'semesters', 'Variants', 'Semesters', 'exportedAt', 'raw', 'Summary', 'Courses', 'Timetable', 'Attendance', 'Day marks', 'Tasks', 'Subtasks', 'Reminders', 'Notices', 'Marks', 'Focus sessions', 'Trips', 'Alarms', 'Settings']);
 const B_KEYS = new Set(['app', 'version', 'exportedAt', 'profileName', 'semester', 'courses', 'days', 'attendance', 'tasks', 'marks']);
 
 export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan {

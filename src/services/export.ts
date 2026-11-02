@@ -54,6 +54,19 @@ export const toJson = (s: Snapshot, now: number, terms: readonly SemesterRow[] =
   raw: s, semesters: terms.filter((t) => !t.active && t.snapshotJson),
 }, null, 2);
 
+/** A shareable class timetable (collage pass): the same `margin/2` shape an import reads, carrying ONLY the
+ *  subjects, their variants (lab, tutorial…), rooms and weekly classes, and the term's dates — no attendance,
+ *  marks, tasks, notes, focus or name. A classmate imports it and has the whole week in one step; dropped into
+ *  `src/domain/packs/` it becomes a built-in timetable the onboarding offers. Sample rows are left out. */
+export interface PackMeta { program: string; section: string; title: string }
+export const toTimetableJson = (s: Snapshot, now: number, meta: PackMeta) => {
+  const courses = s.courses.filter((c) => !c.demo), ids = new Set(courses.map((c) => c.id));
+  return JSON.stringify({
+    app: 'margin', format: 'margin/2', version: 2, exportedAt: isoUtc(now), pack: meta,
+    raw: { courses, meetings: s.meetings.filter((m) => !m.demo && ids.has(m.courseId)), variants: (s.variants ?? []).filter((v) => ids.has(v.subjectId)), settings: { semesterStart: s.settings.semesterStart, semesterEnd: s.settings.semesterEnd } },
+  }, null, 2);
+};
+
 const csvCell = (v: Cell) => { const x = v === null ? '' : String(v); return /[",\r\n]/.test(x) || /^[=+\-@]/.test(x) && typeof v === 'string' ? `"${(/^[=+\-@]/.test(x) && typeof v === 'string' ? "'" + x : x).replace(/"/g, '""')}"` : x; };
 export const toCsv = (t: Table) => '\uFEFF' + [t.header, ...t.rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 

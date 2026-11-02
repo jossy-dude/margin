@@ -21,7 +21,7 @@ import { nudgeStep, nudgeWord } from '../domain/timer';
 import { APP_VERSION } from '../domain/version';
 import type { NotifStatus } from '../services/notifications';
 import { SettingsSheet } from '../sheets/Settings';
-import { AboutPage, SUPPORT_URL } from '../sheets/AboutPage';
+import { AboutPage, GITHUB_URL, SUPPORT_URL } from '../sheets/AboutPage';
 import { clearCrashes, recordCrash, type CrashEntry } from '../services/problems';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -608,11 +608,14 @@ describe('About and Reset are two pages, and the support row is absent until its
   it('About says what this is and what this build is, and carries no erase button', async () => {
     const t = (await page(['about'])).text();
     expect(t).toContain(`Margin ${APP_VERSION}`);
-    expect(t).toContain('A school planner in paper and ink, on your phone.');
-    expect(t).toContain('What it holds');
-    expect(t).toContain('Why it looks like this');
+    // Rationale (owner's About rewrite, collage pass): new copy — a one-line description, "What it's for",
+    // "Why it looks like paper", and "Made by" with Jossy as a signature on its own line.
+    expect(t).toContain('A school planner — on paper, in your pocket.');
+    expect(t).toContain("What it's for");
+    expect(t).toContain('Why it looks like paper');
     expect(t).toContain('Who made it');
-    expect(t).toContain('Made by Jossy');
+    expect(t).toContain('Made by');
+    expect(t).toContain('Jossy');
     expect(t).toContain('Updates');
     expect(t).not.toContain('Erase everything');
     expect(t).not.toContain('undefined');
@@ -622,7 +625,7 @@ describe('About and Reset are two pages, and the support row is absent until its
     const t = (await page(['reset'])).text();
     expect(t).toContain('Erase everything');
     expect(t).toContain('This erases the whole database file');
-    expect(t).not.toContain('Why it looks like this');
+    expect(t).not.toContain('Why it looks like paper');
     expect(t).not.toContain(`Margin ${APP_VERSION}`); // the version moved off the erase page
   });
 
@@ -633,10 +636,24 @@ describe('About and Reset are two pages, and the support row is absent until its
     expect(getState().settingsPath).toEqual(['reset']); // it armed instead of acting
   });
 
-  it('SUPPORT_URL ships blank, so the section it controls does not exist', async () => {
-    expect(SUPPORT_URL).toBe('');
-    expect((await page(['about'])).text()).not.toContain('Buy me a coffee');
-    expect((await page(['about'])).text()).not.toContain('Support');
+  /* Rationale (owner gave the link, collage pass): SUPPORT_URL is now the owner's Gursha page; the rule that a
+     blank link means NO section at all still holds, so it is tested through the prop. */
+  it('SUPPORT_URL is the owner\'s Gursha page, and a blank link means no section at all', async () => {
+    expect(SUPPORT_URL).toBe('https://gurshaplus.com/jossy');
+    expect((await page(['about'])).text()).toContain('Feed the developer');
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => { r = TestRenderer.create(React.createElement(AboutPage, { supportUrl: '' })); });
+    const t = r.root.findAll((n) => String(n.type) === 'Text').map((n) => String(n.children[0] ?? '')).join(' ');
+    expect(t).not.toContain('Feed the developer');
+    expect(r.root.findAll((n) => (n.props as { accessibilityLabel?: unknown }).accessibilityLabel === 'Buy Jossy a gursha')).toHaveLength(0);
+  });
+
+  it('the star button opens the GitHub repository', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const s = await page(['about']);
+    await act(async () => { pressable(s, 'Star Margin on GitHub').onPress(); });
+    expect(open).toHaveBeenCalledWith(GITHUB_URL);
+    open.mockRestore();
   });
 
   it('a pasted support URL adds the row, and the row opens exactly that URL', async () => {
@@ -645,7 +662,7 @@ describe('About and Reset are two pages, and the support row is absent until its
     await act(async () => { r = TestRenderer.create(React.createElement(AboutPage, { supportUrl: 'https://buymeacoffee.com/jossy' })); });
     const btn = r.root.findAll((n) => {
       const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
-      return p.accessibilityLabel === 'Buy me a coffee' && typeof p.onPress === 'function';
+      return p.accessibilityLabel === 'Buy Jossy a gursha' && typeof p.onPress === 'function';
     })[0];
     expect(btn).toBeDefined();
     await act(async () => { (btn!.props as { onPress: () => void }).onPress(); });
@@ -660,7 +677,7 @@ describe('About and Reset are two pages, and the support row is absent until its
     await act(async () => { r = TestRenderer.create(React.createElement(AboutPage, { supportUrl: 'nope://coffee' })); });
     const btn = r.root.findAll((n) => {
       const p = n.props as { accessibilityLabel?: unknown; onPress?: unknown };
-      return p.accessibilityLabel === 'Buy me a coffee' && typeof p.onPress === 'function';
+      return p.accessibilityLabel === 'Buy Jossy a gursha' && typeof p.onPress === 'function';
     })[0]!;
     await act(async () => { (btn.props as { onPress: () => void }).onPress(); });
     await act(async () => { await Promise.resolve(); });

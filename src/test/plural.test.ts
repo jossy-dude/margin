@@ -42,7 +42,9 @@ describe('pluralisation (BUG-029)', () => {
 
   it('and it is the plural helper the screen uses, not a copy that can drift', () => {
     const stats = readFileSync(join(__dirname, '../screens/Stats.tsx'), 'utf8');
-    expect(stats).toContain("streak ${plural(ds.current, 'day')}");
+    // Rationale (Stats rebuild): the streak is now a figure ("3" over "day streak"), so no sentence needs
+    // pluralising there; the sentences that do (attendance, tasks) are built with `plural` in analytics.
+    expect(stats).toContain("{ k: 'day streak', v: `${ds.current}`");
     expect(stats).not.toMatch(/streak \$\{[^}]*\} days/); // the old shape is gone
   });
 });

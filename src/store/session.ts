@@ -3,7 +3,8 @@ import { MemoryRepository } from '../data/memory';
 import { seedSnapshot } from '../data/seed';
 import { TOUR_VERSION, toured } from '../domain/defaults';
 import { hasRealRows } from '../domain/rows';
-import type { ImportPlan } from '../domain/importPlan';
+import { parseImport, type ImportPlan } from '../domain/importPlan';
+import { packById } from '../domain/packs';
 import { recordCrash } from '../services/problems';
 import { configureFx } from '../services/fx';
 import { applySnapshot, getState, set, type State } from './core';
@@ -169,8 +170,20 @@ export async function adoptDemo(keepSamples: boolean) {
 /** Where the onboarding's data page sent the user. `sample` keeps the sample semester for this session,
  *  `hand` starts empty, `import` starts empty and opens Import (file or paste), `keep` is a replay on a
  *  planner that already holds the user's own data: nothing about the data changes. */
-export type OnboardDoor = 'sample' | 'hand' | 'import' | 'keep';
-export interface OnboardChoice { door: OnboardDoor; name: string; semesterStart: string; semesterEnd: string }
+export type OnboardDoor = 'sample' | 'hand' | 'import' | 'keep' | 'class';
+export interface OnboardChoice { door: OnboardDoor; name: string; semesterStart: string; semesterEnd: string; pack?: string | null }
+
+/** Apply a built-in class timetable (domain/packs): the ordinary merge-only import of its file. Returns
+ *  whether it landed; a pack that will not parse says why instead of throwing. */
+export async function applyPack(id: string): Promise<boolean> {
+  const p = packById(id); if (!p) { toast('That class timetable is not in this build'); return false; }
+  const st = getState();
+  const plan = parseImport(JSON.stringify(p.data()), { courses: st.courses, meetings: st.meetings, tasks: st.tasks, attendance: st.attendance, dayMarks: st.dayMarks, marks: st.marks, variants: st.variants ?? [], now: Date.now() });
+  if (plan.problems.length) { toast(`Couldn't read ${p.title}: ${plan.problems[0]!.message ?? 'the file has a problem'}`); return false; }
+  const ok = await importPlan(plan);
+  if (ok) toast(`${p.title} is in — ${plan.counts.courses ?? 0} subjects, ${plan.counts.meetings ?? 0} weekly classes`);
+  return ok;
+}
 
 /**
  * Leave the onboarding. In this order, because each step writes where the previous one left the store:
@@ -183,10 +196,11 @@ export async function finishOnboarding(o: OnboardChoice) {
   const s0 = getState().settings, name = o.name.trim().slice(0, 40), moved = o.semesterStart !== s0.semesterStart || o.semesterEnd !== s0.semesterEnd;
   setSettings({ name, ...(db.demo && moved ? { semesterStart: o.semesterStart, semesterEnd: o.semesterEnd } : {}) });
   if (o.door !== 'keep') await adoptDemo(o.door === 'sample');
+  if (o.door === 'class' && o.pack) await applyPack(o.pack);
   const s1 = getState().settings;
   if (o.semesterStart && (o.semesterStart !== s1.semesterStart || o.semesterEnd !== s1.semesterEnd)) await setActiveRange(o.semesterStart, o.semesterEnd);
   setSettings({ onboarded: TOUR_VERSION });
   if (o.door === 'import') set({ sheet: { t: 'settings' }, settingsPath: ['data', 'import'] });
 }
 
-export const sessionActions = { purgeDemo, importPlan, resetAll, adoptDemo, finishOnboarding };
+export const sessionActions = { purgeDemo, importPlan, resetAll, adoptDemo, finishOnboarding, applyPack };

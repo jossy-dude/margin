@@ -85,9 +85,10 @@ describe('a surface whose muted pair fails is painted with ink, not muted', () =
   const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
 
   it('an important note prints its subject in ink, because mut on hl is 4.02 in original.dark', () => {
-    const src = read('screens/Today.tsx');
-    // the highlight fill and the ink-on-highlight text are one expression, so they cannot disagree
-    expect(src).toContain("fill={n.priority >= 2 ? c.hl : c.card}");
+    // Rationale (collage notes): the note card moved to ui/collage/NoteCard.tsx and gained four papers by level;
+    // the highlight is level 2, and from that level up every line on the card is ink, never `mut`.
+    const src = read('ui/collage/NoteCard.tsx');
+    expect(src).toContain('n.priority === 2 ? c.hl');
     expect(src).toContain("c={n.priority >= 2 ? c.ink : 'mut'}");
     expect(src).not.toMatch(/c\.hl[\s\S]{0,400}c="mut"/);
   });

@@ -52,12 +52,12 @@ describe('attendance heatmap row fits its card (BUG-023)', () => {
     expect(new Set(heat.map((r) => r.cells.length))).toEqual(new Set([28]));
   });
 
-  it('Stats sizes the strip from heatRow and no longer hides it in a horizontal ScrollView', () => {
+  it('Stats\' attendance strip fits its card by construction and is never a horizontal ScrollView', () => {
     // The row used to sit in `<ScrollView horizontal showsHorizontalScrollIndicator={false}>`: it
     // scrolled, but the last cell was cut at rest with no affordance, so it read as a clipped card.
-    expect(stats).toMatch(/const heat = heatRow\(iw, 28\);/);
-    expect(stats).toMatch(/width: heat\.label/);
-    expect(stats).toMatch(/width: heat\.cell/);
+    // Rationale (Stats rebuild, collage pass): the subject name moved above its strip, so the strip is a
+    // row of `flex: 1` cells across the card's full width — it cannot overflow at any width.
+    expect(stats).toMatch(/<View key=\{x\.date\} style=\{\{ flex: 1, height: HEAT_CELL_H/);
     expect(stats).not.toMatch(/<ScrollView horizontal[^>]*>\s*<View style=\{\{ gap: 6 \}\}>\s*\{attHeat/);
   });
 });

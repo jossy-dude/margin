@@ -56,13 +56,14 @@ describe('horizontal strips announce that they scroll (BUG-026)', () => {
 
   it('every former site now goes through the one primitive', () => {
     const sites: [string, number][] = [
-      ['screens/Stats.tsx', 2], ['screens/Today.tsx', 1], ['screens/Tasks.tsx', 1],
+      // Rationale (Stats rebuild): the rings strip became the headline figures, so Stats keeps one strip (mark history).
+      ['screens/Stats.tsx', 1], ['screens/Today.tsx', 1], ['screens/Tasks.tsx', 1],
       ['screens/Grades.tsx', 1], ['sheets/forms.tsx', 2], ['sheets/WhenPicker.tsx', 2],
     ];
     for (const [file, n] of sites) expect([...read(file).matchAll(/<HStrip\b/g)]).toHaveLength(n);
     // The sixth reported clip was Today → Notes, whose row is the note cards rather than chips; it is
     // the Today.tsx site above, so every one of the six named places is covered by these nine strips.
-    expect(sites.reduce((a, [, n]) => a + n, 0)).toBe(9);
+    expect(sites.reduce((a, [, n]) => a + n, 0)).toBe(8); // one fewer since the Stats rings strip became the headline
   });
 
   it('each strip passes the paper colour behind it, so the fade blends instead of banding', () => {

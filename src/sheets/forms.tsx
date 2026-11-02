@@ -7,7 +7,10 @@ import { Label, Sheet, useSheetClose } from '../ui/Sheet';
 import { latch } from '../ui/latch';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { WhenPicker, nextHome } from './WhenPicker';
-import { act, toast, useStore, type SheetSpec } from '../store/store';
+import { RoomChips, ScheduleEditor } from './ScheduleEditor';
+import { draftsOf, planSchedule, type SlotDraft } from '../domain/schedule';
+import { NOTE_LEVEL, noteDate } from '../ui/collage/notes';
+import { act, getState, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE } from '../domain/attendance';
 import { DW, fmtDur, fmtWhen, fromMin, hm, uid, startOfDay } from '../domain/time';
 import { workload } from '../domain/reminders';
@@ -142,10 +145,27 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }
    sample subject the user renames or fills with their own grades must not be deleted as sample data. */
 export function CourseSheet({ id }: { id?: string }) {
   const c0 = useStore((s) => s.courses.find((x) => x.id === id)), count = useStore((s) => s.courses.length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => c0?.id ?? uid('c')), [submit] = useState(latch);
+  const meetings = useStore((s) => s.meetings), variants = useStore((s) => s.variants), hour12 = useStore((s) => s.settings.hour12);
   const [name, setName] = useState(c0?.name ?? ''), [teacher, setTeacher] = useState(c0?.teacher ?? ''), [goal, setGoal] = useState(c0?.goal ?? 0);
+  /* Rooms and the weekly schedule live with the subject now (collage pass): one sheet makes a whole subject. */
+  const [rooms, setRooms] = useState<string[]>(c0?.rooms ?? []), [rows, setRows] = useState<SlotDraft[]>(() => (c0 ? draftsOf(c0.id, meetings, variants) : []));
+  /* A new kind (Lab, Tutorial…) gets ONE variant id per form, remembered here, so a repeated save reuses it. */
+  const [vids] = useState(() => new Map<string, string>()), vid = (k: string) => { const key = k.toLocaleLowerCase(); if (!vids.has(key)) vids.set(key, `${saveId}-${key}`); return vids.get(key)!; };
+  const save = () => submit(() => {
+    act.saveCourse({ id: saveId, name: name.trim(), rooms, teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false, bar: c0?.bar ?? null });
+    const plan = planSchedule(saveId, rows, getState().meetings, getState().variants, vid);
+    plan.variants.forEach((v) => act.saveVariant(v));
+    plan.meetings.forEach((m) => { const was = getState().meetings.find((x) => x.id === m.id); if (!was || was.weekday !== m.weekday || was.start !== m.start || was.end !== m.end || (was.room ?? null) !== m.room || (was.variantId ?? null) !== m.variantId) act.saveMeeting(m); });
+    plan.removed.forEach((mid) => act.removeMeeting(mid));
+    if (plan.problems.length) toast(plan.problems[0]!);
+    close();
+  });
   return (
-    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={() => submit(() => { act.saveCourse({ id: saveId, name: name.trim(), rooms: c0?.rooms ?? [], teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false, bar: c0?.bar ?? null }); close(); })} /></Row>}>
+    <Sheet title={c0 ? 'Edit subject' : 'New subject'} onClose={act.close} closeRef={closeRef} maxH={0.93} footer={<Row style={{ flexWrap: 'nowrap' }}>{c0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete subject" onPress={() => { act.removeCourse(c0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim()} onPress={save} /></Row>}>
       <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
+      <Label>Rooms</Label><RoomChips rooms={rooms} onChange={setRooms} />
+      <Label>When it meets, every week</Label>
+      <ScheduleEditor rows={rows} onChange={setRows} rooms={rooms} hour12={hour12} />
       <Label>Grade goal</Label><NumberField label="goal" value={goal || null} onChange={(v) => setGoal(v ?? 0)} min={0} max={100} decimals={1} unit="%" emptyLabel="none" />
     </Sheet>
   );
@@ -197,11 +217,17 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
 export function NoticeSheet({ id }: { id?: string }) {
   const n0 = useStore((s) => s.notices.find((x) => x.id === id)), { closeRef, close } = useSheetClose(), [saveId] = useState(() => n0?.id ?? uid('n')), [submit] = useState(latch);
   const [text, setText] = useState(n0?.text ?? ''), [cid, setCid] = useState(n0?.courseId ?? null), [pri, setPri] = useState<number>(n0?.priority ?? 0);
+  /* A note can be FOR a day (a notice, as the name says). A note's stored date used to be the day it was
+     pinned, so only a date still ahead is treated as one the user set (`noteDate`). No date = today's midnight,
+     which never shows. */
+  const [now] = useState(() => Date.now()), [when, setWhen] = useState<number | null>(() => (n0 ? noteDate(n0, now) : null));
+  const homeAt = useStore((s) => s.settings.notif.homeAt), hour12 = useStore((s) => s.settings.hour12);
   return (
-    <Sheet title={n0 ? 'Edit note' : 'New note'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete note" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label="Pin it" icon="check" disabled={!text.trim()} onPress={() => submit(() => { const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: n0?.dueAt ?? startOfDay(Date.now()), priority: pri as Notice['priority'], demo: false }; act.saveNotice(n); fx.tap(); close(); })} /></Row>}>
+    <Sheet title={n0 ? 'Edit note' : 'New note'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete note" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label="Pin it" icon="check" disabled={!text.trim()} onPress={() => submit(() => { const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: when ?? startOfDay(Date.now()), priority: pri as Notice['priority'], demo: false }; act.saveNotice(n); fx.tap(); close(); })} /></Row>}>
       <Field label="Note" multiline value={text} onChangeText={setText} autoFocus={!n0} placeholder="What should you remember?" />
       <Label>About</Label><CourseChips value={cid} onChange={setCid} />
-      <Label>How important?</Label><Row>{['Note', 'Heads-up', 'Important', 'Urgent'].map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
+      <Label>How important?</Label><Row style={{ flexWrap: 'wrap' }}>{NOTE_LEVEL.map((p, i) => <Chip key={p.word} label={p.word} icon={p.icon} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
+      <Label>For when?</Label><WhenPicker value={when} onChange={setWhen} now={now} homeAt={homeAt} optional nonePlaceholder="No date" h12={hour12} />
       <Hair />
     </Sheet>
   );
