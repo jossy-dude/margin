@@ -33,7 +33,8 @@ import { hasRealRows } from './domain/rows';
 import { toured } from './domain/defaults';
 import { getState, set, useStore, useUpdateAnnouncement, wireLifecycle, act, boot } from './store/store';
 import { configureNotifications } from './services/notifications';
-import { initAudio, preloadAudio } from './services/audio';
+import { initAudio, preloadAudioSoon } from './services/audio';
+import { mark, reportBoot } from './services/bootClock';
 
 const Book = createBookNavigator();
 
@@ -88,11 +89,18 @@ export function Shell() {
  *  irreversible action in the app is guarded by the same double tap Settings → Reset uses. */
 /** Open the database and start the services that need it. The Fatal screen's "Try again" runs it again. */
 async function bringUp() {
+  mark('js');
   await boot();
-  await configureNotifications(getState().settings.notif.lockText);
-  initAudio();
-  preloadAudio();
+  mark('data');
   wireLifecycle();
+}
+/** v0.6 cold start: what the first frame does not need waits for it. Notification channels used to be
+ *  awaited — six native round trips — and 14 audio players were built synchronously before anything drew.
+ *  `sync()` waits for the channels itself, and a sound asked for early builds its own player. */
+function afterFirstFrame() {
+  void configureNotifications(getState().settings.notif.lockText);
+  initAudio();
+  preloadAudioSoon();
 }
 /** A refusal that left the file untouched (a newer Margin's data, a safety copy that could not be written)
  *  is retried, not erased: "Try again" is the first button, erasing stays two taps away. */
@@ -164,6 +172,7 @@ function Gate() {
      (the field is deliberately absent from `DEFAULT_SETTINGS`, so there is nothing persisted to read). */
   const launched = useRef(false), firstRun = useRef<boolean | null>(null);
   useEffect(() => { if (toured(onboarded)) launched.current = true; }, [onboarded]);
+  useEffect(() => { if (ready && !error) requestAnimationFrame(() => { mark('frame'); reportBoot(); afterFirstFrame(); }); }, [ready, error]);
   if (!ready) return <Splash />;
   if (error) return <Fatal message={error} />;
   // The tour COVERS the shell rather than replacing it, because it now runs the shell's own controls: the
@@ -232,7 +241,7 @@ export default function App() {
   const [fonts, setFonts] = useState(false), [fontError, setFontError] = useState<string | null>(null), [fontTry, setFontTry] = useState(0), [booted, setBooted] = useState(false);
   useEffect(() => {
     let alive = true;
-    loadAsync(FONT_MAP).then(() => { if (alive) { setFonts(true); setFontError(null); } }).catch((e: unknown) => { if (alive) setFontError(String((e as Error)?.message ?? e)); });
+    loadAsync(FONT_MAP).then(() => { mark('fonts'); if (alive) { setFonts(true); setFontError(null); } }).catch((e: unknown) => { if (alive) setFontError(String((e as Error)?.message ?? e)); });
     return () => { alive = false; };
   }, [fontTry]);
   useEffect(() => {

@@ -7,6 +7,7 @@ import { MOODS, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
 import { getState, toast } from '../store/store';
+import { bootMarks } from '../services/bootClock';
 import { appVersion, clearCrashes, formatAllCrashes, formatCrash, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../services/problems';
 
 /** Clipboard from react-native core. It is marked `@deprecated` (and logs one `warnOnce` the first time it is
@@ -55,6 +56,7 @@ export function DiagnosticsPage() {
         <Txt f="serif" s={15} c="mut">
           {list.length === 0 ? 'No crashes recorded.' : `${list.length} crash${list.length === 1 ? '' : 'es'} recorded, newest first.`}
         </Txt>
+        {bootMarks().length > 0 && <Txt f="type" s={13} c="mut" selectable>Start-up: {bootMarks().map((m) => `${m.name} ${m.ms} ms`).join(' · ')}</Txt>}
         <Txt f="serif" s={14} c="mut">
           Stored on this phone only, in the app’s own files. Nothing is uploaded — there is no account and no network call.
         </Txt>

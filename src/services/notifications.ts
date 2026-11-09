@@ -27,11 +27,18 @@ const channelConfigs = (lockText: boolean): Record<'classes' | 'tasks' | 'focus'
 });
 
 let configured = false;
+/** Resolves once channels and categories exist. `sync` waits on it, so moving the setup after the first frame
+ *  (v0.6 cold start) cannot schedule a reminder onto a channel Android has not been told about yet. */
+let setUp: Promise<void> = Promise.resolve();
 /** Each step is guarded on its own. One try/catch used to cover all of them, so an Expo Go build
  *  that refused a category registration silently skipped the channels as well — and on Android a
  *  notification with no channel is dropped, with nothing anywhere to say so. */
-export async function configureNotifications(lockText = true) {
-  if (configured) return; configured = true;
+export function configureNotifications(lockText = true): Promise<void> {
+  if (configured) return setUp; configured = true;
+  setUp = configureNow(lockText);
+  return setUp;
+}
+async function configureNow(lockText: boolean) {
   try {
     N.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
   } catch { /* Expo Go can lack parts of the module; local scheduling is probed separately */ }
@@ -104,6 +111,7 @@ export async function sync(plan: Plan, accent: string): Promise<{ added: number;
   let added = 0, removed = 0;
   const planned: { id: string; kind: string; at: number }[] = [];
   try {
+    await setUp;
     const have = (await N.getAllScheduledNotificationsAsync()).filter((x) => !RESERVED.has(x.identifier)), want = new Map(plan.items.map((p) => [p.id, p]));
     for (const h of have) if (!want.has(h.identifier)) { await N.cancelScheduledNotificationAsync(h.identifier); removed++; }
     const haveIds = new Set(have.map((h) => h.identifier));

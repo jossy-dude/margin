@@ -120,6 +120,14 @@ export const PRELOAD: SoundName[] = [...new Set<SoundName>([
 ])];
 /** Warm those sounds so the first dial detent, and the first Play tap, are not late. */
 export function preloadAudio() { PRELOAD.forEach((n) => { try { pool(n); } catch { /* ignore */ } }); }
+/** v0.6 cold start: the same warm-up, one player per 40 ms instead of 14 synchronous native loads before the
+ *  first frame. A sound asked for before its turn simply builds its player then (`pool` is lazy). */
+export function preloadAudioSoon(step = 40): () => void {
+  let i = 0, t: ReturnType<typeof setTimeout> | null = null;
+  const next = () => { const n = PRELOAD[i++]; if (!n) { t = null; return; } try { pool(n); } catch { /* ignore */ } t = setTimeout(next, step); };
+  t = setTimeout(next, step);
+  return () => { if (t) clearTimeout(t); t = null; };
+}
 
 function stop(pl: AudioPlayer) { seeking.delete(pl); try { pl.pause(); } catch { /* ignore */ } }
 /** pause, await the seek, then play. play() must stay synchronous, so the resume is chained off the
