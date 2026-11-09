@@ -2,26 +2,29 @@ import type { SemesterRow, Settings, Snapshot } from '../domain/types';
 import { withDefaults } from '../domain/defaults';
 import { newSemester, semesterName } from '../domain/archive';
 import { isYmd } from '../domain/semester';
-import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository } from './repository';
+import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository, type RowChange } from './repository';
 
 /** In-memory adapter: same contract as SQLite, used by tests and as proof that nothing above the port depends on SQL. */
 export class MemoryRepository implements Repository {
-  private t = new Map<EntityName, Map<string, { v: unknown; deleted: boolean }>>();
+  private t = new Map<EntityName, Map<string, { v: unknown; deleted: boolean; at: number }>>();
   private set: Record<string, unknown> = {};
   private sems = new Map<string, SemesterRow>();
   private ob: OutboxRow[] = []; private seq = 0; private nl = new Map<string, NotifLogRow>();
   constructor(private clock: () => number = Date.now) {}
   private tab(e: EntityName) { let m = this.t.get(e); if (!m) { m = new Map(); this.t.set(e, m); } return m; }
   private log(entity: string, id: string, op: OutboxRow['op']) { this.ob.push({ seq: ++this.seq, entity, id, op, at: this.clock() }); }
-  async upsert<K extends EntityName>(e: K, v: EntityMap[K]) { const id = pkOf(e, v); this.tab(e).set(id, { v: structuredClone(v), deleted: false }); this.log(e, id, 'put'); }
-  async remove(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = true; this.log(e, id, 'del'); }
+  async upsert<K extends EntityName>(e: K, v: EntityMap[K]) { const id = pkOf(e, v); this.tab(e).set(id, { v: structuredClone(v), deleted: false, at: this.clock() }); this.log(e, id, 'put'); }
+  async remove(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) { r.deleted = true; r.at = this.clock(); } this.log(e, id, 'del'); }
   async removeMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.remove(r.entity, r.id); }
   async commit(b: { put: { entity: EntityName; value: unknown }[]; remove: { entity: EntityName; id: string }[] }) {
     for (const r of b.remove) await this.remove(r.entity, r.id);
     for (const p of b.put) await this.upsert(p.entity, p.value as never);
   }
   async restoreMany(rows: { entity: EntityName; id: string }[]) { for (const r of rows) await this.restore(r.entity, r.id); }
-  async restore(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) r.deleted = false; this.log(e, id, 'restore'); }
+  async restore(e: EntityName, id: string) { const r = this.tab(e).get(id); if (r) { r.deleted = false; r.at = this.clock(); } this.log(e, id, 'restore'); }
+  async changes<K extends EntityName>(e: K, since: number): Promise<RowChange<EntityMap[K]>[]> {
+    return [...this.tab(e).entries()].filter(([, r]) => r.at > since).sort((a, b) => a[1].at - b[1].at).map(([id, r]) => ({ id, updatedAt: r.at, deleted: r.deleted, value: structuredClone(r.v) as EntityMap[K] }));
+  }
   async putSettings(p: Partial<Settings>) { Object.assign(this.set, structuredClone(p)); }
   /* Same KV surface as the SQLite adapter, over the same object `putSettings` writes: a key that is
      not a `Settings` field (the OTA marker) is stored verbatim and never reaches `withDefaults`. */

@@ -20,6 +20,7 @@ import { entityActions } from './actions/entities';
 import { timerActions } from './actions/timer';
 import { sessionActions } from './session';
 import { semesterActions } from './semesters';
+import { bridgeActions } from './bridge';
 import './ota'; // binds the OTA marker to the open repository on load
 
 export type { RouteName, SheetSpec, Toast, Moved, PlanInfo, State } from './core';
@@ -38,4 +39,5 @@ export const act = {
   ...timerActions,
   ...sessionActions,
   ...semesterActions,
+  ...bridgeActions,
 };

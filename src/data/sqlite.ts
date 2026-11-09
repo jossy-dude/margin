@@ -2,7 +2,7 @@ import type { SemesterRow, Settings, Snapshot } from '../domain/types';
 import { withDefaults } from '../domain/defaults';
 import { newSemester, semesterName } from '../domain/archive';
 import { isYmd } from '../domain/semester';
-import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository } from './repository';
+import { pkOf, type EntityMap, type EntityName, type NotifLogRow, type OutboxRow, type Repository, type RowChange } from './repository';
 import { BACKFILL, fromSql, MIGRATIONS, SPECS, toSql } from './specs';
 
 /** The slice of expo-sqlite's SQLiteDatabase this adapter needs. A node:sqlite shim implements it for the contract test. */
@@ -356,6 +356,17 @@ export class SqliteRepository implements Repository {
     }));
   }
   async notifLog(): Promise<NotifLogRow[]> { return this.ser(async () => (await this.db.getAllAsync<{ id: string; kind: string; due_at: number; shown_at: number | null; opened_at: number | null }>('SELECT * FROM notif_log')).map((r) => ({ id: r.id, kind: r.kind, dueAt: r.due_at, shownAt: r.shown_at, openedAt: r.opened_at }))); }
+  async changes<K extends EntityName>(e: K, since: number): Promise<RowChange<EntityMap[K]>[]> {
+    return this.ser(async () => {
+      const s = SPECS[e], rows = await this.db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${s.table} WHERE updated_at > ? ORDER BY updated_at`, [since]);
+      const out: RowChange<EntityMap[K]>[] = [];
+      /* An unreadable row is left out of the feed rather than failing it, the same rule `load()` applies. */
+      for (const r of rows) {
+        try { out.push({ id: String(r[s.pk]), updatedAt: Number(r.updated_at), deleted: r.deleted_at != null, value: Object.fromEntries(s.fields.filter((x) => !(x.opt && r[x.c] == null)).map((x) => [x.p, fromSql(x, r[x.c])])) as unknown as EntityMap[K] }); } catch { /* skipped */ }
+      }
+      return out;
+    });
+  }
   async pendingOutbox(limit = 200) { return this.ser(() => this.db.getAllAsync<OutboxRow>('SELECT seq,entity,id,op,at FROM outbox ORDER BY seq LIMIT ?', [limit])); }
   async ackOutbox(upTo: number) { await this.ser(() => this.db.runAsync('DELETE FROM outbox WHERE seq<=?', [upTo])); }
 }

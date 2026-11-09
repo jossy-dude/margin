@@ -60,4 +60,13 @@ describe('migration 6 (v0.6)', () => {
     await r.upsert('task', task);
     expect((await r.load()).tasks[0]).toEqual(task);
   });
+  it('the change feed reads updated_at, tombstones included (sqlite)', async () => {
+    const db = rawDb(); let t = 100;
+    const r = new SqliteRepository(db.sql, () => t); await r.init();
+    const base = { title: 'x', courseId: null, kind: 'other' as const, dueAt: null, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status: 0 as const, createdAt: 1, completedAt: null, reminders: [], subtasks: [], demo: false };
+    await r.upsert('task', { ...base, id: 'a' }); t = 200; await r.upsert('task', { ...base, id: 'b', origin: 'obsidian', extId: 'zz' }); t = 300; await r.remove('task', 'a');
+    const feed = await r.changes('task', 150);
+    expect(feed.map((c) => [c.id, c.updatedAt, c.deleted])).toEqual([['b', 200, false], ['a', 300, true]]);
+    expect(feed[0]!.value).toMatchObject({ origin: 'obsidian', extId: 'zz' });
+  });
 });

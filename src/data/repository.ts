@@ -9,6 +9,9 @@ export interface NotifLogRow { id: string; kind: string; dueAt: number; shownAt:
  * The persistence port. The UI and store only ever see this interface. A sync server later drains `pendingOutbox()`
  * (every mutation writes an outbox row in the same transaction) without any component changing.
  */
+/** One row out of the change feed: its id, when it last changed, whether that change deleted it, and its value. */
+export interface RowChange<T> { id: string; updatedAt: number; deleted: boolean; value: T }
+
 export interface Repository {
   load(): Promise<Snapshot>;
   upsert<K extends EntityName>(entity: K, value: EntityMap[K]): Promise<void>;
@@ -54,6 +57,10 @@ export interface Repository {
   /** One scheduling pass's rows in one transaction. */
   schedNotifMany(rows: { id: string; kind: string; at: number }[]): Promise<void>;
   notifLog(): Promise<NotifLogRow[]>;
+  /** v0.6 bridge change feed (docs/BRIDGE.md): every row of `entity` written after `since` (ms), tombstones
+   *  included, with when it changed. `updated_at` is the feed rather than the outbox because the outbox is
+   *  pruned to its last 500 rows, and a sync that missed a week must still see every change. */
+  changes<K extends EntityName>(entity: K, since: number): Promise<RowChange<EntityMap[K]>[]>;
   pendingOutbox(limit?: number): Promise<OutboxRow[]>;
   ackOutbox(upToSeq: number): Promise<void>;
   /* ── semesters (v0.5) ──────────────────────────────────────────────────────────────────────────
