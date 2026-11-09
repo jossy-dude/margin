@@ -272,3 +272,53 @@ export function statsHeadline(x: HeadlineIn): string | null {
   if (att.held > 0) return `You were at ${att.here} of ${plural(att.held, 'class', 'classes')} in the last 4 weeks.`;
   return null;
 }
+
+/* ── v0.6 Stats: "Are you showing up?" and "Are you on top of your work?" ─────────────────────────────── */
+/** Every class held in the window, counted by state and reason (the v0.6 attendance model). An inferred
+ *  "present" (a class that ended unmarked) counts as present with no reason; future classes are left out. */
+export interface AttBreakdown { present: number; late: number; absent: number; cancelled: number; held: number; why: { a: Partial<Record<AttWhy, number>>; c: Partial<Record<AttWhy, number>>; p: Partial<Record<AttWhy, number>> } }
+export function attendanceBreakdown(meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()): AttBreakdown {
+  const from = addDays(startOfDay(now), -(nDays - 1)), out: AttBreakdown = { present: 0, late: 0, absent: 0, cancelled: 0, held: 0, why: { a: {}, c: {}, p: {} } };
+  for (const o of occurrencesBetween(from, now, meetings)) {
+    const e = effective(o.date, o.meeting, att, days, now);
+    if (!e.status) continue;
+    const w = e.why ?? '';
+    if (w) out.why[e.status][w] = (out.why[e.status][w] ?? 0) + 1;
+    if (e.status === 'c') { out.cancelled++; continue; }
+    out.held++;
+    if (e.status === 'p') { out.present++; if (w === 'late') out.late++; } else out.absent++;
+  }
+  return out;
+}
+/** One subject's classes in the window, oldest first: a dot per class held or cancelled (not per day). */
+export function classDots(courseId: string, meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+  const from = addDays(startOfDay(now), -(nDays - 1));
+  return occurrencesBetween(from, now, meetings.filter((m) => m.courseId === courseId))
+    .map((o) => ({ date: ymd(o.date), ...effective(o.date, o.meeting, att, days, now) }))
+    .filter((e) => e.status !== null) as { date: string; status: AttStatus; why?: AttWhy; inferred: boolean; explicit: boolean }[];
+}
+/** How many more classes a subject at `here` of `held` can miss before it drops under `floor` (0.8 = 80%),
+ *  assuming every class from now is attended — the number a student actually plans with. */
+export function canMiss(here: number, held: number, floor = 0.8): number {
+  if (held === 0) return 0;
+  let n = 0; while ((here) / (held + n + 1) >= floor && n < 99) n++;
+  return n;
+}
+/** "Right now" for tasks: what is overdue, what falls due in the next seven days, what was done this week. */
+export function workNow(tasks: Task[], now = Date.now()) {
+  const day = startOfDay(now), weekEnd = addDays(day, 7), weekStart = addDays(day, -((new Date(day).getDay() + 6) % 7));
+  let overdue = 0, dueSoon = 0, doneWeek = 0;
+  for (const t of tasks) {
+    if (t.status === 2) { if (t.completedAt && t.completedAt >= weekStart) doneWeek++; continue; }
+    if (t.dueAt === null) continue;
+    if (t.dueAt < now) overdue++; else if (t.dueAt < weekEnd) dueSoon++;
+  }
+  return { overdue, dueSoon, doneWeek };
+}
+/** Daily values (oldest first, the last one today) summed into calendar weeks, newest last. `todayWd` is
+ *  today's weekday, Monday = 0, so the newest bar is this week so far — Monday to today. */
+export function weeklySums(values: number[], weeks: number, todayWd: number): number[] {
+  const out: number[] = [];
+  for (let end = values.length, size = todayWd + 1; end > 0 && out.length < weeks; end -= size, size = 7) out.unshift(values.slice(Math.max(0, end - size), end).reduce((a, b) => a + b, 0));
+  return out;
+}

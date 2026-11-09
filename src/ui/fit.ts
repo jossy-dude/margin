@@ -68,7 +68,6 @@ export function hourTop(i: number, H: number, PX: number, lh = HOUR_LH) {
  *  of what is left. `cell` never falls below `MIN_CELL`, and if even that does not fit, `label` shrinks
  *  to whatever is left rather than pushing a cell off the edge. */
 export const HEAT_GAP = 2;
-export const HEAT_CELL_H = 18;
 export const HEAT_LABEL_MAX = 96;
 export const HEAT_MIN_CELL = 5;
 export interface HeatRow { label: number; cell: number; fits: boolean }

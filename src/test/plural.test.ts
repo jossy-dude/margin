@@ -44,7 +44,9 @@ describe('pluralisation (BUG-029)', () => {
     const stats = readFileSync(join(__dirname, '../screens/Stats.tsx'), 'utf8');
     // Rationale (Stats rebuild): the streak is now a figure ("3" over "day streak"), so no sentence needs
     // pluralising there; the sentences that do (attendance, tasks) are built with `plural` in analytics.
-    expect(stats).toContain("{ k: 'day streak', v: `${ds.current}`");
+    // Rationale (v0.6 Stats): the work streak moved into the weekly-bars header (`streak={ds.current}`); focus keeps its figure.
+    expect(stats).toContain('streak={ds.current}');
+    expect(stats).toContain("{ k: 'day streak', v: `${fs.current}` }");
     expect(stats).not.toMatch(/streak \$\{[^}]*\} days/); // the old shape is gone
   });
 });

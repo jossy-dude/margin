@@ -31,14 +31,15 @@ function useEntrance(delay: number, ms = 420) {
 }
 
 /** One question, answered: the heading, the sentence that answers it, then the evidence. */
-export function Sheet({ i, seed, kicker, title, line, children }: { i: number; seed: string; kicker: string; title: string; line: string | null; children?: React.ReactNode }) {
+/** One question, answered. (v0.6: the small tracked label that sat above each title is gone — the title and its
+ *  sentence carry the period themselves.) */
+export function Sheet({ i, seed, title, line, children }: { i: number; seed: string; title: string; line: string | null; children?: React.ReactNode }) {
   const { c } = useTheme(), deal = useEntrance(60 + i * 70, 460);
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - deal.get()) * 22 }, { rotate: `${(1 - deal.get()) * (i % 2 ? 1.6 : -1.6)}deg` }] }));
   return (
     <Animated.View style={st}>
       <HandBox seed={seed} fill={c.card} style={{ padding: 16, gap: 12 }}>
         <View style={{ gap: 3 }}>
-          <Txt f="type" s={12} c="acc" maxFontSizeMultiplier={FS} style={{ letterSpacing: 2 }}>{kicker.toUpperCase()}</Txt>
           <Txt f="marker" s={25} accessibilityRole="header">{title}</Txt>
           {line ? <Txt f="serif" s={16} c="mut" style={{ lineHeight: 22 }}>{line}</Txt> : null}
         </View>

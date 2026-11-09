@@ -57,7 +57,11 @@ describe('attendance heatmap row fits its card (BUG-023)', () => {
     // scrolled, but the last cell was cut at rest with no affordance, so it read as a clipped card.
     // Rationale (Stats rebuild, collage pass): the subject name moved above its strip, so the strip is a
     // row of `flex: 1` cells across the card's full width — it cannot overflow at any width.
-    expect(stats).toMatch(/<View key=\{x\.date\} style=\{\{ flex: 1, height: HEAT_CELL_H/);
+    // Rationale (v0.6 Stats): the strip is now one dot per class in a wrapping row (ui/stats/sections.tsx), so it
+    // still cannot overflow at any width — and it is still never a horizontal ScrollView.
+    const sections = readFileSync(join(__dirname, '../ui/stats/sections.tsx'), 'utf8');
+    expect(sections).toMatch(/flexDirection: 'row', flexWrap: 'wrap', gap: 5, paddingLeft: 20/);
+    expect(sections).not.toMatch(/ScrollView/);
     expect(stats).not.toMatch(/<ScrollView horizontal[^>]*>\s*<View style=\{\{ gap: 6 \}\}>\s*\{attHeat/);
   });
 });
