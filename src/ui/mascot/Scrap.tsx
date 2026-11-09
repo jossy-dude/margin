@@ -154,24 +154,24 @@ export function Scrap({ size, mood = 'idle', cue = null, lookX, lookY, attentive
       {/* The shadow on the page, which shrinks as he leaves it. */}
       <Animated.View style={[{ position: 'absolute', left: 64 * k, top: 262 * k, width: 112 * k, height: 12 * k, borderRadius: 56 * k, backgroundColor: c.shadow }, shadowS]} />
       <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: size, height: H, transformOrigin: `50% ${(262 / SCRAP_H) * 100}%` }, whole]}>
-        {FEET.map(([x, y], i) => <Image key={i} source={SRC.foot} style={img(BOX.foot[0], BOX.foot[1], k, x - BOX.foot[0] / 2, y - BOX.foot[1] / 2)} />)}
-        {SRC.body.map((src, i) => <Animated.View key={i} style={[{ position: 'absolute', left: 0, top: 0 }, bodies[i]]}><Image source={src} style={img(bw, bh, k, -bp, -bp)} /></Animated.View>)}
+        {FEET.map(([x, y], i) => <Image key={i} fadeDuration={0} source={SRC.foot} style={img(BOX.foot[0], BOX.foot[1], k, x - BOX.foot[0] / 2, y - BOX.foot[1] / 2)} />)}
+        {SRC.body.map((src, i) => <Animated.View key={i} style={[{ position: 'absolute', left: 0, top: 0 }, bodies[i]]}><Image fadeDuration={0} source={src} style={img(bw, bh, k, -bp, -bp)} /></Animated.View>)}
         <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: size, height: H }, face]}>
           {EYES.map(([x, y], i) => (
             <View key={i} style={{ position: 'absolute', left: (x - ew / 2) * k, top: (y - ew / 2) * k, width: ew * k, height: ew * k }}>
-              <Image source={SRC.eye} style={img(ew, ew, k)} />
+              <Image fadeDuration={0} source={SRC.eye} style={img(ew, ew, k)} />
               {/* The pupil and both lids live inside a disc a hair smaller than the eye, so a lid never
                   shows outside the eye it closes. */}
               <View style={{ position: 'absolute', left: (ep + 1) * k, top: (ep + 1) * k, width: EYE_R * 2 * k, height: EYE_R * 2 * k, borderRadius: EYE_R * k, overflow: 'hidden' }}>
-                <Animated.View style={[{ position: 'absolute', left: (EYE_R - pw / 2) * k, top: (EYE_R + 3 - pw / 2) * k, width: pw * k, height: pw * k }, pupils]}><Image source={SRC.pupil} style={img(pw, pw, k)} /></Animated.View>
-                <Animated.View style={[{ position: 'absolute', left: -ep * k, top: -ep * k }, upper]}><Image source={SRC.lid} style={img(BOX.lid[0], BOX.lid[1], k)} /></Animated.View>
-                <Animated.View style={[{ position: 'absolute', left: -ep * k, top: -ep * k }, lower]}><Image source={SRC.lid} style={img(BOX.lid[0], BOX.lid[1], k)} /></Animated.View>
+                <Animated.View style={[{ position: 'absolute', left: (EYE_R - pw / 2) * k, top: (EYE_R + 3 - pw / 2) * k, width: pw * k, height: pw * k }, pupils]}><Image fadeDuration={0} source={SRC.pupil} style={img(pw, pw, k)} /></Animated.View>
+                <Animated.View style={[{ position: 'absolute', left: -ep * k, top: -ep * k }, upper]}><Image fadeDuration={0} source={SRC.lid} style={img(BOX.lid[0], BOX.lid[1], k)} /></Animated.View>
+                <Animated.View style={[{ position: 'absolute', left: -ep * k, top: -ep * k }, lower]}><Image fadeDuration={0} source={SRC.lid} style={img(BOX.lid[0], BOX.lid[1], k)} /></Animated.View>
               </View>
             </View>
           ))}
-          {CHEEKS.map(([x, y], i) => <Animated.View key={i} style={[{ position: 'absolute', left: (x - BOX.cheek[0] / 2) * k, top: (y - BOX.cheek[1] / 2) * k }, cheekS]}><Image source={SRC.cheek} style={img(BOX.cheek[0], BOX.cheek[1], k)} /></Animated.View>)}
+          {CHEEKS.map(([x, y], i) => <Animated.View key={i} style={[{ position: 'absolute', left: (x - BOX.cheek[0] / 2) * k, top: (y - BOX.cheek[1] / 2) * k }, cheekS]}><Image fadeDuration={0} source={SRC.cheek} style={img(BOX.cheek[0], BOX.cheek[1], k)} /></Animated.View>)}
           <Animated.View style={[{ position: 'absolute', left: mouthX * k, top: mouthY * k, width: mw * k, height: mh * k, transformOrigin: wide ? '50% 50%' : `50% ${(mp / mh) * 100}%` }, mouthS]}>
-            <Image source={SRC.mouth[mouth]} style={img(mw, mh, k)} />
+            <Image fadeDuration={0} source={SRC.mouth[mouth]} style={img(mw, mh, k)} />
           </Animated.View>
         </Animated.View>
         {/* Ink, not paper: the three strokes a cartoonist adds when something lands. */}

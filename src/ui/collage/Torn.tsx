@@ -32,7 +32,7 @@ export function TornSheet({ children, fill, seed = 'sheet', depth = 7, style, bo
         </Svg>
       )}
       <View style={[{ backgroundColor: bg, flexGrow: 1, overflow: 'hidden' }, bodyStyle]}>
-        {crumple > 0 && <Image source={CRUMPLE} accessible={false} style={{ position: 'absolute', left: 0, top: -E, width: 512, height: 900, opacity: crumple * (dark ? 0.9 : 0.7) }} />}
+        {crumple > 0 && <Image fadeDuration={0} source={CRUMPLE} accessible={false} style={{ position: 'absolute', left: 0, top: -E, width: 512, height: 900, opacity: crumple * (dark ? 0.9 : 0.7) }} />}
         {children}
       </View>
     </View>

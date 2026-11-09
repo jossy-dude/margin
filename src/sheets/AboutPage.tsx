@@ -118,8 +118,8 @@ function GurshaButton({ onPress }: { onPress: () => void }) {
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', right: 0, top: 0, flexDirection: 'row', gap: 0, transform: [{ rotate: '-10deg' }] }}>
         {[0, 1].map((i) => (
           <Animated.View key={i} style={[{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }, lidS]}>
-            <Image source={EYE} style={{ position: 'absolute', width: 56, height: 56 }} />
-            <Animated.View style={pupil}><Image source={PUPIL} style={{ width: 24, height: 24 }} /></Animated.View>
+            <Image fadeDuration={0} source={EYE} style={{ position: 'absolute', width: 56, height: 56 }} />
+            <Animated.View style={pupil}><Image fadeDuration={0} source={PUPIL} style={{ width: 24, height: 24 }} /></Animated.View>
           </Animated.View>
         ))}
       </View>

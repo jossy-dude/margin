@@ -121,7 +121,7 @@ function Tiles({ src, px, ph = px, tint }: { src: number; px: number; ph?: numbe
     <>
       {Array.from({ length: cols * rows }, (_, i) => {
         const col = i % cols;
-        return <Image key={i} source={src} resizeMode="stretch" tintColor={tint} style={tileStyle(col, (i - col) / cols, px, ph)} />;
+        return <Image key={i} fadeDuration={0} source={src} resizeMode="stretch" tintColor={tint} style={tileStyle(col, (i - col) / cols, px, ph)} />;
       })}
     </>
   );

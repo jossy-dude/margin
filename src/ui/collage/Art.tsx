@@ -23,5 +23,5 @@ export type ArtName = keyof typeof SRC;
 const ratio = (n: ArtName) => { const m = (manifest as Record<string, { w: number; h: number }>)[`art-${n}`]; return m ? m.h / m.w : 1; };
 
 export function Art({ name, w, rot = 0, style }: { name: ArtName; w: number; rot?: number; style?: StyleProp<ImageStyle> }) {
-  return <Image source={SRC[name]} accessible={false} importantForAccessibility="no" style={[{ width: w, height: w * ratio(name), transform: rot ? [{ rotate: `${rot}deg` }] : undefined }, style]} />;
+  return <Image fadeDuration={0} source={SRC[name]} accessible={false} importantForAccessibility="no" style={[{ width: w, height: w * ratio(name), transform: rot ? [{ rotate: `${rot}deg` }] : undefined }, style]} />;
 }

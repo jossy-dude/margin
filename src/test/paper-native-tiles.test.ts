@@ -44,7 +44,7 @@ describe('the native paper tiles with a grid, not with resizeMode="repeat"', () 
     // No postprocessor, no platform-chosen size: `useWindowDimensions()` is the area Android draws in,
     // and `stretch` makes the tile fill exactly the `px` box Yoga gave it.
     expect(code).toMatch(/const \{ width, height \} = useWindowDimensions\(\)/);
-    expect(code).toMatch(/<Image key=\{i\} source=\{src\} resizeMode="stretch"/);
+    expect(code).toMatch(/<Image key=\{i\} fadeDuration=\{0\} source=\{src\} resizeMode="stretch"/ /* Rationale (v0.6): tiles draw at once, no Android fade (image-fade.test.ts) */);
   });
 
   it('the grain branch renders the grid, at GRAIN_PX', () => {
