@@ -707,6 +707,45 @@ Do these in order, on the phone that has v0.1.0 with your real data. Write PASS/
 12. **Backup and restore.** Settings (Android) → Google → Backup → Back up now; on a second phone or after
     a reinstall, restore. Look for: the planner comes back with its data.
 
+## V06 — v0.6 (UNVERIFIED-ON-DEVICE until this pass)
+
+Install the 0.6.0 APK from GitHub Actions over the 0.5 one (data must survive: migration 6 runs on first open).
+
+**V06.1 Upgrade keeps attendance.** Before installing, note a few marked classes in Grades (a Late, a Sick, a
+Cancelled). After: Late shows as Present · Late entry (L), Sick as Absent · Sick (S), Cancelled stays.
+**PASS / FAIL: ______**
+
+**V06.2 Marking a class.** Long-press a class cell (or tap a class on Today). Look for: three stamps —
+Present, Absent, Cancelled; picking one shows its reasons (Absent: Late arrival, Kicked out, Sick, Excused,
+Skipped; Cancelled: Teacher didn't come…, with a "What happened?" line); Save writes it and closes.
+**PASS / FAIL: ______**
+
+**V06.3 Cold start after a phone restart.** Restart the phone, wait one minute, open Margin, time it to the
+first screen. Then Settings → Diagnostics: the "Start-up:" line lists js / fonts / data / frame in ms —
+write those numbers here. (`adb logcat -s ReactNativeJS | grep margin-boot` prints the same line.)
+**PASS / FAIL: ______  numbers: ______**
+
+**V06.4 Pictures appear whole.** First run (Settings → Show the introduction again, or clear data): Scrap
+appears in one piece, no parts fading in one by one; his mouth changes instantly when his mood changes;
+backgrounds and paper art do not fade in on each page. **PASS / FAIL: ______**
+
+**V06.5 Clocks.** Settings → Look & feel → Clock face: Field, Studio, Diver. On Today each reads at a glance
+in light and dark; the Diver's date window shows today's date; the second hand ticks (Field), sweeps
+(Studio) or steps finely (Diver). **PASS / FAIL: ______**
+
+**V06.6 Plain style.** Settings → Look & feel → Style → Plain. Look for: one typeface everywhere (no
+handwriting, no italic serif), smooth paper with no creases, rounded cards with a soft shadow, a round +
+button, a slate deck on Today, notes not taped or tilted. Back to Collage restores the torn paper.
+**PASS / FAIL: ______**
+
+**V06.7 Stats.** "Are you showing up?" shows a big %, one bar, "Missed, and why" once something is marked
+absent or cancelled, and subjects lowest-first with a dot per class and "You can miss N more before 80%".
+"Are you on top of your work?" shows overdue / due in 7 days / done this week and weekly bars.
+**PASS / FAIL: ______**
+
+**V06.8 Notification buttons.** On a class reminder: Present, Late, Absent. "Late" marks Present · Late entry.
+**PASS / FAIL: ______**
+
 ---
 
 ## Appending for later workstreams

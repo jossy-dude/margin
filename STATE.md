@@ -211,6 +211,23 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 | UX-8 | Low | CONFIRMED dev-only upstream warning (RNW SVG) | REPORT note |
 | env | — | "live is not defined" / "unknown colour token #FFFBF1" do NOT reproduce at HEAD (moving-tree artifacts; the token text came from audit-code's M1 proposal) | closed |
 
+## v0.6 status (2026-11-09)
+
+Version 0.6.0 / versionCode 5, on `v2-improvements`, not pushed, not built. Gate: typecheck, lint (0 warnings),
+1,482 tests, depcruise — green. Plan: `docs/superpowers/plans/2026-11-09-v06-release.md`.
+
+Done and committed: attendance as Present / Absent / Cancelled + a why (migration 6, old letters migrate),
+the Obsidian bridge foundation (`docs/BRIDGE.md`), start-up (first frame no longer waits for notification
+channels or audio; boot timings in Diagnostics and `[margin-boot]` in logcat), three watch faces (Field,
+Studio, Diver) replacing the nine, the Plain style (owner chose it from impeccable's directions; Hanken
+Grotesk), the Stats sections "Are you showing up?" / "Are you on top of your work?", no Android image fade
+(the leading cause of the "glitchy" mascot), Today's class times start-over-end.
+
+Not done yet: watching the first run on the phone (the phone was not connected — another session was using
+it) and measuring cold start there; the pager re-rendering all five onboarding pages at the start of a
+"Next" scroll is the second suspect for mascot stutter, to be decided from that recording. Owner's phone
+pass: `docs/DEVICE_CHECKLIST.md` §V06.
+
 ## v0.5 status (2026-11-01)
 
 Done and committed: F2 layering (depcruise `data-not-up`, `services-not-ui`, `ui-not-data` over sheets),

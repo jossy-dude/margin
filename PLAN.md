@@ -1,6 +1,8 @@
 # PLAN
 
-The current release is **Margin v0.5**. Its plan and design live under `docs/superpowers/`:
+The current release is **Margin v0.6** — plan: [`docs/superpowers/plans/2026-11-09-v06-release.md`](docs/superpowers/plans/2026-11-09-v06-release.md); Obsidian bridge contract: [`docs/BRIDGE.md`](docs/BRIDGE.md).
+
+The previous release was **Margin v0.5**. Its plan and design live under `docs/superpowers/`:
 
 - **Plan (tasks, checkpoints, subagent routing):** [`docs/superpowers/plans/2026-11-01-v05-release.md`](docs/superpowers/plans/2026-11-01-v05-release.md)
 - **Spec (requirements, owner decisions O1–O9, risks):** [`docs/superpowers/specs/2026-11-01-v05-release-design.md`](docs/superpowers/specs/2026-11-01-v05-release-design.md)

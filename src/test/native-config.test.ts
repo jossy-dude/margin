@@ -240,10 +240,11 @@ describeIfNative('v0.5 release engineering (R1)', () => {
     return { 'tools:node': /tools:node="([^"]+)"/.exec(tag)?.[1] };
   };
 
-  it('ships as 0.5.0, version code 4', () => {
-    expect(appJson.expo.version).toBe('0.5.0');
-    expect(gradle).toMatch(/versionCode 4\b/);
-    expect(gradle).toContain('versionName "0.5.0"');
+  /* Rationale (v0.6): the release bump — app.json, the shipped gradle file and the runtime string move together. */
+  it('ships as 0.6.0, version code 5', () => {
+    expect(appJson.expo.version).toBe('0.6.0');
+    expect(gradle).toMatch(/versionCode 5\b/);
+    expect(gradle).toContain('versionName "0.6.0"');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {

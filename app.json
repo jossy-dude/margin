@@ -2,7 +2,7 @@
   "expo": {
     "name": "Margin",
     "slug": "marginalia",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "runtimeVersion": { "policy": "appVersion" },
     "updates": {
       "url": "https://u.expo.dev/a1177786-3b71-4f60-89b5-30fc633d3534",
