@@ -152,16 +152,16 @@ describe('a notification the user acted on', () => {
     wireLifecycle();
     const ended = plan().items.find((x) => x.kind === 'ended')!;
     expect(ended).toBeDefined();
-    opened()({ route: 'Today', kind: ended.kind, id: ended.id, at: ended.at, action: { kind: 'att', status: 'p', key: ended.entityId } });
+    opened()({ route: 'Today', kind: ended.kind, id: ended.id, at: ended.at, action: { kind: 'att', status: 'p', why: '', key: ended.entityId } });
     expect(getState().attendance[ended.entityId]).toMatchObject({ status: 'p', key: ended.entityId });
-    expect(getState().toast?.text).toBe('Marked Here'); // the timetable check passed, so it was written
+    expect(getState().toast?.text).toBe('Marked Present'); // the timetable check passed, so it was written
     expect(getState().route).toBe('Today');
   });
 
   it('a stale class key is refused with a line instead of writing a record nothing reads', async () => {
     await boot();
     wireLifecycle();
-    opened()({ route: 'Today', kind: 'ended', id: 'ended-old', at: MON, action: { kind: 'att', status: 'a', key: '2020-01-01|08:00|GONE' } });
+    opened()({ route: 'Today', kind: 'ended', id: 'ended-old', at: MON, action: { kind: 'att', status: 'a', why: '', key: '2020-01-01|08:00|GONE' } });
     expect(getState().attendance['2020-01-01|08:00|GONE']).toBeUndefined();
     expect(getState().toast?.text).toBe('That class is no longer in your timetable');
   });

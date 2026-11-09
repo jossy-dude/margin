@@ -10,9 +10,9 @@ import type { ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { addDays, fmtDur, fmtTime, startOfDay } from '../domain/time';
-import type { AttStatus, Task } from '../domain/types';
+import type { AttStatus, AttWhy, Task } from '../domain/types';
 import { workload } from '../domain/reminders';
-import { ST } from '../domain/attendance';
+import { ST, statusLabel } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 import { fx } from '../services/fx';
 import { SwipeCard } from '../ui/Swipe';
@@ -61,14 +61,17 @@ export function Empty({ text, icon = 'note', mood }: { text: string; icon?: stri
   );
   return <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 18, alignItems: 'center', gap: 6 }}><Icon name={icon} size={30} /><Txt f="serif" s={17} c="mut" style={{ textAlign: 'center' }}>{text}</Txt></HandBox>;
 }
-export const STATUS_GLYPH: Record<AttStatus, string> = { p: '✓', l: 'L', n: 'L', a: '✕', s: 'S', c: '–', t: '–' };
-export function statusColor(s: AttStatus | null, c: ReturnType<typeof useTheme>['c']) { return s === 'a' ? c.bad : s === 'l' || s === 'n' ? c.warn : s === 's' ? c.ok : s === 'c' || s === 't' ? c.mut : c.ink; }
+export const STATUS_GLYPH: Record<AttStatus, string> = { p: '✓', a: '✕', c: '–' };
+/** The cell's letter: the state's glyph, except the two reasons common enough to read at a glance. */
+export const glyphOf = (s: AttStatus, why?: AttWhy) => (s === 'p' && why === 'late' ? 'L' : s === 'a' && why === 'sick' ? 'S' : STATUS_GLYPH[s]);
+/** A late entry keeps its warn colour inside Present; every other why shares its state's colour. */
+export function statusColor(s: AttStatus | null, c: ReturnType<typeof useTheme>['c'], why?: AttWhy) { return s === 'a' ? c.bad : s === 'p' && why === 'late' ? c.warn : s === 'c' ? c.mut : c.ink; }
 /** How an occurrence's status is spoken. `effective()` reports `inferred` for a class that has simply ended
  *  with no mark on it, which the grid draws as a faint dashed "Here" — reading that out as "Here" claims the
  *  student was marked present when nothing was ever marked, so an inferred status is announced as unmarked. */
-export function spokenStatus(e: { status: AttStatus | null; inferred: boolean }): string {
+export function spokenStatus(e: { status: AttStatus | null; inferred: boolean; why?: AttWhy }): string {
   if (!e.status) return 'not marked yet';
-  return e.inferred ? `${ST[e.status]}, not marked yet` : ST[e.status];
+  return e.inferred ? `${ST[e.status]}, not marked yet` : statusLabel(e.status, e.why);
 }
 
 export function relDue(ms: number, now: number, h12 = false) {
@@ -162,10 +165,10 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   );
 }, (a, b) => a.t === b.t && Math.floor(a.now / 60_000) === Math.floor(b.now / 60_000));
 /** the 28px attendance cell; the hit area is the cell itself because the 3px gutter leaves no room for an honest bigger one */
-export function AttCell({ status, inferred, future, locked, onTap, onHold, label, pulse, testID }: { status: AttStatus | null; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string }) {
+export function AttCell({ status, why, inferred, future, locked, onTap, onHold, label, pulse, testID }: { status: AttStatus | null; why?: AttWhy; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), sc = useSharedValue(1), sh = useSharedValue(0);
   useEffect(() => { if (pulse && !reduce) sc.value = withSequence(withTiming(1.25, { duration: 90 }), withTiming(1, { duration: 160 })); }, [pulse, reduce, sc]);
-  const st = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }, { translateX: sh.value }] })), col = statusColor(status, c);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }, { translateX: sh.value }] })), col = statusColor(status, c, why);
   const deny = () => { fx.denied(); if (!reduce) sh.value = withSequence(withTiming(-3, { duration: 40 }), withTiming(3, { duration: 70 }), withTiming(0, { duration: 40 })); };
   /* A stamp presses like a stamp — the cell dips 0.95 on the way down and springs back, on the same
      `sc` value the stamp pulse rides past, so a tap reads as a mark landing even before the grid
@@ -178,7 +181,7 @@ export function AttCell({ status, inferred, future, locked, onTap, onHold, label
       onPress={() => { if (locked) return deny(); if (!status || inferred) onTap(); else deny(); }} onLongPress={() => { if (locked) return deny(); onHold(); }} delayLongPress={380} hitSlop={{ top: 6, bottom: 6, left: 1, right: 1 }}
       onPressIn={() => { if (!reduce) sc.value = withTiming(0.95, { duration: BEAT, easing: EASE }); }} onPressOut={() => { if (!reduce) sc.value = withSpring(1, { duration: 190, dampingRatio: 0.7 }); }}>
       <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: inferred || future ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
-        {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{STATUS_GLYPH[status]}</Txt>}
+        {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{glyphOf(status, why)}</Txt>}
       </Animated.View>
     </Pressable>
   );

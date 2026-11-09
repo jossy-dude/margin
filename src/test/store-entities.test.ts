@@ -165,14 +165,14 @@ describe('attendance stamps', () => {
 
   it('undoing a first stamp removes the record; undoing a re-stamp restores the previous one', async () => {
     const repo = await store();
-    act.setAtt(KEY, 'l');
+    act.setAtt(KEY, 'p', '', 'late');
     undo();
     expect(getState().attendance[KEY]).toBeUndefined();
     await flush();
     expect((await repo.load()).attendance[KEY]).toBeUndefined();
     await rebuildsAfter(700);
 
-    act.setAtt(KEY, 'p'); act.setAtt(KEY, 's', 'fever');
+    act.setAtt(KEY, 'p'); act.setAtt(KEY, 'a', 'fever', 'sick');
     undo();
     expect(getState().attendance[KEY]).toMatchObject({ status: 'p' });
     await flush();
@@ -181,7 +181,7 @@ describe('attendance stamps', () => {
   });
 
   it('clearAtt hands the class back to automatic, and its undo restores the stamp', async () => {
-    const repo = await store(async (r) => { await r.upsert('attendance', { key: KEY, status: 'l', at: NOW - 60_000, reason: 'bus' }); });
+    const repo = await store(async (r) => { await r.upsert('attendance', { key: KEY, status: 'p', why: 'late', at: NOW - 60_000, reason: 'bus' }); });
     act.clearAtt(KEY);
     expect(getState().attendance[KEY]).toBeUndefined();
     expect(getState().toast?.text).toBe('Back to automatic');
@@ -190,9 +190,9 @@ describe('attendance stamps', () => {
     await rebuildsAfter(700);
 
     undo();
-    expect(getState().attendance[KEY]).toEqual({ key: KEY, status: 'l', at: NOW - 60_000, reason: 'bus' });
+    expect(getState().attendance[KEY]).toEqual({ key: KEY, status: 'p', why: 'late', at: NOW - 60_000, reason: 'bus' });
     await flush();
-    expect((await repo.load()).attendance[KEY]).toMatchObject({ status: 'l', reason: 'bus' });
+    expect((await repo.load()).attendance[KEY]).toMatchObject({ status: 'p', why: 'late', reason: 'bus' });
     expect((await ops(repo)).slice(-2)).toEqual([`attendance:${KEY}:del`, `attendance:${KEY}:restore`]);
     await rebuildsAfter(700);
   });
@@ -225,12 +225,12 @@ describe('day marks', () => {
   });
 
   it('undoing a re-mark restores the previous day mark', async () => {
-    const repo = await store(async (r) => { await r.upsert('dayMark', { date: DAY, status: 's', at: NOW - 1, reason: 'flu' }); });
+    const repo = await store(async (r) => { await r.upsert('dayMark', { date: DAY, status: 'a', why: 'sick', at: NOW - 1, reason: 'flu' }); });
     act.setDay(DAY, 'p');
     undo();
-    expect(getState().dayMarks[DAY]).toEqual({ date: DAY, status: 's', at: NOW - 1, reason: 'flu' });
+    expect(getState().dayMarks[DAY]).toEqual({ date: DAY, status: 'a', why: 'sick', at: NOW - 1, reason: 'flu' });
     await flush();
-    expect((await repo.load()).dayMarks[DAY]).toMatchObject({ status: 's', reason: 'flu' });
+    expect((await repo.load()).dayMarks[DAY]).toMatchObject({ status: 'a', why: 'sick', reason: 'flu' });
   });
 
   it('clearDay removes the mark and its undo restores it; no mark means no toast', async () => {

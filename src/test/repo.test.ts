@@ -57,11 +57,11 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
   });
   it('keyed entities: attendance by key, day marks by date, adjustments by course', async () => {
     const r = await make();
-    await r.upsert('attendance', { key: '2026-10-05|08:30|E', status: 'l', at: NOW, reason: 'bus' });
-    await r.upsert('dayMark', { date: '2026-10-06', status: 's', at: NOW, reason: '' });
+    await r.upsert('attendance', { key: '2026-10-05|08:30|E', status: 'p', why: 'late', at: NOW, reason: 'bus' });
+    await r.upsert('dayMark', { date: '2026-10-06', status: 'a', why: 'sick', at: NOW, reason: '' });
     await r.upsert('adjust', { courseId: 'E', adj: 2.5 });
     const l = await r.load();
-    expect(l.attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'l', reason: 'bus' }); expect(l.dayMarks['2026-10-06']?.status).toBe('s'); expect(l.adjusts.E).toBe(2.5);
+    expect(l.attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'p', why: 'late', reason: 'bus' }); expect(l.dayMarks['2026-10-06']?.status).toBe('a'); expect(l.adjusts.E).toBe(2.5);
     await r.upsert('attendance', { key: '2026-10-05|08:30|E', status: 'a', at: NOW, reason: '' });
     expect((await r.load()).attendance['2026-10-05|08:30|E']?.status).toBe('a');
   });
@@ -112,13 +112,13 @@ describe.each(factories)('Repository contract · %s', (_name, make) => {
   it('seeds attendance, day marks and adjustments (audit L3)', async () => {
     const r = await make();
     const s = seedSnapshot(NOW);
-    s.attendance = { '2026-10-05|08:30|E': { key: '2026-10-05|08:30|E', status: 'l', at: NOW, reason: 'bus' } };
-    s.dayMarks = { '2026-10-06': { date: '2026-10-06', status: 's', at: NOW, reason: '' } };
+    s.attendance = { '2026-10-05|08:30|E': { key: '2026-10-05|08:30|E', status: 'p', why: 'late', at: NOW, reason: 'bus' } };
+    s.dayMarks = { '2026-10-06': { date: '2026-10-06', status: 'a', why: 'sick', at: NOW, reason: '' } };
     s.adjusts = { E: 2.5 };
     await r.seed(s);
     const l = await r.load();
-    expect(l.attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'l', reason: 'bus' });
-    expect(l.dayMarks['2026-10-06']?.status).toBe('s');
+    expect(l.attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'p', why: 'late', reason: 'bus' });
+    expect(l.dayMarks['2026-10-06']?.status).toBe('a');
     expect(l.adjusts.E).toBe(2.5);
   });
 

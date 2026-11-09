@@ -73,7 +73,8 @@ describe('parseImport', () => {
       ] }));
       expect(p.problems).toEqual([]);
       expect(p.snapshot.dayMarks!['2026-09-14']!.status).toBe('c');
-      expect(p.snapshot.dayMarks!['2026-09-15']!.status).toBe('s');
+      /* Rationale (v0.6): attendance is Present/Absent/Cancelled + a why; old letters and words still import, as a state + why. */
+      expect(p.snapshot.dayMarks!['2026-09-15']).toMatchObject({ status: 'a', why: 'sick' });
       expect(p.snapshot.dayMarks!['2026-09-16']!.status).toBe('p');
     });
 
@@ -81,7 +82,7 @@ describe('parseImport', () => {
       const p = parse(json({ days: [{ date: '2026-09-14', status: 'holiday' }] }));
       expect(p.problems).toHaveLength(1);
       expect(p.problems[0]).toMatchObject({ where: 'days[0]', field: 'status' });
-      expect(p.problems[0]!.message).toContain('p, a, s, c');
+      expect(p.problems[0]!.message).toContain('p, a, c');
       expect(p.snapshot.dayMarks).toBeUndefined();
     });
 
@@ -251,7 +252,7 @@ describe('parseImport', () => {
       tasks: [{ id: 'T1', title: 'Essay', courseId: 'C1', kind: 'assignment', dueAt: 123, startAt: null, estimateMin: null, priority: 1, notes: '', status: 0, createdAt: 1, completedAt: null, reminders: [], subtasks: [], demo: false }],
       notices: [{ id: 'N1', courseId: 'C1', text: 'Bring the book', dueAt: 5, priority: 2, demo: false }],
       marks: [{ id: 'K1', courseId: 'C1', name: 'Quiz', score: null, weight: 10, on: true, sort: 0, demo: false }],
-      attendance: { '2026-09-08|08:30|C1': { key: '2026-09-08|08:30|C1', status: 'l', at: 5, reason: 'bus' } },
+      attendance: { '2026-09-08|08:30|C1': { key: '2026-09-08|08:30|C1', status: 'p', why: 'late', at: 5, reason: 'bus' } },
       dayMarks: { '2026-09-14': { date: '2026-09-14', status: 'c', at: 5, reason: 'holiday' } },
       adjusts: { C1: 2.5 },
       /* v0.5 D2: these three are imported now (an export is a whole backup), so the fixture carries
@@ -268,7 +269,7 @@ describe('parseImport', () => {
       expect(plan.problems).toEqual([]);
       expect(plan.counts).toEqual({ courses: 1, meetings: 1, tasks: 1, notices: 1, attendance: 1, dayMarks: 1, marks: 1, adjusts: 1, focus: 1, trips: 1, alarms: 1 });
       expect(plan.snapshot.courses![0]!.id).toBe('C1');
-      expect(plan.snapshot.attendance!['2026-09-08|08:30|C1']).toMatchObject({ status: 'l', reason: 'bus' });
+      expect(plan.snapshot.attendance!['2026-09-08|08:30|C1']).toMatchObject({ status: 'p', why: 'late', reason: 'bus' });
       expect(plan.snapshot.dayMarks!['2026-09-14']!.status).toBe('c');
       expect(plan.snapshot.adjusts).toEqual({ C1: 2.5 });
     });
@@ -435,7 +436,7 @@ describe('the full-dataset JSON shape', () => {
 
   it('reads a named attendance status as its letter, keyed the way the grid keys it', () => {
     const course = plan.snapshot.courses![0]!;
-    expect(plan.attendance).toEqual([{ key: `2026-09-14|08:30|${course.id}`, status: 'l', at: NOW, reason: 'bus' }]);
+    expect(plan.attendance).toEqual([{ key: `2026-09-14|08:30|${course.id}`, status: 'p', why: 'late', at: NOW, reason: 'bus' }]);
     expect(plan.snapshot.attendance).toEqual({ [`2026-09-14|08:30|${course.id}`]: plan.attendance![0] });
   });
 
@@ -487,7 +488,7 @@ describe('the full-dataset JSON shape', () => {
     expect(p.attendance).toHaveLength(1);
     expect(messages(p)).toEqual([
       'attendance[1] · start: Times are 24-hour "HH:MM".',
-      'attendance[2] · status: status must be one of p, l, n, a, s, c, t.',
+      'attendance[2] · status: status must be one of p, a, c.',
     ]);
   });
 
@@ -515,7 +516,7 @@ describe('the full-dataset JSON shape', () => {
       courses: [{ name: 'Maths' }],
       attendance: [{ date: '2026-09-16', course: 'Maths', start: '08:30', status: 'maybe' }],
     }));
-    expect(messages(p)).toEqual(['attendance[0] · status: status must be one of p, l, n, a, s, c, t.']);
+    expect(messages(p)).toEqual(['attendance[0] · status: status must be one of p, a, c.']);
   });
 
   /* R2 round 5: the mark's own `at` stamp belongs to the phone — a compact row over an occurrence
@@ -525,7 +526,7 @@ describe('the full-dataset JSON shape', () => {
     const p = parseImport(json({
       courses: [{ name: 'Maths' }],
       attendance: [{ date: '2026-09-16', course: 'Maths', start: '08:30', status: 'p' }],
-    }), { courses: [course('C1', 'Maths')], attendance: { [key]: { key, status: 'l', at: 555, reason: 'bus' } }, now: NOW });
+    }), { courses: [course('C1', 'Maths')], attendance: { [key]: { key, status: 'p', why: 'late', at: 555, reason: 'bus' } }, now: NOW });
     expect(p.problems).toEqual([]);
     expect(p.snapshot.attendance![key]).toEqual({ key, status: 'p', at: 555, reason: 'bus' });
     expect(p.breakdown.attendance).toEqual({ write: 1, skip: 0, add: 0, update: 1 });
@@ -551,7 +552,7 @@ describe('CSV planning', () => {
   });
 
   it('names the line that could not be read, and keeps the rows that could', () => {
-    expect(p.problems).toEqual([{ where: 'line 4', field: 'status', message: 'status must be one of p, l, n, a, s, c, t.' }]);
+    expect(p.problems).toEqual([{ where: 'line 4', field: 'status', message: 'status must be one of p, a, c.' }]);
   });
 
   it('accepts the header this app exports, including the columns it does not need back', () => {
@@ -667,7 +668,7 @@ describe('CSV planning', () => {
 
   it('merges an attendance row over the mark already on the phone', () => {
     const key = '2026-09-14|08:30|C1';
-    const existing: AttRecord = { key, status: 'l', at: 123, reason: 'bus' };
+    const existing: AttRecord = { key, status: 'p', why: 'late', at: 123, reason: 'bus' };
     const t = parseCsv('date,course,start,status,reason\n2026-09-14,DB Systems,08:30,,\n');
     const q = planCsv(t.header, t.rows, 'attendance', { courses: [course('C1', 'DB Systems')], attendance: { [key]: existing }, now: NOW });
     expect(q.problems).toEqual([]);

@@ -1,7 +1,7 @@
 import type {
-  Alarm, AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, TaskKind, Trip,
+  Alarm, AttRecord, AttStatus, AttWhy, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, TaskKind, Trip,
 } from './types';
-import { ST, occKey } from './attendance';
+import { ST, WHY_LABEL, legacyStatus, occKey, whyOf } from './attendance';
 import { splitRooms } from './rooms';
 import { DEFAULT_SETTINGS } from './defaults';
 import { parseCsv } from './csv';
@@ -110,23 +110,34 @@ const roomsIn = (row: Rec): string[] | null => { const r = splitRooms(row.rooms 
  *  says "(`cancelled`, `holiday`, …)"; `domain/types.ts` has no `holiday` — it is a *reason* on a
  *  cancelled day, not a status — so both the letters and the printed words are accepted, and nothing
  *  outside the type is invented. */
-const DAY_STATUS: DayStatus[] = ['p', 'a', 's', 'c'];
-const ATT_STATUS: AttStatus[] = ['p', 'l', 'n', 'a', 's', 'c', 't'];
+const DAY_STATUS: DayStatus[] = ['p', 'a', 'c'];
+const ATT_STATUS: AttStatus[] = ['p', 'a', 'c'];
 const TASK_KINDS: TaskKind[] = ['assignment', 'exam', 'reading', 'project', 'lab', 'deadline', 'other'];
 
-function dayStatus(v: unknown): DayStatus | null {
-  const s = str(v)?.trim().toLowerCase();
+/** A status cell, read as a v0.6 state + why: the letters of every generation (`l n s t` included),
+ *  the words the app prints (`Present`, `Late`, `Sick`…), and the export's own "Absent · Sick" form. */
+function readStatus(v: unknown): { status: AttStatus; why: AttWhy } | null {
+  const s = str(v)?.trim();
   if (!s) return null;
-  return DAY_STATUS.find((k) => k === s) ?? DAY_STATUS.find((k) => ST[k].toLowerCase() === s) ?? null;
+  const [head, tail] = s.split('·').map((x) => x.trim());
+  const base = legacyStatus(head);
+  if (!base) return null;
+  if (tail) {
+    const w = (Object.keys(WHY_LABEL) as Exclude<AttWhy, ''>[]).find((k) => WHY_LABEL[k].toLowerCase() === tail.toLowerCase());
+    return { status: base.status, why: whyOf(base.status, w) || base.why };
+  }
+  return base;
 }
+const dayStatus = (v: unknown): DayStatus | null => readStatus(v)?.status ?? null;
+const attStatus = (v: unknown): AttStatus | null => readStatus(v)?.status ?? null;
+/** The why a row carries: its own `why` field when it names one this state offers, else the one its
+ *  status cell implied (an old `s` is Absent · Sick), else none. */
+const whyIn = (status: AttStatus, statusCell: unknown, why: unknown): AttWhy => whyOf(status, why) || (readStatus(statusCell)?.status === status ? readStatus(statusCell)!.why : '');
+/** A why rides on the record only when there is one, so a plain mark keeps the shape it always had. */
+const W = (why: AttWhy) => (why ? { why } : {});
+/** A merge that names a status replaces the why too — the old reason belonged to the old status. */
+const noWhy = <T extends { why?: AttWhy }>(r: T): Omit<T, 'why'> => { const rest = { ...r }; delete rest.why; return rest; };
 const statusProblem = () => `status must be one of ${DAY_STATUS.join(', ')} — or ${DAY_STATUS.map((k) => ST[k]).join(', ')}.`;
-
-/** An attendance status, by its letter or by the word the app prints (`Late`, `Sick`, …). */
-function attStatus(v: unknown): AttStatus | null {
-  const s = str(v)?.trim().toLowerCase();
-  if (!s) return null;
-  return ATT_STATUS.find((k) => k === s) ?? ATT_STATUS.find((k) => ST[k].toLowerCase() === s) ?? null;
-}
 
 /** Statuses this app's export writes when a class has not finished: `effective()` returns no status
  *  yet, so the export prints `upcoming` (and marks the row's source `future`) in its CSV table, and a
@@ -422,11 +433,11 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [key, row] of attendanceRows) {
       const at = `attendance[${key}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['key', 'status', 'at', 'reason'], at);
+      unknownKeys(row, ['key', 'status', 'at', 'reason', 'why'], at);
       const k = nonEmpty(row.key) ?? key;
-      const status = ATT_STATUS.find((s) => s === row.status);
+      const status = typeof row.status === 'string' && row.status.length === 1 ? attStatus(row.status) : null;
       if (!status) { problem(at, 'status', `status must be one of ${ATT_STATUS.join(', ')}.`); continue; }
-      attendance.set(k, { key: k, status, at: num(row.at) ?? now, reason: str(row.reason) ?? '' });
+      attendance.set(k, { key: k, status, at: num(row.at) ?? now, reason: str(row.reason) ?? '', ...W(whyIn(status, row.status, row.why)) });
     }
 
     const dayRows = entriesOf(raw.dayMarks);
@@ -434,12 +445,12 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [key, row] of dayRows) {
       const at = `dayMarks[${key}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['date', 'status', 'at', 'reason'], at);
+      unknownKeys(row, ['date', 'status', 'at', 'reason', 'why'], at);
       const date = nonEmpty(row.date) ?? key;
       if (!isYmd(date)) { problem(at, 'date', 'A day mark needs a YYYY-MM-DD date.'); continue; }
       const status = dayStatus(row.status);
       if (!status) { problem(at, 'status', statusProblem()); continue; }
-      dayMarks.set(date, { date, status, at: num(row.at) ?? now, reason: str(row.reason) ?? '' });
+      dayMarks.set(date, { date, status, at: num(row.at) ?? now, reason: str(row.reason) ?? '', ...W(whyIn(status, row.status, row.why)) });
     }
 
     const adjustRows = entriesOf(raw.adjusts);
@@ -600,13 +611,13 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of dayList.entries()) {
       const at = `days[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['date', 'status', 'reason'], at);
+      unknownKeys(row, ['date', 'status', 'reason', 'why'], at);
       const date = nonEmpty(row.date);
       if (!isYmd(date)) { problem(at, 'date', 'A day needs a YYYY-MM-DD date.'); continue; }
       const status = dayStatus(row.status);
       if (!status) { problem(at, 'status', statusProblem()); continue; }
       if (dayMarks.has(date)) duplicate(`the day mark for ${date}`, at);
-      dayMarks.set(date, { date, status, at: now, reason: str(row.reason) ?? '' });
+      dayMarks.set(date, { date, status, at: now, reason: str(row.reason) ?? '', ...W(whyIn(status, row.status, row.why)) });
     }
 
     const compactAttendance = asRows(obj.attendance, 'attendance');
@@ -614,7 +625,7 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of compactAttendance.entries()) {
       const at = `attendance[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['key', 'date', 'course', 'start', 'status', 'reason', 'at'], at);
+      unknownKeys(row, ['key', 'date', 'course', 'start', 'status', 'reason', 'at', 'why'], at);
       const date = nonEmpty(row.date);
       if (!isYmd(date)) { problem(at, 'date', 'Use YYYY-MM-DD.'); continue; }
       const start = clock(row.start);
@@ -645,8 +656,8 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
         continue;
       }
       attendance.set(k, existing
-        ? { ...existing, status, at: fileAt ?? existing.at, reason: nonEmpty(row.reason) ?? existing.reason }
-        : { key: k, status, at: fileAt ?? now, reason: str(row.reason) ?? '' });
+        ? { ...noWhy(existing), status, at: fileAt ?? existing.at, reason: nonEmpty(row.reason) ?? existing.reason, ...W(whyIn(status, row.status, row.why)) }
+        : { key: k, status, at: fileAt ?? now, reason: str(row.reason) ?? '', ...W(whyIn(status, row.status, row.why)) });
     }
 
     const compactTasks = asRows(obj.tasks, 'tasks');
@@ -1002,9 +1013,10 @@ export function planCsv(
         const existing = opts.attendance?.[key];
         const status = statusCell ? attStatus(statusCell) : existing?.status;
         if (!status) { problem(at, 'status', `status must be one of ${ATT_STATUS.join(', ')}.`); return; }
+        const why = statusCell ? whyIn(status, statusCell, col(row, 'why')) : existing?.why ?? '';
         out.set(key, existing
-          ? { ...existing, status, reason: col(row, 'reason') || existing.reason }
-          : { key, status, at: now, reason: col(row, 'reason') });
+          ? { ...noWhy(existing), status, reason: col(row, 'reason') || existing.reason, ...W(why) }
+          : { key, status, at: now, reason: col(row, 'reason'), ...W(why) });
       });
       if (out.size) { snapshot.attendance = Object.fromEntries(out); counts.attendance = out.size; plan.attendance = [...out.values()]; }
       break;
@@ -1021,9 +1033,10 @@ export function planCsv(
         const statusCell = col(row, 'status');
         const status = statusCell ? dayStatus(statusCell) : existing?.status;
         if (!status) { problem(at, 'status', statusProblem()); return; }
+        const why = statusCell ? whyIn(status, statusCell, col(row, 'why')) : existing?.why ?? '';
         out.set(date, existing
-          ? { ...existing, status, reason: col(row, 'reason') || existing.reason }
-          : { date, status, at: now, reason: col(row, 'reason') });
+          ? { ...noWhy(existing), status, reason: col(row, 'reason') || existing.reason, ...W(why) }
+          : { date, status, at: now, reason: col(row, 'reason'), ...W(why) });
       });
       if (out.size) { snapshot.dayMarks = Object.fromEntries(out); counts.dayMarks = out.size; }
       break;

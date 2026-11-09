@@ -26,17 +26,18 @@ describe('store undo', () => {
   const KEY = '2026-10-05|08:30|E';
   it('a stamped class is undoable: the first stamp is undone by removing the record', async () => {
     const repo = new MemoryRepository(() => NOW); await hydrate(repo);
-    act.setAtt(KEY, 'l');
-    expect(getState().attendance[KEY]).toMatchObject({ key: KEY, status: 'l' });
-    expect(getState().toast?.text).toBe('Marked Late'); expect(typeof getState().toast?.undo).toBe('function');
+    act.setAtt(KEY, 'p', '', 'late');
+    /* Rationale (v0.6): three states + a why; the old Late is Present · late entry. */
+    expect(getState().attendance[KEY]).toMatchObject({ key: KEY, status: 'p', why: 'late' });
+    expect(getState().toast?.text).toBe('Marked Present · Late entry'); expect(typeof getState().toast?.undo).toBe('function');
     getState().toast!.undo!();
     expect(getState().attendance[KEY]).toBeUndefined();
     expect((await repo.load()).attendance[KEY]).toBeUndefined();
   });
   it('undo restores the previous record, in state and in the repository', async () => {
     const repo = new MemoryRepository(() => NOW); await hydrate(repo);
-    act.setAtt(KEY, 'a', 'dentist'); act.setAtt(KEY, 's', 'fever');
-    expect(getState().attendance[KEY]).toMatchObject({ status: 's', reason: 'fever' });
+    act.setAtt(KEY, 'a', 'dentist'); act.setAtt(KEY, 'a', 'fever', 'sick');
+    expect(getState().attendance[KEY]).toMatchObject({ status: 'a', why: 'sick', reason: 'fever' });
     getState().toast!.undo!();
     expect(getState().attendance[KEY]).toMatchObject({ status: 'a', reason: 'dentist' });
     expect((await repo.load()).attendance[KEY]).toMatchObject({ status: 'a', reason: 'dentist' });

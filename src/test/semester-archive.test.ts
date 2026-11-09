@@ -22,7 +22,7 @@ import { seedSnapshot } from '../data/seed';
 import type { Repository } from '../data/repository';
 import { ARCHIVE_VERSION, buildSnapshot, newSemester, readSnapshot } from '../domain/archive';
 import { activeSemester, daysLeft, suggestEnd } from '../domain/semester';
-import type { Mark, SemesterRow, SubjectVariant } from '../domain/types';
+import type { AttRecord, Mark, SemesterRow, SubjectVariant } from '../domain/types';
 
 const NOW = new Date(2026, 9, 5, 8).getTime(); // 2026-10-05
 
@@ -123,7 +123,7 @@ describe.each(factories)('semesters in the repository · %s', (_name, make) => {
     await r.seed(seedSnapshot(NOW));
     await r.upsert('variant', variant('v1', 0));
     await r.upsert('variant', variant('v2', 1));
-    await r.upsert('attendance', { key: '2026-09-14|08:30|E', status: 'l', at: NOW, reason: 'bus' });
+    await r.upsert('attendance', { key: '2026-09-14|08:30|E', status: 'p', why: 'late', at: NOW, reason: 'bus' });
     await r.upsert('dayMark', { date: '2026-09-15', status: 'c', at: NOW, reason: 'holiday' });
     return r;
   }
@@ -302,7 +302,8 @@ describe('termSummary', () => {
     const { buildSnapshot: build, readSnapshot: read, termSummary: summary } = jest.requireActual('../domain/archive') as typeof import('../domain/archive');
     const course = { id: 'DB', name: 'Database', rooms: [], teacher: '', goal: null, sort: 0, demo: false };
     const mk = (id: string, score: number) => ({ id, courseId: 'DB', name: id, score, weight: 50, on: true, sort: 0, demo: false });
-    const att = (key: string, status: 'p' | 'a' | 'c' | 'l') => ({ key, status, at: 0, reason: '' });
+    /* 'l' is a pre-v0.6 letter on purpose: archived terms keep what their build wrote, and the summary reads it through `normAtt`. */
+    const att = (key: string, status: 'p' | 'a' | 'c' | 'l') => ({ key, status, at: 0, reason: '' } as unknown as AttRecord);
     const task = (id: string, status: 0 | 2) => ({ id, title: id, courseId: 'DB', kind: 'assignment' as const, dueAt: null, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status, createdAt: 0, completedAt: null, reminders: [], subtasks: [], demo: false });
     const json = build([course], [], {
       '2026-03-02|08:30|DB': att('2026-03-02|08:30|DB', 'p'), '2026-03-09|08:30|DB': att('2026-03-09|08:30|DB', 'l'),

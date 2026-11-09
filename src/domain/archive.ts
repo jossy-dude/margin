@@ -1,7 +1,7 @@
 import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, SubjectVariant, Task } from './types';
 import { newSemesterRange } from './semester';
 import { uid } from './time';
-import { parseOccKey } from './attendance';
+import { normAtt, parseOccKey } from './attendance';
 import { total } from './grades';
 
 /**
@@ -113,10 +113,11 @@ export function termSummary(env: ArchiveEnvelope): TermSummary {
   const subjects = d.courses.map((c): TermSubject => {
     const marks = d.marks.filter((m) => m.courseId === c.id);
     let here = 0, held = 0;
-    for (const a of Object.values(d.attendance)) {
-      const k = parseOccKey(a.key);
-      if (!k || k.courseId !== c.id || a.status === 'c' || a.status === 't') continue;
-      held++; if (a.status === 'p' || a.status === 'l' || a.status === 'n') here++;
+    /* An archived term keeps whatever letters its build wrote (`l n s t` before v0.6), so read through `normAtt`. */
+    for (const raw of Object.values(d.attendance)) {
+      const a = normAtt(raw), k = parseOccKey(a.key);
+      if (!k || k.courseId !== c.id || a.status === 'c') continue;
+      held++; if (a.status === 'p') here++;
     }
     const ts = d.tasks.filter((t) => t.courseId === c.id);
     return { id: c.id, name: c.name, average: total(marks, d.adjusts[c.id] ?? 0), marks: marks.length, here, held, tasks: ts.length, tasksDone: ts.filter((t) => t.status === 2).length };

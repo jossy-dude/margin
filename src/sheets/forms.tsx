@@ -11,10 +11,10 @@ import { RoomChips, ScheduleEditor } from './ScheduleEditor';
 import { draftsOf, planSchedule, type SlotDraft } from '../domain/schedule';
 import { NOTE_LEVEL, noteDate } from '../ui/collage/notes';
 import { act, getState, toast, useStore, type SheetSpec } from '../store/store';
-import { ST, CYCLE } from '../domain/attendance';
+import { ST, CYCLE, WHY, WHY_LABEL } from '../domain/attendance';
 import { DW, fmtDur, fmtWhen, fromMin, hm, uid, startOfDay } from '../domain/time';
 import { workload } from '../domain/reminders';
-import type { AttStatus, Course, DayStatus, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
+import type { AttStatus, AttWhy, Course, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
 import { fx } from '../services/fx';
 import { hexA } from '../tokens/theme';
 import { STATUS_GLYPH, statusColor } from '../screens/common';
@@ -122,39 +122,54 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
 }
 
 /* ───── class / day status ───── */
-/** One attendance choice, as the stamp it leaves: its glyph in a ring of its own colour, the word beside it, and
- *  the current one inked solid. The colours are the ones every attendance cell in the app already uses. */
+/** One of the three states, as the stamp it leaves: its glyph in a ring of its own colour, the word under it,
+ *  and the chosen one inked solid. The colours are the ones every attendance cell in the app already uses. */
 function StampChoice({ s, on, onPress }: { s: AttStatus; on: boolean; onPress: () => void }) {
   const { c } = useTheme(), col = statusColor(s, c);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${ST[s]}${on ? ', currently set' : ''}`} accessibilityState={{ selected: on }} onPress={() => { fx.stamp(s); onPress(); }}>
-      <HandBox seed={`stamp-${s}`} fill={on ? hexA(col, 0.16) : c.card} stroke={on ? col : undefined} cut="cut" shadow={!on} style={{ minHeight: 54, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 2.2, borderColor: col, backgroundColor: on ? col : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }] }}>
-          <Txt f="marker" s={16} c={on ? c.card : col} maxFontSizeMultiplier={FS_STAMP}>{STATUS_GLYPH[s]}</Txt>
+    <Pressable testID={`stamp-${s}`} accessibilityRole="radio" accessibilityLabel={ST[s]} accessibilityState={{ selected: on, checked: on }} onPress={() => { fx.stamp(s); onPress(); }} style={{ flex: 1 }}>
+      <HandBox seed={`stamp-${s}`} fill={on ? hexA(col, 0.16) : c.card} stroke={on ? col : undefined} cut="cut" shadow={!on} style={{ minHeight: 84, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 2.2, borderColor: col, backgroundColor: on ? col : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }] }}>
+          <Txt f="marker" s={17} c={on ? c.card : col} maxFontSizeMultiplier={FS_STAMP}>{STATUS_GLYPH[s]}</Txt>
         </View>
-        <Txt f="bold" s={17} style={{ flex: 1 }} numberOfLines={2}>{ST[s]}</Txt>
+        <Txt f="bold" s={16} numberOfLines={1} maxFontSizeMultiplier={FS_STAMP}>{ST[s]}</Txt>
       </HandBox>
     </Pressable>
   );
 }
 const FS_STAMP = 1.3;
+/** What the free-text line asks, per state: a cancelled class is the one where the words matter most. */
+const NOTE: Record<AttStatus, { label: string; hint: string }> = {
+  p: { label: 'Note (optional)', hint: 'e.g. bus was late' },
+  a: { label: 'Note (optional)', hint: 'e.g. doctor until noon' },
+  c: { label: 'What happened?', hint: "e.g. teacher didn't come" },
+};
 
+/** v0.6: Present / Absent / Cancelled, then the reason. Choosing a state no longer closes the sheet — the
+ *  reasons under it are the point — so the mark is written by Save. */
 export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }> }) {
-  const dayMarks = useStore((s) => s.dayMarks), attendance = useStore((s) => s.attendance);
-  const st = { dayMarks, attendance };
-  const { closeRef, close } = useSheetClose(), isDay = spec.t === 'status' && spec.mode === 'day';
-  const cur = isDay ? st.dayMarks[spec.date]?.status : st.attendance[spec.key]?.status, [why, setWhy] = useState(isDay ? st.dayMarks[spec.date]?.reason ?? '' : st.attendance[spec.key]?.reason ?? '');
-  const opts: AttStatus[] = isDay ? ['p', 'a', 's', 'c'] : [...CYCLE, 'n', 't'].filter((x, i, a) => a.indexOf(x) === i) as AttStatus[];
+  const isDay = spec.t === 'status' && spec.mode === 'day';
+  const rec = useStore((s) => (isDay ? s.dayMarks[spec.date] : s.attendance[spec.key]));
+  const { closeRef, close } = useSheetClose();
+  const [state, setState] = useState<AttStatus | null>(rec?.status ?? null), [why, setWhy] = useState<AttWhy>(rec?.why ?? ''), [note, setNote] = useState(rec?.reason ?? '');
+  const pick = (s: AttStatus) => { setState(s); if (s !== state) setWhy(''); };
+  const save = () => { if (!state) return; if (isDay) act.setDay(spec.date, state, note.trim(), why); else act.setAtt(spec.key, state, note.trim(), why); close(); };
   return (
-    <Sheet title={spec.title} onClose={act.close} maxH={0.7} closeRef={closeRef}>
+    <Sheet title={spec.title} onClose={act.close} maxH={0.8} closeRef={closeRef}
+      footer={<Row style={{ flexWrap: 'nowrap' }}>{rec && <Btn kind="ghost" icon="x" label="Automatic" a11y="Back to automatic" onPress={() => { if (isDay) act.clearDay(spec.date); else act.clearAtt(spec.key); close(); }} />}<Btn flex icon="check" label="Save" disabled={!state} onPress={save} /></Row>}>
       <Txt f="serif" s={16} c="mut">{isDay ? 'Mark the whole day' : 'How did this class go?'}</Txt>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {/* `Btn` has no selected state of its own, so the current mark is spelled out in the label: without
-            it TalkBack says "Here", "Late", ... seven times and never says which one is already set. */}
-        {opts.map((s) => <View key={s} style={{ width: '47%', flexGrow: 1 }}><StampChoice s={s} on={cur === s} onPress={() => { if (isDay) act.setDay(spec.date, s as DayStatus, why); else act.setAtt(spec.key, s, why); close(); }} /></View>)}
+      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10 }}>
+        {CYCLE.map((s) => <StampChoice key={s} s={s} on={state === s} onPress={() => pick(s)} />)}
       </View>
-      <Field label="Reason (optional)" value={why} onChangeText={setWhy} placeholder="e.g. bus broke down" />
-      {(isDay ? st.dayMarks[spec.date] : st.attendance[spec.key]) && <Btn kind="ghost" icon="x" label="Back to automatic" onPress={() => { if (isDay) act.clearDay(spec.date); else act.clearAtt(spec.key); close(); }} />}
+      {state && (
+        <View style={{ gap: 8 }}>
+          <Label>{state === 'c' ? 'Why was it cancelled?' : state === 'a' ? 'Why were you out?' : 'Anything off?'}</Label>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {WHY[state].map((w) => <Chip key={w} label={WHY_LABEL[w as Exclude<AttWhy, ''>]} on={why === w} onPress={() => setWhy(why === w ? '' : w)} />)}
+          </View>
+          <Field label={NOTE[state].label} value={note} onChangeText={setNote} placeholder={NOTE[state].hint} />
+        </View>
+      )}
     </Sheet>
   );
 }

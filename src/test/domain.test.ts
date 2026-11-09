@@ -3,7 +3,7 @@ import { DEFAULT_NOTIF, withDefaults } from '../domain/defaults';
 import { applyAction, resolveAction, type NotifEffects } from '../domain/notifActions';
 import { advance, canBreak, endBreak, finish, initTimer, nudgeStep, startBreak, toggle, view, FLOW_OVER_CAP_MS, NUDGE_MS } from '../domain/timer';
 import { needed, total } from '../domain/grades';
-import { effective, nextStatus, occKey } from '../domain/attendance';
+import { effective, legacyStatus, nextStatus, normAtt, occKey, whyOf } from '../domain/attendance';
 import { doneByHour, level, onTimeStats, streak } from '../domain/analytics';
 import { seedSnapshot } from '../data/seed';
 import type { Meeting, NotifSettings, Task } from '../domain/types';
@@ -125,7 +125,7 @@ describe('reminder planner', () => {
     expect(cls).toBeDefined();
     expect(cls!.entityId).toBe(occKey('2026-10-05', { start: '08:30', courseId: 'E' }));
     const a = resolveAction('att.here', { kind: cls!.kind, entityId: cls!.entityId });
-    expect(a).toEqual({ kind: 'att', status: 'p', key: cls!.entityId });
+    expect(a).toEqual({ kind: 'att', status: 'p', why: '', key: cls!.entityId });
     const written: [string, string][] = [];
     const fx: NotifEffects = {
       tasks: [], meetings: [{ start: '08:30', courseId: 'E' }],
@@ -273,7 +273,7 @@ describe('grades, attendance, analytics', () => {
     const mt = snap.meetings.find((x) => x.weekday === 0 && x.courseId === 'E')!, d = new Date(2026, 9, 5);
     expect(effective(d, mt, {}, {}, at(2026, 10, 5, 7)).status).toBeNull();
     expect(effective(d, mt, {}, {}, at(2026, 10, 5, 12))).toMatchObject({ status: 'p', inferred: true });
-    expect(effective(d, mt, {}, { '2026-10-05': { date: '2026-10-05', status: 's', at: 1, reason: '' } }, at(2026, 10, 5, 12)).status).toBe('s');
+    expect(effective(d, mt, {}, { '2026-10-05': { date: '2026-10-05', status: 'a', why: 'sick', at: 1, reason: '' } }, at(2026, 10, 5, 12)).status).toBe('a');
     expect(effective(d, mt, { [occKey('2026-10-05', mt)]: { key: 'x', status: 'a', at: 1, reason: '' } }, {}, at(2026, 10, 5, 12)).status).toBe('a');
     expect(nextStatus('c')).toBe('p'); expect(nextStatus(null)).toBe('p');
   });
@@ -294,9 +294,19 @@ describe('grades, attendance, analytics', () => {
     const written = e.status && e.inferred ? nextStatus(e.status) : 'p';
     expect(written).toBe('p'); expect(seen.status).toBe('p');
   });
-  it('attendance: the cycle still advances once a class is Here, so Late→Absent→Sick→Cancelled keeps working', () => {
-    expect(nextStatus('l')).toBe('a'); expect(nextStatus('a')).toBe('s'); expect(nextStatus('s')).toBe('c'); expect(nextStatus('c')).toBe('p');
-    expect(nextStatus('n')).toBe('p'); expect(nextStatus('t')).toBe('p');
+  /* Rationale (v0.6): three states + a why; the old Late is Present · late entry. */
+  it('attendance: the cycle is Present → (fixed); Absent → Cancelled → Present', () => {
+    expect(nextStatus(null)).toBe('p'); expect(nextStatus('p')).toBe('p'); expect(nextStatus('a')).toBe('c'); expect(nextStatus('c')).toBe('p');
+  });
+  it('attendance: every older letter and word reads as a v0.6 state and why', () => {
+    expect(legacyStatus('l')).toEqual({ status: 'p', why: 'late' });
+    expect(legacyStatus('n')).toEqual({ status: 'a', why: 'arrivedLate' });
+    expect(legacyStatus('Sick')).toEqual({ status: 'a', why: 'sick' });
+    expect(legacyStatus('t')).toEqual({ status: 'c', why: 'teacher' });
+    expect(legacyStatus('Here')).toEqual({ status: 'p', why: '' });
+    expect(legacyStatus('maybe')).toBeNull();
+    expect(whyOf('p', 'sick')).toBe(''); // a why only counts under the state that offers it
+    expect(normAtt({ key: 'k', status: 's', at: 0, reason: '' })).toMatchObject({ status: 'a', why: 'sick' });
   });
   it('analytics helpers', () => {
     const t = (h: number, due: number) => task({ status: 2, completedAt: new Date(2026, 9, 1, h).getTime(), dueAt: due });

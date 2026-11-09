@@ -149,7 +149,7 @@ describe('adoptDemo — leaving the tour', () => {
     await s.boot();
     s.act.saveTask(mine()); s.act.saveCourse(myCourse); s.act.saveMeeting(myMeeting);
     s.act.saveNotice(myNotice); s.act.saveMark(myMark); s.act.addSession(session);
-    s.act.setAtt('2026-10-05|11:00|c-mine', 'l', 'bus'); s.act.setDay('2026-10-06', 'c', 'holiday'); s.act.setAdjust('c-mine', 2);
+    s.act.setAtt('2026-10-05|11:00|c-mine', 'p', 'bus', 'late'); s.act.setDay('2026-10-06', 'c', 'holiday'); s.act.setAdjust('c-mine', 2);
     await s.R().upsert('trip', myTrip); await s.R().upsert('alarm', myAlarm);
     s.act.setSettings({ name: 'Sam', hapticsOn: false });
     await flush();

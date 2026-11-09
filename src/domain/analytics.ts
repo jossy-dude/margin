@@ -1,4 +1,4 @@
-import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Task } from './types';
+import type { AttRecord, AttStatus, AttWhy, Course, DayMark, FocusSession, Mark, Meeting, Task } from './types';
 import { addDays, fmtDur, pad, parseYmd, plural, startOfDay, ymd } from './time';
 import { attendanceRate, effective, occurrencesBetween, occurrencesOn, type Occurrence } from './attendance';
 import { total } from './grades';
@@ -91,15 +91,15 @@ export const statsEmptyHint = (x: { focusMinutes: number; finished: number }): s
 
 /** One day of one subject's attendance strip. `cls` says whether the subject meets that day at all, which
  *  `status: null` alone cannot: a class later today and a day with no class both have no status yet. */
-export interface AttCell { date: string; status: string | null; inferred: boolean; cls: boolean }
+export interface AttCell { date: string; status: AttStatus | null; why: AttWhy; inferred: boolean; cls: boolean }
 export function attendanceHeat(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
   const keys = lastDays(nDays, now);
   return courses.filter((c) => meetings.some((m) => m.courseId === c.id)).map((c) => ({
     course: c,
     cells: keys.map<AttCell>((k) => {
       const d = parseYmd(k), m = occurrencesOn(d, meetings.filter((x) => x.courseId === c.id))[0];
-      if (!m) return { date: k, status: null, inferred: false, cls: false };
-      const e = effective(d, m.meeting, att, days, now); return { date: k, status: e.status, inferred: e.inferred, cls: true };
+      if (!m) return { date: k, status: null, why: '', inferred: false, cls: false };
+      const e = effective(d, m.meeting, att, days, now); return { date: k, status: e.status, why: e.why ?? '', inferred: e.inferred, cls: true };
     }),
   }));
 }

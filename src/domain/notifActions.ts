@@ -1,4 +1,4 @@
-import type { AttStatus, Meeting, Task } from './types';
+import type { AttStatus, AttWhy, Meeting, Task } from './types';
 import type { Planned } from './reminders';
 import { fmtTime } from './time';
 import { parseOccKey } from './attendance';
@@ -17,13 +17,14 @@ import { parseOccKey } from './attendance';
 export const CAT_ATT = 'mgatt', CAT_TASK = 'mgtask';
 export interface ButtonDef { identifier: string; buttonTitle: string }
 export const NOTIF_CATEGORIES: { identifier: string; actions: ButtonDef[] }[] = [
-  { identifier: CAT_ATT, actions: [{ identifier: 'att.here', buttonTitle: 'Here' }, { identifier: 'att.late', buttonTitle: 'Late' }, { identifier: 'att.absent', buttonTitle: 'Absent' }] },
+  { identifier: CAT_ATT, actions: [{ identifier: 'att.here', buttonTitle: 'Present' }, { identifier: 'att.late', buttonTitle: 'Late' }, { identifier: 'att.absent', buttonTitle: 'Absent' }] },
   { identifier: CAT_TASK, actions: [{ identifier: 'task.done', buttonTitle: 'Done' }] },
 ];
 /** What the OS reports when the notification body was tapped rather than one of its buttons. */
 export const DEFAULT_ACTION = 'expo.modules.notifications.actions.DEFAULT';
 
-const ATT_STATUS: Record<string, AttStatus | undefined> = { 'att.here': 'p', 'att.late': 'l', 'att.absent': 'a' };
+/** The action ids stay as v0.5 named them: a notification already on the shade still carries the old id. */
+const ATT_STATUS: Record<string, [AttStatus, AttWhy] | undefined> = { 'att.here': ['p', ''], 'att.late': ['p', 'late'], 'att.absent': ['a', ''] };
 const PLANNED_KINDS = ['class', 'ended', 'task', 'start', 'exam'];
 /** `focus` and the test notification are not planner reminders and have no row in `notif_log`. */
 export const isPlannedKind = (kind: string) => PLANNED_KINDS.includes(kind);
@@ -40,7 +41,7 @@ export function planCategory(kind: string): string | null {
   return null;
 }
 
-export type NotifAction = { kind: 'att'; status: AttStatus; key: string } | { kind: 'task'; taskId: string };
+export type NotifAction = { kind: 'att'; status: AttStatus; why: AttWhy; key: string } | { kind: 'task'; taskId: string };
 export interface NotifData { route?: unknown; kind?: unknown; entityId?: unknown; planned?: unknown; at?: unknown }
 export interface Opened { route: 'Today' | 'Tasks'; kind: string; id: string; at: number; action: NotifAction | null }
 
@@ -52,7 +53,7 @@ export function resolveAction(actionId: string, data: NotifData): NotifAction | 
   const kind = String(data.kind ?? ''), entityId = String(data.entityId ?? '');
   if (!entityId) return null;
   const status = ATT_STATUS[actionId];
-  if (status !== undefined) return kind === 'class' || kind === 'ended' ? { kind: 'att', status, key: entityId } : null;
+  if (status !== undefined) return kind === 'class' || kind === 'ended' ? { kind: 'att', status: status[0], why: status[1], key: entityId } : null;
   if (actionId === 'task.done') return kind === 'task' || kind === 'exam' ? { kind: 'task', taskId: entityId } : null;
   return null;
 }
@@ -60,7 +61,7 @@ export function resolveAction(actionId: string, data: NotifData): NotifAction | 
 export interface NotifEffects {
   tasks: readonly Pick<Task, 'id' | 'status' | 'title'>[];
   meetings: readonly Pick<Meeting, 'start' | 'courseId' | 'variantId'>[];
-  setAtt: (key: string, status: AttStatus) => void;
+  setAtt: (key: string, status: AttStatus, why: AttWhy) => void;
   toggleTask: (id: string) => void;
   toast: (text: string) => void;
   go: (route: 'Today' | 'Tasks') => void;
@@ -74,7 +75,7 @@ export function applyAction(a: NotifAction, fx: NotifEffects): boolean {
   if (a.kind === 'att') {
     const k = parseOccKey(a.key);
     if (!k || !fx.meetings.some((m) => m.start === k.start && m.courseId === k.courseId && (m.variantId ?? null) === k.variantId)) { fx.toast('That class is no longer in your timetable'); return false; }
-    fx.setAtt(a.key, a.status); return true;
+    fx.setAtt(a.key, a.status, a.why); return true;
   }
   const t = fx.tasks.find((x) => x.id === a.taskId);
   if (!t) { fx.toast('That task has been deleted'); return false; }

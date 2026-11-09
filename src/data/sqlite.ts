@@ -189,7 +189,7 @@ export class SqliteRepository implements Repository {
     const out: EntityMap[K][] = [];
     let skipped = 0, first = '';
     for (const r of rows) {
-      try { out.push(Object.fromEntries(s.fields.map((x) => [x.p, fromSql(x, r[x.c])])) as unknown as EntityMap[K]); }
+      try { out.push(Object.fromEntries(s.fields.filter((x) => !(x.opt && r[x.c] == null)).map((x) => [x.p, fromSql(x, r[x.c])])) as unknown as EntityMap[K]); }
       /* A row whose value cannot be read back is SKIPPED, not defaulted (audit H2). Defaulting was the
          unsafe direction for exactly one reason: the loaded object is what the next `upsert` writes
          back, so an unparseable `reminders` column read as `[]` became an empty array ON DISK on the

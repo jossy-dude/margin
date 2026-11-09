@@ -1,6 +1,6 @@
 import { haptic, hapticBurst, setHapticsEnabled } from './haptics';
 import { configureAudio, play } from './audio';
-import type { AttStatus, Settings } from '../domain/types';
+import type { AttStatus, AttWhy, Settings } from '../domain/types';
 
 /** One call per meaningful state change: sound + haptic together, each respecting its own toggle and volume.
  *
@@ -10,12 +10,14 @@ import type { AttStatus, Settings } from '../domain/types';
  *  ears, and there are none on this machine (`qa/COORDINATION.md` §0). `Feel: 'error'` was the other orphan and
  *  it did not need deleting — see `denied()` below. */
 export function configureFx(s: Settings) { configureAudio(s.soundOn, s.soundVol); setHapticsEnabled(s.hapticsOn); }
-const STAMP: Record<AttStatus, Parameters<typeof play>[0]> = { p: 'stamp-here', l: 'stamp-late', n: 'stamp-late', a: 'stamp-absent', s: 'stamp-sick', c: 'stamp-cancel', t: 'stamp-cancel' };
+const STAMP: Record<AttStatus, Parameters<typeof play>[0]> = { p: 'stamp-here', a: 'stamp-absent', c: 'stamp-cancel' };
+/** The why picks the sound where one exists: a late entry still sounds late, a sick day sounds sick. */
+const stampSound = (s: AttStatus, why: AttWhy) => (s === 'p' && why === 'late' ? 'stamp-late' : s === 'a' && why === 'sick' ? 'stamp-sick' : STAMP[s]);
 export const fx = {
   page() { play('place'); haptic('place'); },   // 0.22s, matched to PLACE_MS=200 in navigation/window.ts
   swipe() { play('shuffle'); haptic('soft'); },
   crumple() { play('crumple'); hapticBurst('crumple', 4, 70); setTimeout(() => { play('thud'); haptic('fall'); }, 620); },
-  stamp(s: AttStatus) { play(STAMP[s]); haptic(s === 'a' ? 'heavy' : s === 'p' ? 'stamp' : 'tap'); },
+  stamp(s: AttStatus, why: AttWhy = '') { play(stampSound(s, why)); haptic(s === 'a' ? 'heavy' : s === 'p' ? 'stamp' : 'tap'); },
   /** `'error'`, not `'warn'`. It is Android's `Reject` and iOS's `NotificationFeedbackType.Error` — a refusal,
    *  where `warn` is `Context_Click`, a menu press. A *distinct* feel is wanted for "denied
    *  (locked cell)" and this was the feel that was mapped and never requested. Nothing else in the app is a

@@ -1,7 +1,7 @@
-import type { AttRecord, AttStatus, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, NotifSettings, Settings, SubjectVariant, Task } from '../../domain/types';
+import type { AttRecord, AttStatus, AttWhy, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, NotifSettings, Settings, SubjectVariant, Task } from '../../domain/types';
 import { batchOf, duplicateMeeting, emptyRows, makeVariantChange, pkOfRow, removeVariantChange, type Change, type RowSet } from '../../domain/variants';
 import type { EntityName } from '../../data/repository';
-import { ST } from '../../domain/attendance';
+import { statusLabel, whyOf } from '../../domain/attendance';
 import { uid } from '../../domain/time';
 import { configureFx, fx } from '../../services/fx';
 import * as notifs from '../../services/notifications';
@@ -97,9 +97,9 @@ function unstamp(k: MapKey, e: 'attendance' | 'dayMark', key: string, said: stri
     resync();
   });
 }
-export function setAtt(key: string, status: AttStatus, reason = '') { fx.stamp(status); stamp('attendance', 'attendance', key, { key, status, at: Date.now(), reason }, `Marked ${ST[status]}`); }
+export function setAtt(key: string, status: AttStatus, reason = '', why: AttWhy = '') { const w = whyOf(status, why); fx.stamp(status, w); stamp('attendance', 'attendance', key, { key, status, at: Date.now(), reason, ...(w ? { why: w } : {}) }, `Marked ${statusLabel(status, w)}`); }
 export function clearAtt(key: string) { unstamp('attendance', 'attendance', key, 'Back to automatic'); }
-export function setDay(date: string, status: DayStatus, reason = '') { fx.stamp(status); stamp('dayMarks', 'dayMark', date, { date, status, at: Date.now(), reason }, `Marked ${ST[status]}`); }
+export function setDay(date: string, status: DayStatus, reason = '', why: AttWhy = '') { const w = whyOf(status, why); fx.stamp(status, w); stamp('dayMarks', 'dayMark', date, { date, status, at: Date.now(), reason, ...(w ? { why: w } : {}) }, `Marked ${statusLabel(status, w)}`); }
 export function clearDay(date: string) { unstamp('dayMarks', 'dayMark', date, 'Day mark cleared'); }
 
 /* ── compound edits ──────────────────────────────────────────────────────────────────────────────

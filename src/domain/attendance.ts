@@ -1,8 +1,41 @@
-import type { AttRecord, AttStatus, Course, DayMark, Meeting } from './types';
+import type { AttRecord, AttStatus, AttWhy, Course, DayMark, Meeting } from './types';
 import { addDays, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
 
-export const ST: Record<AttStatus, string> = { p: 'Here', l: 'Late', n: 'Late · stayed out', a: 'Absent', s: 'Sick', c: 'Cancelled', t: 'Teacher out' };
-export const CYCLE: AttStatus[] = ['p', 'l', 'a', 's', 'c'];
+export const ST: Record<AttStatus, string> = { p: 'Present', a: 'Absent', c: 'Cancelled' };
+export const CYCLE: AttStatus[] = ['p', 'a', 'c'];
+/** The reasons each state offers, in the order the sheet shows them (v0.6, owner's list). */
+export const WHY: Record<AttStatus, AttWhy[]> = {
+  p: ['late', 'early'],
+  a: ['arrivedLate', 'kicked', 'sick', 'excused', 'skipped'],
+  c: ['teacher', 'holiday', 'moved', 'other'],
+};
+export const WHY_LABEL: Record<Exclude<AttWhy, ''>, string> = {
+  late: 'Late entry', early: 'Left early',
+  arrivedLate: 'Late arrival', kicked: 'Kicked out', sick: 'Sick', excused: 'Excused', skipped: 'Skipped',
+  teacher: "Teacher didn't come", holiday: 'Holiday', moved: 'Moved', other: 'Other',
+};
+const WHYS = new Set(Object.keys(WHY_LABEL));
+/** A why only counts under the state that offers it; anything else reads as no reason. */
+export const whyOf = (status: AttStatus | null, why: unknown): AttWhy => (status && typeof why === 'string' && WHYS.has(why) && WHY[status].includes(why as AttWhy) ? why as AttWhy : '');
+/** What a mark says out loud: "Absent · Sick", "Present". */
+export const statusLabel = (status: AttStatus, why?: AttWhy | '') => (why ? `${ST[status]} · ${WHY_LABEL[why]}` : ST[status]);
+/** Any status an older build, an export or a typed file may hold, as a v0.6 state + why. Accepts the
+ *  letters (`l n s t` included) and the printed words of both generations; null when it is none. */
+const LEGACY: Record<string, [AttStatus, AttWhy]> = {
+  p: ['p', ''], here: ['p', ''], present: ['p', ''], l: ['p', 'late'], late: ['p', 'late'],
+  a: ['a', ''], absent: ['a', ''], n: ['a', 'arrivedLate'], 'late · stayed out': ['a', 'arrivedLate'], s: ['a', 'sick'], sick: ['a', 'sick'],
+  c: ['c', ''], cancelled: ['c', ''], canceled: ['c', ''], t: ['c', 'teacher'], 'teacher out': ['c', 'teacher'],
+};
+export function legacyStatus(v: unknown): { status: AttStatus; why: AttWhy } | null {
+  if (typeof v !== 'string') return null;
+  const hit = LEGACY[v.trim().toLowerCase()];
+  return hit ? { status: hit[0], why: hit[1] } : null;
+}
+/** A stored record in the v0.6 shape whatever generation wrote it (archived terms keep old letters). */
+export function normAtt<T extends { status: string; why?: unknown }>(r: T): T & { status: AttStatus; why: AttWhy } {
+  const l = legacyStatus(r.status) ?? { status: 'p' as AttStatus, why: '' as AttWhy };
+  return { ...r, status: l.status, why: whyOf(l.status, r.why) || l.why };
+}
 /** One class occurrence's attendance key: `date|start|courseId`, plus `~variantId` for a meeting that
  *  belongs to one of the subject's variants. The suffix keeps the lecture and the lab apart when both
  *  sit in the same slot (two groups, one subject), and a meeting with no variant keeps the exact key
@@ -30,16 +63,16 @@ export const occEnd = (dayMs: number, m: Pick<Meeting, 'start' | 'end'>) => {
   return end > start ? end : atTime(addDays(dayMs, 1), m.end); // calendar day, not 24 h: DST nights are 23 or 25
 };
 
-export interface Eff { status: AttStatus | null; inferred: boolean; explicit: boolean }
+export interface Eff { status: AttStatus | null; inferred: boolean; explicit: boolean; why?: AttWhy }
 /** One status model for every class occurrence: explicit record > whole-day mark > inferred "here" once the class ended > nothing (future). */
 export function effective(date: Date, m: Meeting, att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()): Eff {
   const d = ymd(date), r = att[occKey(d, m)];
-  if (r) return { status: r.status, inferred: false, explicit: true };
+  if (r) return { status: r.status, inferred: false, explicit: true, why: r.why ?? '' };
   const dm = days[d];
-  if (dm) return { status: dm.status, inferred: false, explicit: true };
+  if (dm) return { status: dm.status, inferred: false, explicit: true, why: dm.why ?? '' };
   return occEnd(date.getTime(), m) <= now ? { status: 'p', inferred: true, explicit: false } : { status: null, inferred: false, explicit: false };
 }
-export const isCancelled = (e: Eff) => e.status === 'c' || e.status === 't';
+export const isCancelled = (e: Eff) => e.status === 'c';
 
 /** Next status in the cycle; used for the one-tap first change and for long-press changes. 'p' is a fixed point: a class that already reads Here — set by hand or inferred once it ended — must stay Here on tap, never silently escalate to Late. */
 export const nextStatus = (s: AttStatus | null): AttStatus => {
@@ -91,7 +124,7 @@ export function attendanceRate(occ: Occurrence[], att: Record<string, AttRecord>
     if (!e.status) continue;
     if (isCancelled(e)) { cancelled++; continue; }
     held++;
-    if (e.status === 'p') here++; else if (e.status === 'l' || e.status === 'n') { late++; here++; } else if (e.status === 'a') absent++; else if (e.status === 's') sick++;
+    if (e.status === 'p') { here++; if (e.why === 'late') late++; } else if (e.status === 'a') { absent++; if (e.why === 'sick') sick++; }
   }
   return { held, here, late, absent, sick, cancelled, rate: held ? here / held : null };
 }

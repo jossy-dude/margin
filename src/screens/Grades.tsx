@@ -40,11 +40,11 @@ function AttendanceGrid({ course }: { course: Course }) {
         <HStrip ref={gridRef} gap={3} bg={c.card} contentStyle={{ paddingVertical: 6 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
           {occ.map(({ date, meeting }) => {
             const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${fmtTime(atTime(date.getTime(), meeting.start), hour12)}, ${spokenStatus(e)}`;
-            return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
+            return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} why={e.why} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
               onTap={() => act.setAtt(key, e.status && e.inferred ? nextStatus(e.status) : 'p')} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}
         </HStrip>)}
-      <Row style={{ gap: 12 }}>{[['✓', 'here', c.ink], ['L', 'late', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.ok], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
+      <Row style={{ gap: 12 }}>{[['✓', 'present', c.ink], ['L', 'late entry', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.bad], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
     </View>
   );
 }

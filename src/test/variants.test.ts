@@ -29,7 +29,7 @@ function snap(): Snapshot {
   return {
     courses: [course('DB', 'Database', ['LR-601', 'LR-303']), course('DBL', 'Database LAB', ['Lab 2'])],
     meetings: [meeting('M1', 'DB'), meeting('M2', 'DBL', '14:00', { room: null })],
-    attendance: { '2026-10-06|14:00|DBL': { key: '2026-10-06|14:00|DBL', status: 'l', at: 1, reason: 'bus' } },
+    attendance: { '2026-10-06|14:00|DBL': { key: '2026-10-06|14:00|DBL', status: 'p', why: 'late', at: 1, reason: 'bus' } },
     dayMarks: {}, tasks: [{ id: 'T1', title: 'Lab sheet', courseId: 'DBL', kind: 'lab', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: 0, completedAt: null, reminders: [], subtasks: [], demo: false }],
     notices: [], marks: [mark('K1', 'DB'), mark('K2', 'DBL')], adjusts: { DBL: 2 }, focus: [], trips: [], alarms: [], variants: [], settings: {},
   };
@@ -77,7 +77,7 @@ describe('make this a variant of…', () => {
     expect(a.meetings).toEqual([{ ...meeting('M2', 'DB', '14:00'), variantId: 'v1', room: 'Lab 2' }]);
     expect(a.marks).toEqual([{ ...mark('K2', 'DB'), variantId: 'v1' }]);
     expect(a.tasks.map((t) => t.courseId)).toEqual(['DB']);
-    expect(a.attendance).toEqual([{ key: '2026-10-06|14:00|DB~v1', status: 'l', at: 1, reason: 'bus' }]);
+    expect(a.attendance).toEqual([{ key: '2026-10-06|14:00|DB~v1', status: 'p', why: 'late', at: 1, reason: 'bus' }]);
     const b = batchOf(c.before, c.after);
     expect(b.remove).toEqual([{ entity: 'course', id: 'DBL' }, { entity: 'attendance', id: '2026-10-06|14:00|DBL' }]);
   });

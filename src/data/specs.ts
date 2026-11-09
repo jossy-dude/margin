@@ -2,29 +2,31 @@ import type { EntityName } from './repository';
 import { splitRooms } from '../domain/rooms';
 
 type Kind = 'text' | 'int' | 'real' | 'bool' | 'json';
-export interface Field { p: string; c: string; k: Kind; nullable?: boolean }
+/** `opt`: an optional property (v0.6) — a NULL column leaves it off the object instead of setting null. */
+export interface Field { p: string; c: string; k: Kind; nullable?: boolean; opt?: boolean }
 export interface Spec { table: string; pk: string; pkProp: string; fields: Field[] }
 const f = (p: string, k: Kind, nullable = false, c?: string): Field => ({ p, k, nullable, c: c ?? p.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()) });
+const o = (p: string): Field => ({ ...f(p, 'text', true), opt: true });
 
 export const SPECS: Record<EntityName, Spec> = {
   /* Migration 5: `rooms` (a JSON list) replaces the bound `room` string, which stays in the table
      unbound — an old migration is never edited, and the backfill below copied it into `rooms` first. */
   course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('rooms', 'json'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool'), f('bar', 'text', true)] },
   meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id'), f('room', 'text', true)] },
-  attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
-  dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text')] },
-  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool')] },
+  attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
+  dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
+  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath')] },
   /* No `read` field: the flag was written and never read anywhere, so the object, the export column
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
-  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int'), f('demo', 'bool')] },
+  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int'), f('demo', 'bool'), o('origin'), o('extId')] },
   mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id')] },
   adjust: { table: 'adjust', pk: 'course_id', pkProp: 'courseId', fields: [f('courseId', 'text'), f('adj', 'real')] },
   /* `mode`/`completed` are bound here from W3 on: migration 2 (W1) added the columns, and until the finish
      path wrote them they were dead weight — a row loaded with the schema's own defaults and was exported
      without them. Both are non-null with SQL defaults, so a row written before this work still loads as
      `mode: 'focus'`, `completed: false` and re-exports with that meaning intact. */
-  focus: { table: 'focus_session', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('taskId', 'text', true), f('courseId', 'text', true), f('startedAt', 'int'), f('endedAt', 'int'), f('focusSec', 'int'), f('breakSec', 'int'), f('overSec', 'int'), f('rounds', 'int'), f('planMin', 'int'), f('mode', 'text'), f('completed', 'bool'), f('demo', 'bool')] },
+  focus: { table: 'focus_session', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('taskId', 'text', true), f('courseId', 'text', true), f('startedAt', 'int'), f('endedAt', 'int'), f('focusSec', 'int'), f('breakSec', 'int'), f('overSec', 'int'), f('rounds', 'int'), f('planMin', 'int'), f('mode', 'text'), f('completed', 'bool'), f('demo', 'bool'), o('origin'), o('extId')] },
   /* W5/W6's entities, wired at the data layer only: nothing reads or writes them from the UI yet, so
      the shapes below are deliberately minimal — a later migration can add fields rather than this
      one guessing them. */
@@ -111,7 +113,28 @@ export const MIGRATIONS: string[] = [
    ALTER TABLE course ADD COLUMN bar TEXT;
    ALTER TABLE meeting ADD COLUMN room TEXT;
    ALTER TABLE mark ADD COLUMN variant_id TEXT;`,
+  /* Migration 6 (v0.6). Attendance is three states plus a reason (`why`); the old letters are rewritten
+     by `BACKFILL[5]` in the same transaction. The bridge columns get Margin ready to share tasks, events
+     and focus time with the Bone plugins in Obsidian (docs/BRIDGE.md): `origin` says which side created
+     a row ('obsidian'; NULL = Margin), `ext_id` is the other side's id (Bone's 🆔), `ext_path` the note a
+     task line lives in. `updated_at` is the change feed, so it gets an index on the synced tables. */
+  `ALTER TABLE attendance ADD COLUMN why TEXT;
+   ALTER TABLE day_mark ADD COLUMN why TEXT;
+   ALTER TABLE task ADD COLUMN origin TEXT;
+   ALTER TABLE task ADD COLUMN ext_id TEXT;
+   ALTER TABLE task ADD COLUMN ext_path TEXT;
+   ALTER TABLE notice ADD COLUMN origin TEXT;
+   ALTER TABLE notice ADD COLUMN ext_id TEXT;
+   ALTER TABLE focus_session ADD COLUMN origin TEXT;
+   ALTER TABLE focus_session ADD COLUMN ext_id TEXT;
+   CREATE INDEX IF NOT EXISTS idx_task_ext ON task(ext_id);
+   CREATE INDEX IF NOT EXISTS idx_task_upd ON task(updated_at);
+   CREATE INDEX IF NOT EXISTS idx_notice_upd ON notice(updated_at);
+   CREATE INDEX IF NOT EXISTS idx_focus_upd ON focus_session(updated_at);`,
 ];
+
+/** Old letter → v0.6 state + why (the same table `domain/attendance.ts` `legacyStatus` reads). */
+export const LEGACY_LETTERS: [string, string, string][] = [['l', 'p', 'late'], ['n', 'a', 'arrivedLate'], ['s', 'a', 'sick'], ['t', 'c', 'teacher']];
 
 /** The slice of a database a backfill needs — the same two calls `SqlDb` has. */
 export interface BackfillDb {
@@ -124,5 +147,13 @@ export const BACKFILL: Partial<Record<number, (db: BackfillDb) => Promise<void>>
   4: async (db) => {
     const rows = await db.getAllAsync<{ id: string; room: unknown }>('SELECT id, room FROM course WHERE rooms IS NULL');
     for (const r of rows) await db.runAsync('UPDATE course SET rooms=? WHERE id=?', [JSON.stringify(splitRooms(r.room)), r.id]);
+  },
+  /* v0.6: the seven attendance letters become three states and a why. Pure SQL, so it is one pass per
+     table whatever the row count, and a row already in the new shape is left alone. */
+  5: async (db) => {
+    for (const t of ['attendance', 'day_mark']) {
+      for (const [from, to, why] of LEGACY_LETTERS) await db.runAsync(`UPDATE ${t} SET status=?, why=? WHERE status=?`, [to, why, from]);
+      await db.runAsync(`UPDATE ${t} SET why='' WHERE why IS NULL`, []);
+    }
   },
 };

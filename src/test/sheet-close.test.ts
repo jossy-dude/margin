@@ -173,17 +173,23 @@ describe('a form that writes its row also dismisses itself', () => {
     expect(getState().timer.taskId).toBe('seed-task-2');
   });
 
-  it('the attendance sheet: marking a class writes the mark and closes', async () => {
+  /* Rationale (v0.6): choosing a state shows its reasons instead of closing, so the mark is written by Save. */
+  it('the attendance sheet: a state, a reason, Save — writes the mark and closes', async () => {
     const s = await open({ t: 'status', mode: 'class', key: '2026-10-05|08:30|E', title: 'Economics', date: '2026-10-05' });
     await s.press('Absent');
-    expect(getState().attendance['2026-10-05|08:30|E']?.status).toBe('a');
+    expect(getState().sheet).not.toBeNull();
+    await s.press('Kicked out');
+    await s.press('Save');
+    expect(getState().attendance['2026-10-05|08:30|E']).toMatchObject({ status: 'a', why: 'kicked' });
     expect(getState().sheet).toBeNull();
   });
 
   it('the day sheet: marking a whole day writes the mark and closes', async () => {
     const s = await open({ t: 'status', mode: 'day', key: '2026-10-07', title: 'Wednesday', date: '2026-10-07' });
+    await s.press('Absent');
     await s.press('Sick');
-    expect(getState().dayMarks['2026-10-07']?.status).toBe('s');
+    await s.press('Save');
+    expect(getState().dayMarks['2026-10-07']).toMatchObject({ status: 'a', why: 'sick' });
     expect(getState().sheet).toBeNull();
   });
 

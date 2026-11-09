@@ -48,7 +48,7 @@ async function store() {
   await r.upsert('task', { id: 't1', title: 'Lab report', courseId: 'E', kind: 'lab', dueAt: NOW, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false });
   await r.upsert('notice', { id: 'n1', courseId: 'E', text: 'Goggles', dueAt: NOW, priority: 0, demo: false });
   await r.upsert('mark', { id: 'k1', courseId: 'E', name: 'Quiz', score: 80, weight: 10, on: true, sort: 0, demo: false });
-  await r.upsert('attendance', { key: ATT, status: 'l', at: NOW, reason: 'bus' });
+  await r.upsert('attendance', { key: ATT, status: 'p', why: 'late', at: NOW, reason: 'bus' });
   await r.upsert('dayMark', { date: '2026-09-15', status: 'c', at: NOW, reason: 'strike' });
   await hydrate(r);
   await settle(1500); mockSync.mockClear();

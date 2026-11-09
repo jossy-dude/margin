@@ -1,5 +1,5 @@
 import { AppState as RNAppState } from 'react-native';
-import type { AttStatus } from '../domain/types';
+import type { AttStatus, AttWhy } from '../domain/types';
 import { dispatchOpened, isPlannedKind } from '../domain/notifActions';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
@@ -17,7 +17,7 @@ const notifEffects = () => {
   const s = getState();
   return {
     tasks: s.tasks, meetings: s.meetings,
-    setAtt: (key: string, status: AttStatus) => setAtt(key, status),
+    setAtt: (key: string, status: AttStatus, why: AttWhy) => setAtt(key, status, '', why),
     toggleTask: (id: string) => toggleTask(id),
     toast: (text: string) => toast(text),
     go: (route: 'Today' | 'Tasks') => set({ route }),

@@ -34,11 +34,11 @@ const NOW = new Date(2026, 9, 6, 8, 0).getTime();
 /** A real response, as the OS hands one back: two strings the app owns nothing about. */
 const response = (actionIdentifier: string, data: NotifData, identifier = 'ended-2026-10-06|08:30|E-600') => ({ actionIdentifier, notification: { date: NOW, request: { identifier, content: { title: 't', body: 'b', data } } } });
 const effects = () => {
-  const calls = { att: [] as [string, string][], task: [] as string[], toast: [] as string[], go: [] as string[], log: [] as [string, string, number][] };
+  const calls = { att: [] as string[][], task: [] as string[], toast: [] as string[], go: [] as string[], log: [] as [string, string, number][] };
   const fx: NotifEffects = {
     tasks: [{ id: 'task-1', status: 0, title: 'Problem set' }, { id: 'task-2', status: 2, title: 'Already done' }],
     meetings: [{ start: '08:30', courseId: 'E' }],
-    setAtt: (key, status) => calls.att.push([key, status]),
+    setAtt: (key, status, why) => calls.att.push(why ? [key, status, why] : [key, status]),
     toggleTask: (id) => calls.task.push(id),
     toast: (text) => calls.toast.push(text),
     go: (route) => calls.go.push(route),
@@ -107,10 +107,11 @@ describe('which reminders carry which buttons', () => {
 
   it('and the titles are the app&rsquo;s own words for the statuses it writes', () => {
     const titles = NOTIF_CATEGORIES[0]!.actions.map((a) => a.buttonTitle);
-    expect(titles).toEqual(['Here', 'Late', 'Absent']);
-    expect(resolveAction('att.here', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'p', key: KEY });
-    expect(resolveAction('att.late', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'l', key: KEY });
-    expect(resolveAction('att.absent', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'a', key: KEY });
+    /* Rationale (v0.6): attendance is Present/Absent/Cancelled + a why — the Late button writes Present · late entry. */
+    expect(titles).toEqual(['Present', 'Late', 'Absent']);
+    expect(resolveAction('att.here', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'p', why: '', key: KEY });
+    expect(resolveAction('att.late', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'p', why: 'late', key: KEY });
+    expect(resolveAction('att.absent', { kind: 'ended', entityId: KEY })).toEqual({ kind: 'att', status: 'a', why: '', key: KEY });
   });
 });
 
@@ -158,20 +159,20 @@ describe('an action is only applied when the notification it came from can suppo
 describe('the write an action asks for', () => {
   it('attendance goes through with the occurrence key untouched', () => {
     const { fx, calls } = effects();
-    expect(applyAction({ kind: 'att', status: 'l', key: KEY }, fx)).toBe(true);
-    expect(calls.att).toEqual([[KEY, 'l']]);
+    expect(applyAction({ kind: 'att', status: 'p', why: 'late', key: KEY }, fx)).toBe(true);
+    expect(calls.att).toEqual([[KEY, 'p', 'late']]);
   });
 
   it('a class that has left the timetable is reported, not written into the table', () => {
     const { fx, calls } = effects();
-    expect(applyAction({ kind: 'att', status: 'a', key: '2026-10-06|09:15|GONE' }, fx)).toBe(false);
+    expect(applyAction({ kind: 'att', status: 'a', why: '', key: '2026-10-06|09:15|GONE' }, fx)).toBe(false);
     expect(calls.att).toEqual([]);
     expect(calls.toast).toEqual(['That class is no longer in your timetable']);
   });
 
   it('a malformed key is refused the same way', () => {
     const { fx, calls } = effects();
-    expect(applyAction({ kind: 'att', status: 'p', key: 'garbage' }, fx)).toBe(false);
+    expect(applyAction({ kind: 'att', status: 'p', why: '', key: 'garbage' }, fx)).toBe(false);
     expect(calls.att).toEqual([]);
   });
 
@@ -214,14 +215,14 @@ describe('one tap of a notification does its logging, its write and its navigati
 
   it('an ended reminder lands on Today whatever route its payload claimed', () => {
     const { fx, calls } = effects();
-    dispatchOpened({ route: 'Tasks', kind: 'ended', id: 'e1', at: NOW, action: { kind: 'att', status: 'p', key: KEY } }, fx);
+    dispatchOpened({ route: 'Tasks', kind: 'ended', id: 'e1', at: NOW, action: { kind: 'att', status: 'p', why: '', key: KEY } }, fx);
     expect(calls.go).toEqual(['Today']);
     expect(calls.att).toEqual([[KEY, 'p']]);
   });
 
   it('an action that cannot be applied still navigates, so the user is never left with nothing', () => {
     const { fx, calls } = effects();
-    dispatchOpened({ route: 'Today', kind: 'ended', id: 'e1', at: NOW, action: { kind: 'att', status: 'a', key: 'x|y|Z' } }, fx);
+    dispatchOpened({ route: 'Today', kind: 'ended', id: 'e1', at: NOW, action: { kind: 'att', status: 'a', why: '', key: 'x|y|Z' } }, fx);
     expect(calls.go).toEqual(['Today']);
     expect(calls.toast).toHaveLength(1);
   });
@@ -262,7 +263,7 @@ describe('the same user action can arrive twice and must be applied once', () =>
     onOpened((o) => dispatchOpened(o, fx)); // …this reads `last` itself, as a cold start does
     for (const h of mockOs.handlers) h(mockOs.last); // …and then the listener delivers the very same response
 
-    expect(calls.att).toEqual([[KEY, 'l']]);
+    expect(calls.att).toEqual([[KEY, 'p', 'late']]);
     expect(calls.toast).toEqual([]);
     expect(calls.go).toEqual(['Today']);
   });

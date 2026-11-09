@@ -1,5 +1,11 @@
-export type AttStatus = 'p' | 'l' | 'n' | 'a' | 's' | 'c' | 't';
-export type DayStatus = 'p' | 'a' | 's' | 'c';
+/** v0.6: three states — Present, Absent, Cancelled — and the reason is a separate `why` code
+ *  (`domain/attendance.ts` WHY) plus the free-text `reason` line. Older builds wrote `l`, `n`, `s` and `t`;
+ *  migration 6 and `legacyStatus()` turn those into a state and a why, so nothing new ever holds them. */
+export type AttStatus = 'p' | 'a' | 'c';
+export type DayStatus = AttStatus;
+export type AttWhy = '' | 'late' | 'early' | 'arrivedLate' | 'kicked' | 'sick' | 'excused' | 'skipped' | 'teacher' | 'holiday' | 'moved' | 'other';
+/** Which app created a row the bridge shares. Margin's own rows leave it null. */
+export type Origin = 'obsidian';
 export type TaskKind = 'assignment' | 'exam' | 'reading' | 'project' | 'lab' | 'deadline' | 'other';
 
 /** `demo` marks a row the first-run sample set seeded, so Settings can remove the sample semester
@@ -25,8 +31,8 @@ export interface SubjectVariant { id: string; subjectId: string; name: string; r
 export interface Meeting { id: string; courseId: string; weekday: number; start: string; end: string; demo: boolean; variantId?: string | null;
   /** Which of the subject's rooms this class is in (migration 5). Empty/absent = the variant's room, else the subject's first. */
   room?: string | null }
-export interface AttRecord { key: string; status: AttStatus; at: number; reason: string }
-export interface DayMark { date: string; status: DayStatus; at: number; reason: string }
+export interface AttRecord { key: string; status: AttStatus; at: number; reason: string; why?: AttWhy }
+export interface DayMark { date: string; status: DayStatus; at: number; reason: string; why?: AttWhy }
 /** A reminder is either an absolute moment, or an offset before the due date. */
 export type ReminderSpec =
   | { id: string; mode: 'abs'; at: number; label: string }
@@ -38,8 +44,10 @@ export interface Task {
   priority: 0 | 1 | 2 | 3; notes: string; status: 0 | 1 | 2;
   createdAt: number; completedAt: number | null;
   reminders: ReminderSpec[]; subtasks: Subtask[]; demo: boolean;
+  /** v0.6 bridge (docs/BRIDGE.md): who made it ('obsidian'; absent/null = Margin), the other side's id, and the note it lives in. */
+  origin?: Origin | null; extId?: string | null; extPath?: string | null;
 }
-export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean }
+export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean; origin?: Origin | null; extId?: string | null }
 /** `variantId` (migration 5): a mark earned in one of the subject's variants (the lab, say). It still
  *  belongs to `courseId`, so the subject's average rolls every variant up; the id only splits the breakdown. */
 export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number; demo: boolean; variantId?: string | null }
@@ -53,6 +61,7 @@ export interface Adjust { courseId: string; adj: number }
 export interface FocusSession {
   id: string; taskId: string | null; courseId: string | null; startedAt: number; endedAt: number;
   focusSec: number; breakSec: number; overSec: number; rounds: number; planMin: number; mode: string; completed: boolean; demo: boolean;
+  origin?: Origin | null; extId?: string | null;
 }
 /** A commute/route log entry (W5). Stored and exported from W1; nothing writes one yet, so the shape
  *  stays at the columns the brief named rather than guessing what the tracker will need. */

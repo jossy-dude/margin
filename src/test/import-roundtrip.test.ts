@@ -20,8 +20,8 @@ function fullPlanner(): Snapshot {
   s.variants = [{ id: 'v-lab', subjectId: s.courses[0]!.id, name: 'Lab', room: 'Lab 2', teacher: 'Mr Y', note: 'Thu group', ord: 0 }];
   s.meetings.push({ id: 'm-lab', courseId: s.courses[0]!.id, weekday: 3, start: '14:00', end: '16:00', demo: false, variantId: 'v-lab', room: 'Lab 2' });
   s.marks.push({ id: 'k-lab', courseId: s.courses[0]!.id, name: 'Lab 1', score: 9, weight: 5, on: true, sort: 9, demo: false, variantId: 'v-lab' });
-  s.attendance['2026-10-01|14:00|E~v-lab'] = { key: '2026-10-01|14:00|E~v-lab', status: 'l', at: NOW - 1000, reason: 'bus' };
-  s.dayMarks['2026-10-02'] = { date: '2026-10-02', status: 's', at: NOW - 2000, reason: 'flu' };
+  s.attendance['2026-10-01|14:00|E~v-lab'] = { key: '2026-10-01|14:00|E~v-lab', status: 'p', why: 'late', at: NOW - 1000, reason: 'bus' };
+  s.dayMarks['2026-10-02'] = { date: '2026-10-02', status: 'a', why: 'sick', at: NOW - 2000, reason: 'flu' };
   s.adjusts = { [s.courses[0]!.id]: 2.5 };
   s.trips = [{ id: 'p1', startedAt: NOW - 9000, endedAt: NOW - 8000, route: 'home → campus', note: '' }];
   s.alarms = [{ id: 'a1', at: NOW + 3_600_000, label: 'Leave', enabled: true, kind: 'leave', taskId: null }];

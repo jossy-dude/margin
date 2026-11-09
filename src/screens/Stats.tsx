@@ -8,10 +8,10 @@ import { useNow, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
 import { useStore } from '../store/store';
 import { HEAT_CELL_H } from '../ui/fit';
-import { Page } from './common';
+import { Page, statusColor } from './common';
 import * as A from '../domain/analytics';
 import { fmtDur, plural, startOfDay } from '../domain/time';
-import { ST } from '../domain/attendance';
+import { statusLabel } from '../domain/attendance';
 import { hexA } from '../tokens/theme';
 
 /* ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -84,9 +84,9 @@ export function StatsScreen() {
                   <Txt f="type" s={16} c={r.rate !== null && r.rate < 0.8 ? 'bad' : 'ink'}>{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</Txt>
                 </View>
                 {strip ? (
-                  <View style={{ flexDirection: 'row', gap: 2 }} accessible accessibilityLabel={`${r.course.name}, each class: ${strip.cells.filter((x) => x.status).map((x) => ST[x.status as keyof typeof ST]).join(', ') || 'none marked yet'}`}>
+                  <View style={{ flexDirection: 'row', gap: 2 }} accessible accessibilityLabel={`${r.course.name}, each class: ${strip.cells.filter((x) => x.status).map((x) => statusLabel(x.status!, x.why)).join(', ') || 'none marked yet'}`}>
                     {strip.cells.map((x) => {
-                      const col = x.status === 'a' ? c.bad : x.status === 'l' || x.status === 'n' ? c.warn : x.status === 's' ? c.ok : x.status === 'c' || x.status === 't' ? c.mut : c.ink;
+                      const col = statusColor(x.status, c, x.why);
                       return <View key={x.date} style={{ flex: 1, height: HEAT_CELL_H * 0.8, borderRadius: 2, backgroundColor: x.status ? hexA(col, x.inferred ? 0.4 : 0.85) : x.cls ? hexA(c.ink, 0.12) : 'transparent', borderWidth: x.cls && !x.status ? 1 : 0, borderColor: hexA(c.ink, 0.2) }} />;
                     })}
                   </View>
