@@ -53,7 +53,7 @@ export const Section = ({ title, right, children }: { title: string; right?: Rea
  *  is good news; no classes is a quiet day); the words are the same either way, and they carry the meaning. */
 export function Empty({ text, icon = 'note', mood }: { text: string; icon?: string; mood?: ScrapMood }) {
   const { look } = useTheme(), live = useScreenLive();
-  if (look === 'collage' && mood) return (
+  if (look !== 'ink' && mood) return (
     <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <Scrap size={62} mood={mood} awake={live} />
       <Txt f="serif" s={16.5} c="mut" style={{ flex: 1 }}>{text}</Txt>

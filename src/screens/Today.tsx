@@ -272,7 +272,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
    *  corner and the state pill has to start clear of it. */
   headPad?: number;
 }) {
-  const { c } = useTheme();
+  const { c, look } = useTheme();
   const t = useNow(live ? 1000 : 60_000);
   /* Which class of a shared slot the card is about (S2). Stored with the slot it belongs to, so when the
      slot changes (the class ends, another day is picked) it falls back to the first without an effect. */
@@ -308,7 +308,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   const shown = soon ? [waitPeriod(d.period!.start, gapMs, `until ${d.period!.label}`)] : barPeriods;
   return (
     <HandBox seed="deck" fill={c.deck} stroke={c.deck} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
-      <SlabHatch ink={c.deckInk} />
+      {look !== 'plain' && <SlabHatch ink={c.deckInk} />}
       {/* `.tg` — the state word is the card's own ink inverted back out, as the reference's `.tg b` is:
           the one place inside the slab that is lighter than the slab, so it reads first. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: headPad }}>
@@ -494,7 +494,8 @@ export function TodayScreen() {
           return (
             <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${spokenStatus(e)}. Opens attendance.`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}>
               <HandBox seed={key} stroke={live ? c.acc : c.ink} sw={live ? 2.4 : 1.6} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 12, opacity: isCancelled(e) ? 0.7 : 1 }}>
-                <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{range}</Txt></View>
+                {/* v0.6: start over end. One line truncated to "08:30–09…" at phone width, hiding the end of the class. */}
+                <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }} accessibilityLabel={range}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={hour12 ? RANGE_SIZE_12 - 2 : RANGE_SIZE_24 - 2} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
                 <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
                 <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: e.inferred || !e.status ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
               </HandBox>

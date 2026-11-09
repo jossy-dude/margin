@@ -16,9 +16,11 @@ const CRUMPLE = require('../../../assets/paper/crumple.webp');
 export function TornSheet({ children, fill, seed = 'sheet', depth = 7, style, bodyStyle, crumple = 0.4, lift = false }: { children?: React.ReactNode; fill?: string; seed?: string; depth?: number; style?: StyleProp<ViewStyle>; bodyStyle?: StyleProp<ViewStyle>; crumple?: number;
   /** The sheet hovers over something (a sheet over the dimmed app): a soft shadow above the tear. */
   lift?: boolean }) {
-  const { c, dark } = useTheme(), [w, setW] = useState(0), bg = fill ?? c.card;
+  const { c, dark, look } = useTheme(), [w, setW] = useState(0), bg = fill ?? c.card;
   const e = useMemo(() => tornEdge(w, hashSeed(seed), depth), [w, seed, depth]), E = depth * 2 + 2;
   const close = (pts: [number, number][]) => (pts.length ? `M0 ${E}L${pts.map(([x, y]) => `${x.toFixed(1)} ${(y + 1).toFixed(1)}`).join('L')}L${w} ${E}Z` : '');
+  /* Plain: the same sheet with a clean rounded top instead of a tear, and no crumple. */
+  if (look === 'plain') return <View style={[{ backgroundColor: bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' }, lift ? { boxShadow: `0 -4px 18px ${hexA(c.shadow, dark ? 0.4 : 0.1)}` } : null, style]}><View style={[{ flexGrow: 1 }, bodyStyle]}>{children}</View></View>;
   return (
     <View style={style} onLayout={(ev) => { const nw = ev.nativeEvent.layout.width; if (Math.abs(nw - w) > 0.5) setW(nw); }}>
       {w > 0 && (

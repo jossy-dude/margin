@@ -40,8 +40,9 @@ const PAIRS: Reach[] = [
   ['deckInk', 'deck', 'every word on the Today command deck'],
   ['deckMut', 'deck', 'the deck\'s position line and its After row'],
 ];
-describe('every text/background pair the app draws clears 4.5:1 — in BOTH palettes and BOTH themes', () => {
-  for (const name of ['refined', 'original'] as const) {
+describe('every text/background pair the app draws clears 4.5:1 — in every palette and BOTH themes', () => {
+  /* Rationale (v0.6): the plain look joined; its tokens are held to the same pairs. */
+  for (const name of ['refined', 'original', 'plain'] as const) {
     for (const mode of ['light', 'dark'] as const) {
       const c = palettes[name][mode];
       it.each(PAIRS)(`${name}.${mode}: %s on %s — %s`, (fg, bg, _where) => {
@@ -54,7 +55,7 @@ describe('every text/background pair the app draws clears 4.5:1 — in BOTH pale
      themes, is checked where the accent is drawn: as text on the page and on a card, and as a filled
      button carrying `onAcc`. */
   for (const pen of Object.keys(PENS) as (keyof typeof PENS)[]) {
-    for (const palette of ['refined', 'original'] as const) {
+    for (const palette of ['refined', 'original', 'plain'] as const) {
       for (const theme of ['light', 'dark'] as const) {
         it(`the ${pen} pen on ${palette} ${theme}: on paper, on a card, and under its own button label`, () => {
           const { c } = makeTheme({ pen, palette, theme }, false);
@@ -77,7 +78,7 @@ describe('every text/background pair the app draws clears 4.5:1 — in BOTH pale
    *     `original.light`.
    */
   it('the highlight and the desk only take ink as text, in every combination', () => {
-    for (const name of ['refined', 'original'] as const) for (const mode of ['light', 'dark'] as const) {
+    for (const name of ['refined', 'original', 'plain'] as const) for (const mode of ['light', 'dark'] as const) {
       const c = palettes[name][mode];
       for (const bg of ['hl', 'desk'] as const) expect(cr(c.ink, c[bg])).toBeGreaterThanOrEqual(4.5);
     }
@@ -111,7 +112,8 @@ describe('the palette invariants that are not contrast', () => {
   it('every palette keeps its own values: both names still exist and all four modes are populated', () => {
     // Rationale (collage look): a third palette joined the two, and it is the new default; the two old
     // ones are kept, untouched, and still selectable.
-    expect(Object.keys(palettes).sort()).toEqual(['collage', 'original', 'refined']);
+    // Rationale (v0.6): the plain look is a fourth palette beside them; nothing old was removed.
+    expect(Object.keys(palettes).sort()).toEqual(['collage', 'original', 'plain', 'refined']);
     for (const p of Object.values(palettes)) for (const mode of ['light', 'dark'] as const) expect(p[mode].paper).toMatch(/^#[0-9A-F]{6}$/i);
   });
 });

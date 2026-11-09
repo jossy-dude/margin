@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BEAT, Btn, EASE, HandBox, Icon, Txt, usePressIn } from './kit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { Art } from './collage/Art';
-import { PAPER } from '../tokens/theme';
+import { PAPER, hexA } from '../tokens/theme';
 import { act, dismissToast, useStore } from '../store/store';
 import { useKeyboardUp } from './keyboard';
 import { CourseSheet, MarkSheet, MeetingSheet, NoticeSheet, StatusSheet, TaskSheet } from '../sheets/forms';
@@ -37,6 +37,8 @@ function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
           /* a torn disc of denim paper (scripts/paper-art.mjs), its shadow and white core baked in; the
              bitmap's padding is the 14-unit margin the generator leaves around the 80-unit disc */
           ? <View style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Art name="disc-denim" w={84} style={{ position: 'absolute', left: -11, top: -11 }} /><View style={{ position: 'absolute', left: 0, top: 0, width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={30} color={PAPER.core} sw={2.8} /></View></View>
+          : look === 'plain'
+          ? <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: c.acc, alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 4px ${hexA(c.shadow, 0.18)}, 0 8px 20px ${hexA(c.shadow, 0.2)}` }}><Icon name="plus" size={30} color={c.onAcc} sw={2.6} /></View>
           : <HandBox seed="fab" fill={c.acc} stroke={c.ink} sw={2.2} amp={1.8} corners={{ h: [34, 30, 34, 30], v: [30, 34, 30, 34] }} style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={32} color={c.onAcc} sw={2.6} /></HandBox>}
       </Animated.View>
     </Pressable>

@@ -14,6 +14,10 @@ import { BricolageGrotesque_400Regular } from '@expo-google-fonts/bricolage-grot
 import { BricolageGrotesque_600SemiBold } from '@expo-google-fonts/bricolage-grotesque/600SemiBold';
 import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque/800ExtraBold';
 import { DMMono_500Medium } from '@expo-google-fonts/dm-mono/500Medium';
+import { HankenGrotesk_400Regular } from '@expo-google-fonts/hanken-grotesk/400Regular';
+import { HankenGrotesk_500Medium } from '@expo-google-fonts/hanken-grotesk/500Medium';
+import { HankenGrotesk_600SemiBold } from '@expo-google-fonts/hanken-grotesk/600SemiBold';
+import { HankenGrotesk_700Bold } from '@expo-google-fonts/hanken-grotesk/700Bold';
 import { ThemeProvider, useTheme } from './ui/theme-context';
 import { CrashBoundary } from './ui/CrashBoundary';
 import { ScreenBoundary } from './ui/ScreenBoundary';
@@ -210,7 +214,8 @@ const Splash = () => {
 /** Module scope so the map identity is stable: `useFonts` re-runs its effect on every render if handed a
  *  fresh object literal. Loading imperatively also lets a failure be reported and retried. */
 const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Italic, Newsreader_600SemiBold_Italic, PermanentMarker_400Regular, SpecialElite_400Regular,
-  BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, DMMono_500Medium };
+  BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, DMMono_500Medium,
+  HankenGrotesk_400Regular, HankenGrotesk_500Medium, HankenGrotesk_600SemiBold, HankenGrotesk_700Bold };
 
 /** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
  *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default

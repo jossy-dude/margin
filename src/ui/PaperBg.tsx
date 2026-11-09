@@ -132,7 +132,9 @@ function Tiles({ src, px, ph = px, tint }: { src: number; px: number; ph?: numbe
 const grainOn = (tex: string) => (tex === 'grain' ? 1 : tex === 'crumple' ? 0.45 : 0);
 
 export function PaperBg({ card = false }: { card?: boolean }) {
-  const { c, dark } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), tex = useStore((s) => s.settings.texture);
+  const { c, dark, look } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), setTex = useStore((s) => s.settings.texture);
+  /* The plain look is smooth stock: whatever texture the paper looks have chosen, it draws none. */
+  const tex = look === 'plain' ? 'none' : setTex;
   const id = useId();
   /* Seeded from the settings themselves, so the very first painted frame is already correct — a
      background that fades in on arrival is a page transition wearing a second, slower one. */

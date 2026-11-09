@@ -85,7 +85,7 @@ export function WeekScreen() {
                   return (
                     <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
                       style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
-                      <HandBox seed={key} fill={x ? c.paper : look === 'collage' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={x ? c.mut : look === 'collage' ? undefined : c.acc} shadow={look === 'collage' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
+                      <HandBox seed={key} fill={x ? c.paper : look !== 'ink' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={x ? c.mut : look !== 'ink' ? undefined : c.acc} shadow={look !== 'ink' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
                         {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{roomOf(meeting, course, st.variants)}</Txt>}
 </HandBox>

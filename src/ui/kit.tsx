@@ -103,8 +103,10 @@ export function Txt({ f = 'hand', s = 18, c = 'ink', style, ...p }: TxtProps) {
   const th = useTheme(), color = (th.c as unknown as Record<string, string>)[c] ?? c, fc = th.type[f];
   /* The line box is computed from the REQUESTED size, the glyphs from the scaled one: a role re-faced by the
      look keeps the exact height it had, so swapping the notebook hand for the collage grotesque moves nothing. */
-  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, style]} />;
+  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, fc.tnum ? TNUM : null, style]} />;
 }
+
+const TNUM = { fontVariant: ['tabular-nums' as const] };
 
 export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<ViewStyle>; fill?: string; stroke?: string; seed?: string | number; corners?: Corners; sw?: number; shadow?: boolean; amp?: number; dashed?: boolean;
   /** Collage only: force a surface to be torn (a sheet) or scissor-cut (a control) instead of deciding by size. */
@@ -122,6 +124,17 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
   const d = useMemo(() => (mode === 'torn' ? '' : handPath(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
   const torn = useMemo(() => (mode === 'torn' ? tornPaths(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
   const onLayout = (e: { nativeEvent: { layout: { width: number; height: number } } }) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); };
+  if (look === 'plain') {
+    /* Plain: no drawing at all — a rounded view, a hairline, a soft native shadow. A coloured stroke is still a
+       mark (selection, live, late) and keeps its weight; a ghost or dashed box keeps a visible outline. */
+    const bare = fill === 'transparent' || dashed, mark = stroke && stroke !== c.ink ? stroke : null;
+    return (
+      <View style={[{ position: 'relative', borderRadius: 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : 1, borderColor: mark ?? (bare ? hexA(c.ink, dashed ? 0.45 : 0.5) : hexA(c.ink, dark ? 0.14 : 0.09)), borderStyle: dashed ? 'dashed' : 'solid' },
+        shadow && !bare ? { boxShadow: dark ? `0 1px 2px ${hexA(c.shadow, 0.5)}, 0 6px 16px ${hexA(c.shadow, 0.35)}` : `0 1px 2px ${hexA(c.shadow, 0.06)}, 0 6px 16px ${hexA(c.shadow, 0.07)}` } : null, style]}>
+        {children}
+      </View>
+    );
+  }
   if (collage) {
     const face = torn ? torn.face : d, bare = fill === 'transparent' || dashed;
     /* No ink outlines on paper — except where a line MEANS something: a ghost or dashed drop-zone has
@@ -423,8 +436,9 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
  * a given strip tears the same way every render.
  */
 export function Tape({ w = 62, rot = -4, style, testID }: { w?: number; rot?: number; style?: StyleProp<ViewStyle>; testID?: string }) {
-  const { dark } = useTheme(), T = dark ? TAPE.dark : TAPE.light, H = 20;
+  const { dark, look } = useTheme(), T = dark ? TAPE.dark : TAPE.light, H = 20;
   const d = useMemo(() => tornTape(w, H, hashSeed(`tape${w}:${rot}`)), [w, rot]);
+  if (look === 'plain') return null; // smooth stock: nothing is taped down
   return (
     <View testID={testID} pointerEvents="none" style={[{ position: 'absolute', width: w, height: H, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]}>
       <Svg width={w + 2} height={H + 3} style={{ position: 'absolute', left: 0, top: 0 }}>

@@ -90,7 +90,7 @@ export interface NotifSettings {
 }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
-  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'refined' | 'original'; texture: 'crumple' | 'grain' | 'photo' | 'none';
+  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original'; texture: 'crumple' | 'grain' | 'photo' | 'none';
   clock: string; bar: string; semesterStart: string;
   /** The last day of term, `YYYY-MM-DD`; `''` means open-ended, which is the default. A settings KV
    *  row written before v0.3.1 has no such key, so `withDefaults` fills the empty string in — no SQL

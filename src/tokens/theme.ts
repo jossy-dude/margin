@@ -40,6 +40,18 @@ const COLLAGE: Record<'light' | 'dark', Colors> = {
   light: { paper: '#F3EFE7', card: '#FBF9F4', desk: '#E2DBCE', ink: '#232428', mut: '#625E57', acc: '#35619A', hl: '#F1D98C', rule: '#23242826', dot: '#2324281C', shadow: '#1E1A14', ok: '#4A6A43', warn: '#8E5F10', bad: '#AE3B28', slab: '#232428', slabInk: '#F3EFE7', slabMut: '#CFC9BD', deck: '#36608F', deckInk: '#F7F3EA', deckMut: '#D5E0EC', grain: 0.32, photo: 0.18, onAcc: '#FBF9F4' },
   dark: { paper: '#1E2125', card: '#282C31', desk: '#121417', ink: '#EEEAE2', mut: '#AAA59B', acc: '#9BBBE0', hl: '#4A4128', rule: '#EEEAE233', dot: '#EEEAE21A', shadow: '#000000', ok: '#9CC48F', warn: '#E6B95A', bad: '#F09A86', slab: '#121417', slabInk: '#EEEAE2', slabMut: '#B9B4AA', deck: '#2F5079', deckInk: '#F3EFE7', deckMut: '#C9D6E6', grain: 0.4, photo: 0.18, onAcc: '#1E2125' },
 };
+/**
+ * Plain (v0.6, look 3). For people who like the planner but not the paper: a recycled-stock day planner —
+ * smooth grey-white stock with no texture or tears, crisp white cards with a hairline and a soft shadow, one
+ * calm grotesque (Hanken Grotesk) for every role, and a deep slate cover for the command deck. Subjects keep
+ * their collage papers (`TINTS`), so a subject is the same colour in every look.
+ * Measured (WCAG, on card): ink 16.6:1 light / 13.9:1 dark; mut 6.6 / 6.9; deckInk on deck 10.4 / 9.6;
+ * deckMut 6.3 / 5.9; ok, warn, bad all over 5:1 on card in both.
+ */
+const PLAIN: Record<'light' | 'dark', Colors> = {
+  light: { paper: '#F4F3F0', card: '#FFFFFF', desk: '#E6E4DF', ink: '#1C1D1F', mut: '#5A5B5F', acc: '#35619A', hl: '#F3E6AE', rule: '#1C1D1F1F', dot: '#1C1D1F17', shadow: '#1C1D1F', ok: '#3C6845', warn: '#865709', bad: '#A6362A', slab: '#1C1D1F', slabInk: '#F4F3F0', slabMut: '#C9C9C6', deck: '#2D3B4E', deckInk: '#F4F3F0', deckMut: '#C3CBD7', grain: 0, photo: 0, onAcc: '#FFFFFF' },
+  dark: { paper: '#17181A', card: '#212225', desk: '#0E0F10', ink: '#ECEBE7', mut: '#A6A6A2', acc: '#9BBBE0', hl: '#403A25', rule: '#ECEBE726', dot: '#ECEBE714', shadow: '#000000', ok: '#97C49B', warn: '#E3B75D', bad: '#F2998C', slab: '#0E0F10', slabInk: '#ECEBE7', slabMut: '#B5B5B1', deck: '#2B394B', deckInk: '#ECEBE7', deckMut: '#B9C4D2', grain: 0, photo: 0, onAcc: '#17181A' },
+};
 /** The coloured papers of the collage, per theme. Light ones are pale stock (text sits on them at ink and
  *  `mut` strength: mut ≥ 4.65:1 on every one); `mustard`, `denim`, `moss` and `tomato` are the saturated
  *  papers used for shapes and art, never under body text. */
@@ -70,7 +82,7 @@ export const PENS: Record<Settings['pen'], { light: string; dark: string }> = {
 /** The red margin rule of a ruled exercise book: the same in every palette and with every pen, because
  *  it is printed on the paper, not written on it. */
 export const MARGIN = { light: '#C0392B', dark: '#E0705F' } as const;
-export const palettes = { collage: COLLAGE, refined: REFINED, original: ORIGINAL };
+export const palettes = { collage: COLLAGE, plain: PLAIN, refined: REFINED, original: ORIGINAL };
 
 /** Art constants that are deliberately theme-independent, so they are tokens rather than literals
  *  pasted into components. `ONYX.dark` is the dial material of the dark-native clock faces: they keep it in the
@@ -112,7 +124,8 @@ export const TAPE = {
 } as const;
 
 export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', serif: 'Newsreader_400Regular_Italic', serifB: 'Newsreader_600SemiBold_Italic', marker: 'PermanentMarker_400Regular', type: 'SpecialElite_400Regular',
-  sans: 'BricolageGrotesque_400Regular', sansMid: 'BricolageGrotesque_600SemiBold', sansBlack: 'BricolageGrotesque_800ExtraBold', mono: 'DMMono_500Medium' } as const;
+  sans: 'BricolageGrotesque_400Regular', sansMid: 'BricolageGrotesque_600SemiBold', sansBlack: 'BricolageGrotesque_800ExtraBold', mono: 'DMMono_500Medium',
+  plain: 'HankenGrotesk_400Regular', plainMid: 'HankenGrotesk_500Medium', plainSemi: 'HankenGrotesk_600SemiBold', plainBold: 'HankenGrotesk_700Bold' } as const;
 
 /**
  * What each text role is set in, per look. A role (`hand`, `bold`, `marker`…) is what a screen asks for;
@@ -126,7 +139,8 @@ export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', seri
  * requested size (see `Txt`), so a re-faced line keeps the exact box it had and no layout moves.
  */
 export type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type' | 'script';
-export interface Face { fam: string; k: number; track: number }
+/** `tnum`: tabular figures, so a ticking number never shifts its neighbours (the plain look's numerals). */
+export interface Face { fam: string; k: number; track: number; tnum?: boolean }
 export type TypeMap = Record<FontKey, Face>;
 const INK_TYPE: TypeMap = {
   hand: { fam: FONT.hand, k: 1, track: 0 }, bold: { fam: FONT.handBold, k: 1, track: 0 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
@@ -136,18 +150,25 @@ const COLLAGE_TYPE: TypeMap = {
   hand: { fam: FONT.sans, k: 0.84, track: 0 }, bold: { fam: FONT.sansMid, k: 0.84, track: -0.1 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
   marker: { fam: FONT.sansBlack, k: 0.88, track: -0.6 }, type: { fam: FONT.mono, k: 0.86, track: -0.2 }, script: { fam: FONT.hand, k: 1, track: 0 },
 };
+/** Plain: one grotesque for every role. Asides are the regular weight in the muted ink, not an italic serif,
+ *  and nothing is handwritten. Hanken's x-height sits between Caveat's and Bricolage's, hence k ≈ 0.88. */
+const PLAIN_TYPE: TypeMap = {
+  hand: { fam: FONT.plain, k: 0.88, track: 0 }, bold: { fam: FONT.plainSemi, k: 0.88, track: -0.1 }, serif: { fam: FONT.plain, k: 0.9, track: 0 }, serifB: { fam: FONT.plainMid, k: 0.9, track: 0 },
+  marker: { fam: FONT.plainBold, k: 0.9, track: -0.5 }, type: { fam: FONT.plainMid, k: 0.9, track: 0, tnum: true }, script: { fam: FONT.plainMid, k: 0.88, track: 0 },
+};
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;
 export const RS = { h: [30, 12, 26, 10], v: [10, 24, 12, 30] } as const;
 
 /** `look` is how a surface is cut: `ink` = the notebook's hand-cut outline with a hard offset shadow,
- *  `collage` = torn coloured paper with a white core along the tear and a soft lift shadow. */
-export type Look = 'ink' | 'collage';
+ *  `collage` = torn coloured paper with a white core along the tear and a soft lift shadow, `plain` = a clean
+ *  rounded card with a hairline and a soft shadow, on smooth stock. */
+export type Look = 'ink' | 'collage' | 'plain';
 export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints }
 export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean): Theme {
   const dark = s.theme === 'auto' ? systemDark : s.theme === 'dark', mode = dark ? 'dark' : 'light';
   const pal = palettes[s.palette] ? s.palette : 'collage', base = palettes[pal][mode];
-  const acc = (PENS[s.pen] ?? PENS.denim)[mode], collage = pal === 'collage';
-  return { c: { ...base, acc }, dark, font: FONT, look: collage ? 'collage' : 'ink', type: collage ? COLLAGE_TYPE : INK_TYPE, tints: TINTS[mode] };
+  const acc = (PENS[s.pen] ?? PENS.denim)[mode], look: Look = pal === 'collage' ? 'collage' : pal === 'plain' ? 'plain' : 'ink';
+  return { c: { ...base, acc }, dark, font: FONT, look, type: look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode] };
 }
 export const hexA = (hex: string, a: number) => `${hex.slice(0, 7)}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

@@ -226,7 +226,11 @@ export function SettingsSheet() {
     <Nav icon="trash" label="Reset" hint="Erase everything" to="reset" />
   </>);
   if (page === 'appearance') body = (<>
-    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : 'Original'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={faceById(s.clock).n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
+    {/* v0.6: the look itself, first. Collage is torn paper; Plain is a clean planner for anyone who does not
+        want the paper (smooth stock, rounded cards, one calm typeface); Notebook is the original hand-drawn look. */}
+    <Label>Style</Label><Seg value={s.palette === 'original' ? 'refined' : s.palette} opts={[['collage', 'Collage'], ['plain', 'Plain'], ['refined', 'Notebook']]} onChange={(v) => { set({ palette: v as Settings['palette'] }); fx.select(); }} />
+    <Txt f="serif" s={15} c="mut">{s.palette === 'plain' ? 'Plain: smooth paper, rounded cards and one calm typeface. Subjects keep their colours.' : s.palette === 'collage' ? 'Collage: torn paper, crumpled stock and cut-out shapes.' : 'Notebook: the hand-drawn original, ruled paper and handwriting.'}</Txt>
+    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : s.palette === 'original' ? 'Original' : s.palette === 'plain' ? 'Plain' : 'Collage'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={faceById(s.clock).n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
     {/* The clock format lives here with the other display choices, and the switch is stated as the
         24-hour clock because that is what is true out of the box: it ships ON, so the app a new user
         opens is the app as built. Turning it off is the 12-hour reading — see `fmtTime`. */}

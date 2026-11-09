@@ -181,7 +181,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
           </Animated.View>
         ) : (
         <Animated.View importantForAccessibility={gone ? 'no-hide-descendants' : 'yes'} pointerEvents={gone ? 'none' : 'auto'} style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
-          <Surface collage={look === 'collage'} cap={cap} ink={c.ink}>
+          <Surface collage={look === 'collage'} plain={look === 'plain'} cap={cap} ink={c.ink}>
             <PaperBg card />
             <GestureDetector gesture={pan}>
               <View style={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 6 }} accessible accessibilityRole="header" accessibilityLabel={title}>
@@ -204,7 +204,8 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
 }
 /** The sheet's paper. The notebook cuts it with rounded top corners and an ink edge; the collage tears it off
  *  the pad, so its top is a torn edge with the white core showing and a soft shadow on the dimmed app. */
-function Surface({ collage, cap, ink, children }: { collage: boolean; cap: number; ink: string; children: React.ReactNode }) {
+function Surface({ collage, plain, cap, ink, children }: { collage: boolean; plain?: boolean; cap: number; ink: string; children: React.ReactNode }) {
+  if (plain) return <View style={{ overflow: 'hidden', borderTopLeftRadius: 22, borderTopRightRadius: 22, flexShrink: 1, maxHeight: cap, borderWidth: 1, borderBottomWidth: 0, borderColor: hexA(ink, 0.1), boxShadow: `0 -6px 24px ${hexA(ink, 0.12)}` }}>{children}</View>;
   if (collage) return <TornSheet seed="sheet" depth={6} lift crumple={0} style={{ flexShrink: 1, maxHeight: cap }} bodyStyle={{ flexGrow: 0, flexShrink: 1 }}>{children}</TornSheet>;
   return <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={ink}>{children}</HandBox>;
 }

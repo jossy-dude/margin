@@ -62,7 +62,7 @@ function GoalBar({ total, goal }: { total: number; goal: number | null }) {
 export function GradesScreen() {
   const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings);
   const st = { courses, marks, adjusts };
-  const { c, tints } = useTheme();
+  const { c, tints, look } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
   return (
@@ -71,11 +71,12 @@ export function GradesScreen() {
       {rows.map(({ course, marks, adj, tot, need }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
           {/* the subject's own paper, as a tab on the card — the colour it has on Week, the + desk and Focus */}
-          <View pointerEvents="none" style={{ position: 'absolute', top: -9, left: 16, transform: [{ rotate: '-2deg' }] }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          {look !== 'plain' && <View pointerEvents="none" style={{ position: 'absolute', top: -9, left: 16, transform: [{ rotate: '-2deg' }] }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <HandBox seed={`gtab-${course.id}`} fill={subjectTint(course.id, tints)} cut="cut" style={{ width: 54, height: 20 }} />
-          </View>
+          </View>}
           <Pressable onPress={() => act.open({ t: 'course', id: course.id })} accessibilityRole="button" accessibilityLabel={`${course.name}. Edit subject.`} onLongPress={() => act.open({ t: 'meeting', courseId: course.id })}>
             <Row style={{ flexWrap: 'nowrap' }}>
+              {look === 'plain' && <View style={{ width: 12, height: 12, borderRadius: 6, marginTop: 9, marginRight: 10, alignSelf: 'flex-start', backgroundColor: subjectTint(course.id, tints), borderWidth: 1, borderColor: hexA(c.ink, 0.2) }} />}
               <View style={{ flex: 1 }}><Txt f="marker" s={24} numberOfLines={2}>{course.name}</Txt><Txt f="serif" s={15} c="mut">{[roomsLabel(course), course.teacher].filter(Boolean).join(' · ') || 'Add a class to set its room'}</Txt></View>
               <View style={{ alignItems: 'center', minWidth: 74 }}><Txt f="marker" s={34} c={tot !== null && course.goal && tot < course.goal ? 'warn' : 'ink'}>{tot === null ? '—' : Math.round(tot)}</Txt><Txt f="bold" s={17} c="mut">{letter(tot)}</Txt></View>
             </Row>
