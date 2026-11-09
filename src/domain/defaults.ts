@@ -25,7 +25,7 @@ export const DEFAULT_NOTIF: NotifSettings = {
 export const LOOK_V = 2;
 export const DEFAULT_SETTINGS: Settings = {
   name: '', theme: 'auto', paper: 'plain', pen: 'denim', palette: 'collage', texture: 'crumple', lookV: LOOK_V,
-  clock: 'rb', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
+  clock: 'field', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
   hapticsOn: true, tickOn: true, lockAttendance: false, reduceMotion: 'system',
