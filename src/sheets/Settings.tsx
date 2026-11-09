@@ -32,12 +32,13 @@ import { SemesterRange } from '../ui/SemesterRange';
 import { semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
 import { AboutPage } from './AboutPage';
+import { AlarmsPage, WidgetsPage } from './Alarms';
 import type { Settings } from '../domain/types';
 
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -208,6 +209,8 @@ export function SettingsSheet() {
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette}`} to="appearance" />
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
+    <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · a fixed time, or before your first class` : 'A fixed time, or before your first class'} to="alarms" />
+    <Nav icon="today" label="Widgets" hint="Next class, today and what is due, on your home screen" to="widgets" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="week" label="Semesters" hint="The active term, its dates, and the terms you kept" to="semesters" />
@@ -273,9 +276,12 @@ export function SettingsSheet() {
     <Nav icon="grad" label="Per-subject lead time" hint="Warn earlier for the classes you tend to be late to" to="ncourse" />
     {/* D4, directly above Delivery status: the toggle is the wish, and Delivery status prints what the
         phone's own channel actually does about it (including when the two disagree). */}
+    <Toggle label="Pin the class that is running" hint="Its name, room and time left stay in your notifications until it ends" value={n.pinClass} onChange={(v) => act.setNotif({ pinClass: v })} />
     <Toggle label="Show reminder text on the lock screen" hint="When off, it still rings but the text stays hidden until you unlock" value={n.lockText} onChange={(v) => act.setNotif({ lockText: v })} />
     <Nav icon="bell" label="Delivery status" hint={statusHint(st.notifStatus)} to="nstatus" />
   </>);
+  if (page === 'alarms') body = <AlarmsPage />;
+  if (page === 'widgets') body = <WidgetsPage />;
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
     <Labelled label="Lead time"><NumberField label="Lead time" value={n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ classLeadMin: v ?? 0 })} /></Labelled>

@@ -19,6 +19,7 @@ export const DEFAULT_NOTIF: NotifSettings = {
   homeAt: '16:30', effortBuffer: 0.25,
   // D4/W5. ON is the platform default; OFF is a SECRET channel (text hidden until unlock).
   lockText: true,
+  pinClass: true,
 };
 
 /** The default look's generation; see `lookUpgrade` below. Declared before the defaults that read it. */

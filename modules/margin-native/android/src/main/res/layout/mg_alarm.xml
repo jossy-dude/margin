@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+  android:background="@color/mg_alarm_bg" android:paddingStart="28dp" android:paddingEnd="28dp" android:paddingTop="72dp" android:paddingBottom="44dp"
+  android:fitsSystemWindows="true">
+  <TextView android:id="@+id/mg_al_date" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:textColor="@color/mg_alarm_mut" android:textSize="17sp"/>
+  <TextView android:id="@+id/mg_al_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp"
+    android:textColor="@color/mg_alarm_ink" android:textSize="84sp" android:fontFamily="sans-serif-light" android:fontFeatureSettings="tnum" android:includeFontPadding="false"/>
+  <TextView android:id="@+id/mg_al_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp"
+    android:textColor="@color/mg_alarm_ink" android:textSize="26sp" android:fontFamily="sans-serif-medium" android:maxLines="3" android:ellipsize="end"/>
+  <TextView android:id="@+id/mg_al_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp"
+    android:textColor="@color/mg_alarm_mut" android:textSize="16sp" android:maxLines="3" android:ellipsize="end"/>
+  <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+  <TextView android:id="@+id/mg_al_snooze" android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center"
+    android:background="@drawable/mg_alarm_ghost" android:textColor="@color/mg_alarm_ink" android:textSize="18sp" android:fontFamily="sans-serif-medium"
+    android:clickable="true" android:focusable="true"/>
+  <TextView android:id="@+id/mg_al_dismiss" android:layout_width="match_parent" android:layout_height="72dp" android:layout_marginTop="14dp" android:gravity="center"
+    android:background="@drawable/mg_alarm_btn" android:text="@string/mg_alarm_dismiss" android:textColor="@color/mg_alarm_btn_ink" android:textSize="20sp" android:fontFamily="sans-serif-medium"
+    android:clickable="true" android:focusable="true"/>
+</LinearLayout>

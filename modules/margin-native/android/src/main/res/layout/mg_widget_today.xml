@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="@drawable/mg_widget_card"
+  android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="12dp" android:paddingBottom="8dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingBottom="4dp">
+    <TextView android:id="@+id/mg_date" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="Tue 10 Nov" android:textColor="@color/mg_ink" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end"/>
+    <TextView android:id="@+id/mg_count" android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:text="3 classes" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1"/>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/mg_rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+  <TextView android:id="@+id/mg_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"
+    android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="6dp"
+    android:text="No classes coming up." android:textColor="@color/mg_mut" android:textSize="13sp"/>
+</LinearLayout>

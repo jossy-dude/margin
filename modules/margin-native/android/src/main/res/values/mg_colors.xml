@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Margin outside the app (widgets, the alarm screen): the Plain look's own stock and inks, light. -->
+<resources>
+  <color name="mg_card">#FFFFFF</color>
+  <color name="mg_ink">#1C1D1F</color>
+  <color name="mg_mut">#5A5B5F</color>
+  <color name="mg_acc">#35619A</color>
+  <color name="mg_bad">#A6362A</color>
+  <color name="mg_rule">#1F1C1D1F</color>
+  <color name="mg_now">#E6EDF6</color>
+  <color name="mg_deck">#2D3B4E</color>
+  <color name="mg_deck_ink">#F4F3F0</color>
+  <color name="mg_deck_mut">#C3CBD7</color>
+  <color name="mg_deck_track">#33F4F3F0</color>
+  <color name="mg_alarm_bg">#17181A</color>
+  <color name="mg_alarm_ink">#ECEBE7</color>
+  <color name="mg_alarm_mut">#A6A6A2</color>
+  <color name="mg_alarm_btn">#ECEBE7</color>
+  <color name="mg_alarm_btn_ink">#17181A</color>
+  <color name="mg_alarm_ghost">#33ECEBE7</color>
+</resources>

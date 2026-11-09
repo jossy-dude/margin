@@ -20,6 +20,14 @@ interface MarginNative {
   silence(): boolean;
   restore(previous: number): boolean;
   openPolicySettings(): boolean;
+  setAgenda(json: string): number;
+  nextAlarmAt(): number;
+  canExactAlarm(): boolean;
+  canFullScreen(): boolean;
+  ringNow(label: string): boolean;
+  openAlarmSettings(kind: string): boolean;
+  hasWidgets(): boolean;
+  pinWidget(kind: string): boolean;
 }
 
 let resolved: MarginNative | null | undefined;
@@ -50,6 +58,24 @@ export const interruptionFilter = () => safe<number | null>((m) => m.interruptio
 export const silence = () => safe((m) => m.silence(), false);
 export const restoreFilter = (previous: number) => safe((m) => m.restore(previous), false);
 export const openPolicySettings = () => safe((m) => m.openPolicySettings(), false);
+
+/* ── the agenda: widgets, the pinned class, alarms (v0.7) ──────────────────────────────────────── */
+/** Hand the phone the agenda (`domain/agenda.ts`, as JSON). It redraws the widgets and the pinned class and
+ *  arms the next alarm; the answer is when that alarm rings (ms), 0 for none, and `null` when this build has
+ *  no native half to hand it to (web, an older APK). */
+export const setAgenda = (json: string) => safe<number | null>((m) => m.setAgenda(json), null);
+export const nextAlarmAt = () => safe<number | null>((m) => m.nextAlarmAt() || null, null);
+/** May this app set an alarm to the minute? Always true before Android 12. */
+export const canExactAlarm = () => safe((m) => m.canExactAlarm(), false);
+/** May a ringing alarm take over a locked screen? Android 14+ can withhold it. */
+export const canFullScreen = () => safe((m) => m.canFullScreen(), false);
+/** Ring now, exactly as a real alarm would. */
+export const ringNow = (label: string) => safe((m) => m.ringNow(label), false);
+export const openAlarmSettings = (kind: 'exact' | 'fullscreen' | 'app') => safe((m) => m.openAlarmSettings(kind), false);
+export const hasWidgets = () => safe((m) => m.hasWidgets(), false);
+export type WidgetKind = 'next' | 'today' | 'tasks';
+/** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
+export const pinWidget = (kind: WidgetKind) => safe((m) => m.pinWidget(kind), false);
 
 /** Tests only: forget the resolved module so a mock installed later is picked up. */
 export const resetNative = () => { resolved = undefined; };

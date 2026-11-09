@@ -1,6 +1,7 @@
-import { AppState as RNAppState } from 'react-native';
+import { AppState as RNAppState, Linking } from 'react-native';
 import type { AttStatus, AttWhy } from '../domain/types';
 import { dispatchOpened, isPlannedKind } from '../domain/notifActions';
+import { linkTarget } from '../domain/links';
 import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { checkOnForeground } from '../services/ota';
@@ -28,5 +29,15 @@ export function wireLifecycle() {
   if (wired) return; wired = true;
   RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); void checkOnForeground(); } });
   notifs.onOpened((o) => dispatchOpened(o, notifEffects()));
+  /* v0.7: a widget, the pinned class or an alarm opened the app with a link. Only once the planner is on
+     screen — a link that arrives during the introduction is dropped rather than opening a sheet over it. */
+  const follow = (url: string | null) => {
+    const to = linkTarget(url), st = getState();
+    if (!to || !st.ready) return;
+    if (to.t === 'route') set({ route: to.route, prevRoute: st.route, sheet: null });
+    else if (to.t === 'add-task') set({ route: 'Tasks', prevRoute: st.route, sheet: { t: 'task' } });
+    else set({ sheet: { t: 'settings' }, settingsPath: ['alarms'] });
+  };
+  try { Linking.addEventListener('url', (e) => follow(e.url)); void Linking.getInitialURL().then(follow).catch(() => undefined); } catch { /* no Linking on this surface */ }
   notifs.onReceived((kind, id, at) => { fx.chime(); if (isPlannedKind(kind)) logNotif(id, kind, at, 'shown', Date.now()); });
 }

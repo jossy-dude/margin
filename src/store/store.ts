@@ -21,6 +21,7 @@ import { timerActions } from './actions/timer';
 import { sessionActions } from './session';
 import { semesterActions } from './semesters';
 import { bridgeActions } from './bridge';
+import { alarmActions } from './actions/alarms';
 import './ota'; // binds the OTA marker to the open repository on load
 
 export type { RouteName, SheetSpec, Toast, Moved, PlanInfo, State } from './core';
@@ -31,6 +32,7 @@ export { useUpdateAnnouncement, resetUpdateAnnouncement } from './ota';
 export { refreshNotifLog, stopResync, resync, refreshNotifStatus, notificationAccent } from './reminders';
 export { hydrate, boot } from './session';
 export { wireLifecycle } from './lifecycle';
+export { pushAgenda } from './surfaces';
 
 /* ───── actions ───── */
 export const act = {
@@ -40,4 +42,5 @@ export const act = {
   ...sessionActions,
   ...semesterActions,
   ...bridgeActions,
+  ...alarmActions,
 };

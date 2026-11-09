@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="@drawable/mg_widget_card"
+  android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="6dp" android:paddingBottom="8dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="8dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:text="Due" android:textColor="@color/mg_ink" android:textSize="15sp" android:fontFamily="sans-serif-medium"/>
+    <TextView android:id="@+id/mg_count" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp"
+      android:text="2 overdue" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1"/>
+    <ImageView android:id="@+id/mg_add" android:layout_width="40dp" android:layout_height="40dp" android:padding="9dp"
+      android:src="@drawable/mg_plus" android:contentDescription="@string/mg_add_task"/>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/mg_rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+  <TextView android:id="@+id/mg_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone"
+    android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="6dp"
+    android:text="Nothing due. Nice." android:textColor="@color/mg_mut" android:textSize="13sp"/>
+</LinearLayout>

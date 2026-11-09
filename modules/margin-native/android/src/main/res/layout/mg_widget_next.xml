@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="@drawable/mg_widget_deck"
+  android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="14dp" android:paddingBottom="14dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+    <TextView android:id="@+id/mg_state" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="Next up" android:textColor="@color/mg_deck_mut" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end"/>
+    <TextView android:id="@+id/mg_room" android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:text="C-4" android:textColor="@color/mg_deck_ink" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
+  </LinearLayout>
+  <TextView android:id="@+id/mg_title" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+    android:layout_marginTop="2dp" android:gravity="top"
+    android:text="Computer Programming" android:textColor="@color/mg_deck_ink" android:textSize="18sp" android:fontFamily="sans-serif-medium"
+    android:maxLines="2" android:ellipsize="end" android:lineSpacingMultiplier="0.95"/>
+  <LinearLayout android:id="@+id/mg_count_row" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:baselineAligned="true">
+    <Chronometer android:id="@+id/mg_count" android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:textColor="@color/mg_deck_ink" android:textSize="26sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum"/>
+    <TextView android:id="@+id/mg_unit" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp"
+      android:text="left" android:textColor="@color/mg_deck_mut" android:textSize="13sp" android:maxLines="1"/>
+  </LinearLayout>
+  <TextView android:id="@+id/mg_when" android:layout_width="wrap_content" android:layout_height="wrap_content" android:visibility="gone"
+    android:text="09:00" android:textColor="@color/mg_deck_ink" android:textSize="26sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum"/>
+  <ProgressBar android:id="@+id/mg_bar" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="6dp"
+    android:layout_marginTop="6dp" android:progressDrawable="@drawable/mg_progress_deck" android:max="50" android:progress="18"/>
+  <TextView android:id="@+id/mg_after" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+    android:text="Then Intro to Economics · 10:55" android:textColor="@color/mg_deck_mut" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+</LinearLayout>

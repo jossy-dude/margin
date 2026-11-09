@@ -1,8 +1,11 @@
 package app.marginalia.nativebits
 
 import android.app.NotificationManager
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import expo.modules.kotlin.modules.Module
@@ -31,6 +34,45 @@ class MarginNativeModule : Module() {
     }
     Function("hideLive") { id: String -> Live.hide(context, id) }
     Function("wasDismissed") { id: String -> Live.wasDismissed(context, id) }
+
+    /* ── the agenda: widgets, the pinned class, alarms ──────────────────────────────────────────── */
+    /** JS hands over what it knows (`src/domain/agenda.ts`); every surface outside the app is redrawn from it. */
+    Function("setAgenda") { json: String ->
+      Agenda.write(context, json)
+      Surfaces.refresh(context)
+      AlarmClock.arm(context.applicationContext).toDouble()
+    }
+    /** When the next alarm rings, in ms; 0 when none is set. */
+    Function("nextAlarmAt") { (AlarmClock.next(context, System.currentTimeMillis())?.at ?: 0L).toDouble() }
+    Function("canExactAlarm") { AlarmClock.canExact(context) }
+    Function("canFullScreen") { AlarmClock.canFullScreen(context) }
+    /** Ring now, exactly as a real alarm would: the way to hear it and see the alarm screen before trusting it. */
+    Function("ringNow") { label: String ->
+      try {
+        val i = Intent(context, AlarmService::class.java).setAction(AlarmService.ACTION_RING).putExtra("id", "preview").putExtra("label", label).putExtra("snooze", 5).putExtra("vib", true)
+        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(i) else context.startService(i)
+        true
+      } catch (e: Exception) { false }
+    }
+    /** Opens the system page where full-screen alarms (kind "fullscreen") or exact alarms ("exact") are allowed. */
+    Function("openAlarmSettings") { kind: String ->
+      val action = when {
+        kind == "fullscreen" && Build.VERSION.SDK_INT >= 34 -> Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
+        kind == "exact" && Build.VERSION.SDK_INT >= 31 -> Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+        else -> Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+      }
+      try { context.startActivity(Intent(action, Uri.parse("package:" + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
+    }
+    /** Is at least one Margin widget on a home screen? */
+    Function("hasWidgets") { Widgets.any(context) }
+    /** Asks the launcher to add a widget ("next", "today" or "tasks"). False when this launcher cannot. */
+    Function("pinWidget") { kind: String ->
+      if (Build.VERSION.SDK_INT < 26) return@Function false
+      val mgr = AppWidgetManager.getInstance(context)
+      if (!mgr.isRequestPinAppWidgetSupported) return@Function false
+      val cls = when (kind) { "today" -> TodayWidget::class.java; "tasks" -> TasksWidget::class.java; else -> NextClassWidget::class.java }
+      try { mgr.requestPinAppWidget(ComponentName(context, cls), null, null) } catch (e: Exception) { false }
+    }
 
     /* ── Do Not Disturb for a focus session ────────────────────────────────────────────────────── */
     Function("hasPolicyAccess") { nm.isNotificationPolicyAccessGranted }

@@ -3,8 +3,49 @@
   <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
   <!-- Android 16 Live Updates: lets the pinned class / focus countdown be promoted to the status chip. -->
   <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
+  <!-- Alarms (v0.7). Margin is an alarm clock now, so on Android 13+ exact alarms are its to set without a trip
+       to Settings (USE_EXACT_ALARM); the ringing service is the "systemExempted" kind the platform reserves for
+       exactly that; the wake lock keeps the sound going with the screen off; and the boot broadcast re-arms
+       the alarm and the widgets' next wake after a restart, which drops every alarm that was set. -->
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"/>
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
   <application>
     <!-- Records that the person swiped the live countdown away, so it is not posted again for that class. -->
     <receiver android:name="app.marginalia.nativebits.LiveDismissReceiver" android:exported="false"/>
+
+    <!-- Redraws the widgets and the pinned class at each class boundary, and after a restart or a clock change. -->
+    <receiver android:name="app.marginalia.nativebits.TickReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="android.intent.action.TIME_SET"/>
+        <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+      </intent-filter>
+    </receiver>
+
+    <!-- Home-screen widgets. -->
+    <receiver android:name="app.marginalia.nativebits.NextClassWidget" android:exported="false" android:label="@string/mg_widget_next_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_next"/>
+    </receiver>
+    <receiver android:name="app.marginalia.nativebits.TodayWidget" android:exported="false" android:label="@string/mg_widget_today_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_today"/>
+    </receiver>
+    <receiver android:name="app.marginalia.nativebits.TasksWidget" android:exported="false" android:label="@string/mg_widget_tasks_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_tasks"/>
+    </receiver>
+
+    <!-- Alarms: the moment, the ringing, and the full-screen answer. -->
+    <receiver android:name="app.marginalia.nativebits.AlarmReceiver" android:exported="false"/>
+    <receiver android:name="app.marginalia.nativebits.SnoozeCancelReceiver" android:exported="false"/>
+    <service android:name="app.marginalia.nativebits.AlarmService" android:exported="false" android:foregroundServiceType="systemExempted"/>
+    <activity android:name="app.marginalia.nativebits.AlarmActivity" android:exported="false"
+      android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:launchMode="singleInstance" android:excludeFromRecents="true"
+      android:showWhenLocked="true" android:turnScreenOn="true" android:screenOrientation="portrait" android:taskAffinity=""/>
   </application>
 </manifest>

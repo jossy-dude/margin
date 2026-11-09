@@ -87,7 +87,17 @@ export interface NotifSettings {
    *  `withDefaults` gives every settings row written before this field existed the ON behaviour — no
    *  SQL migration. */
   lockText: boolean;
+  /** v0.7: keep the class that is running pinned in the notification shade — its name, room, time left and
+   *  what comes after. ON by default; a row written before this existed gets it through `withDefaults`. */
+  pinClass: boolean;
 }
+/**
+ * An alarm (v0.7). Two kinds: `clock` rings at `h:m` on the chosen weekdays (Monday first; none chosen = once,
+ * at `once`), and `class` rings `lead` minutes before the first class of each chosen day, following the
+ * timetable as it changes. Kept in the settings row, not the `alarm` table: that table holds single instants
+ * (`Alarm.at`) and predates this, and a list this small needs no migration.
+ */
+export interface AlarmRule { id: string; label: string; kind: 'clock' | 'class'; h: number; m: number; days: boolean[]; lead: number; on: boolean; snooze: number; vib: boolean; once?: number }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
   pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original'; texture: 'crumple' | 'grain' | 'photo' | 'none';
@@ -111,6 +121,8 @@ export interface Settings {
    *  needs no migration. It is a version stamp rather than a boolean so replay is one write of `0` — there is
    *  no second source of truth that can disagree with it. */
   onboarded?: number;
+  /** The alarms (v0.7). Optional for the same reason: an older row has none, and none is the answer. */
+  alarms?: AlarmRule[];
   /** Which generation of the default look this settings row has been moved to (2 = the collage). Absent on
    *  a row written before the collage existed; `withDefaults` moves such a row over once. See there. */
   lookV?: number;

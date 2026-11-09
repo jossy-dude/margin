@@ -7,6 +7,7 @@ import { recordCrash } from '../services/problems';
 import * as notifs from '../services/notifications';
 import { getState, set, type Moved, type PlanInfo } from './core';
 import { db, R } from './persist';
+import { pushAgenda } from './surfaces';
 
 /* ───── notifications: plan → OS queue, debounced ───── */
 /** The OS tints a notification with the app's accent, and `resync` runs from store actions rather than from a
@@ -58,6 +59,9 @@ export function resync(delay = 700) {
   syncTimer = setTimeout(async () => {
     syncTimer = null;
     const s = getState(); if (!s.ready) return;
+    /* v0.7: the same pass hands the phone its agenda — widgets, the pinned class, the alarms. Before the demo
+       check on purpose: entering the sample semester has to CLEAR what the home screen shows. */
+    try { pushAgenda(); } catch (e) { recordCrash(e, 'runtime', s.route); }
     /* The demo session plans nothing: a sample class must never arrive as a real bell. Leaving the
        tour calls resync(0) alongside adoption, so the real session starts planning at once. */
     if (db.demo) return;

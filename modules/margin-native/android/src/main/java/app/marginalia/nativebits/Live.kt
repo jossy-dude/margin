@@ -48,9 +48,9 @@ object Live {
     nm(c).createNotificationChannel(ch)
   }
 
-  private fun smallIcon(c: Context): Int {
-    val res = c.resources.getIdentifier("notification_icon", "drawable", c.packageName)
-    return if (res != 0) res else c.applicationInfo.icon
+  @Suppress("UNUSED_PARAMETER")
+  fun smallIcon(c: Context): Int {
+    return R.drawable.mg_stat
   }
 
   /** Returns false (and posts nothing) when the person already swiped this one away, or the end has passed. */
@@ -81,6 +81,44 @@ object Live {
     if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(endAt - now + 60_000L)
     return try { nm(c).notify(id, tag(id), b.build()); true } catch (e: SecurityException) { false }
   }
+
+  /**
+   * The class that is running: the same countdown, with a progress bar and what comes after it. `total` and
+   * `done` are minutes; the bar is redrawn by `Ticker` every few minutes, the time by the system every second.
+   */
+  fun showClass(c: Context, id: String, title: String, line: String, then: String, endAt: Long, total: Int, done: Int, link: String): Boolean {
+    if (wasDismissed(c, id)) return false
+    val now = System.currentTimeMillis()
+    if (endAt <= now) return false
+    ensureChannel(c)
+    val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    val open = PendingIntent.getActivity(c, tag(id), Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(c.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
+    val gone = PendingIntent.getBroadcast(c, tag(id), Intent(c, LiveDismissReceiver::class.java).putExtra("id", id), flags)
+    @Suppress("DEPRECATION")
+    val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
+    b.setSmallIcon(smallIcon(c))
+      .setContentTitle(title)
+      .setContentText(line)
+      .setStyle(Notification.BigTextStyle().bigText(line + "\n" + then))
+      .setProgress(total, done, false)
+      .setOngoing(true)
+      .setOnlyAlertOnce(true)
+      .setShowWhen(true)
+      .setWhen(endAt)
+      .setUsesChronometer(true)
+      .setChronometerCountDown(true)
+      .setCategory(Notification.CATEGORY_PROGRESS)
+      .setVisibility(Notification.VISIBILITY_PUBLIC)
+      .setColor(c.getColor(R.color.mg_acc))
+      .setContentIntent(open)
+      .setDeleteIntent(gone)
+      .addExtras(Bundle().apply { putBoolean(EXTRA_PROMOTE, true) })
+    if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(endAt - now + 60_000L)
+    return try { nm(c).notify(id, tag(id), b.build()); true } catch (e: SecurityException) { false }
+  }
+
+  /** A class that is over cannot be swiped away again, so its record goes too. */
+  fun forget(c: Context, id: String) { c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(id).apply() }
 
   fun hide(c: Context, id: String): Boolean {
     nm(c).cancel(id, tag(id))
