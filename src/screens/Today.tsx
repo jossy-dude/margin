@@ -397,14 +397,6 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   );
 });
 
-/** The header clock subscribes to its own face, in the pattern `Focus`'s `Dial` already uses: writing a
- *  clock face re-renders this 200-unit SVG leaf and nothing else. Today's body — dayBlock, ActiveCard,
- *  the week strip, the notices — used to ride along on every clock select (RC-1). */
-const HeaderClock = React.memo(function HeaderClock({ live, size }: { live: boolean; size: number }) {
-  const id = useStore((s) => s.settings.clock);
-  return <ClockFace id={id} size={size} live={live} />;
-});
-
 /** Today's "Due" groups (S2), pure: open tasks with a due date, split into overdue (oldest first, five
  *  shown), due later today, and the next three after today. */
 export function dueGroups(tasks: readonly Task[], now: number) {
@@ -422,7 +414,7 @@ export function dueGroups(tasks: readonly Task[], now: number) {
 export function TodayScreen() {
   /* Narrow selectors: each slice subscribes on its own, so toast/timer/sheet/plan writes no longer
      re-render this whole page — only the slices it actually reads. Settings are read field by field
-     (`name`, `bar`); `clock` lives in `HeaderClock` above. `st` is rebuilt locally each render. */
+     (`name`, `bar`). `st` is rebuilt locally each render. */
   const name = useStore((s) => s.settings.name), bar = useStore((s) => s.settings.bar), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks, notices };
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
@@ -455,7 +447,7 @@ export function TodayScreen() {
       {periods.length > 0 ? (
         <View style={{ marginTop: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: -26, position: 'relative', zIndex: 2 }}>
-            <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPressIn={() => act.openSettingsAt('clock')}><HeaderClock size={CLOCK} live={focused} /></Pressable>
+            <View testID="clock-face"><ClockFace size={CLOCK} live={focused} /></View>
             {/* `paddingBottom` equals the overlap, so the status line's second row clears the card's top
                 edge instead of grazing it. */}
             <View style={{ flex: 1, gap: 4, paddingBottom: 26 }}>
@@ -467,7 +459,7 @@ export function TodayScreen() {
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          <Pressable testID="clock-face" accessibilityRole="button" accessibilityLabel="Change clock face" onPressIn={() => act.openSettingsAt('clock')}><HeaderClock size={CLOCK} live={focused} /></Pressable>
+          <View testID="clock-face"><ClockFace size={CLOCK} live={focused} /></View>
           <View style={{ flex: 1, gap: 4 }}>
             <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
             {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}

@@ -97,19 +97,6 @@ export const palettes = { collage: COLLAGE, plain: PLAIN, refined: REFINED, orig
  *  so it is gone; if the plates ever come back the material comes back
  *  with them. See `STATE.md` deviation 10. */
 export const ONYX = { dark: '#17130F' } as const;
-/** Dial materials for the clock faces, alongside ONYX and for the same reason: a dial is a physical plate,
- *  not a themed surface, so the same plate must not change material when the app flips to dark. ENAMEL is
- *  true white porcelain and LACQUER is true black lacquer — the two extremes, because an engraved ground
- *  only reads as engraving when the ink is as far from it as it can get, and that is what stops a dial
- *  reading as haze. `refined.dark.card` is `#353029`, a brown-grey that belongs to no material and that
- *  made the ornament read as dust; a cream dial is likewise four steps off `paper`, so the dial stopped
- *  being an object. SECOND is the sweep hand and the Scales sub-seconds: it is red-brown, a
- *  lacquered-steel colour and not a theme accent — `refined.dark.acc` is `#E0A47A`,
- *  a pale peach that reads grey at hairline width. Contrast against their own grounds: 6.7:1 in light,
- *  5.2:1 in dark, both over the 3:1 a non-text accent needs. Like ONYX, none of these follow
- *  `palette: 'original'`: they are materials, not theme colours. */
-export const DIAL = { light: '#FFFFFF', dark: '#000000' } as const;
-export const SECOND = { light: '#8A4B27', dark: '#C0663A' } as const;
 /** Paper constants of the collage, theme-independent because they are materials: the white core that
  *  shows along a tear (bleached pulp is white whatever the dye), and the ink and hint of a cream scrap that
  *  is cream in both themes (the onboarding's ruled strip), so its writing must not follow the theme. */

@@ -6,8 +6,6 @@ import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '.
 import { NumberField, Slider, TimeField } from '../ui/fields';
 import { Label, Sheet } from '../ui/Sheet';
 import { Empty, Section } from '../screens/common';
-import { FaceThumb } from '../ui/clock/ClockFace';
-import { FACES, faceById } from '../ui/clock/faces';
 import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
 import { isBarKind } from '../ui/instruments/legacyKinds';
 import { GROUPS, INSTRUMENTS } from '../ui/instruments/catalogue';
@@ -39,7 +37,7 @@ import type { Settings } from '../domain/types';
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', clock: 'Clock face', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -208,7 +206,7 @@ export function SettingsSheet() {
         new install gets the bare greeting until this field supplies a name. Blank stays allowed: Today
         drops the name and just says "Good morning". */}
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
-    <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette} · ${faceById(s.clock).n}`} to="appearance" />
+    <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette}`} to="appearance" />
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
@@ -230,7 +228,7 @@ export function SettingsSheet() {
         want the paper (smooth stock, rounded cards, one calm typeface); Notebook is the original hand-drawn look. */}
     <Label>Style</Label><Seg value={s.palette === 'original' ? 'refined' : s.palette} opts={[['collage', 'Collage'], ['plain', 'Plain'], ['refined', 'Notebook']]} onChange={(v) => { set({ palette: v as Settings['palette'] }); fx.select(); }} />
     <Txt f="serif" s={15} c="mut">{s.palette === 'plain' ? 'Plain: smooth paper, rounded cards and one calm typeface. Subjects keep their colours.' : s.palette === 'collage' ? 'Collage: torn paper, crumpled stock and cut-out shapes.' : 'Notebook: the hand-drawn original, ruled paper and handwriting.'}</Txt>
-    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : s.palette === 'original' ? 'Original' : s.palette === 'plain' ? 'Plain' : 'Collage'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="clock" label="Clock face" hint={faceById(s.clock).n} to="clock" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
+    <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : s.palette === 'original' ? 'Original' : s.palette === 'plain' ? 'Plain' : 'Collage'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
     {/* The clock format lives here with the other display choices, and the switch is stated as the
         24-hour clock because that is what is true out of the box: it ships ON, so the app a new user
         opens is the app as built. Turning it off is the 12-hour reading — see `fmtTime`. */}
@@ -245,19 +243,6 @@ export function SettingsSheet() {
   if (page === 'paper') body = (<>
     <Label>Ruling</Label><Seg value={s.paper} opts={[['dots', 'Dots'], ['grid', 'Grid'], ['ruled', 'Ruled'], ['plain', 'Plain']]} onChange={(v) => set({ paper: v })} />
     <Label>Texture</Label><Seg value={s.texture} opts={[['grain', 'Grain (new)'], ['photo', 'Original photo'], ['none', 'None']]} onChange={(v) => set({ texture: v })} />
-  </>);
-  if (page === 'clock') body = (<>
-    <Txt f="serif" s={15} c="mut">Three watches, each made to be read at a glance. Every one works on light and dark paper.</Txt>
-    <View style={{ gap: 10 }}>{FACES.map((f) => {
-      const on = faceById(s.clock).id === f.id;
-      return (
-        <Pressable key={f.id} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={`${f.n}. ${f.d}`} onPress={() => { set({ clock: f.id }); fx.select(); }}>
-          <HandBox seed={f.id} fill={on ? c.hl : c.card} stroke={on ? c.acc : undefined} sw={on ? 2.4 : 1.6} style={{ flexDirection: 'row', alignItems: 'center', padding: 10, gap: 14 }}>
-            <FaceThumb id={f.id} size={96} />
-            <View style={{ flex: 1, gap: 2 }}><Txt f="bold" s={18}>{f.n}</Txt><Txt f="serif" s={14.5} c="mut">{f.d}</Txt></View>
-          </HandBox>
-        </Pressable>);
-    })}</View>
   </>);
   if (page === 'bar') body = (<>
     <Txt f="serif" s={15} c="mut">A bar that measures. The sixteen instruments count the class you are in, from the

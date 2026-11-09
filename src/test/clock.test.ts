@@ -1,64 +1,75 @@
 /**
- * v0.6 — the three watch faces that replaced the nine engraved ones (owner: "useless and hard to read").
- * Pinned here: there are exactly three and every retired id still resolves; each speaks Arabic numerals;
- * the centre is a pin, not an ornament; every colour comes from the palette; the frame loop is gated;
- * and the hand angles keep their DST-safe arithmetic (ported from the retired clock-engine test).
+ * v0.7 — the one clock face (owner: "I don't like the clock design overall" → one refined analog face).
+ * Pinned here: there is one dial and no catalogue; it carries no numerals and nothing that turns but the
+ * hands; every colour comes from the palette; the dial beats once a second instead of running a frame loop;
+ * and the hand angles keep their DST-safe arithmetic.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FACES, compositeSvg, dialPal, dialSvg, faceById, handAngles, handSvg } from '../ui/clock/faces';
-import { DIAL, SECOND } from '../tokens/theme';
+import * as faces from '../ui/clock/faces';
+import { compositeSvg, dialPal, dialSvg, handAngles, handSvg } from '../ui/clock/faces';
 
-const pal = (dark: boolean) => dialPal({ ink: dark ? '#EDE6DA' : '#1F1B16' }, dark);
-const texts = (svg: string) => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+const C = (dark: boolean) => (dark ? { ink: '#ECEBE7', card: '#212225', acc: '#9BBBE0', shadow: '#000000' } : { ink: '#1C1D1F', card: '#FFFFFF', acc: '#35619A', shadow: '#1C1D1F' });
+const pal = (dark: boolean) => dialPal(C(dark), dark);
 
-describe('the faces', () => {
-  it('ships three watches, and every retired id lands on one of them', () => {
-    expect(FACES.map((f) => f.id)).toEqual(['field', 'studio', 'diver']);
-    for (const old of ['g', 'rb', 'c', 'sl', 's', 'or', 'hm', 'sun', 'af', 'fob', '', 'nonsense']) expect(FACES).toContain(faceById(old));
+describe('the face', () => {
+  it('is one dial: no catalogue of faces and no picker to choose from', () => {
+    expect(Object.keys(faces)).not.toContain('FACES');
+    expect(Object.keys(faces)).not.toContain('faceById');
+    expect(readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8')).not.toMatch(/Clock face|ui\/clock/);
   });
-  it('speaks Arabic numerals: Field all twelve, Studio the four quarters, Diver its quarters, bezel and date', () => {
-    expect(texts(dialSvg(faceById('field'), pal(false), 'F'))).toEqual(['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
-    expect(texts(dialSvg(faceById('studio'), pal(false), 'F'))).toEqual(['12', '3', '6', '9']);
-    expect(texts(dialSvg(faceById('diver'), pal(false), 'F', 200, 27))).toEqual(['10', '20', '30', '40', '50', '12', '6', '9', '27']);
-    for (const f of FACES) expect(texts(dialSvg(f, pal(false), 'F', 200, 27)).join(' ')).not.toMatch(/[IVX]{2,}/);
+  it('has twelve batons — a double one at twelve — a minute track, and no numerals', () => {
+    const d = dialSvg(pal(false));
+    expect(d).not.toMatch(/<text/);
+    expect((d.match(/<line /g) ?? []).length).toBe(48 + 11 + 2);
   });
   it('the dial has no moving ornament: one plate plus three hands is the whole document set', () => {
-    for (const f of FACES) {
-      const doc = compositeSvg(f, pal(true), 'F');
-      expect(doc).not.toMatch(/animate|clipPath|<image/);
-      expect((doc.match(/<g transform="rotate/g) ?? []).length).toBe(3);
-    }
+    const doc = compositeSvg(pal(true));
+    expect(doc).not.toMatch(/animate|clipPath|<image/);
+    expect((doc.match(/<g transform="rotate/g) ?? []).length).toBe(3);
   });
-  it('every colour is the palette ink, a dial material, the second-hand material, or a tone mixed from them', () => {
+  it('every colour is the palette: ink, the card the dial is cut from, the accent pen, the shadow, or a tone mixed from them', () => {
     for (const dark of [false, true]) {
-      const p = pal(dark);
-      expect(p.dial).toBe(dark ? DIAL.dark : DIAL.light);
-      expect(p.second).toBe(dark ? SECOND.dark : SECOND.light);
-      for (const f of FACES) {
-        const doc = compositeSvg(f, p, 'F');
-        const used = new Set([...doc.matchAll(/(?:fill|stroke)="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1]!.toUpperCase()));
-        for (const col of used) expect([p.ink, p.dial, p.second, p.mut, p.bezel, p.bezelInk].map((x) => x.toUpperCase())).toContain(col);
-      }
+      const p = pal(dark), c = C(dark);
+      expect(p).toMatchObject({ ink: c.ink, dial: c.card, second: c.acc, shadow: c.shadow });
+      const doc = compositeSvg(p);
+      const used = new Set([...doc.matchAll(/(?:fill|stroke|stop-color)="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1]!.toUpperCase()));
+      for (const col of used) expect([p.ink, p.dial, p.second, p.mut, p.shadow].map((x) => x.toUpperCase())).toContain(col);
     }
   });
-  it('hour and minute hands are told apart by length on every face', () => {
-    const reach = (xml: string) => Math.max(...[...xml.replace(/<svg[^>]*>/, "").matchAll(/[-](\d+(?:\.\d+)?)/g)].map((m) => +m[1]!));
-    for (const f of FACES) expect(reach(handSvg('minute', f, pal(false)))).toBeGreaterThan(reach(handSvg('hour', f, pal(false))) + 15);
+  it('the second hand is the only thing drawn in the accent', () => {
+    expect(dialSvg(pal(false))).not.toContain(pal(false).second);
+    expect(handSvg('hour', pal(false))).not.toContain(pal(false).second);
+    expect(handSvg('second', pal(false))).toContain(pal(false).second);
   });
-  it('a small thumbnail keeps hairlines at least ~0.6 dp wide', () => {
-    for (const f of FACES) {
-      const widths = [...dialSvg(f, pal(false), 'F', 96).matchAll(/stroke-width="([\d.]+)"/g)].map((m) => +m[1]! * (96 / 200));
-      expect(Math.min(...widths)).toBeGreaterThanOrEqual(0.55);
-    }
+  it('hour and minute hands are told apart by length', () => {
+    const reach = (xml: string) => Math.max(...[...xml.replace(/<svg[^>]*>/, '').matchAll(/[-](\d+(?:\.\d+)?)/g)].map((m) => +m[1]!));
+    expect(reach(handSvg('minute', pal(false)))).toBeGreaterThan(reach(handSvg('hour', pal(false))) + 15);
+  });
+  it('at masthead size no hairline is thinner than ~0.6 dp', () => {
+    const widths = [...dialSvg(pal(false), 115).matchAll(/stroke-width="([\d.]+)"/g)].map((m) => +m[1]! * (115 / 200));
+    expect(Math.min(...widths)).toBeGreaterThanOrEqual(0.55);
   });
 });
 
-describe('the frame loop', () => {
+describe('the beat', () => {
   const src = readFileSync(join(__dirname, '..', 'ui', 'clock', 'ClockFace.tsx'), 'utf8');
-  it('runs only while the dial is live, unpinned and has hands', () => {
-    expect(src).toMatch(/const ticking = live && !time && hands;/);
-    expect(src).toMatch(/frame\.setActive\(ticking\)/);
+  it('is one timer a second, aligned to the second — not a frame loop', () => {
+    expect(src).not.toMatch(/useFrameCallback/);
+    expect(src).toMatch(/setTimeout\(\(\) => beat\(true\), 1000 - \(now % 1000\)/);
+  });
+  it('runs only while the dial is live and unpinned, and stops when it is not', () => {
+    expect(src).toMatch(/const ticking = live && !time;/);
+    expect(src).toMatch(/if \(!ticking\) return;/);
+    expect(src).toMatch(/return \(\) => \{ clearTimeout\(t\); sub\.remove\(\); \};/);
+  });
+  it('eases one step forward only: a resume, a clock change or midnight is set outright', () => {
+    expect(src).toMatch(/a\.sa - last === 6 \? withTiming\(a\.sa, STEP\) : a\.sa/);
+  });
+  it('the second hand angle is cumulative within the day, so 59 → 0 is +6°, never −354°', () => {
+    const a = handAngles(Date.UTC(2026, 0, 15, 10, 0, 59), 0), b = handAngles(Date.UTC(2026, 0, 15, 10, 1, 0), 0);
+    expect(b.sa - a.sa).toBe(6);
+    expect(handAngles(Date.UTC(2026, 0, 15, 0, 0, 0), 0).sa).toBe(0);
   });
 });
 
@@ -112,12 +123,10 @@ describe('E. the hand angles take the timezone offset as an argument', () => {
     // the mutation check: reintroducing `const MS_TZ = new Date()…` at module scope fails this
     const src = readFileSync(join(__dirname, '..', 'ui', 'clock', 'ClockFace.tsx'), 'utf8');
     expect(src).not.toMatch(/^const\s+\w*TZ\s*=\s*new Date\(\)\.getTimezoneOffset\(\)/m);
-    // the frame callback calls it per frame with the CURRENT offset, not a baked one (`now` became
-    // `Date.now()` when the timestamp stopped being handed on to the ornaments — see `SpinView`)
-    expect(src).toMatch(/handAngles\(Date\.now\(\), tz\.value\)/);
-    // and it really does re-read: an AppState resume plus a poll while the loop runs
+    // every beat reads the CURRENT offset, not a baked one
+    expect(src).toMatch(/handAngles\(now, new Date\(\)\.getTimezoneOffset\(\) \* 60_000\)/);
+    // and a resume re-reads at once instead of waiting out a stale timer
     expect(src).toMatch(/AppState\.addEventListener\('change'/);
-    expect(src).toMatch(/setInterval\(read, 60_000\)/);
   });
 
 });

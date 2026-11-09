@@ -148,7 +148,8 @@ test('everything a worklet calls is itself a worklet', () => {
 test('the sweep found worklets, so the rule is reading something', () => {
   // without this the test above would pass on an empty sweep after a refactor that broke the matcher
   // v0.5 U1: the time ruler's `release` runs inside a `withTiming` callback, so it is a worklet too.
-  expect([...workletised].sort()).toEqual(['ui/clock/faces.ts: handAngles', 'ui/fields.tsx: release']);
+  // v0.7: the clock beats from a timer on the JS thread, so `handAngles` is a plain function again.
+  expect([...workletised].sort()).toEqual(['ui/fields.tsx: release']);
 });
 
 describe('the real bundle, when one is being served', () => {
@@ -179,13 +180,13 @@ describe('the real bundle, when one is being served', () => {
     }
     // A workletised declaration is rewritten to `var f = function <name>Factory(_refN) { var _worklet_<hash>_init_data = …`.
     // A plain function keeps its own body, which on the UI thread is a *remote* call and a hard throw.
-    for (const name of ['handAngles']) {
+    for (const name of [] as string[]) {
       const factory = new RegExp(`var ${name} = function \\w+Factory\\(_ref`).test(bundle!);
       expect({ name, workletFactory: factory }).toEqual({ name, workletFactory: true });
     }
     // …and the control: a same-file export that is *not* a worklet is still emitted plainly, so the check
     // above cannot be passing because the pattern matches everything.
-    for (const name of ['compositeSvg', 'dialPal']) {
+    for (const name of ['compositeSvg', 'dialPal', 'handAngles']) {
       expect({ name, workletFactory: new RegExp(`var ${name} = function \\w+Factory\\(_ref`).test(bundle!) }).toEqual({ name, workletFactory: false });
     }
   });
