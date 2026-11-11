@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <color name="mg_card">#212225</color>
-  <color name="mg_ink">#ECEBE7</color>
-  <color name="mg_mut">#A6A6A2</color>
-  <color name="mg_acc">#9BBBE0</color>
-  <color name="mg_bad">#F2998C</color>
-  <color name="mg_rule">#26ECEBE7</color>
-  <color name="mg_now">#2B3442</color>
-  <color name="mg_deck">#2B394B</color>
-  <color name="mg_deck_ink">#ECEBE7</color>
-  <color name="mg_deck_mut">#B9C4D2</color>
-  <color name="mg_deck_track">#33ECEBE7</color>
+  <color name="mg_card">#3C352C</color>
+  <color name="mg_ink">#F2EAD8</color>
+  <color name="mg_mut">#BCB19C</color>
+  <color name="mg_acc">#E3AA82</color>
+  <color name="mg_bad">#F4998A</color>
+  <color name="mg_rule">#3DF2EAD8</color>
+  <color name="mg_now">#4A3F22</color>
+  <color name="mg_deck">#1F1B16</color>
+  <color name="mg_deck_ink">#F2EAD8</color>
+  <color name="mg_deck_mut">#BCB19C</color>
+  <color name="mg_deck_track">#33F2EAD8</color>
 </resources>

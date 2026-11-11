@@ -149,7 +149,8 @@ test('the sweep found worklets, so the rule is reading something', () => {
   // without this the test above would pass on an empty sweep after a refactor that broke the matcher
   // v0.5 U1: the time ruler's `release` runs inside a `withTiming` callback, so it is a worklet too.
   // v0.7: the clock beats from a timer on the JS thread, so `handAngles` is a plain function again.
-  expect([...workletised].sort()).toEqual(['ui/fields.tsx: release']);
+  // v0.6: the mascot's arm angles are read by both the arms and the strings that hold them, on the UI thread.
+  expect([...workletised].sort()).toEqual(['ui/fields.tsx: release', 'ui/mascot/Jot.tsx: armL', 'ui/mascot/Jot.tsx: armR']);
 });
 
 describe('the real bundle, when one is being served', () => {

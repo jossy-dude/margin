@@ -14,7 +14,7 @@ afterEach(() => stopResync());
 const NOW = new Date(2026, 9, 5, 8).getTime();
 const settingsCopy = () => {
   const src = readFileSync(join(__dirname, '../sheets/Settings.tsx'), 'utf8');
-  return src.slice(src.indexOf('Remove all sample data'), src.indexOf('Settings → Reset wipes the whole database file.') + 'Settings → Reset wipes the whole database file.'.length);
+  return src.slice(src.indexOf('Remove all sample data'), src.indexOf('Reset wipes everything.') + 'Reset wipes everything.'.length);
 };
 
 async function seeded() {
@@ -89,7 +89,7 @@ describe('Remove all sample data takes the whole sample semester, and nothing el
 
   it('the row names what it removes, and that anything created or edited stays', () => {
     const copy = settingsCopy();
-    for (const phrase of ['sample subjects', 'timetable', 'tasks', 'notes', 'grades', 'history', 'Anything you created or edited stays']) {
+    for (const phrase of ['sample subjects', 'timetable', 'tasks', 'notes', 'grades', 'history', 'Edits stay.']) {
       expect(copy).toContain(phrase);
     }
     expect(copy).toContain('Reset'); // …and where the full demo set *can* be replaced

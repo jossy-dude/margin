@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Image, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../theme-context';
 import { hashSeed, tornEdge } from '../hand';
 import { PAPER, hexA } from '../../tokens/theme';
 
-const CRUMPLE = require('../../../assets/paper/crumple.webp');
 
 /**
  * A sheet of paper laid across the full width with a TORN top edge: the reference's way of dividing a
@@ -13,7 +12,7 @@ const CRUMPLE = require('../../../assets/paper/crumple.webp');
  * it does on dyed or bleached paper; the sheet carries the same crumple as the page, so it reads as one
  * more piece of the same stack rather than a flat panel.
  */
-export function TornSheet({ children, fill, seed = 'sheet', depth = 7, style, bodyStyle, crumple = 0.4, lift = false }: { children?: React.ReactNode; fill?: string; seed?: string; depth?: number; style?: StyleProp<ViewStyle>; bodyStyle?: StyleProp<ViewStyle>; crumple?: number;
+export function TornSheet({ children, fill, seed = 'sheet', depth = 7, style, bodyStyle, lift = false }: { children?: React.ReactNode; fill?: string; seed?: string; depth?: number; style?: StyleProp<ViewStyle>; bodyStyle?: StyleProp<ViewStyle>;
   /** The sheet hovers over something (a sheet over the dimmed app): a soft shadow above the tear. */
   lift?: boolean }) {
   const { c, dark, look } = useTheme(), [w, setW] = useState(0), bg = fill ?? c.card;
@@ -32,7 +31,6 @@ export function TornSheet({ children, fill, seed = 'sheet', depth = 7, style, bo
         </Svg>
       )}
       <View style={[{ backgroundColor: bg, flexGrow: 1, overflow: 'hidden' }, bodyStyle]}>
-        {crumple > 0 && <Image fadeDuration={0} source={CRUMPLE} accessible={false} style={{ position: 'absolute', left: 0, top: -E, width: 512, height: 900, opacity: crumple * (dark ? 0.9 : 0.7) }} />}
         {children}
       </View>
     </View>

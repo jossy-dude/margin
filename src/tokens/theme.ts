@@ -104,6 +104,17 @@ export const PAPER = { core: '#FFFFFF', scrapInk: '#232428', scrapHint: '#8A847A
 /** Focus's ambient face (the screen dimmed while a round runs and nobody touches it): the same in both
  *  themes on purpose, because it is the phone resting, not a page. Near-black so an OLED panel is mostly
  *  off; the numerals a warm paper-white at reduced strength (the screen still reads at a glance, 9.7:1). */
+/* The first page's sky and sun, by time of day: [top of the wash, horizon]. */
+export const SKY = {
+  light: { dawn: ['#F7E3C8', '#F4B183'], day: ['#D6E6F2', '#F6E9C8'], dusk: ['#D9C7E6', '#F2A26B'], night: ['#27304F', '#55527A'] },
+  dark: { dawn: ['#2B2530', '#7A4B36'], day: ['#1F2E3E', '#3B4648'], dusk: ['#2A2238', '#7C4630'], night: ['#10131C', '#262B44'] },
+} as const;
+export const SUN = {
+  dawn: { disc: '#F3A94A', core: '#FAD27A', ray: '#E8893A', glow: '#FFB870' },
+  day: { disc: '#EDB735', core: '#F9D872', ray: '#E8973A', glow: '#FFD36B' },
+  dusk: { disc: '#EE8A3C', core: '#F7B86A', ray: '#D7553B', glow: '#FF9E5C' },
+  night: { disc: '#F1EBD8', core: '#FFFFFF', ray: '#CFC8B4', glow: '#BFD0FF' },
+} as const;
 export const AMBIENT = { ground: '#0B0C0E', ink: '#D9D3C7' } as const;
 export const TAPE = {
   light: { fill: '#E7D9AE99', edge: '#B8A56E55', shadow: '#2A241C1A', shine: '#FFFFFF59' },
@@ -112,7 +123,9 @@ export const TAPE = {
 
 export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', serif: 'Newsreader_400Regular_Italic', serifB: 'Newsreader_600SemiBold_Italic', marker: 'PermanentMarker_400Regular', type: 'SpecialElite_400Regular',
   sans: 'BricolageGrotesque_400Regular', sansMid: 'BricolageGrotesque_600SemiBold', sansBlack: 'BricolageGrotesque_800ExtraBold', mono: 'DMMono_500Medium',
-  plain: 'HankenGrotesk_400Regular', plainMid: 'HankenGrotesk_500Medium', plainSemi: 'HankenGrotesk_600SemiBold', plainBold: 'HankenGrotesk_700Bold' } as const;
+  plain: 'HankenGrotesk_400Regular', plainMid: 'HankenGrotesk_500Medium', plainSemi: 'HankenGrotesk_600SemiBold', plainBold: 'HankenGrotesk_700Bold',
+  /* One display face per style, so each has its own voice: a fat soft serif for the collage, a wide geometric for Plain. */
+  poster: 'Fraunces_900Black', wide: 'Syne_800ExtraBold' } as const;
 
 /**
  * What each text role is set in, per look. A role (`hand`, `bold`, `marker`…) is what a screen asks for;
@@ -135,13 +148,13 @@ const INK_TYPE: TypeMap = {
 };
 const COLLAGE_TYPE: TypeMap = {
   hand: { fam: FONT.sans, k: 0.84, track: 0 }, bold: { fam: FONT.sansMid, k: 0.84, track: -0.1 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
-  marker: { fam: FONT.sansBlack, k: 0.88, track: -0.6 }, type: { fam: FONT.mono, k: 0.86, track: -0.2 }, script: { fam: FONT.hand, k: 1, track: 0 },
+  marker: { fam: FONT.poster, k: 0.9, track: -0.4 }, type: { fam: FONT.mono, k: 0.86, track: -0.2 }, script: { fam: FONT.hand, k: 1, track: 0 },
 };
 /** Plain: one grotesque for every role. Asides are the regular weight in the muted ink, not an italic serif,
  *  and nothing is handwritten. Hanken's x-height sits between Caveat's and Bricolage's, hence k ≈ 0.88. */
 const PLAIN_TYPE: TypeMap = {
   hand: { fam: FONT.plain, k: 0.88, track: 0 }, bold: { fam: FONT.plainSemi, k: 0.88, track: -0.1 }, serif: { fam: FONT.plain, k: 0.9, track: 0 }, serifB: { fam: FONT.plainMid, k: 0.9, track: 0 },
-  marker: { fam: FONT.plainBold, k: 0.9, track: -0.5 }, type: { fam: FONT.plainMid, k: 0.9, track: 0, tnum: true }, script: { fam: FONT.plainMid, k: 0.88, track: 0 },
+  marker: { fam: FONT.wide, k: 0.8, track: -0.6 }, type: { fam: FONT.plainMid, k: 0.9, track: 0, tnum: true }, script: { fam: FONT.plainMid, k: 0.88, track: 0 },
 };
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;

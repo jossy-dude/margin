@@ -142,7 +142,7 @@ export function ImportPage() {
 
   return (
     <View style={{ gap: 10 }}>
-      <Txt f="serif" s={15.5} c="mut">Import a JSON export or a CSV table, from a file or pasted. Import only adds rows, or overwrites a row that carries the same id — nothing is ever deleted, so the same file twice changes nothing the second time.</Txt>
+      <Txt f="serif" s={15.5} c="mut">JSON or CSV, from a file or pasted. Import only adds rows. Nothing is deleted.</Txt>
       <Row>
         <Btn small label="Pick file" icon="note" testID="import-pick" disabled={busy} onPress={() => void pick()} />
         <Txt f="serif" s={15} c="mut" numberOfLines={1} style={{ flexShrink: 1 }}>{name ?? 'or paste below'}</Txt>
@@ -204,7 +204,7 @@ export function ImportPage() {
               {plan.warnings.map((w, i) => <Txt key={`${w}-${i}`} f="serif" s={14.5} c="mut">{w}</Txt>)}
             </View>
           ) : null}
-          <Txt f="serif" s={14} c="mut">Problems stop the import. Warnings do not: that row was read, and only the part named in the warning was ignored.</Txt>
+          <Txt f="serif" s={14} c="mut">Problems block import. Warnings don&apos;t.</Txt>
         </View>
       ) : null}
     </View>

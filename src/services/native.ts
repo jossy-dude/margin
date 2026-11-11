@@ -73,7 +73,7 @@ export const canFullScreen = () => safe((m) => m.canFullScreen(), false);
 export const ringNow = (label: string) => safe((m) => m.ringNow(label), false);
 export const openAlarmSettings = (kind: 'exact' | 'fullscreen' | 'app') => safe((m) => m.openAlarmSettings(kind), false);
 export const hasWidgets = () => safe((m) => m.hasWidgets(), false);
-export type WidgetKind = 'next' | 'today' | 'tasks';
+export type WidgetKind = 'board';
 /** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
 export const pinWidget = (kind: WidgetKind) => safe((m) => m.pinWidget(kind), false);
 

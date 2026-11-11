@@ -47,7 +47,7 @@ const DECK_BAR_H = 48;
  *  92 was too small to read at a glance — squinting at a masthead clock is a failed size — so it grew
  *  (92 → 115). Everything the face draws is generated at `size` (`k = size / 200` in `ClockFace.tsx`),
  *  so this scales strokes and numerals too, not just the box; `headPad` below follows it. */
-const CLOCK = 115;
+const CLOCK = 138;
 
 /* An overnight class (23:30–00:30) has both ends stamped on the day it occurs, so it arrives here with
  *  `end <= start` and disappears — `activePeriod` drops any period whose end is not after its start, and
@@ -428,6 +428,9 @@ export function TodayScreen() {
   const [picked, setPicked] = useState<number | null>(null);
   const { day: sel, date: selDate, occ: selOcc, periods } = dayBlock(now, st.meetings, st.courses, st.attendance, st.dayMarks, picked);
   const { cur, next, periods: todayPeriods } = dayBlock(now, st.meetings, st.courses, st.attendance, st.dayMarks, null);
+  /* Today's classes, marked on the clock's rim; the ones already over are faded. */
+  const minOf = (ms: number) => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
+  const arcs = todayPeriods.filter((p) => !p.cancelled).map((p) => ({ from: minOf(p.start), to: minOf(p.start) + Math.round((p.end - p.start) / 60_000), done: p.end <= now }));
   const week = mondayOf(sel);
   const hour = new Date(now).getHours(), hello = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   /** The name is user-editable now, so it may be blank: drop the whole ", name" rather than greet nobody. */
@@ -447,7 +450,7 @@ export function TodayScreen() {
       {periods.length > 0 ? (
         <View style={{ marginTop: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: -26, position: 'relative', zIndex: 2 }}>
-            <View testID="clock-face"><ClockFace size={CLOCK} live={focused} /></View>
+            <View testID="clock-face"><ClockFace size={CLOCK} live={focused} arcs={arcs} /></View>
             {/* `paddingBottom` equals the overlap, so the status line's second row clears the card's top
                 edge instead of grazing it. */}
             <View style={{ flex: 1, gap: 4, paddingBottom: 26 }}>
@@ -459,7 +462,7 @@ export function TodayScreen() {
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          <View testID="clock-face"><ClockFace size={CLOCK} live={focused} /></View>
+          <View testID="clock-face"><ClockFace size={CLOCK} live={focused} arcs={arcs} /></View>
           <View style={{ flex: 1, gap: 4 }}>
             <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
             {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}

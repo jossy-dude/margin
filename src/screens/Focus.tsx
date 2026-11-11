@@ -6,7 +6,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { HandBox, HStrip, Icon, Toggle, Txt, usePressIn } from '../ui/kit';
 import { NumberField } from '../ui/fields';
 import { PaperBg } from '../ui/PaperBg';
-import { Scrap } from '../ui/mascot/Scrap';
+import { Jot } from '../ui/mascot/Jot';
 import { subjectTint } from '../ui/collage/tint';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
@@ -281,7 +281,7 @@ function Saved({ s, sum, courseName, onDone }: { s: Summary; sum: FocusSummary; 
       <Animated.View style={st}>
         <HandBox seed="focus-saved" fill={c.card} style={{ padding: 18, gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Scrap size={78} mood="proud" cue={{ kind: 'hop', n: 1 }} />
+            <Jot size={78} mood="proud" cue={{ kind: 'hop', n: 1 }} />
             <View style={{ flex: 1 }}>
               <Txt f="type" s={13} c="acc" style={{ letterSpacing: 2 }}>SESSION SAVED</Txt>
               <Txt f="marker" s={30} accessibilityRole="header">{fmtDur(Math.max(1, Math.round(s.focusSec / 60)))} of {courseName}</Txt>

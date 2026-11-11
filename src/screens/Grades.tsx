@@ -24,6 +24,8 @@ function AttendanceGrid({ course }: { course: Course }) {
   const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = semesterFirstDay(settings, now);
   const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id)), [sem, now, meetings, course.id]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
+  const teacher = settings.teacherAbsent?.[course.id];
+  const setTeacher = (n: number) => { fx.select(); act.setSettings({ teacherAbsent: { ...settings.teacherAbsent, [course.id]: Math.max(0, Math.min(99, n)) } }); };
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).
      An inline `ref` callback used to call scrollToEnd on EVERY render of this grid — the ref was
      detached and re-attached each time — which made every store write force a scroll here. */
@@ -35,7 +37,7 @@ function AttendanceGrid({ course }: { course: Course }) {
         <Txt f="bold" s={19}>Attendance {rate.rate === null ? '' : `· ${Math.round(rate.rate * 100)}%`}</Txt>
         <Btn small kind={locked ? 'ink' : 'ghost'} icon={locked ? 'lock' : 'unlock'} label={locked ? 'Locked' : 'Lock'} a11y={locked ? 'Unlock attendance grid' : 'Lock attendance grid'} onPress={() => { act.setSettings({ lockAttendance: !locked }); fx.toggle(!locked); }} quiet />
       </Row>
-      <Txt f="serif" s={14} c="mut">{locked ? 'Locked: nothing can change by accident.' : 'Tap an empty cell once to mark it. After that, long-press to change.'}</Txt>
+      <Txt f="serif" s={14} c="mut">{locked ? 'Locked against accidents.' : 'Tap an empty cell to mark. Long-press to change.'}</Txt>
       {occ.length === 0 ? <Txt f="serif" s={16} c="mut">No classes scheduled yet.</Txt> : (
         <HStrip ref={gridRef} gap={3} bg={c.card} contentStyle={{ paddingVertical: 6 }} accessibilityLabel={`${course.name} attendance, ${occ.length} classes`} onContentSizeChange={toEnd}>
           {occ.map(({ date, meeting }) => {
@@ -45,6 +47,16 @@ function AttendanceGrid({ course }: { course: Course }) {
           })}
         </HStrip>)}
       <Row style={{ gap: 12 }}>{[['✓', 'present', c.ink], ['L', 'late entry', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.bad], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
+      {/* The teacher's own count, typed in: it can differ from the marks above, and it is the one that counts. */}
+      <Row style={{ gap: 10, marginTop: 4 }}>
+        <View style={{ flex: 1 }}>
+          <Txt f="bold" s={16}>Teacher&apos;s count</Txt>
+          <Txt f="serif" s={13.5} c="mut">{teacher === undefined ? `Not set · marked here: ${rate.absent}` : `${teacher} absent · marked here: ${rate.absent}`}</Txt>
+        </View>
+        <Btn small kind="ghost" label="−" a11y={`One fewer absence on the teacher's count for ${course.name}`} testID="teacher-absent-less" onPress={() => setTeacher((teacher ?? rate.absent) - 1)} />
+        <Txt f="marker" s={22} c={teacher !== undefined && teacher !== rate.absent ? 'bad' : 'ink'} style={{ minWidth: 28, textAlign: 'center' }} testID="teacher-absent">{teacher ?? '–'}</Txt>
+        <Btn small kind="ghost" label="+" a11y={`One more absence on the teacher's count for ${course.name}`} testID="teacher-absent-more" onPress={() => setTeacher((teacher ?? rate.absent) + 1)} />
+      </Row>
     </View>
   );
 }
@@ -67,7 +79,7 @@ export function GradesScreen() {
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
   return (
     <Page title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
-      {rows.length === 0 && <Empty icon="grad" mood="curious" text="No subjects yet. Add one to start tracking marks and attendance." />}
+      {rows.length === 0 && <Empty icon="grad" mood="curious" text="No subjects yet. Add one to start." />}
       {rows.map(({ course, marks, adj, tot, need }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
           {/* the subject's own paper, as a tab on the card — the colour it has on Week, the + desk and Focus */}
@@ -93,7 +105,7 @@ export function GradesScreen() {
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}
-      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change it in Settings → Semesters.</Txt></Row></Section>}
+      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change in Settings.</Txt></Row></Section>}
     </Page>
   );
 }

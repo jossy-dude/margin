@@ -52,12 +52,12 @@ function Fit({ tight, needMin, freeMin, startBy }: { tight: boolean; needMin: nu
   return (
     <View>
       <Animated.View pointerEvents="none" style={comfortable}>
-        <HandBox seed="wl" shadow={false} fill={c.card} stroke={c.ink} style={{ padding: 10 }}><Txt f="bold" s={19}>Comfortable: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
+        <HandBox seed="wl" shadow={false} fill={c.card} stroke={c.ink} style={{ padding: 10 }}><Txt f="bold" s={19}>Comfortable: ~{fmtDur(needMin)} needed, ~{fmtDur(freeMin)} free.</Txt></HandBox>
       </Animated.View>
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0 }, tightStyle]}>
-        <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19}>Tight: needs ~{fmtDur(needMin)}, you have ~{fmtDur(freeMin)} free before it is due.</Txt></HandBox>
+        <HandBox seed="wl" shadow={false} fill={c.hl} stroke={c.warn} style={{ padding: 10 }}><Txt f="bold" s={19}>Tight: ~{fmtDur(needMin)} needed, ~{fmtDur(freeMin)} free.</Txt></HandBox>
       </Animated.View>
-      <Txt f="serif" s={15} c="mut">Latest start: {startBy} (classes, sleep and quiet hours already excluded)</Txt>
+      <Txt f="serif" s={15} c="mut">Latest start: {startBy}</Txt>
     </View>
   );
 }
@@ -100,7 +100,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
       <HStrip gap={8} bg={c.card}>{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</HStrip>
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" h12={hour12} />
-      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (it shows up from then, with a nudge)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
+      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (shows from then)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
       <Label>How long will it take?</Label>
       <DurationField label="effort" value={est || null} onChange={(v) => setEst(v ?? 0)} presets={[15, 30, 45, 60, 90, 120]} min={0} max={720} noneLabel="unknown" />
       {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now, hour12)} />}

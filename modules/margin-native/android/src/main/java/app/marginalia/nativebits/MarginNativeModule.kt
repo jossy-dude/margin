@@ -70,8 +70,7 @@ class MarginNativeModule : Module() {
       if (Build.VERSION.SDK_INT < 26) return@Function false
       val mgr = AppWidgetManager.getInstance(context)
       if (!mgr.isRequestPinAppWidgetSupported) return@Function false
-      val cls = when (kind) { "today" -> TodayWidget::class.java; "tasks" -> TasksWidget::class.java; else -> NextClassWidget::class.java }
-      try { mgr.requestPinAppWidget(ComponentName(context, cls), null, null) } catch (e: Exception) { false }
+      try { mgr.requestPinAppWidget(ComponentName(context, BoardWidget::class.java), null, null) } catch (e: Exception) { false }
     }
 
     /* ── Do Not Disturb for a focus session ────────────────────────────────────────────────────── */

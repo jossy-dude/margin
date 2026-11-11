@@ -31,7 +31,7 @@ const SLIPS: Slip[] = [
   { id: 'exam', label: 'Exam', line: 'A date to revise for', icon: 'exam', tint: 'blush', needs: true, to: (cid) => ({ t: 'task', kind: 'exam', courseId: cid }) },
   { id: 'reading', label: 'Reading', line: 'Pages, chapters, a book', icon: 'book', tint: 'sand', to: (cid) => ({ t: 'task', kind: 'reading', courseId: cid }) },
   { id: 'project', label: 'Project', line: 'Bigger, with steps', icon: 'flag', tint: 'sage', to: (cid) => ({ t: 'task', kind: 'project', courseId: cid }), tape: true },
-  { id: 'class', label: 'Class', line: 'A weekly slot in the timetable', icon: 'week', tint: 'cream', needs: true, to: (cid) => ({ t: 'meeting', courseId: cid ?? undefined }), tape: true },
+  { id: 'class', label: 'Class', line: 'A weekly timetable slot', icon: 'week', tint: 'cream', needs: true, to: (cid) => ({ t: 'meeting', courseId: cid ?? undefined }), tape: true },
   { id: 'mark', label: 'Mark', line: 'A score and its weight', icon: 'grades', tint: 'sand', needs: true, to: (cid) => ({ t: 'mark', courseId: cid ?? '' }) },
   { id: 'note', label: 'Note', line: 'A sticky for later', icon: 'note', tint: 'hl', to: () => ({ t: 'notice' }) },
   { id: 'subject', label: 'Subject', line: 'Start here: name, rooms, goal', icon: 'grad', tint: 'denim', to: () => ({ t: 'course' }) },
@@ -64,7 +64,7 @@ export function AddSheet() {
         {none ? (
           <HandBox seed="add-none" fill={hexA(c.acc, 0.1)} stroke={c.acc} sw={1.6} style={{ padding: 12, gap: 4 }}>
             <Txt f="bold" s={17}>No subjects yet</Txt>
-            <Txt f="serif" s={14.5} c="mut">Classes, marks and exams each belong to one. Start with the denim card below.</Txt>
+            <Txt f="serif" s={14.5} c="mut">Classes, marks and exams need a subject.</Txt>
           </HandBox>
         ) : (
           <HStrip gap={7}>
@@ -79,7 +79,7 @@ export function AddSheet() {
       {why && (
         <HandBox seed="add-why" fill={c.card} stroke={c.bad} sw={1.6} style={{ padding: 12, gap: 8 }} >
           <Txt f="bold" s={17} accessibilityLiveRegion="polite">{why === 'Class' ? 'A class' : why === 'Mark' ? 'A mark' : 'An exam'} needs a subject first</Txt>
-          <Txt f="serif" s={14.5} c="mut">Make the subject, then come back to the + and it will be waiting here.</Txt>
+          <Txt f="serif" s={14.5} c="mut">Make the subject, then tap + again.</Txt>
           <Pressable accessibilityRole="button" accessibilityLabel="New subject" onPress={() => { fx.page(); close(() => act.open({ t: 'course' })); }} style={{ alignSelf: 'flex-start' }}>
             <HandBox seed="add-why-go" fill={c.deck} cut="cut" style={{ minHeight: 40, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="plus" size={16} color={c.deckInk} /><Txt f="bold" s={17} c="deckInk">New subject</Txt></HandBox>
           </Pressable>
@@ -147,7 +147,7 @@ function FocusStrip({ label, onPress }: { label: string; onPress: () => void }) 
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={21} color={c.paper} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Txt f="bold" s={19} numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt>
-          <Txt f="serif" s={13.5} c="ink" style={{ opacity: 0.75 }} maxFontSizeMultiplier={FS}>A quiet timer that logs what you study</Txt>
+          <Txt f="serif" s={13.5} c="ink" style={{ opacity: 0.75 }} maxFontSizeMultiplier={FS}>A quiet timer for study</Txt>
         </View>
         <Icon name="chevron" size={20} />
       </HandBox>

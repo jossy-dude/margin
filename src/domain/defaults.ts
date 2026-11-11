@@ -25,7 +25,7 @@ export const DEFAULT_NOTIF: NotifSettings = {
 /** The default look's generation; see `lookUpgrade` below. Declared before the defaults that read it. */
 export const LOOK_V = 2;
 export const DEFAULT_SETTINGS: Settings = {
-  name: '', theme: 'auto', paper: 'plain', pen: 'denim', palette: 'collage', texture: 'crumple', lookV: LOOK_V,
+  name: '', theme: 'light', paper: 'ruled', pen: 'warm', palette: 'refined', texture: 'grain', lookV: LOOK_V,
   clock: 'field', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
@@ -51,7 +51,7 @@ export const withDefaults = (s: Partial<Settings>): Settings => ({
  */
 function lookUpgrade(s: Partial<Settings>): Partial<Settings> {
   if ((s.lookV ?? 0) >= LOOK_V || (s.palette === undefined && s.texture === undefined)) return {};
-  return { palette: 'collage', texture: 'crumple', pen: !s.pen || s.pen === 'warm' ? 'denim' : s.pen, paper: !s.paper || s.paper === 'dots' ? 'plain' : s.paper, lookV: LOOK_V };
+  return { palette: 'collage', texture: 'grain', pen: !s.pen || s.pen === 'warm' ? 'denim' : s.pen, paper: !s.paper || s.paper === 'dots' ? 'plain' : s.paper, lookV: LOOK_V };
 }
 
 /* ───── the onboarding tour ─────

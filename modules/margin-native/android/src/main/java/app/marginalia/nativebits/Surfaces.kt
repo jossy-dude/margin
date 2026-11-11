@@ -104,25 +104,30 @@ abstract class MarginWidget : AppWidgetProvider() {
   override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) { Surfaces.refresh(context) }
   override fun onEnabled(context: Context) { Surfaces.refresh(context) }
 }
-/** The class that is on now, or the next one: name, room, time left. */
-class NextClassWidget : MarginWidget()
-/** The day's timetable. */
-class TodayWidget : MarginWidget()
-/** What is due. */
-class TasksWidget : MarginWidget()
+/** The one home-screen widget: the class that is on, the day's timetable and what is due, on one card. */
+class BoardWidget : MarginWidget()
 
 object Widgets {
   /** True when at least one Margin widget is on a home screen. */
   fun any(c: Context): Boolean {
     val mgr = AppWidgetManager.getInstance(c)
-    return listOf(NextClassWidget::class.java, TodayWidget::class.java, TasksWidget::class.java).any { mgr.getAppWidgetIds(ComponentName(c, it)).isNotEmpty() }
+    return mgr.getAppWidgetIds(ComponentName(c, BoardWidget::class.java)).isNotEmpty()
   }
 
   fun updateAll(c: Context, a: Agenda, now: Long) {
     val mgr = AppWidgetManager.getInstance(c)
-    for (id in mgr.getAppWidgetIds(ComponentName(c, NextClassWidget::class.java))) mgr.updateAppWidget(id, nextClass(c, a, now))
-    for (id in mgr.getAppWidgetIds(ComponentName(c, TodayWidget::class.java))) mgr.updateAppWidget(id, today(c, a, now, rowsFor(mgr, id, 44, 42)))
-    for (id in mgr.getAppWidgetIds(ComponentName(c, TasksWidget::class.java))) mgr.updateAppWidget(id, tasks(c, a, now, rowsFor(mgr, id, 44, 42)))
+    for (id in mgr.getAppWidgetIds(ComponentName(c, BoardWidget::class.java))) {
+      /* The rows left under the next-class slab and the two headers are shared: the timetable gets the odd one. */
+      val rows = rowsFor(mgr, id, 230, 42).coerceAtLeast(2)
+      val rv = RemoteViews(c.packageName, R.layout.mg_widget_board)
+      rv.removeAllViews(R.id.mg_b_next)
+      rv.addView(R.id.mg_b_next, nextClass(c, a, now))
+      rv.removeAllViews(R.id.mg_b_today)
+      rv.addView(R.id.mg_b_today, today(c, a, now, (rows + 1) / 2))
+      rv.removeAllViews(R.id.mg_b_tasks)
+      rv.addView(R.id.mg_b_tasks, tasks(c, a, now, rows / 2))
+      mgr.updateAppWidget(id, rv)
+    }
   }
 
   /** How many rows fit: the widget's height in dp, less its header, over one row. */
@@ -138,7 +143,7 @@ object Widgets {
   }
 
   private fun nextClass(c: Context, a: Agenda, now: Long): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_widget_next)
+    val rv = RemoteViews(c.packageName, R.layout.mg_part_next)
     rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://today", 51))
     val cur = a.current(now)
     val next = a.next(now)
@@ -186,7 +191,7 @@ object Widgets {
   }
 
   private fun today(c: Context, a: Agenda, now: Long, rows: Int): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_widget_today)
+    val rv = RemoteViews(c.packageName, R.layout.mg_part_today)
     rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://today", 52))
     rv.removeAllViews(R.id.mg_rows)
     /* Today, while anything of it is left; after the last bell, the next day that has classes. */
@@ -228,7 +233,7 @@ object Widgets {
   }
 
   private fun tasks(c: Context, a: Agenda, now: Long, rows: Int): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_widget_tasks)
+    val rv = RemoteViews(c.packageName, R.layout.mg_part_tasks)
     rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://tasks", 53))
     rv.setOnClickPendingIntent(R.id.mg_add, Surfaces.open(c, "marginalia://add/task", 54))
     rv.removeAllViews(R.id.mg_rows)

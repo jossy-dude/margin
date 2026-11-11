@@ -3,7 +3,7 @@ import { View, useWindowDimensions } from 'react-native';
 import { Chip, HandBox, HStrip, Txt } from '../ui/kit';
 import { CalHeat, Figures, Headline, HourBars, MarkLine, Quiet, Sheet, SubjectBars } from '../ui/stats/parts';
 import { OnTop, ShowingUp } from '../ui/stats/sections';
-import { Scrap } from '../ui/mascot/Scrap';
+import { Jot } from '../ui/mascot/Jot';
 import { subjectTint } from '../ui/collage/tint';
 import { useNow, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
@@ -62,7 +62,7 @@ export function StatsScreen() {
     <Page title="Stats" sub={nothing ? 'Fills in as you use the app' : 'This week, and the weeks behind it'}>
       {nothing ? (
         <HandBox seed="stats-empty" fill={c.card} style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Scrap size={84} mood="curious" awake={live} />
+          <Jot size={84} mood="curious" awake={live} />
           <View style={{ flex: 1, gap: 4 }}>
             <Txt f="bold" s={20}>Nothing to report — yet</Txt>
             <Txt f="serif" s={15.5} c="mut">{hint ?? 'Mark a class, finish a task or run a focus session, and this page starts telling you how the term is going.'}</Txt>

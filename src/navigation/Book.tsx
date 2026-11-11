@@ -111,7 +111,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
           /* The collage's nav: a strip of kraft paper torn across the foot of the page, the way the
              reference closes its page; the page you are on is a cream scrap laid on the strip. */
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 999 }}>
-            <TornSheet seed="nav" fill={tints.kraft} depth={5} crumple={0.55} lift>
+            <TornSheet seed="nav" fill={tints.kraft} depth={5} lift>
               <View style={{ flexDirection: 'row', minHeight: NAV_BODY - 4, paddingHorizontal: 6, paddingBottom: Math.max(0, navInset(ins.bottom) - 6) }} onLayout={(e) => { const w = e.nativeEvent.layout.width - 12; if (Math.abs(w - navW) > 0.5) setNavW(w); }}>
                 <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: NAV_BODY - 4 }}><NavScrap index={Math.max(0, TABS.findIndex((t) => t.name === cur))} width={navW} /></View>
                 {TABS.map((t) => { const on = cur === t.name; return (

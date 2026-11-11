@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Clipboard, View } from 'react-native';
 import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
-import { Scrap } from '../ui/mascot/Scrap';
+import { Jot } from '../ui/mascot/Jot';
 import { MOODS, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
@@ -35,7 +35,7 @@ function MascotCheck() {
   const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<{ kind: ScrapCueKind; n: number } | null>(null);
   return (
     <View style={{ gap: 10 }}>
-      <View style={{ alignItems: 'center', paddingTop: 8 }}><Scrap size={170} mood={mood} cue={cue} testID="diag-mascot" /></View>
+      <View style={{ alignItems: 'center', paddingTop: 8 }}><Jot size={170} mood={mood} cue={cue} testID="diag-mascot" /></View>
       <Row style={{ flexWrap: 'wrap', gap: 6 }}>{(Object.keys(MOODS) as ScrapMood[]).map((m) => <Btn key={m} small kind={m === mood ? 'primary' : 'ghost'} label={m} onPress={() => setMood(m)} />)}</Row>
       <Row style={{ flexWrap: 'wrap', gap: 6 }}>{(['hop', 'celebrate', 'wow', 'nod', 'shake'] as ScrapCueKind[]).map((k) => <Btn key={k} small kind="ink" label={k} onPress={() => setCue((c) => ({ kind: k, n: (c?.n ?? 0) + 1 }))} />)}</Row>
     </View>

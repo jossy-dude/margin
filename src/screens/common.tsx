@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { BEAT, EASE, HandBox, Icon, Txt } from '../ui/kit';
 import { PaperBg } from '../ui/PaperBg';
-import { Scrap } from '../ui/mascot/Scrap';
+import { Jot } from '../ui/mascot/Jot';
 import { useScreenLive } from '../ui/live';
 import type { ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
@@ -55,7 +55,7 @@ export function Empty({ text, icon = 'note', mood }: { text: string; icon?: stri
   const { look } = useTheme(), live = useScreenLive();
   if (look !== 'ink' && mood) return (
     <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <Scrap size={62} mood={mood} awake={live} />
+      <Jot size={62} mood={mood} awake={live} />
       <Txt f="serif" s={16.5} c="mut" style={{ flex: 1 }}>{text}</Txt>
     </HandBox>
   );

@@ -1,7 +1,7 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import type { SoundGroup } from '../domain/types';
 
-/* Metro needs literal require() paths, so every asset is listed once here. Durations come from assets/sounds/manifest.json (generated). */
+/* Metro needs literal require() paths, so every asset is listed once here. Durations are the slot lengths in scripts/fetch-sounds.mjs (generated). */
 const SRC = {
   place: require('../../assets/sounds/place.wav'), shuffle: require('../../assets/sounds/shuffle.wav'), crumple: require('../../assets/sounds/crumple.wav'), thud: require('../../assets/sounds/thud.wav'), flutter: require('../../assets/sounds/flutter.wav'),
   tick: require('../../assets/sounds/tick.wav'), tock: require('../../assets/sounds/tock.wav'),

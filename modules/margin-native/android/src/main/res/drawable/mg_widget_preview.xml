@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item><shape android:shape="rectangle"><size android:width="260dp" android:height="300dp"/><solid android:color="@color/mg_card"/><corners android:radius="22dp"/></shape></item>
+  <item android:left="10dp" android:top="10dp" android:right="10dp" android:bottom="178dp"><shape android:shape="rectangle"><solid android:color="@color/mg_deck"/><corners android:radius="16dp"/></shape></item>
+  <item android:left="26dp" android:top="26dp" android:right="150dp" android:bottom="264dp"><shape android:shape="rectangle"><solid android:color="@color/mg_deck_mut"/><corners android:radius="5dp"/></shape></item>
+  <item android:left="26dp" android:top="46dp" android:right="60dp" android:bottom="236dp"><shape android:shape="rectangle"><solid android:color="@color/mg_deck_ink"/><corners android:radius="8dp"/></shape></item>
+  <item android:left="26dp" android:top="76dp" android:right="120dp" android:bottom="198dp"><shape android:shape="rectangle"><solid android:color="@color/mg_deck_ink"/><corners android:radius="10dp"/></shape></item>
+  <item android:left="22dp" android:top="140dp" android:right="70dp" android:bottom="146dp"><shape android:shape="rectangle"><solid android:color="@color/mg_ink"/><corners android:radius="7dp"/></shape></item>
+  <item android:left="22dp" android:top="170dp" android:right="100dp" android:bottom="116dp"><shape android:shape="rectangle"><solid android:color="@color/mg_mut"/><corners android:radius="7dp"/></shape></item>
+  <item android:left="18dp" android:top="200dp" android:right="18dp" android:bottom="99dp"><shape android:shape="rectangle"><solid android:color="@color/mg_rule"/></shape></item>
+  <item android:left="22dp" android:top="216dp" android:right="80dp" android:bottom="70dp"><shape android:shape="rectangle"><solid android:color="@color/mg_ink"/><corners android:radius="7dp"/></shape></item>
+  <item android:left="22dp" android:top="246dp" android:right="120dp" android:bottom="40dp"><shape android:shape="rectangle"><solid android:color="@color/mg_mut"/><corners android:radius="7dp"/></shape></item>
+</layer-list>

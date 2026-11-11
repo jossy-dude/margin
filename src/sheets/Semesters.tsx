@@ -72,10 +72,10 @@ export function SemestersPage() {
       {active && !asking ? <Btn icon="plus" label="Start a new semester" testID="semester-rollover" onPress={() => setAsking(true)} /> : null}
       {active && asking ? <HandBox seed="roll-over" fill={c.card} style={{ padding: 12, gap: 8 }}>
         <Txt f="bold" s={20}>Start a new semester?</Txt>
-        <Txt f="serif" s={15.5} c="mut">“{active.name}” is put away whole first: its timetable, attendance, grades and curves, tasks, notes, day marks and focus time are saved with the term, and you can open it below. Then the timetable, tasks, notes, day marks, grades and curves are cleared so the new term starts lean. Subjects and their variants stay — they are what the new term inherits.</Txt>
+        <Txt f="serif" s={15.5} c="mut">“{active.name}” is saved first. Its timetable, tasks, notes, grades and attendance are then cleared. Subjects stay.</Txt>
         <Txt f="bold" s={18}>The new term runs</Txt>
         <SemesterRange start={next.start} end={next.end} onChange={(p) => setNext({ start: p.semesterStart, end: p.semesterEnd })} />
-        <Txt f="serif" s={14.5} c="mut">Keep attendance leaves this term’s marks in your records; they fall before the new dates, so Today and Week will not show them.</Txt>
+        <Txt f="serif" s={14.5} c="mut">Keeps attendance on record. Today and Week will not show it.</Txt>
         <Row>
           <Btn small testID="semester-rollover-keep" disabled={busy} label="Keep attendance" onPress={() => void roll(true)} />
           <Btn small kind="ghost" testID="semester-rollover-wipe" disabled={busy} label="Start fresh" onPress={() => void roll(false)} />
@@ -86,7 +86,7 @@ export function SemestersPage() {
 
     <Section title="Earlier semesters">
       {archived.length === 0
-        ? <Txt f="serif" s={16} c="mut">No earlier semesters yet. When you roll this one over it will be kept here.</Txt>
+        ? <Txt f="serif" s={16} c="mut">No earlier semesters yet.</Txt>
         : <View style={{ gap: 8 }}>{archived.map((r) => <PastTerm key={r.id} row={r} />)}</View>}
     </Section>
   </>);
@@ -111,7 +111,7 @@ function PastTerm({ row }: { row: SemesterRow }) {
         </View>
         {sum ? <View style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}><Icon name="chevron" size={18} color={c.mut} /></View> : null}
       </Pressable>
-      {!sum ? <Txt f="serif" s={14} c="mut">{row.snapshotJson ? 'The saved copy of this term could not be read.' : 'No copy of this term was kept.'}</Txt> : null}
+      {!sum ? <Txt f="serif" s={14} c="mut">{row.snapshotJson ? 'Saved copy could not be read.' : 'No saved copy.'}</Txt> : null}
       {sum ? <Reveal open={open}>
         <View style={{ gap: 2, paddingTop: 6 }}>
           {sum.subjects.length === 0 ? <Txt f="serif" s={15} c="mut">No subjects in this term.</Txt> : sum.subjects.map((x, i) => (

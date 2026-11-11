@@ -1,8 +1,6 @@
 import { makeTheme, palettes, PENS, RG } from '../tokens/theme';
 import { handPath, outline, scaleRadii, tornTape } from '../ui/hand';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
@@ -199,23 +197,6 @@ const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1',
 /** Fired faster than the eye can follow, so these must stay inside the 30-120 ms window. */
 const RAPID = ['tick', 'tock', 'toggle-on', 'toggle-off', 'clack', 'detent-1', 'detent-2', 'detent-3', 'detent-4'];
 
-describe('synthesised sounds', () => {
-  const m = JSON.parse(readFileSync(join(LIVE, 'manifest.json'), 'utf8')) as Record<string, { seconds: number; peak: number; dc: number; clipped: number }>;
-  it('every sound is short, never clips and has no DC offset', () => {
-    expect(Object.keys(m).length).toBeGreaterThanOrEqual(25);
-    for (const [k, v] of Object.entries(m)) { expect([k, v.clipped]).toEqual([k, 0]); expect(Math.abs(v.dc)).toBeLessThan(0.01); expect(v.seconds).toBeLessThan(1.3); expect(v.seconds).toBeGreaterThan(0.04); }
-  });
-  it('the live manifest matches the bytes on disk, not just itself', () => {
-    for (const [k, v] of Object.entries(m)) {
-      const w = readWav(join(LIVE, `${k}.wav`)), s = stats(w.x, w.rate);
-      expect({ sound: k, seconds: +s.seconds.toFixed(3) }).toEqual({ sound: k, seconds: v.seconds });
-      // the manifest stores a float-rounded value, so compare to the precision it claims
-      expect({ sound: k, peak: +s.peak.toFixed(3) }).toEqual({ sound: k, peak: +v.peak.toFixed(3) });
-      expect(s.peak).toBeLessThan(1);
-      expect(Math.abs(s.dc)).toBeLessThan(0.01);
-    }
-  });
-});
 describe('shipped palette (assets/sounds/, the files the app loads)', () => {
   const files = readdirSync(LIVE).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
   it('covers exactly the sounds fx.ts asks for, no gaps and no strays', () => {
@@ -228,56 +209,18 @@ describe('shipped palette (assets/sounds/, the files the app loads)', () => {
     for (const [n, s] of shipped) { expect({ sound: n, len: s.seconds > 0.03 && s.seconds < 1.3, peak: s.peak < 1 }).toEqual({ sound: n, len: true, peak: true }); }
   });
 });
-/* The recipe checks below measure what scripts/synth-sounds.mjs writes, generated fresh into a temp folder.
-   They used to read the tracked `assets/sounds-candidates/` copy, which was that same output (26 of 27 files
-   byte-identical; place.wav predated its shorter recipe). The shipped folder above was balanced by ear and does
-   NOT meet all of these (loudness spread ~13 dB, detent-1 brighter than detent-2, a DC offset and a sub-200 Hz
-   case), so pointing them at assets/sounds/ would fail on files nobody changed. Promoting the recipes into
-   assets/sounds/ is a sound-design decision for the v0.5 sound task (spec section K), not housekeeping. */
-describe('synth recipes (scripts/synth-sounds.mjs output, the audition set)', () => {
-  let dir = '';
-  let files: string[] = [];
-  const all = new Map<string, ReturnType<typeof stats>>();
-  beforeAll(() => {
-    dir = mkdtempSync(join(tmpdir(), 'margin-sounds-'));
-    execFileSync(process.execPath, [join(__dirname, '../../scripts/synth-sounds.mjs'), '--all', '--out', dir], { stdio: 'pipe' });
-    files = readdirSync(dir).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
-    for (const n of files) { const w = readWav(join(dir, `${n}.wav`)); all.set(n, stats(w.x, w.rate)); }
+describe('the sounds are credited recordings (scripts/fetch-sounds.mjs)', () => {
+  const credits = readFileSync(join(LIVE, 'CREDITS.md'), 'utf8');
+  it('every credited clip is public domain and names its source', () => {
+    const rows = credits.split('\n').filter((l) => l.startsWith('| `'));
+    expect(rows.length).toBeGreaterThanOrEqual(20);
+    for (const r of rows) { expect(r).toContain('CC0 1.0'); expect(r).toMatch(/https?:\/\//); expect(r).not.toMatch(/\| LL-/); }
   });
-  afterAll(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
-  it('the script writes exactly the sounds fx.ts asks for, no gaps and no strays', () => {
-    expect(files).toEqual(EXPECTED);
-  });
-  it('the spectral metric is trustworthy (a 1 kHz tone must measure as 1 kHz, not as leakage)', () => {
-    const x = new Float64Array(Math.round(0.3 * 44100));
-    for (let i = 0; i < x.length; i++) x[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / 44100);
-    const s = spectrum(x, 44100);
-    expect(s.centroid).toBeGreaterThan(950); expect(s.centroid).toBeLessThan(1050); expect(s.sub200).toBeLessThan(1);
-  });
-  it('nothing clips and no candidate carries a DC offset', () => {
-    for (const [n, s] of all) {
-      expect({ sound: n, peak: s.peak < 1 }).toEqual({ sound: n, peak: true });
-      expect({ sound: n, dc: Math.abs(s.dc) < 0.001 }).toEqual({ sound: n, dc: true });
-    }
-  });
-  it('no sound buries its energy below 200 Hz, where a phone speaker has no output', () => {
-    for (const [n, s] of all) expect({ sound: n, sub200: +s.sub200.toFixed(1) < 40 }).toEqual({ sound: n, sub200: true });
-  });
-  it('the dial ratchet gets brighter with every step of drag speed, and never dulls', () => {
-    const c = [1, 2, 3, 4].map((i) => (all.get(`detent-${i}`) as { centroid: number }).centroid);
-    expect(c[0]!).toBeLessThan(c[1]!); expect(c[1]!).toBeLessThan(c[2]!); expect(c[2]!).toBeLessThan(c[3]!);
-    expect((c[3] as number) / (c[0] as number)).toBeGreaterThan(1.5);
-  });
-  it('effective loudness is matched across the set, so no candidate is buried or blasts', () => {
-    const d = [...all.values()].map((s) => s.bandDb);
-    expect(Math.max(...d) - Math.min(...d)).toBeLessThan(6);
-  });
-  it('rapid-fire sounds stay inside the 30-120 ms window and nothing runs long', () => {
-    for (const n of RAPID) { const s = all.get(n) as { seconds: number }; expect({ sound: n, rapid: s.seconds >= 0.03 && s.seconds <= 0.12 }).toEqual({ sound: n, rapid: true }); }
-    for (const [n, s] of all) { expect({ sound: n, len: s.seconds > 0.03 && s.seconds < 1.3 }).toEqual({ sound: n, len: true }); }
+  it('credits only sounds the app ships', () => {
+    for (const n of [...credits.matchAll(/^\| `([\w-]+)`/gm)].map((m) => m[1]!)) expect(EXPECTED).toContain(n);
   });
 });
-/* v0.5 U2 — tape tears, small boxes wobble less. */
+
 describe('tape and small boxes', () => {
   it('a tape strip is torn at both ends, the same way for the same strip, differently for another', () => {
     const a = tornTape(62, 20, 7), b = tornTape(62, 20, 7), c = tornTape(62, 20, 8);

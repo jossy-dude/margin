@@ -10,7 +10,8 @@ import * as faces from '../ui/clock/faces';
 import { compositeSvg, dialPal, dialSvg, handAngles, handSvg } from '../ui/clock/faces';
 
 const C = (dark: boolean) => (dark ? { ink: '#ECEBE7', card: '#212225', acc: '#9BBBE0', shadow: '#000000' } : { ink: '#1C1D1F', card: '#FFFFFF', acc: '#35619A', shadow: '#1C1D1F' });
-const pal = (dark: boolean) => dialPal(C(dark), dark);
+const PAPERS = { kraft: '#C49B6D', mustard: '#E1B03C', denim: '#4C79AE', cream: '#F5EEDF', blush: '#F2D3C7', tomato: '#D7553B' };
+const pal = (dark: boolean) => dialPal(C(dark), dark, PAPERS);
 
 describe('the face', () => {
   it('is one dial: no catalogue of faces and no picker to choose from', () => {
@@ -18,10 +19,21 @@ describe('the face', () => {
     expect(Object.keys(faces)).not.toContain('faceById');
     expect(readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8')).not.toMatch(/Clock face|ui\/clock/);
   });
-  it('has twelve batons — a double one at twelve — a minute track, and no numerals', () => {
+  it('marks twelve hours — a double baton at twelve, batons at the quarters, dots between — and no numerals', () => {
     const d = dialSvg(pal(false));
     expect(d).not.toMatch(/<text/);
-    expect((d.match(/<line /g) ?? []).length).toBe(48 + 11 + 2);
+    expect((d.match(/stroke-width="4\.4"/g) ?? []).length).toBe(2);
+    expect((d.match(/stroke-width="4\.8"/g) ?? []).length).toBe(3);
+    expect((d.match(/<circle cx="[-\d.]+" cy="[-\d.]+" r="2\.6"/g) ?? []).length).toBe(8);
+  });
+  it('draws today\'s classes on the rim, the finished ones faded, and nothing when the day is empty', () => {
+    expect(dialSvg(pal(false))).not.toContain(PAPERS.tomato);
+    const d = dialSvg(pal(false), 200, [{ from: 480, to: 570, done: true }, { from: 600, to: 690 }, { from: 700, to: 700 }]);
+    expect((d.match(new RegExp(`stroke="${PAPERS.tomato}"`, 'g')) ?? []).length).toBe(2);
+    expect((d.match(/stroke-opacity="0\.3"/g) ?? []).length).toBe(1);
+  });
+  it('without the coloured papers it still draws, in tones mixed from the palette', () => {
+    expect(compositeSvg(dialPal(C(false), false))).not.toMatch(/undefined|NaN/);
   });
   it('the dial has no moving ornament: one plate plus three hands is the whole document set', () => {
     const doc = compositeSvg(pal(true));
@@ -34,7 +46,7 @@ describe('the face', () => {
       expect(p).toMatchObject({ ink: c.ink, dial: c.card, second: c.acc, shadow: c.shadow });
       const doc = compositeSvg(p);
       const used = new Set([...doc.matchAll(/(?:fill|stroke|stop-color)="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1]!.toUpperCase()));
-      for (const col of used) expect([p.ink, p.dial, p.second, p.mut, p.shadow].map((x) => x.toUpperCase())).toContain(col);
+      for (const col of used) expect([p.ink, p.dial, p.second, p.mut, p.shadow, ...Object.values(PAPERS)].map((x) => x.toUpperCase())).toContain(col);
     }
   });
   it('the second hand is the only thing drawn in the accent', () => {

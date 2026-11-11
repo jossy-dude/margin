@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="mg_widget_next_name">Next class</string>
-  <string name="mg_widget_next_desc">The class that is on now, or the next one, with the time left.</string>
-  <string name="mg_widget_today_name">Today\'s classes</string>
-  <string name="mg_widget_today_desc">The day\'s timetable, with the class that is running marked.</string>
-  <string name="mg_widget_tasks_name">Due</string>
-  <string name="mg_widget_tasks_desc">What is overdue and what is due next.</string>
+  <string name="mg_widget_board_name">Margin</string>
+  <string name="mg_widget_board_desc">Next class, today\'s timetable and what is due.</string>
   <string name="mg_add_task">Add a task</string>
   <string name="mg_alarm_dismiss">Dismiss</string>
 </resources>

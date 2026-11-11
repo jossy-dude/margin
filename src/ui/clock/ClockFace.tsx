@@ -2,7 +2,7 @@ import React, { memo, useEffect, useMemo } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
-import { dialPal, dialSvg, handAngles, handSvg } from './faces';
+import { dialPal, dialSvg, handAngles, handSvg, type Arc } from './faces';
 import { useTheme, useReduceMotion } from '../theme-context';
 
 /** A hand, turned about the dial centre by a shared value — on the UI thread, nothing re-renders per tick. */
@@ -24,9 +24,12 @@ const STEP = { duration: 240, easing: Easing.out(Easing.back(2.4)) };
  * `live` false (a hidden page) or a pinned `time` runs no timer at all. Reduce-motion steps without the ease.
  * The timezone offset is read on every beat, so a DST change reaches a clock left open across it.
  */
-export const ClockFace = memo(function ClockFace({ size, live = true, time }: { size: number; live?: boolean; time?: { h: number; m: number; s: number } }) {
-  const { dark, c } = useTheme(), reduce = useReduceMotion(), pal = useMemo(() => dialPal(c, dark), [c, dark]);
-  const base = useMemo(() => dialSvg(pal, size), [pal, size]);
+export const ClockFace = memo(function ClockFace({ size, live = true, time, arcs }: { size: number; live?: boolean; time?: { h: number; m: number; s: number }; arcs?: Arc[] }) {
+  const { dark, c, tints } = useTheme(), reduce = useReduceMotion(), pal = useMemo(() => dialPal(c, dark, tints), [c, dark, tints]);
+  /* The arcs arrive as a fresh array on every render of the screen; the key keeps the dial from being rebuilt for it. */
+  const arcKey = arcs?.map((a) => `${a.from}-${a.to}-${a.done ? 1 : 0}`).join(',') ?? '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `arcKey` stands in for `arcs`
+  const base = useMemo(() => dialSvg(pal, size, arcs), [pal, size, arcKey]);
   const hx = useMemo(() => ({ hour: handSvg('hour', pal, size), minute: handSvg('minute', pal, size), second: handSvg('second', pal, size) }), [pal, size]);
   const ha = useSharedValue(0), ma = useSharedValue(0), sa = useSharedValue(0);
   const ticking = live && !time;

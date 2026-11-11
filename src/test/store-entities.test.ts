@@ -463,7 +463,7 @@ describe('settings', () => {
     const repo = await store();
     const putSettings = jest.spyOn(repo, 'putSettings');
     act.setSettings({ name: 'Sam', paper: 'grid' });
-    expect(getState().settings).toMatchObject({ name: 'Sam', paper: 'grid', theme: 'auto' });
+    expect(getState().settings).toMatchObject({ name: 'Sam', paper: 'grid', theme: 'light' });
     expect(putSettings).toHaveBeenCalledWith({ name: 'Sam', paper: 'grid' });
     await flush();
     expect((await repo.load()).settings).toMatchObject({ name: 'Sam', paper: 'grid' });

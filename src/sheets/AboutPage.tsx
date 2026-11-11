@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, Linking, Platform, Pressable, View } from 'react-native';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Btn, HandBox, Hair, Row, Txt, usePressIn } from '../ui/kit';
-import { Scrap } from '../ui/mascot/Scrap';
+import { Jot } from '../ui/mascot/Jot';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { fx } from '../services/fx';
 import { FONT } from '../tokens/theme';
@@ -36,43 +36,43 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
   return (
     <>
       <View style={{ alignItems: 'center', gap: 2, paddingTop: 4 }}>
-        <Scrap size={92} mood="happy" cue={hop} />
+        <Jot size={92} mood="happy" cue={hop} />
         <Txt f="marker" s={34} style={{ textAlign: 'center' }} accessibilityRole="header">Margin</Txt>
         <Txt f="serif" s={17} c="mut" style={{ textAlign: 'center' }}>A school planner — on paper, in your pocket.</Txt>
       </View>
 
       <Section title="What it's for">
-        <Txt f="hand" s={17.5} style={{ lineHeight: 24 }}>Your brain is for learning, not for remembering that Physics moved to room B-12 on Thursdays.</Txt>
-        <Txt f="serif" s={15.5} c="mut">So Margin remembers it: your timetable, attendance, marks, deadlines, notes and study time, on one desk. It knows what class you are in and how long is left, nags you only if you ask it to, and keeps everything on this phone — no account, no cloud.</Txt>
+        <Txt f="hand" s={17.5} style={{ lineHeight: 24 }}>Your brain is for learning, not for remembering room changes.</Txt>
+        <Txt f="serif" s={15.5} c="mut">So Margin keeps your timetable, marks, deadlines and notes on one desk. Everything stays on this phone.</Txt>
       </Section>
 
       <Section title="Why it looks like paper">
-        <Txt f="serif" s={15.5} c="mut">Because school already happens on paper. Margin was made to look like it and feel like it — torn edges, crumpled sheets, tape, stamps and a scrap of denim called Scrap — so opening it feels like your own desk, not another dashboard. A page you enjoy looking at is a page you actually open.</Txt>
+        <Txt f="serif" s={15.5} c="mut">School happens on paper, so Margin looks like it. Pages you enjoy get opened.</Txt>
       </Section>
 
       <Section title="Who made it">
         <View style={{ gap: 2 }}>
           <Txt f="serif" s={15} c="mut">Made by</Txt>
           <Txt f="script" s={58} style={{ fontFamily: FONT.handBold, lineHeight: 60, marginTop: -6, transform: [{ rotate: '-3deg' }] }} accessibilityLabel="Jossy">Jossy</Txt>
-          <Txt f="serif" s={15.5} c="mut">A 20-year-old computer science student who wanted one app to run his whole school week — so he built it, for himself and his classmates.</Txt>
+          <Txt f="serif" s={15.5} c="mut">A 20-year-old computer science student who built it for his school week.</Txt>
         </View>
       </Section>
 
       <Section title="It's open source">
-        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star tells Jossy someone is using it (and makes Scrap do a little hop).</Txt>
+        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes Jot hop.</Txt>
         <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Margin on GitHub" onPress={() => { setHop((h) => ({ kind: 'celebrate', n: (h?.n ?? 0) + 1 })); openLink(GITHUB_URL); }} /></Row>
       </Section>
 
       {support ? (
         <Section title="Feed the developer">
-          <Txt f="serif" s={15.5} c="mut">In Ethiopia, a gursha is a bite you feed someone you care about. This is the internet version.</Txt>
+          <Txt f="serif" s={15.5} c="mut">In Ethiopia, a gursha is a bite you feed someone you care about.</Txt>
           <GurshaButton onPress={() => openLink(support)} />
         </Section>
       ) : null}
 
       <Hair />
       <Section title="This build">
-        <Txt f="serif" s={15} c="mut">Margin {APP_VERSION} · local-first, no account; the network is used only for the update check.</Txt>
+        <Txt f="serif" s={15} c="mut">Margin {APP_VERSION} · no account. The network is used only for updates.</Txt>
       </Section>
       <Section title="Updates">
         {otaAvailable() ? (<>
@@ -82,7 +82,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
             {ota === 'ready' ? <Btn small label="Update now (restart)" onPress={() => void applyUpdate(true)} /> : null}
           </Row>
           <Txt f="serif" s={14.5} c="mut">{OTA_LINE[ota]}</Txt>
-        </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Updates are checked in the installed app; this browser build cannot update itself.' : 'This build cannot update itself. Updates must be enabled when the app is built.'}</Txt>}
+        </>) : <Txt f="serif" s={14.5} c="mut">{Platform.OS === 'web' ? 'Browser builds cannot update themselves.' : 'This build cannot update itself.'}</Txt>}
       </Section>
     </>
   );
@@ -129,13 +129,13 @@ function GurshaButton({ onPress }: { onPress: () => void }) {
 const EYE = require('../../assets/paper/scrap-eye.webp'), PUPIL = require('../../assets/paper/scrap-pupil.webp');
 
 const OTA_LINE: Record<OtaView, string> = {
-  idle: 'Checked automatically when the app opens.',
+  idle: 'Checked when the app opens.',
   checking: 'Checking…',
   downloading: 'Downloading the update…',
   current: 'You are on the newest version.',
-  ready: 'Update available — downloaded and ready to install.',
-  error: 'Couldn’t reach the update server. Check your connection and try again.',
-  unavailable: 'Updates are switched off in this build.',
+  ready: 'Update available. Ready to install.',
+  error: 'Couldn’t reach the update server.',
+  unavailable: 'Updates are off in this build.',
 };
 
 /** A link that cannot be opened says so instead of failing silently: `openURL` rejects when there is

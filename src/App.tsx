@@ -18,6 +18,8 @@ import { HankenGrotesk_400Regular } from '@expo-google-fonts/hanken-grotesk/400R
 import { HankenGrotesk_500Medium } from '@expo-google-fonts/hanken-grotesk/500Medium';
 import { HankenGrotesk_600SemiBold } from '@expo-google-fonts/hanken-grotesk/600SemiBold';
 import { HankenGrotesk_700Bold } from '@expo-google-fonts/hanken-grotesk/700Bold';
+import { Fraunces_900Black } from '@expo-google-fonts/fraunces/900Black';
+import { Syne_800ExtraBold } from '@expo-google-fonts/syne/800ExtraBold';
 import { ThemeProvider, useTheme } from './ui/theme-context';
 import { CrashBoundary } from './ui/CrashBoundary';
 import { ScreenBoundary } from './ui/ScreenBoundary';
@@ -215,7 +217,8 @@ const Splash = () => {
  *  fresh object literal. Loading imperatively also lets a failure be reported and retried. */
 const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Italic, Newsreader_600SemiBold_Italic, PermanentMarker_400Regular, SpecialElite_400Regular,
   BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, DMMono_500Medium,
-  HankenGrotesk_400Regular, HankenGrotesk_500Medium, HankenGrotesk_600SemiBold, HankenGrotesk_700Bold };
+  HankenGrotesk_400Regular, HankenGrotesk_500Medium, HankenGrotesk_600SemiBold, HankenGrotesk_700Bold,
+  Fraunces_900Black, Syne_800ExtraBold };
 
 /** The runtime subtree. `useTheme()` is invisible above `ThemeProvider`, so both the status bar and the paint
  *  behind it live in this child of it rather than in `App` — read from `App` they would get the context default

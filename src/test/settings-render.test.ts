@@ -359,7 +359,7 @@ describe('Settings → Reminders (W5)', () => {
     const s = await reminders();
     const t = s.text();
     expect(t).toContain('Show reminder text on the lock screen');
-    expect(t).toContain('When off, it still rings but the text stays hidden until you unlock');
+    expect(t).toContain('Off hides the text until you unlock');
     expect(t.indexOf('Show reminder text on the lock screen')).toBeLessThan(t.indexOf('Delivery status'));
   });
 
@@ -397,12 +397,12 @@ describe('the Focus & breaks page describes the cadence the timer will actually 
   };
 
   it('says every minute for the 5-minute default, which is what the code does', async () => {
-    expect(await focus(5)).toContain('nudges you every minute,');
+    expect(await focus(5)).toContain('Nudges you every minute.');
   });
 
   it('says every five minutes once the third of the break reaches the cap', async () => {
-    expect(await focus(15)).toContain('nudges you every 5 minutes,');
-    expect(await focus(30)).toContain('nudges you every 5 minutes,');
+    expect(await focus(15)).toContain('Nudges you every 5 minutes.');
+    expect(await focus(30)).toContain('Nudges you every 5 minutes.');
   });
 
   it('never claims a cadence nudgeStep would not produce, anywhere in the stepper range', async () => {
@@ -417,10 +417,10 @@ describe('the Focus & breaks page describes the cadence the timer will actually 
 
   it('the copy is generated, not typed: the page interpolates nudgeWord rather than naming a number', () => {
     const src = readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8');
-    expect(src).toContain('nudges you {nudgeWord(s.breakMin * 60_000)},');
+    expect(src).toContain('Nudges you {nudgeWord(s.breakMin * 60_000)}.');
     // the negative runs over CODE with comments stripped — the paragraph above legitimately quotes the old copy
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    expect(code).toContain('nudges you {nudgeWord(');
+    expect(code).toContain('Nudges you {nudgeWord(');
     expect(code).not.toContain('nudges you every');
   });
 
@@ -540,11 +540,11 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
     const s = await data();
     const t = s.text();
     expect(t).toContain('Import');
-    expect(t).toContain('Paste a JSON export, or a compact file an AI wrote');
+    expect(t).toContain('Paste a JSON export or AI file');
     expect(t).toContain('Safety copies');
     // jest has no document directory (the mock has no Directory), so the honest fallback is shown
     expect(t).toContain('No safety copies yet');
-    expect(t).toContain('keeps the newest three');
+    expect(t).toContain('The newest three are kept.');
   });
 
   it('the Import page is a page with a paste box, not a dead row', async () => {
@@ -624,7 +624,7 @@ describe('About and Reset are two pages, and the support row is absent until its
   it('Reset keeps the destructive action and none of the prose', async () => {
     const t = (await page(['reset'])).text();
     expect(t).toContain('Erase everything');
-    expect(t).toContain('This erases the whole database file');
+    expect(t).toContain('Erases everything.');
     expect(t).not.toContain('Why it looks like paper');
     expect(t).not.toContain(`Margin ${APP_VERSION}`); // the version moved off the erase page
   });

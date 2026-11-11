@@ -13,11 +13,11 @@ import { fx } from '../services/fx';
  * one lifts it and tells Scrap where to look.
  */
 const ROWS = [
-  { key: 'deck', title: 'The class you are in', line: 'What is on now, how long is left, and what comes after.' },
-  { key: 'add', title: 'The + button', line: 'Add anything from here: a subject, class, assignment, mark or note.' },
-  { key: 'stamp', title: 'Attendance stamps', line: 'Tap a class to stamp it here, late or absent.' },
-  { key: 'focus', title: 'Focus', line: 'A quiet timer that keeps count of what you study.' },
-  { key: 'tabs', title: 'Five pages', line: 'Today, Week, To-do, Grades and Stats, one tap apart.' },
+  { key: 'deck', title: 'The class you are in', line: 'Now, time left, and what is next.' },
+  { key: 'add', title: 'The + button', line: 'Add a subject, class, task, mark or note.' },
+  { key: 'stamp', title: 'Attendance stamps', line: 'Tap a class to stamp it.' },
+  { key: 'focus', title: 'Focus', line: 'A quiet timer for study.' },
+  { key: 'tabs', title: 'Five pages', line: 'Today, Week, To-do, Grades, Stats.' },
 ] as const;
 
 function MiniDeck() {

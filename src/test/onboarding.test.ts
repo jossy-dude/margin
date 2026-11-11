@@ -109,7 +109,7 @@ describe('the gate is one number', () => {
 describe('five pages, every one of them reachable and said out loud', () => {
   it('renders all five titles, and a numbered tab for each page', async () => {
     const s = await mount(true);
-    for (const t of ["Hi, I'm Scrap.", 'Everything has its place.', 'What should I call you?', 'When does your term run?', 'A tap on the shoulder before class.']) expect(s.text()).toContain(t);
+    for (const t of ["Hi, I'm Jot.", 'Everything has its place.', 'What should I call you?', 'When does your term run?', 'A nudge before class.']) expect(s.text()).toContain(t);
     const tabs = s.root.findAll((n) => n.props.accessibilityRole === 'tab' && typeof n.props.onPress === 'function');
     expect(tabs.map((n) => n.props.accessibilityLabel)).toEqual([1, 2, 3, 4, 5].map((i) => `Page ${i} of 5`));
     expect(s.root.findAll((n) => n.props.accessibilityRole === 'header' && typeof n.type === 'string').length).toBeGreaterThanOrEqual(5);

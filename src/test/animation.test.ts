@@ -437,17 +437,15 @@ describe('re-entrancy retargets rather than snaps', () => {
     // The two places a literal 0 is correct are both reduce-motion branches, where it IS the intent.
     // v0.5 U1: the one literal 0 was the Stepper's reduce-motion branch; the Stepper is gone, so none remain.
     expect((kit.match(/\.set\(0\)/g) ?? []).length).toBe(0);
-    expect(paperBg).toContain('rule.set(1); return;');
+    expect(paperBg).toContain('rule.set(1);');
   });
 
   it('the paper background does not fade itself in on arrival', () => {
     // Every page mounts a `PaperBg`; a background that animates on mount is a second page transition.
-    // Rationale (collage look): the grain's starting strength is now `grainOn(tex)` (all of it under
-    // `grain`, a little under the crumple), still seeded from the setting itself on the first frame.
-    expect(paperBg).toContain('useSharedValue(grainOn(tex))');
-    expect(paperBg).toContain("crum = useSharedValue(tex === 'crumple' ? 1 : 0)");
-    expect(paperBg).toContain('const first = !seenRule.current;');
-    expect(paperBg).toContain('const first = !seenTex.current;');
+    // The grain's strength is seeded from the setting on the first frame and only eased on a later change.
+    expect(paperBg).toContain('grain = useSharedValue(on)');
+    expect(paperBg).toContain('const first = !seen.current;');
+    expect(paperBg).toContain('grain.set(first || reduce ? on : withTiming(on');
   });
 
   it('the pattern id is per instance, because two `PaperBg`s really are mounted at once', () => {
@@ -459,18 +457,12 @@ describe('re-entrancy retargets rather than snaps', () => {
     expect((paperBg.match(/<Pattern id=\{id\}/g) ?? []).length).toBe(3);
   });
 
-  it('the settled background mounts only the texture the setting names', () => {
-    // With the default `texture: 'grain'`, holding the photograph mounted forever cost every one of
-    // the six always-mounted pages a full-screen tiled bitmap under a blend mode that no frame shows.
-    // Both layers exist for the cross-fade's 220 ms and no longer.
-    // Rationale (collage look): the crumple is a third texture with its own mount, and the grain now also
-    // mounts (faintly) under the crumple, so its condition is the strength it would be drawn at.
-    expect(paperBg).toContain("{(tex === 'crumple' || cross) &&");
-    expect(paperBg).toContain('{(grainOn(tex) > 0 || cross) &&');
-    expect(paperBg).toContain("{(tex === 'photo' || cross) &&");
-    expect(paperBg).toContain('setTimeout(() => setCross(false), PAPER_MS)');
-    // …and the fade itself still starts from the settings, so the first frame after a change is correct
-    expect(paperBg).toContain('useSharedValue(grainOn(tex))');
+  it('the texture is drawn, not decoded: no bitmap is required and Plain mounts no grain layer', () => {
+    // The photograph and the crumple are gone; the grain is one seeded SVG pattern, so there is no
+    // full-screen bitmap to hold mounted and nothing to cross-fade between.
+    expect(paperBg).not.toMatch(/require\(|<Image|expo-asset/);
+    expect(paperBg).toContain("{look !== 'plain' && (");
+    expect(paperBg).toContain('<Pattern id={gid}');
   });
 });
 
@@ -674,7 +666,7 @@ describe('the introduction is replayable from Settings', () => {
     // Cast for the same reason `Settings.tsx` casts: `Settings.onboarded` is A4's field and its patch to
     // the shared `src/domain/types.ts` has not landed. See `qa/HANDOFF-A6.md`.
     await act(async () => { set({ settings: { ...getState().settings, onboarded: TOUR_VERSION } as Settings }); });
-    expect(s.json()).toContain('Five pages with Scrap');
+    expect(s.json()).toContain('Five pages with Jot');
   });
 
   it('its page offers the run button, and running it writes 0 and closes the sheet', async () => {

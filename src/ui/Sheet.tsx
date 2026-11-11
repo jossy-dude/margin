@@ -206,7 +206,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
  *  the pad, so its top is a torn edge with the white core showing and a soft shadow on the dimmed app. */
 function Surface({ collage, plain, cap, ink, children }: { collage: boolean; plain?: boolean; cap: number; ink: string; children: React.ReactNode }) {
   if (plain) return <View style={{ overflow: 'hidden', borderTopLeftRadius: 22, borderTopRightRadius: 22, flexShrink: 1, maxHeight: cap, borderWidth: 1, borderBottomWidth: 0, borderColor: hexA(ink, 0.1), boxShadow: `0 -6px 24px ${hexA(ink, 0.12)}` }}>{children}</View>;
-  if (collage) return <TornSheet seed="sheet" depth={6} lift crumple={0} style={{ flexShrink: 1, maxHeight: cap }} bodyStyle={{ flexGrow: 0, flexShrink: 1 }}>{children}</TornSheet>;
+  if (collage) return <TornSheet seed="sheet" depth={6} lift style={{ flexShrink: 1, maxHeight: cap }} bodyStyle={{ flexGrow: 0, flexShrink: 1 }}>{children}</TornSheet>;
   return <HandBox seed="sheet" corners={TOP} sw={1.8} shadow={false} amp={1.4} style={{ overflow: 'hidden', borderTopLeftRadius: 30, borderTopRightRadius: 26, flexShrink: 1, maxHeight: cap }} fill="transparent" stroke={ink}>{children}</HandBox>;
 }
 export const Label = ({ children }: { children: React.ReactNode }) => <Txt f="serif" s={15} c="mut" style={{ marginBottom: -4, marginTop: 2 }}>{children}</Txt>;

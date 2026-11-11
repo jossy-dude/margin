@@ -56,13 +56,13 @@ export function AlarmsPage() {
           ? <View style={{ gap: 4 }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS}>Rings at</Txt><TimeField label="Alarm time" value={draft.h * 60 + draft.m} hour12={h12} onChange={(v) => patch({ h: Math.floor(v / 60), m: v % 60 })} /></View>
           : <>
             <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0 }}>Before the first class</Txt><NumberField label="Minutes before the first class" value={draft.lead} min={5} max={240} unit="min" onChange={(v) => patch({ lead: v ?? 60 })} /></Row>
-            <Txt f="serif" s={15} c="mut">It follows your timetable: a later start, a cancelled class or a free day moves or skips it by itself.</Txt>
+            <Txt f="serif" s={15} c="mut">Follows your timetable. Class changes move it.</Txt>
           </>}
         <View style={{ gap: 6 }}>
           <Label>{draft.kind === 'class' ? 'On these days' : 'Repeat'}</Label>
           <Row>{DW.map((d, i) => <Chip key={d} small label={d} on={!!draft.days[i]} onPress={() => { patch({ days: draft.days.map((x, j) => (j === i ? !x : x)) }); fx.select(); }} />)}</Row>
           <Txt f="serif" s={15} c="mut">
-            {draft.kind === 'class' && !draft.days.some(Boolean) ? 'Pick at least one day.' : rings ? `${once ? 'Rings once' : 'Next'}: ${fmtWhen(rings, now, h12)} · ${relFire(rings, now)}` : draft.kind === 'class' ? 'No class on those days in the next five weeks, so it would not ring.' : 'Pick a time.'}
+            {draft.kind === 'class' && !draft.days.some(Boolean) ? 'Pick at least one day.' : rings ? `${once ? 'Rings once' : 'Next'}: ${fmtWhen(rings, now, h12)} · ${relFire(rings, now)}` : draft.kind === 'class' ? 'No class on those days soon.' : 'Pick a time.'}
           </Txt>
         </View>
         <Field label="Label" placeholder={draft.kind === 'class' ? 'Wake up for class' : 'Wake up'} value={draft.label} onChangeText={(v) => patch({ label: v })} maxLength={40} returnKeyType="done" />
@@ -80,11 +80,11 @@ export function AlarmsPage() {
   const soonest = alarms.map((a) => nextRing(a, input)).filter((x): x is number => x !== null).sort((a, b) => a - b)[0];
   return (
     <View style={{ gap: 12 }}>
-      {!has && <Txt f="serif" s={15.5} c="warn">Alarms ring from the phone&apos;s own alarm clock, which this build does not have. You can set them here; they ring once the Android app is installed.</Txt>}
-      {has && !exact && <Note text="This phone is holding alarms back to save battery, so one may ring a few minutes late." action="Allow exact alarms" onPress={() => native.openAlarmSettings('exact')} />}
-      {has && !full && <Note text="A ringing alarm cannot take over the locked screen yet. It will still sound, with Snooze and Dismiss in the notification." action="Allow full screen" onPress={() => native.openAlarmSettings('fullscreen')} />}
+      {!has && <Txt f="serif" s={15.5} c="warn">Alarms ring on the Android app only.</Txt>}
+      {has && !exact && <Note text="Battery saving may delay alarms by minutes." action="Allow exact alarms" onPress={() => native.openAlarmSettings('exact')} />}
+      {has && !full && <Note text="Alarms cannot show on the lock screen yet." action="Allow full screen" onPress={() => native.openAlarmSettings('fullscreen')} />}
       {alarms.length === 0
-        ? <Txt f="serif" s={16} c="mut">No alarms yet. Set one for a fixed time, or let one follow your timetable and wake you before the first class of each day.</Txt>
+        ? <Txt f="serif" s={16} c="mut">No alarms yet. Add one for a set time or before class.</Txt>
         : <Txt f="serif" s={15.5} c="mut">{soonest ? `Next alarm ${fmtWhen(soonest, now, h12)} · ${relFire(soonest, now)}` : 'Every alarm is off.'}</Txt>}
       {alarms.map((a) => {
         const at = nextRing(a, input);
@@ -103,7 +103,7 @@ export function AlarmsPage() {
         <Btn kind="ghost" label="Before class" onPress={() => { setDraft({ ...newAlarm(uid('al'), now), kind: 'class', lead: 60, label: '' }); fx.tap(); }} />
       </Row>
       {has && <Btn kind="ghost" icon="bell" label="Ring a test alarm" onPress={() => { if (!native.ringNow('Test alarm')) toast('The alarm could not start. Check that notifications are allowed for Margin.'); }} />}
-      <Txt f="serif" s={14.5} c="mut">An alarm rings at full alarm volume even on silent, shows over the lock screen, and stops by itself after five minutes.</Txt>
+      <Txt f="serif" s={14.5} c="mut">Rings at full volume, even on silent. Stops after five minutes.</Txt>
     </View>
   );
 }
@@ -119,16 +119,14 @@ function Note({ text, action, onPress }: { text: string; action: string; onPress
 }
 
 const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
-  { kind: 'next', name: 'Next class', line: 'The class that is on now or next, its room and the time left. Small.' },
-  { kind: 'today', name: "Today's classes", line: 'The day’s timetable, with the running class marked. Wide; stretch it taller for more rows.' },
-  { kind: 'tasks', name: 'Due', line: 'What is overdue and what is due next, with a + for a new task.' },
+  { kind: 'board', name: 'Margin', line: 'Next class, today’s timetable and what is due, on one card.' },
 ];
-/** Settings → Widgets: what each one shows, and a button that asks the launcher to place it. */
+/** Settings → Widgets: the one widget, what it shows, and a button that asks the launcher to place it. */
 export function WidgetsPage() {
   const { c } = useTheme(), has = native.nativeAvailable();
   return (
     <View style={{ gap: 12 }}>
-      <Txt f="serif" s={16} c="mut">{has ? 'Three widgets for your home screen. They keep themselves up to date, even when Margin is closed.' : 'Widgets live on the Android home screen; this build has none to place.'}</Txt>
+      <Txt f="serif" s={16} c="mut">{has ? 'One home screen widget. It updates when Margin is closed.' : 'Widgets need the Android app.'}</Txt>
       {WIDGETS.map((w) => (
         <HandBox key={w.kind} seed={`wd-${w.kind}`} fill={c.card} style={{ padding: 14, gap: 8 }}>
           <Txt f="bold" s={21}>{w.name}</Txt>
@@ -136,7 +134,7 @@ export function WidgetsPage() {
           {has && <Btn small kind="ink" icon="plus" label="Add to home screen" a11y={`Add the ${w.name} widget to the home screen`} onPress={() => { if (!native.pinWidget(w.kind)) toast('Long-press your home screen, choose Widgets, then Margin.'); }} />}
         </HandBox>
       ))}
-      <Txt f="serif" s={14.5} c="mut">You can also long-press the home screen, choose Widgets, and find Margin there.</Txt>
+      <Txt f="serif" s={14.5} c="mut">Or long-press the home screen, then Widgets.</Txt>
     </View>
   );
 }

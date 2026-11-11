@@ -89,7 +89,7 @@ const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: st
  * otherwise. `busy` is the Data page's own flag, so a second tap during a slow share sheet cannot start a
  * second file.
  */
-const UNINSTALL_HINT = 'Uninstalling erases what is on this phone, and Auto Backup only restores it if the phone had backed it up. Tap for a JSON copy you can import again.';
+const UNINSTALL_HINT = 'Uninstalling erases this phone. Auto Backup may not restore it. Tap to save a JSON copy.';
 const ExportRow = ({ disabled, onPress }: { disabled: boolean; onPress: () => void }) => {
   const { c } = useTheme();
   return (
@@ -126,10 +126,10 @@ const MinStep = ({ label, value, onChange }: { label: string; value: string; onC
  *  render on every visit; doing it in the parent's render would have been a blocking read per keystroke. */
 function SafetyCopies({ now, h12 }: { now: number; h12: boolean }) {
   const [info] = useState<SafetyInfo>(safetyInfo);
-  if (Platform.OS === 'web') return <Txt f="serif" s={15.5} c="mut">Not on web: the browser build keeps its data in memory for the session, so there is no database file to copy.</Txt>;
+  if (Platform.OS === 'web') return <Txt f="serif" s={15.5} c="mut">Not on web: nothing is saved to a file here.</Txt>;
   return (<>
     <Txt f="bold" s={19}>{info.count ? `${info.count} ${info.count === 1 ? 'copy' : 'copies'} kept` : 'No safety copies yet'}</Txt>
-    <Txt f="serif" s={14.5} c="mut">{info.count && info.newest !== null ? `Newest ${fmtWhen(info.newest, now, h12)}. ` : ''}Before an update changes the database, the app writes the whole thing here and keeps the newest three. Nothing here is read unless something has gone wrong.</Txt>
+    <Txt f="serif" s={14.5} c="mut">{info.count && info.newest !== null ? `Newest ${fmtWhen(info.newest, now, h12)}. ` : ''}Written before each database update. The newest three are kept.</Txt>
     <Row><Btn small kind="ghost" icon="export" label="Share newest" disabled={!info.count} onPress={() => { void shareNewestSafetyCopy().then((ok) => toast(ok ? 'Shared the newest safety copy' : 'Sharing is not available on this device')); }} /></Row>
   </>);
 }
@@ -209,18 +209,18 @@ export function SettingsSheet() {
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette}`} to="appearance" />
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
-    <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · a fixed time, or before your first class` : 'A fixed time, or before your first class'} to="alarms" />
-    <Nav icon="today" label="Widgets" hint="Next class, today and what is due, on your home screen" to="widgets" />
+    <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · set time or before class` : 'Set time or before class'} to="alarms" />
+    <Nav icon="today" label="Widgets" hint="Next class, today, what is due" to="widgets" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
-    <Nav icon="week" label="Semesters" hint="The active term, its dates, and the terms you kept" to="semesters" />
+    <Nav icon="week" label="Semesters" hint="Active term and past terms" to="semesters" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
     {/* Directly under the page it duplicates on purpose: the export exists behind Data & export, this is
         the one-tap version for the moment somebody is about to uninstall. */}
     <ExportRow disabled={!!busy} onPress={() => void doExport('json', 'share')} />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
-    <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five pages with Scrap' : 'Not seen yet'}`} to="tour" />
+    <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five pages with Jot' : 'Not seen yet'}`} to="tour" />
     <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />
     {/* Reset stays last: it is the only row on this page that destroys something, so it must never be
         the row a thumb lands on while reaching for the row above it. */}
@@ -230,7 +230,7 @@ export function SettingsSheet() {
     {/* v0.6: the look itself, first. Collage is torn paper; Plain is a clean planner for anyone who does not
         want the paper (smooth stock, rounded cards, one calm typeface); Notebook is the original hand-drawn look. */}
     <Label>Style</Label><Seg value={s.palette === 'original' ? 'refined' : s.palette} opts={[['collage', 'Collage'], ['plain', 'Plain'], ['refined', 'Notebook']]} onChange={(v) => { set({ palette: v as Settings['palette'] }); fx.select(); }} />
-    <Txt f="serif" s={15} c="mut">{s.palette === 'plain' ? 'Plain: smooth paper, rounded cards and one calm typeface. Subjects keep their colours.' : s.palette === 'collage' ? 'Collage: torn paper, crumpled stock and cut-out shapes.' : 'Notebook: the hand-drawn original, ruled paper and handwriting.'}</Txt>
+    <Txt f="serif" s={15} c="mut">{s.palette === 'plain' ? 'Plain: smooth paper, rounded cards.' : s.palette === 'collage' ? 'Collage: torn paper, cut-out shapes.' : 'Notebook: hand-drawn, ruled paper.'}</Txt>
     <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · ${s.palette === 'refined' ? 'Refined cream' : s.palette === 'original' ? 'Original' : s.palette === 'plain' ? 'Plain' : 'Collage'}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
     {/* The clock format lives here with the other display choices, and the switch is stated as the
         24-hour clock because that is what is true out of the box: it ships ON, so the app a new user
@@ -240,17 +240,15 @@ export function SettingsSheet() {
   if (page === 'theme') body = (<>
     <Label>Theme</Label><Seg value={s.theme} opts={[['light', 'Cream'], ['dark', 'Dark'], ['auto', 'Follow phone']]} onChange={(v) => set({ theme: v })} />
     <Label>Palette</Label><Seg value={s.palette} opts={[['refined', 'Refined (lighter cream)'], ['original', 'Original']]} onChange={(v) => set({ palette: v })} />
-    <Txt f="serif" s={15} c="mut">Original is the first version of the look: the cooler gray desk and the near-black night mode. Everything behind this sheet changes as you tap.</Txt>
+    <Txt f="serif" s={15} c="mut">Original: the first look, with a cooler gray desk.</Txt>
     <Label>Motion</Label><Seg value={s.reduceMotion} opts={[['system', 'Follow phone'], ['on', 'Reduce'], ['off', 'Full']]} onChange={(v) => set({ reduceMotion: v })} />
   </>);
   if (page === 'paper') body = (<>
     <Label>Ruling</Label><Seg value={s.paper} opts={[['dots', 'Dots'], ['grid', 'Grid'], ['ruled', 'Ruled'], ['plain', 'Plain']]} onChange={(v) => set({ paper: v })} />
-    <Label>Texture</Label><Seg value={s.texture} opts={[['grain', 'Grain (new)'], ['photo', 'Original photo'], ['none', 'None']]} onChange={(v) => set({ texture: v })} />
+    <Label>Texture</Label><Seg value={s.texture === 'none' ? 'none' : 'grain'} opts={[['grain', 'Grain'], ['none', 'None']]} onChange={(v) => set({ texture: v })} />
   </>);
   if (page === 'bar') body = (<>
-    <Txt f="serif" s={15} c="mut">A bar that measures. The sixteen instruments count the class you are in, from the
-      real clock: full when it starts, empty when the bell goes. The one at the top reads your whole day
-      instead. Each keeps its own machine.</Txt>
+    <Txt f="serif" s={15} c="mut">Measures the class you are in, or your whole day.</Txt>
     <Label>Your whole day</Label>
     {BAR_KINDS.map((b) => <BarPick key={b.id} id={b.id} n={b.n} d={b.d} on={bar === b.id} onPress={() => { set({ bar: b.id }); fx.select(); }} />)}
     {GROUPS.map((g) => {
@@ -276,8 +274,8 @@ export function SettingsSheet() {
     <Nav icon="grad" label="Per-subject lead time" hint="Warn earlier for the classes you tend to be late to" to="ncourse" />
     {/* D4, directly above Delivery status: the toggle is the wish, and Delivery status prints what the
         phone's own channel actually does about it (including when the two disagree). */}
-    <Toggle label="Pin the class that is running" hint="Its name, room and time left stay in your notifications until it ends" value={n.pinClass} onChange={(v) => act.setNotif({ pinClass: v })} />
-    <Toggle label="Show reminder text on the lock screen" hint="When off, it still rings but the text stays hidden until you unlock" value={n.lockText} onChange={(v) => act.setNotif({ lockText: v })} />
+    <Toggle label="Pin the class that is running" hint="Shows its name, room and time left" value={n.pinClass} onChange={(v) => act.setNotif({ pinClass: v })} />
+    <Toggle label="Show reminder text on the lock screen" hint="Off hides the text until you unlock" value={n.lockText} onChange={(v) => act.setNotif({ lockText: v })} />
     <Nav icon="bell" label="Delivery status" hint={statusHint(st.notifStatus)} to="nstatus" />
   </>);
   if (page === 'alarms') body = <AlarmsPage />;
@@ -285,12 +283,12 @@ export function SettingsSheet() {
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
     <Labelled label="Lead time"><NumberField label="Lead time" value={n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ classLeadMin: v ?? 0 })} /></Labelled>
-    <Toggle label="Ask me when a class ends" hint="Here, late or missed, one tap to mark" value={n.classEnded} onChange={(v) => act.setNotif({ classEnded: v })} />
+    <Toggle label="Ask me when a class ends" hint="One tap to mark it" value={n.classEnded} onChange={(v) => act.setNotif({ classEnded: v })} />
   </>);
   if (page === 'ntask') body = (<>
     <Toggle label="Task reminders" value={n.taskReminders} onChange={(v) => act.setNotif({ taskReminders: v })} />
     <Toggle label="Exam reminders" value={n.examReminders} onChange={(v) => act.setNotif({ examReminders: v })} />
-    <Toggle label="Start-by nudges" hint="If a task needs more time than the free hours you have, the app tells you when to begin" value={n.startBy} onChange={(v) => act.setNotif({ startBy: v })} />
+    <Toggle label="Start-by nudges" hint="Tells you when to start a long task" value={n.startBy} onChange={(v) => act.setNotif({ startBy: v })} />
     <Labelled label="Effort buffer"><NumberField label="Effort buffer" value={Math.round(n.effortBuffer * 100)} min={0} max={100} unit="%" onChange={(v) => act.setNotif({ effortBuffer: (v ?? 0) / 100 })} /></Labelled>
     <MinStep label="“When I get home”" value={n.homeAt} onChange={(v) => act.setNotif({ homeAt: v })} />
     <Label>Default reminder for new tasks</Label><Row>{[0, 30, 60, 120, 1440].map((m) => <Chip key={m} small label={m ? `${fmtDur(m)} before` : 'At due'} on={n.defaultTaskMinutes.includes(m)} onPress={() => act.setNotif({ defaultTaskMinutes: n.defaultTaskMinutes.includes(m) ? n.defaultTaskMinutes.filter((x) => x !== m) : [...n.defaultTaskMinutes, m] })} />)}</Row>
@@ -298,13 +296,13 @@ export function SettingsSheet() {
   if (page === 'nhours') body = (<>
     <Label>Active days</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} small on={n.activeDays[i]} onPress={() => act.setNotif({ activeDays: n.activeDays.map((x, j) => (j === i ? !x : x)) })} />)}</Row>
     <MinStep label="Active from" value={n.activeFrom} onChange={(v) => act.setNotif({ activeFrom: v })} /><MinStep label="Active until" value={n.activeTo} onChange={(v) => act.setNotif({ activeTo: v })} />
-    <Toggle label="Quiet hours" hint="Nothing rings; deadline reminders move earlier instead of later" value={n.quietEnabled} onChange={(v) => act.setNotif({ quietEnabled: v })} />
+    <Toggle label="Quiet hours" hint="Nothing rings; deadline reminders move earlier" value={n.quietEnabled} onChange={(v) => act.setNotif({ quietEnabled: v })} />
     {n.quietEnabled && <><MinStep label="Quiet from" value={n.quietFrom} onChange={(v) => act.setNotif({ quietFrom: v })} /><MinStep label="Quiet until" value={n.quietTo} onChange={(v) => act.setNotif({ quietTo: v })} /></>}
     <Label>Weekends</Label><Seg value={n.weekend} opts={[['normal', 'Like weekdays'], ['quiet', 'Quiet'], ['off', 'Off']]} onChange={(v) => act.setNotif({ weekend: v })} />
-    <Toggle label="Hold reminders until class ends" hint="A reminder that would ring in the middle of a lecture waits for the break" value={n.duringClass === 'defer'} onChange={(v) => act.setNotif({ duringClass: v ? 'defer' : 'allow' })} />
+    <Toggle label="Hold reminders until class ends" hint="Waits for the break" value={n.duringClass === 'defer'} onChange={(v) => act.setNotif({ duringClass: v ? 'defer' : 'allow' })} />
   </>);
   if (page === 'ncourse') body = st.courses.length === 0
-    ? <Empty icon="grad" text="No subjects yet. Add one and it gets its own lead time here." />
+    ? <Empty icon="grad" text="No subjects yet. Add one to set its lead time." />
     : <>{st.courses.map((co) => <Labelled key={co.id} label={co.name}><NumberField label={`${co.name} lead time`} value={n.courseLead[co.id] ?? n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ courseLead: { ...n.courseLead, [co.id]: v ?? 0 } })} /></Labelled>)}</>;
   if (page === 'nstatus') { const ns = st.notifStatus, pl = st.plan, target = testTarget(now, pl?.next ?? null, tasks, notifs.TEST_ACTION_ID, s.hour12); body = (<>
     {/* The one honest place: every number below is either read off this phone or computed by the
@@ -313,9 +311,9 @@ export function SettingsSheet() {
     {noModule ? <Txt f="serif" s={15.5} c="warn">{noModule}</Txt> : null}
     <HandBox seed="ns" fill={c.card} style={{ padding: 12, gap: 5 }}>
       {ns ? <Txt f="bold" s={21} c={PERMISSION[ns.permission].tone}>{PERMISSION[ns.permission].line}</Txt> : <Txt f="bold" s={21} c="mut">Asking this phone…</Txt>}
-      {ns && ns.permission === 'denied' && !ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone has stopped asking. Only its own settings screen can turn this back on — the button below opens it.</Txt> : null}
-      {ns && ns.permission === 'denied' && ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone will still ask once, so the button below is worth a tap.</Txt> : null}
-      <Txt f="bold" s={20}>{!ns ? 'Counting what is queued…' : !ns.queueRead ? 'This phone would not say what it has queued, so nothing here can be counted.' : ns.permission === 'granted' ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : `${ns.scheduled} still queued from before, but nothing new can be queued until it is allowed.`}</Txt>
+      {ns && ns.permission === 'denied' && !ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone has stopped asking.</Txt> : null}
+      {ns && ns.permission === 'denied' && ns.canAskAgain ? <Txt f="serif" s={15} c="mut">The phone will still ask once.</Txt> : null}
+      <Txt f="bold" s={20}>{!ns ? 'Counting queued reminders…' : !ns.queueRead ? 'This phone would not say what it has queued.' : ns.permission === 'granted' ? `${ns.scheduled} reminder${ns.scheduled === 1 ? '' : 's'} queued on this phone` : `${ns.scheduled} still queued from before, nothing new until allowed.`}</Txt>
       {/* W5 deliverable 2: the planner's minute is a plan, not a promise. The app cannot read
           `canScheduleExactAlarms()` (see `EXACT_ALARM_UNKNOWN`), so it quotes a window and says why. */}
       {ns?.queueRead && ns.scheduled > 0 && ns.next !== null ? <Txt f="serif" s={16} c="mut">{nextRingLine(ns.next, (ms) => fmtTime(ms, s.hour12), (ms) => relFire(ms, now))}</Txt> : null}
@@ -323,9 +321,9 @@ export function SettingsSheet() {
       {/* D4 read-back. Channels are Android-only, so this line only exists where a channel can be
           read; the setting is what the user asked for and the phone's answer is printed as-is. */}
       {ns?.platform === 'android' ? <Txt f="serif" s={15} c="mut">{lockTextLine(n.lockText, ns.lockText)}</Txt> : null}
-      {ns?.queueRead && ns.scheduled > 0 && ns.next === null ? <Txt f="serif" s={16} c="mut">Queued, but the phone will not report when any of them fires.</Txt> : null}
-      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count > 0 && ns.permission === 'granted' ? <Txt f="serif" s={16} c="mut">The planner has {pl.count} ready, and the phone&rsquo;s queue is empty. A battery saver that stops alarms, or a phone that dropped them on reboot, is the usual reason.</Txt> : null}
-      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count === 0 ? <Txt f="serif" s={16} c="mut">{n.enabled ? `Nothing to send in the next 14 days${pl.dropped.length ? `: ${pl.dropped.length} blocked by your hours` : ' inside your active hours'}.` : 'Reminders are switched off above.'}</Txt> : null}
+      {ns?.queueRead && ns.scheduled > 0 && ns.next === null ? <Txt f="serif" s={16} c="mut">Queued. The phone will not say when they ring.</Txt> : null}
+      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count > 0 && ns.permission === 'granted' ? <Txt f="serif" s={16} c="mut">The planner has {pl.count} ready, but the queue is empty. Battery savers often cause this.</Txt> : null}
+      {ns?.queueRead && ns.scheduled === 0 && pl && pl.count === 0 ? <Txt f="serif" s={16} c="mut">{n.enabled ? `Nothing to send in 14 days${pl.dropped.length ? `: ${pl.dropped.length} blocked by your hours` : ''}.` : 'Reminders are switched off above.'}</Txt> : null}
     </HandBox>
     {/* Buttons above the fold: this is a bottom sheet, so anything below them is a scroll away. */}
     <Row>
@@ -347,7 +345,7 @@ export function SettingsSheet() {
       <Btn small kind="ghost" icon="bell" label="Test in 10 s" onPress={async () => { const ok = await notifs.sendTest(10); toast(ok ? 'Sent. Lock the phone and wait 10 seconds.' : 'Could not schedule: check permission'); }} />
       <Btn small kind={armed ? 'danger' : 'ghost'} icon="check" disabled={!target} a11y={target ? `${armed ? 'Send the action test now' : 'Arm the action test'}. It really marks ${target.title}, and the toast can undo that.` : 'Test the buttons. No class or open task with a due date to imitate yet.'} label={armed ? 'Tap again to send' : 'Test the buttons'} onPress={() => { const t = target; if (!t) return; if (!armed) { setArmed(true); toast(`Next: ${t.title}. One more tap really marks it.`); return; } setArmed(false); void notifs.sendActionTest(t, notificationAccent(), 10).then((ok) => toast(ok ? `Sent for ${t.title} — it carries the real buttons.` : 'Could not schedule: check permission')); }} />
     </Row>
-    <Txt f="serif" s={14.5} c="mut">{target ? `“Test the buttons” sends a copy of “${target.title}” in 10 seconds, with the same buttons a real reminder has. Pressing one really marks it — the toast that follows can undo it.` : '“Test the buttons” needs a class in the next fortnight, or an open task with a due date, to imitate.'}</Txt>
+    <Txt f="serif" s={14.5} c="mut">{target ? `Sends a copy of “${target.title}” in 10 seconds. Pressing a button really marks it.` : 'Needs a class or a dated task in 14 days.'}</Txt>
     <Section title="The next 14 days">
       {pl ? <>
         <Txt f="serif" s={15.5} c="mut">{pl.count} reminder{pl.count === 1 ? '' : 's'} planned · {pl.shifted} moved out of the way · {pl.deferred} waiting for room in the queue{pl.dropped.length ? ` · ${pl.dropped.length} dropped` : ''}.</Txt>
@@ -357,14 +355,14 @@ export function SettingsSheet() {
     </Section>
     <Section title="What actually arrived">
       {log.length === 0 ? <Empty icon="bell" text="Nothing has been queued on this phone yet, or the app has not been open since one was." /> : <View style={{ gap: 8 }}>{log.map((r) => <LogRow key={r.id} r={r} now={now} h12={s.hour12} />)}</View>}
-      <Txt f="serif" s={14} c="mut">A reminder that rings while the app is closed is recorded as opened but never rang in the app — nothing was running to see it happen. The app will not invent a time it never witnessed.</Txt>
+      <Txt f="serif" s={14} c="mut">Reminders rung while the app was closed show as opened, not rung.</Txt>
     </Section>
     <Hair />
-    <Txt f="serif" s={15.5} c="mut">Local reminders only: they are scheduled on this phone and need no internet. Nothing is sent from a server, so a reminder cannot arrive if the phone has blocked the app, is in a battery-saver that kills alarms, or the app has not been opened for a while. Expo Go uses the system notification sound; custom sounds need a built app.</Txt>
+    <Txt f="serif" s={15.5} c="mut">Reminders are local, with no internet needed. Battery savers can block them. Expo Go uses the system sound.</Txt>
   </>); }
   if (page === 'sound') body = (<>
     <Toggle label="Sound" hint="Paper, stamps, dial and chimes" value={s.soundOn} onChange={(v) => set({ soundOn: v })} />
-    <Toggle label="Haptics" hint="A distinct feel for each kind of change" value={s.hapticsOn} onChange={(v) => { set({ hapticsOn: v }); if (v) fx.stamp('p'); }} />
+    <Toggle label="Haptics" hint="A feel for each kind of change" value={s.hapticsOn} onChange={(v) => { set({ hapticsOn: v }); if (v) fx.stamp('p'); }} />
     <Toggle label="Old-clock tick while focusing" value={s.tickOn} onChange={(v) => set({ tickOn: v })} />
     <Hair />
     {SOUND_GROUPS.map((g) => (
@@ -372,8 +370,8 @@ export function SettingsSheet() {
         <Row style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}><Slider label={`${g.label} volume`} value={Math.round(s.soundVol[g.id] * 100)} min={0} max={100} step={10} onChange={(v) => set({ soundVol: { ...s.soundVol, [g.id]: v / 100 } })} /><Btn small kind="ghost" icon="play" label="Play" quiet a11y={`Play the ${g.label} preview`} onPress={() => { const why = previewSilence(g.id, g.label, s); if (why) { toast(why); return; } if (!play(SAMPLE[g.id])) toast(`Could not play ${g.label.toLowerCase()} — tap again.`); }} /></Row></View>))}
   </>);
   if (page === 'attendance') body = (<>
-    <Toggle label="Lock attendance grid" hint="Nothing can change until you unlock it" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
-    <Txt f="serif" s={15.5} c="mut">When unlocked: tap an empty cell once to mark it. After that, long-press to change it.</Txt>
+    <Toggle label="Lock attendance grid" hint="Nothing changes until unlocked" value={s.lockAttendance} onChange={(v) => set({ lockAttendance: v })} />
+    <Txt f="serif" s={15.5} c="mut">Tap an empty cell to mark it. Long-press to change it.</Txt>
     <SemesterRange start={s.semesterStart} end={s.semesterEnd} onChange={(p) => void act.setActiveRange(p.semesterStart, p.semesterEnd)} />
     <Row><Btn small kind="ghost" icon="plus" label="Add class" onPress={() => act.open({ t: 'meeting' })} /><Btn small kind="ghost" icon="plus" label="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>
   </>);
@@ -387,10 +385,10 @@ export function SettingsSheet() {
         false for every length this page offers: the step is a third of the break, so the default 5-minute
         break wiggles once a minute and a 25-minute break wiggles every five. See `nudgeWord` in
         `domain/timer.ts` and the assertion in `src/test/settings-render.test.ts`. */}
-    <Txt f="serif" s={15.5} c="mut">A break pauses the main clock. It unlocks after 5 minutes of focus, nudges you {nudgeWord(s.breakMin * 60_000)}, and the little taped clock falls off the page when it is over. New sessions pick these up.</Txt>
+    <Txt f="serif" s={15.5} c="mut">Pauses the main clock. Unlocks after 5 minutes of focus. Nudges you {nudgeWord(s.breakMin * 60_000)}.</Txt>
   </>);
   if (page === 'data') body = (<>
-    <Txt f="serif" s={15.5} c="mut">The whole dataset: subjects, timetable, every attendance mark, tasks, steps, reminders, notes, marks, focus sessions and settings. Named from the date you export.</Txt>
+    <Txt f="serif" s={15.5} c="mut">Everything in the app, named by export date.</Txt>
     {(['xlsx', 'csv', 'json'] as ExportFormat[]).map((f) => (
       <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
         <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
@@ -398,15 +396,15 @@ export function SettingsSheet() {
     {/* A class's timetable, without anything personal: the file a classmate imports to have the whole week at
         once, and the file a built-in class timetable is made from (domain/packs). */}
     <Txt f="bold" s={20}>Share your class timetable</Txt>
-    <Txt f="serif" s={14.5} c="mut">Just the subjects, labs, rooms and weekly classes, plus the term dates. No attendance, marks, tasks or notes. A classmate imports it and their week is set up.</Txt>
+    <Txt f="serif" s={14.5} c="mut">Subjects, rooms and weekly classes. No marks or notes.</Txt>
     <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport('timetable', 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport('timetable', 'share')} /></Row>
     {PACKS.length ? (<>
       <Txt f="bold" s={20} style={{ marginTop: 8 }}>Built-in class timetables</Txt>
-      <Txt f="serif" s={14.5} c="mut">Adds your section&apos;s subjects and weekly classes. Nothing you already have is removed.</Txt>
+      <Txt f="serif" s={14.5} c="mut">Adds subjects and classes. Removes nothing.</Txt>
       <Row style={{ flexWrap: 'wrap' }}>{PACKS.map((p) => <Btn key={p.id} small kind="ghost" label={p.title} onPress={() => void act.applyPack(p.id)} />)}</Row>
     </>) : null}
     <Hair />
-    <Nav icon="import" label="Import" hint="Paste a JSON export, or a compact file an AI wrote" to="import" />
+    <Nav icon="import" label="Import" hint="Paste a JSON export or AI file" to="import" />
     <Section title="Safety copies">
       <SafetyCopies now={now} h12={s.hour12} />
     </Section>
@@ -418,24 +416,24 @@ export function SettingsSheet() {
         finished — notes, grades and focus sessions), so the copy can promise the whole sample
         semester and nothing else. An edit clears the flag (see forms.tsx), so "anything you created
         or edited" is exactly what survives. */}
-    <Txt f="serif" s={14.5} c="mut">Removes the sample subjects, timetable, tasks, notes, grades and history. Anything you created or edited stays — touching a sample item makes it yours. Settings → Reset wipes the whole database file.</Txt>
+    <Txt f="serif" s={14.5} c="mut">Removes sample subjects, timetable, tasks, notes, grades and history. Edits stay. Reset wipes everything.</Txt>
   </>);
   if (page === 'import') body = <ImportPage />;
   if (page === 'semesters') body = <SemestersPage />;
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
-    <Txt f="serif" s={16} c="mut">Five pages with Scrap: what Margin is, how it is laid out, your name, your term and where your timetable comes from, and reminders. Seen again from here, it offers to keep your planner exactly as it is, so nothing about your data changes unless you choose an import.</Txt>
+    <Txt f="serif" s={16} c="mut">Five pages with Jot. Your data stays unless you import.</Txt>
     <Btn kind="ghost" icon="play" label="Show it now" onPress={() => { replay(0); act.close(); }} />
-    <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You have seen build ${TOUR_VERSION} of it.` : 'You have not seen it yet, so it opens the next time the app does anyway.'}</Txt>
+    <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You have seen build ${TOUR_VERSION} of it.` : 'Not seen yet. It opens next launch.'}</Txt>
   </>);
   /* The page used to be `about`, and used to carry the version line and the Updates block as well.
      Those moved to About, where "what build is this" belongs; what is left is the one action the whole
      app has that cannot be undone. Its behaviour — the double-tap arm, the 4 s window, the pop after —
      is unchanged. */
   if (page === 'reset') body = (<>
-    <Txt f="serif" s={16} c="mut">This erases the whole database file — subjects, timetable, attendance, tasks, notes, grades, focus history and settings — and hands back a fresh, empty planner. It cannot be undone, so export first if you care about your data.</Txt>
+    <Txt f="serif" s={16} c="mut">Erases everything. This cannot be undone. Export first.</Txt>
     <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to erase everything' : 'Erase everything'} onPress={armReset} />
-    <Txt f="serif" s={14} c="mut">Data &amp; export writes that copy out before you come here, and a safety copy is kept automatically ahead of any update that changes the database.</Txt>
+    <Txt f="serif" s={14} c="mut">A safety copy is kept before each update.</Txt>
   </>);
   if (page === 'about') body = <AboutPage />;
   return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;

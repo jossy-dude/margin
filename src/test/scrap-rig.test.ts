@@ -35,11 +35,15 @@ describe('gaze', () => {
   });
 });
 
-describe('every piece Scrap draws is generated and bundled', () => {
-  it('lists each bitmap the component requires', () => {
-    const src = readFileSync(join(__dirname, '..', 'ui', 'mascot', 'Scrap.tsx'), 'utf8');
-    const files = [...src.matchAll(/assets\/paper\/([\w-]+\.webp)/g)].map((m) => m[1]!);
-    expect(files.length).toBeGreaterThanOrEqual(14);
-    for (const f of files) expect(existsSync(join(__dirname, '..', '..', 'assets', 'paper', f))).toBe(true);
+describe('Jot is drawn in code', () => {
+  const src = readFileSync(join(__dirname, '..', 'ui', 'mascot', 'Jot.tsx'), 'utf8');
+  it('requires no bitmap, and the old Scrap component is gone', () => {
+    expect(src).not.toMatch(/require\(|<Image/);
+    expect(existsSync(join(__dirname, '..', 'ui', 'mascot', 'Scrap.tsx'))).toBe(false);
+  });
+  it('has a mouth for every mood, three strings and three cards to juggle', () => {
+    for (const m of Object.values(MOODS)) expect(src).toContain(`${m.mouth}: <`);
+    expect((src.match(/<ALine /g) ?? []).length).toBe(3);
+    expect(src).toContain('CARDS = [T.tomato, T.denim, T.moss]');
   });
 });

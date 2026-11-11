@@ -5,6 +5,31 @@ Gate: 81 suites / 1,325 tests, typecheck, lint (0 warnings) and depcruise green;
 `TZ=Europe/Berlin`. Committed: CP2 `526f3c0` store split + pins, CP3 `0be36d9` reliability, CP4 `586ec7d` +
 `c4c4815` time and perf, D4 core `c3f5386`, R1 core `9557519`. The v0.5 status section below says what is left.)_
 
+## Checkup log
+
+### 2026-11-11 — checkup 1 (v0.6 "new look", uncommitted on `v2-improvements`)
+Owner's list this session (15 asks) is in the order below; **done** = in the working tree, check green
+(typecheck, lint, 96 suites / 1,507 tests, depcruise).
+
+- **Done:** paper photo + crumple removed everywhere, texture is a seeded SVG fleck pattern
+  (`src/ui/paper-flecks.ts`, `PaperBg.tsx`; `texture` is now `'grain' | 'none'`, old values read as grain) ·
+  first page has a drawn sun with glow, turning rays, clouds and a sky that follows the clock
+  (`src/ui/collage/Sun.tsx`, `sky.ts`, tokens `SKY`/`SUN`) · onboarding copy cut short, "nice guy" line is
+  now "Because I'm generous like that" · display fonts: Fraunces Black (Collage), Syne ExtraBold (Plain) ·
+  clock redrawn: kraft bezel, graph-paper dial, pencil hands, today's classes as arcs on the rim
+  (`src/ui/clock/faces.ts`, `ClockFace` takes `arcs`) · `/checkup` skill (`.claude/skills/checkup`).
+- **Next slice (checkup 2):** new mascot — a paper marionette student on strings who juggles index cards
+  (classes, tasks, exams), replacing Scrap, drawn and animated in code (no Rive) · teacher's absence count
+  per subject in Attendance (a number the owner types, shown beside the app's own count) · the three
+  widgets merged into one, visible in the widget picker · shorter copy in the rest of the app (Haiku agent).
+- **After that:** sounds — test Openverse API, Real SFX (clipwing.pro/skills/real-sfx) and earshot
+  (github.com/Leonxlnx/earshot) for licence and set-up, keep the best, delete `scripts/synth-sounds.mjs`
+  and the current set · "Margin v2" polish pass on Stats/charts and data screens · Obsidian: the Margin
+  plugin and task sync are NOT built yet (only `docs/BRIDGE.md` + `src/domain/bridge.ts`), build over the
+  vault's git repo · GitSync on the phone reports GitHub no longer accepts its token — diagnose, then
+  5-minute auto sync · last: push, GitHub Actions build, Haiku agent tests the APK over adb
+  (prompt via the `prompt-master-marginalia` skill).
+
 ## Git
 
 - Base commit: `cda830b` (branch `qa/prelaunch`).

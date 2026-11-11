@@ -8,8 +8,10 @@ import { PACKS, programs, sectionsOf } from '../domain/packs';
 import { PaperBg } from '../ui/PaperBg';
 import { SemesterRange } from '../ui/SemesterRange';
 import { Art } from '../ui/collage/Art';
+import { Sky, Sun } from '../ui/collage/Sun';
+import { skyPhase } from '../ui/collage/sky';
 import { TornSheet } from '../ui/collage/Torn';
-import { Scrap, SCRAP_H, SCRAP_W } from '../ui/mascot/Scrap';
+import { Jot, JOT_H, JOT_W } from '../ui/mascot/Jot';
 import { gazeAlong, gazeAt, type ScrapCue, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
@@ -34,7 +36,7 @@ import { PAPER } from '../tokens/theme';
  * held here, so leaving half-way leaves nothing half-done.
  * ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-const N = 5, SZ = 220, SZH = (SZ * SCRAP_H) / SCRAP_W, FOOT = 108;
+const N = 5, SZ = 220, SZH = (SZ * JOT_H) / JOT_W, FOOT = 108;
 type Perm = 'unknown' | 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
 export function Onboarding({ firstRun }: { firstRun: boolean }) {
@@ -43,6 +45,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const [page, setPage] = useState(0), [name, setName] = useState(settings.name ?? ''), [typing, setTyping] = useState(false);
   const [range, setRange] = useState({ semesterStart: settings.semesterStart, semesterEnd: settings.semesterEnd });
   const [door, setDoor] = useState<OnboardDoor>(firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
+  const [phase] = useState(() => skyPhase(new Date().getHours()));
   const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<ScrapCue | null>(null), [steer, setSteer] = useState(false);
   const x = useSharedValue(0), gx = useSharedValue(0), gy = useSharedValue(0.2), leave = useSharedValue(0);
   /* how far each hero page is scrolled, so Scrap rides up with the page instead of covering its words */
@@ -54,11 +57,11 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   /* Where Scrap stands on each page: centre x, centre y, scale. */
   const heroBottom = ins.top + 56 + Math.min(H * 0.42, 380), hero5 = ins.top + 56 + Math.min(H * 0.27, 230);
   const anchors = [
-    { cx: W / 2, cy: heroBottom - 40 - SZH / 2, s: 1 },
+    { cx: W / 2, cy: heroBottom - 34 - (SZH * 1.2) / 2, s: 1.2 },
     { cx: W - 58, cy: ins.top + 96, s: 0.36 },
     { cx: W - 70, cy: ins.top + 150, s: 0.5 },
     { cx: W - 58, cy: ins.top + 96, s: 0.36 },
-    { cx: W / 2, cy: hero5 - 30 - (SZH * 0.62) / 2, s: 0.62 },
+    { cx: W / 2, cy: hero5 - 24 - (SZH * 0.74) / 2, s: 0.74 },
   ];
   const at = anchors[page]!;
 
@@ -161,33 +164,34 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
       <Animated.ScrollView ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
         onMomentumScrollEnd={(e) => { const j = Math.round(e.nativeEvent.contentOffset.x / W); if (j !== page) arrive(j); }}>
         {heroShell(0, heroBottom - 6, <>
-          <Art name="sun" w={190} style={{ position: 'absolute', right: -46, top: ins.top + 46 }} />
+          <Sky w={W} h={heroBottom + 40} phase={phase} />
+          <Sun size={130} phase={phase} rise style={{ position: 'absolute', right: -120, top: (phase === 'dawn' || phase === 'dusk' ? heroBottom - 150 : ins.top + 130) - 169 }} />
           <Art name="hill-sage" w={W * 1.25} style={{ position: 'absolute', left: -W * 0.18, top: heroBottom - 84 }} />
           <Art name="hill-moss" w={W * 1.1} style={{ position: 'absolute', left: -W * 0.02, top: heroBottom - 46 }} />
           <Art name="leaf" w={44} rot={-24} style={{ position: 'absolute', left: 18, top: heroBottom - 150 }} />
           <Art name="leaf-sage" w={38} rot={14} style={{ position: 'absolute', left: 52, top: heroBottom - 134 }} />
         </>, <>
-          <Kicker>A school planner, on paper</Kicker>
-          <Title>Hi, I&apos;m Scrap.</Title>
-          <Body>I keep your classes, homework, marks and study time on one desk — and all of it stays on this phone. No account, nothing sent anywhere.</Body>
+          <Kicker>Your school planner</Kicker>
+          <Title>Hi, I&apos;m Jot.</Title>
+          <Body>I juggle your classes, homework and exams so you don&apos;t have to. All on this phone, no account.</Body>
         </>)}
         {pageShell(1, <>
           <Art name="dot" w={74} style={{ position: 'absolute', right: 20, top: ins.top + 56 }} />
           <Art name="leaf-sage" w={46} rot={-38} style={{ position: 'absolute', right: -6, bottom: FOOT + ins.bottom + 40 }} />
         </>, <>
-          <Kicker>How it is laid out</Kicker>
+          <Kicker>The layout</Kicker>
           <Title style={{ marginRight: 88 }}>Everything has its place.</Title>
           <View style={{ height: 14 }} />
           <Legend active={page === 1} onLook={(r, of) => { setSteer(true); gx.set(withSpring(-0.85, { duration: 260 })); gy.set(withSpring(-0.2 + (r / of) * 1.4, { duration: 260 })); play('nod'); if (steerT.current) clearTimeout(steerT.current); steerT.current = setTimeout(() => setSteer(false), 1600); }} />
         </>)}
         {pageShell(2, <>
-          <Art name="sun" w={110} style={{ position: 'absolute', left: -38, top: ins.top + 150 }} />
+          <Sun size={76} phase={phase} style={{ position: 'absolute', left: -82, top: ins.top + 106 }} />
           <Art name="leaf" w={40} rot={28} style={{ position: 'absolute', left: 14, bottom: FOOT + ins.bottom + 30 }} />
         </>, <>
           <Kicker>First things first</Kicker>
           <Title style={{ marginRight: 112 }}>What should I call you?</Title>
           <NamePaper name={name} onName={onName} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); if (name.trim()) { setMood('happy'); play('hop'); } }} onDone={() => goTo(3)} />
-          <Txt f="serif" s={17} c="mut" style={{ marginTop: 14, minHeight: 24 }}>{name.trim() ? `Nice to meet you, ${name.trim()}.` : 'Your first name is plenty. You can leave it blank.'}</Txt>
+          <Txt f="serif" s={17} c="mut" style={{ marginTop: 14, minHeight: 24 }}>{name.trim() ? `Nice to meet you, ${name.trim()}.` : 'First name, or leave it blank.'}</Txt>
         </>)}
         {pageShell(3, <>
           <Art name="scrap-sand" w={150} rot={9} style={{ position: 'absolute', right: -64, top: ins.top + 210 }} />
@@ -198,35 +202,35 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <HandBox seed="ob-term" fill={c.card} style={{ padding: 14, marginTop: 14 }}>
             <SemesterRange start={range.semesterStart} end={range.semesterEnd} onChange={(p) => setRange(p)} />
           </HandBox>
-          <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where does your timetable come from?</Txt>
+          <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where&apos;s your timetable?</Txt>
           <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); play('nod'); setMood(d === 'sample' ? 'happy' : d === 'import' || d === 'class' ? 'curious' : 'idle'); }} />
         </>)}
         {heroShell(4, hero5 - 6, <>
-          <Art name="sun" w={120} style={{ position: 'absolute', left: -34, top: ins.top + 44 }} />
+          <Sun size={84} phase={phase} style={{ position: 'absolute', left: -83, top: ins.top - 5 }} />
           <Art name="strip-denim" w={W * 0.9} rot={-4} style={{ position: 'absolute', right: -W * 0.42, top: hero5 - 64 }} />
           <Art name="strip-kraft" w={W * 0.8} rot={3} style={{ position: 'absolute', left: -W * 0.36, top: hero5 - 52 }} />
         </>, <>
           <Kicker>Reminders</Kicker>
-          <Title>A tap on the shoulder before class.</Title>
+          <Title>A nudge before class.</Title>
           <View style={{ gap: 10, marginTop: 12 }}>
-            <Why icon="clock" text="A few minutes before each class, with the room." />
-            <Why icon="exam" text="When an assignment or exam is coming up." />
-            <Why icon="timer" text="When a focus round or a break is over." />
+            <Why icon="clock" text="Before each class, with the room." />
+            <Why icon="exam" text="Before a deadline or exam." />
+            <Why icon="timer" text="When a focus round ends." />
           </View>
-          <Txt f="serif" s={15} c="mut" style={{ marginTop: 12 }}>They are scheduled on this phone — nothing comes from a server — and you can tune every kind in Settings → Reminders.</Txt>
+          <Txt f="serif" s={15} c="mut" style={{ marginTop: 12 }}>Sent from this phone only. Tune them in Settings → Reminders.</Txt>
           <View style={{ marginTop: 16, gap: 8 }}>
             {perm === 'granted'
-              ? <PermNote tone="ok" text="Reminders are on. I will keep it quiet." />
-              : perm === 'denied' ? <PermNote tone="warn" text="That is fine. You can turn them on any time in Settings → Reminders." />
-              : perm === 'unavailable' ? <PermNote tone="mut" text="This build cannot send reminders (the web preview). On the phone, this asks once." />
+              ? <PermNote tone="ok" text="Reminders are on." />
+              : perm === 'denied' ? <PermNote tone="warn" text="No problem. Turn them on later in Settings → Reminders." />
+              : perm === 'unavailable' ? <PermNote tone="mut" text="The web preview cannot send reminders." />
               : <Btn kind="primary" icon="bell" label="Allow reminders" onPress={() => { void ask(); }} />}
           </View>
           {PACKS.length ? (
             <View style={{ marginTop: 22, gap: 6 }}>
-              <Txt f="bold" s={20} accessibilityRole="header">One more thing — I&apos;m a nice guy</Txt>
-              <Txt f="serif" s={15.5} c="mut">If you are in DRB2503, your timetable is already here: pick your section and every subject, room and lab is set up for you.</Txt>
+              <Txt f="bold" s={20} accessibilityRole="header">Because I&apos;m generous like that</Txt>
+              <Txt f="serif" s={15.5} c="mut">In DRB2503? Pick your section and your whole timetable is done.</Txt>
               <ClassPicker value={pack} onChange={(id) => { setPack(pack === id ? null : id); fx.select(); setMood('happy'); play('celebrate'); }} />
-              {pack ? <PermNote tone="ok" text="Done. Anything can change later: long-press a class on Week to move its room, its time or its day." /> : null}
+              {pack ? <PermNote tone="ok" text="Done. Long-press a class on Week to change it." /> : null}
             </View>
           ) : null}
         </>)}
@@ -234,7 +238,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
 
       {/* Scrap, above every page. */}
       <Walker x={x} W={W} anchors={anchors} reduce={reduce} y0={y0} y4={y4}>
-        <Scrap size={SZ} mood={mood} cue={cue} lookX={gx} lookY={gy} attentive={steer || (page === 2 && typing)} />
+        <Jot size={SZ} mood={mood} cue={cue} lookX={gx} lookY={gy} attentive={steer || (page === 2 && typing)} />
       </Walker>
 
       {/* The masthead and the way out. */}
@@ -287,10 +291,10 @@ function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; on
 }
 
 const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
-  { id: 'import', icon: 'import', title: 'Bring a file', line: 'Import a JSON or CSV export, or paste one in.', tint: 'sky' },
-  { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, then add your subjects with +.', tint: 'sage', first: true },
-  { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample semester, just for this session.', tint: 'sand', first: true },
-  { id: 'keep', icon: 'check', title: 'Keep my planner as it is', line: 'Nothing about your data changes.', tint: 'cream', later: true },
+  { id: 'import', icon: 'import', title: 'Bring a file', line: 'Import a JSON or CSV file.', tint: 'sky' },
+  { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, add subjects with +.', tint: 'sage', first: true },
+  { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample term to try.', tint: 'sand', first: true },
+  { id: 'keep', icon: 'check', title: 'Keep my planner as it is', line: 'Nothing changes.', tint: 'cream', later: true },
 ];
 function Doors({ firstRun, value, onChange }: { firstRun: boolean; value: OnboardDoor; onChange: (d: OnboardDoor) => void }) {
   const { c, tints } = useTheme();

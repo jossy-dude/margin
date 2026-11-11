@@ -10,7 +10,7 @@ import manifest from '../../../assets/paper/manifest.json';
  * `w` is the width in dp; the height keeps the piece's own proportions (the generator's manifest).
  */
 const SRC = {
-  sun: require('../../../assets/paper/art-sun.webp'), dot: require('../../../assets/paper/art-dot.webp'),
+  dot: require('../../../assets/paper/art-dot.webp'),
   'hill-sage': require('../../../assets/paper/art-hill-sage.webp'), 'hill-moss': require('../../../assets/paper/art-hill-moss.webp'),
   'strip-kraft': require('../../../assets/paper/art-strip-kraft.webp'), 'strip-denim': require('../../../assets/paper/art-strip-denim.webp'),
   'scrap-cream': require('../../../assets/paper/art-scrap-cream.webp'), 'scrap-sky': require('../../../assets/paper/art-scrap-sky.webp'),

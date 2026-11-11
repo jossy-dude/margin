@@ -100,7 +100,7 @@ export interface NotifSettings {
 export interface AlarmRule { id: string; label: string; kind: 'clock' | 'class'; h: number; m: number; days: boolean[]; lead: number; on: boolean; snooze: number; vib: boolean; once?: number }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
-  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original'; texture: 'crumple' | 'grain' | 'photo' | 'none';
+  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original'; texture: 'grain' | 'none';
   clock: string; bar: string; semesterStart: string;
   /** The last day of term, `YYYY-MM-DD`; `''` means open-ended, which is the default. A settings KV
    *  row written before v0.3.1 has no such key, so `withDefaults` fills the empty string in — no SQL
@@ -113,6 +113,9 @@ export interface Settings {
   hour12: boolean;
   soundOn: boolean; soundVol: Record<SoundGroup, number>; hapticsOn: boolean; tickOn: boolean;
   lockAttendance: boolean; reduceMotion: 'system' | 'on' | 'off';
+  /** Absences as the teacher's register has them, per subject id. Typed in by hand: the register and
+   *  the marks made here do not always agree, and the register is the one that counts. Absent = not set. */
+  teacherAbsent?: Record<string, number>;
   taskFilter: 'all' | 'open' | 'done'; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
   breakMin: number; breaksPerRound: number; focusFlow: boolean; focusPresetMin: number;
   /** How many builds of the onboarding tour this phone has finished. `0` or absent = not seen. See `toured()`

@@ -26,18 +26,10 @@
       </intent-filter>
     </receiver>
 
-    <!-- Home-screen widgets. -->
-    <receiver android:name="app.marginalia.nativebits.NextClassWidget" android:exported="false" android:label="@string/mg_widget_next_name">
+    <!-- The home-screen widget. -->
+    <receiver android:name="app.marginalia.nativebits.BoardWidget" android:exported="false" android:label="@string/mg_widget_board_name">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
-      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_next"/>
-    </receiver>
-    <receiver android:name="app.marginalia.nativebits.TodayWidget" android:exported="false" android:label="@string/mg_widget_today_name">
-      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
-      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_today"/>
-    </receiver>
-    <receiver android:name="app.marginalia.nativebits.TasksWidget" android:exported="false" android:label="@string/mg_widget_tasks_name">
-      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
-      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_tasks"/>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_board"/>
     </receiver>
 
     <!-- Alarms: the moment, the ringing, and the full-screen answer. -->

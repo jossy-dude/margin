@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one Margin widget. Each of the three boxes is filled at run time with its part layout
+     (mg_part_next, mg_part_today, mg_part_tasks), so the three share one card and one refresh. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_board" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="@drawable/mg_widget_card" android:padding="8dp">
+  <LinearLayout android:id="@+id/mg_b_next" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+  <LinearLayout android:id="@+id/mg_b_today" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+  <ImageView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:layout_marginTop="4dp"
+    android:src="@color/mg_rule" android:importantForAccessibility="no"/>
+  <LinearLayout android:id="@+id/mg_b_tasks" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>
+</LinearLayout>
