@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { startVault } from './store/vault';
 import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -246,6 +247,8 @@ function Themed({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  /* The Obsidian link reads and writes its two files while the app is open; it does nothing until a vault is chosen. */
+  useEffect(() => startVault(), []);
   const [fonts, setFonts] = useState(false), [fontError, setFontError] = useState<string | null>(null), [fontTry, setFontTry] = useState(0), [booted, setBooted] = useState(false);
   useEffect(() => {
     let alive = true;

@@ -74,6 +74,19 @@ its own phone reminders off while the bridge is connected, so nothing rings twic
 Why `updated_at` and not the outbox: the outbox is pruned to its last 500 rows, and a sync that missed a week
 must still see every change.
 
+## What v0.6 added after the foundation (2026-11-11)
+
+| Piece | Where |
+|---|---|
+| The Obsidian half as its own plugin (beside Bone Tasks, same task-line grammar): Margin's tasks into `Margin/Tasks.md`, the timetable into `Margin/Timetable.md`, open dated `#school` tasks out to `obsidian.json` | `obsidian-plugin/margin-bridge/` |
+| Vault folder through the Storage Access Framework | `src/services/vaultFiles.ts` |
+| Sync on foreground, every 30 s and on demand; `margin.json` is the whole state and is rewritten only when it changes, so git does not commit on every sync | `src/store/vault.ts` |
+| Settings → Obsidian | `src/sheets/Obsidian.tsx` |
+| The two halves tested against each other | `obsidian-plugin.test.ts` |
+
+Not verified on a phone yet. Still open from the list below: the vault mark on Obsidian tasks, sending a
+Margin task to a chosen note, timer merge (`⏱`), sessions, and turning Bone's own phone reminders off.
+
 ## v0.7 work
 
 **Margin:** Settings → Obsidian: pick the vault folder (SAF), on/off, last sync, problems; read on foreground

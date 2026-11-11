@@ -33,12 +33,13 @@ import { semesterLabel } from '../domain/semester';
 import { APP_VERSION } from '../domain/version';
 import { AboutPage } from './AboutPage';
 import { AlarmsPage, WidgetsPage } from './Alarms';
+import { ObsidianPage } from './Obsidian';
 import type { Settings } from '../domain/types';
 
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -211,6 +212,7 @@ export function SettingsSheet() {
     <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
     <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · set time or before class` : 'Set time or before class'} to="alarms" />
     <Nav icon="today" label="Widgets" hint="Next class, today, what is due" to="widgets" />
+    <Nav icon="note" label="Obsidian" hint="Tasks and classes in your vault" to="obsidian" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="week" label="Semesters" hint="Active term and past terms" to="semesters" />
@@ -280,6 +282,7 @@ export function SettingsSheet() {
   </>);
   if (page === 'alarms') body = <AlarmsPage />;
   if (page === 'widgets') body = <WidgetsPage />;
+  if (page === 'obsidian') body = <ObsidianPage />;
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
     <Labelled label="Lead time"><NumberField label="Lead time" value={n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ classLeadMin: v ?? 0 })} /></Labelled>

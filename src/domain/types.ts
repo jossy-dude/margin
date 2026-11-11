@@ -116,6 +116,8 @@ export interface Settings {
   /** Absences as the teacher's register has them, per subject id. Typed in by hand: the register and
    *  the marks made here do not always agree, and the register is the one that counts. Absent = not set. */
   teacherAbsent?: Record<string, number>;
+  /** The Obsidian vault folder this phone was given (a Storage Access Framework URI). Absent/null = not linked. */
+  vaultUri?: string | null;
   taskFilter: 'all' | 'open' | 'done'; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
   breakMin: number; breaksPerRound: number; focusFlow: boolean; focusPresetMin: number;
   /** How many builds of the onboarding tour this phone has finished. `0` or absent = not seen. See `toured()`

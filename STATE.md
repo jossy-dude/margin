@@ -7,6 +7,27 @@ Gate: 81 suites / 1,325 tests, typecheck, lint (0 warnings) and depcruise green;
 
 ## Checkup log
 
+### 2026-11-11 — end of session (after checkup 1; owner said "finish everything", no checkup 2)
+Check green: typecheck, lint, 97 suites / 1,513 tests, depcruise.
+
+- **Done since checkup 1:** Jot (paper marionette student juggling index cards, `src/ui/mascot/Jot.tsx`,
+  drawn in code; `Scrap.tsx` removed, its bitmaps in `assets/paper/scrap-*` are now unused) · first run is
+  the light notebook look (`theme: light`, `palette: refined`, `paper: ruled`, pen warm) · clock 138 on Today ·
+  teacher's absence count per subject (`settings.teacherAbsent`, Grades → Attendance) · one widget
+  (`BoardWidget`, `mg_widget_board`, parts `mg_part_*`, picker preview layout + drawable; **Kotlin not
+  compiled locally**) · copy shortened in Settings/About/Alarms/forms/etc. (Haiku) · sounds: 26 of 28 are
+  CC0 recordings via Openverse (`scripts/fetch-sounds.mjs`, `assets/sounds/CREDITS.md`), `done` and
+  `break-start` are the old files, the synthesiser is deleted; **nobody has listened to the new clips** —
+  audition page `output/sounds-audition/index.html` · Obsidian: plugin `obsidian-plugin/margin-bridge`
+  (copied into the Bone vault, not enabled), app side `src/services/vaultFiles.ts` (SAF),
+  `src/store/vault.ts`, Settings → Obsidian; **the phone half is untested** (needs the device).
+- **Not done:** Stats/charts "Margin v2" polish · the Haiku adb test run (no phone on adb all session) ·
+  GitSync on the phone: its last push was 2026-11-05 06:12, the token it holds is rejected by GitHub and
+  only the owner can issue a new one · Obsidian Git on the desktop pulls every 10 min (owner wants 5; set it
+  in the plugin's settings, Obsidian was running so the file was left alone).
+- **Evaluated and rejected:** Real SFX (a video-editing skill, licence of its 78 sounds not stated) and
+  earshot (Python + torch, ~1.1 GB of models, licence of generated audio unclear).
+
 ### 2026-11-11 — checkup 1 (v0.6 "new look", uncommitted on `v2-improvements`)
 Owner's list this session (15 asks) is in the order below; **done** = in the working tree, check green
 (typecheck, lint, 96 suites / 1,507 tests, depcruise).
