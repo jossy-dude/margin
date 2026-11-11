@@ -257,10 +257,18 @@ Every finding re-verified against current HEAD before routing (the audit ran whi
 | UX-8 | Low | CONFIRMED dev-only upstream warning (RNW SVG) | REPORT note |
 | env | — | "live is not defined" / "unknown colour token #FFFBF1" do NOT reproduce at HEAD (moving-tree artifacts; the token text came from audit-code's M1 proposal) | closed |
 
-## v0.6 status (2026-11-09)
+## v0.6 status (2026-11-11)
 
-Version 0.6.0 / versionCode 5, on `v2-improvements`, not pushed, not built. Gate: typecheck, lint (0 warnings),
-1,482 tests, depcruise — green. Plan: `docs/superpowers/plans/2026-11-09-v06-release.md`.
+Version 0.6.0 / versionCode 5, on `v2-improvements`, pushed and tagged. Gate: typecheck, lint (0 warnings),
+1,513 tests, depcruise — green. Plan: `docs/superpowers/plans/2026-11-09-v06-release.md`.
+
+**Released:** tag `v0.6` → `3742689`, https://github.com/jossy-dude/margin/releases/tag/v0.6 with
+`margin-v0.6.0-over-android.apk` (debug-signed `over`, like the v0.5 release — installs over v0.5 and keeps
+data). Built by Actions run 43013188689, `variant=over` from `v2-improvements` (same commit as the tag).
+The tag itself triggered a release-variant run that **failed on purpose**: `ANDROID_KEYSTORE_BASE64` is not
+set on the repo, so no release-key build has ever run. Set the four secrets from `docs/RELEASING.md` §1 and
+the next `v*` tag will produce a release-key APK unattended. Owner's phone pass `docs/DEVICE_CHECKLIST.md` §V06
+is still blank.
 
 Done and committed: attendance as Present / Absent / Cancelled + a why (migration 6, old letters migrate),
 the Obsidian bridge foundation (`docs/BRIDGE.md`), start-up (first frame no longer waits for notification
