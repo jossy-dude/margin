@@ -6,7 +6,9 @@
  *   <vault>/.margin/obsidian.json   written only here, read by Margin
  *
  * One writer per file, so git (Obsidian Git on the desktop, GitSync on the phone) never has to merge
- * inside one. Tasks made in Margin become lines in one note; task lines in the vault that carry the
+ * inside one. For the same reason the bridge runs on ONE device: by default the phone, where Margin
+ * lives (Settings → "Run the bridge on this device", kept per device, not synced). The desktop sees
+ * the results — Margin/Tasks.md, Margin/Timetable.md, the task lines — when git brings them over. Tasks made in Margin become lines in one note; task lines in the vault that carry the
  * school tag and a due date go to Margin. Task lines use the Bone Tasks grammar, so both plugins read
  * the same line. Plain JavaScript, no build step: copy this folder into .obsidian/plugins/.
  */
@@ -176,6 +178,7 @@ class MarginBridge extends obsidian.Plugin {
   async onload() {
     this.state = Object.assign({}, DEFAULTS, await this.loadData());
     this.state.seen = this.state.seen || {}; this.state.sent = this.state.sent || {};
+    this.savedAs = this.stateText();
     this.files = new Map(); // path -> { mtime, rows }: a file is parsed again only when it changes
     this.busy = false;
     this.status = this.addStatusBarItem();
@@ -189,6 +192,13 @@ class MarginBridge extends obsidian.Plugin {
     this.app.workspace.onLayoutReady(() => this.sync(false));
   }
 
+  /** Whether this device runs the bridge: a per-device choice (local storage), the phone by default. */
+  runsHere() { const v = this.app.loadLocalStorage?.('margin-bridge-run'); return v == null ? !!obsidian.Platform.isMobile : v === 'true'; }
+  setRunsHere(on) { this.app.saveLocalStorage?.('margin-bridge-run', on ? 'true' : 'false'); }
+  /** The part of the state worth a write to data.json; lastSync changes every 30 s and is kept in memory. */
+  stateText() { const { lastSync, ...rest } = this.state; return JSON.stringify(rest); }
+  async saveState() { const t = this.stateText(); if (t !== this.savedAs) { await this.saveData(this.state); this.savedAs = t; } }
+
   async readNote(path) { const f = this.app.vault.getAbstractFileByPath(path); return f instanceof obsidian.TFile ? this.app.vault.read(f) : null; }
   async writeNote(path, text) {
     const f = this.app.vault.getAbstractFileByPath(path);
@@ -200,6 +210,11 @@ class MarginBridge extends obsidian.Plugin {
 
   async sync(loud) {
     if (this.busy) return;
+    if (!this.runsHere()) {
+      this.status.setText('Margin: synced on the phone');
+      if (loud) new obsidian.Notice('Margin Bridge runs on the phone, where Margin is. Turn on "Run the bridge on this device" in its settings to run it here instead.');
+      return;
+    }
     this.busy = true;
     try {
       const ad = this.app.vault.adapter, now = Date.now(), s = this.state;
@@ -248,7 +263,7 @@ class MarginBridge extends obsidian.Plugin {
         await ad.write(OUT, `${JSON.stringify(out, null, 1)}\n`);
       }
       s.lastSync = now;
-      await this.saveData(s);
+      await this.saveState();
       this.status.setText(env ? `Margin ✓ ${hm(now)}` : 'Margin: waiting for the app');
       if (loud) new obsidian.Notice(env ? `Margin: ${out.tasks.length} task(s) sent, ${env.tasks.length} read.` : 'Margin: no .margin/margin.json yet. Connect the vault in Margin → Settings → Obsidian.');
     } catch (e) {
@@ -268,6 +283,7 @@ class MarginSettings extends obsidian.PluginSettingTab {
     field('Tasks note', 'Tasks made in Margin are written here.', 'tasksNote');
     field('Timetable note', 'The next two weeks of classes, rewritten by the bridge.', 'timetableNote');
     field('School tag', 'Open tasks with this tag and a due date are sent to Margin. Empty: only the tasks note.', 'tag');
+    new obsidian.Setting(el).setName('Run the bridge on this device').setDesc('On for the phone, where Margin lives. Keep it on for one device only: two devices writing the same files give git conflicts. Not synced.').addToggle((t) => t.setValue(this.plugin.runsHere()).onChange((v) => { this.plugin.setRunsHere(v); this.plugin.sync(true); this.display(); }));
     new obsidian.Setting(el).setName('Sync now').setDesc(s.lastSync ? `Last sync ${new Date(s.lastSync).toLocaleString()}` : 'Not synced yet').addButton((b) => b.setButtonText('Sync').onClick(() => this.plugin.sync(true)));
   }
 }
