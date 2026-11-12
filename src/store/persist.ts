@@ -1,5 +1,6 @@
 import type { Repository } from '../data/repository';
 import { recordCrash } from '../services/problems';
+import { isLostConnection } from '../data/sqlite';
 import { openRepository } from './openRepository';
 import { getState, set } from './core';
 
@@ -20,8 +21,26 @@ export const db: { repo: Repository | null; real: Repository | null; demo: boole
 export const persist = (p: Promise<unknown>) => p.catch(reportSaveFailure);
 /** The failure half every write shares: the Problems log (what is still there tomorrow) and a toast. */
 export function reportSaveFailure(e: unknown) {
+  if (isLostConnection(e)) {
+    /* One lost connection fails every write that was queued behind it; logging each one made a single
+       reboot look like 8 crashes (BUGS.md #11). One Problems entry per minute, and a sentence the owner
+       can act on instead of the native call's name. */
+    const now = Date.now();
+    if (now - lostLoggedAt > 60_000) { lostLoggedAt = now; recordCrash(e, 'save', getState().route); }
+    set({ toast: { id: now, text: "Couldn't save. Reconnecting to your data…" } });
+    return;
+  }
   recordCrash(e, 'save', getState().route);
-  set({ toast: { id: Date.now(), text: `Couldn't save: ${String((e as Error)?.message ?? e).slice(0, 60)}` } });
+  set({ toast: { id: Date.now(), text: `Couldn't save: ${saveCause(e)}` } });
+}
+let lostLoggedAt = 0;
+/** The part of an error a person can read: the native `→ Caused by:` line when there is one (the first line
+ *  is the bridge call's name), else the first line, capped so a toast stays one or two lines. */
+export function saveCause(e: unknown): string {
+  const msg = String((e as Error)?.message ?? e);
+  const caused = /(?:→|->)?\s*Caused by:\s*(.+)/.exec(msg)?.[1];
+  const line = (caused ?? msg.split('\n')[0] ?? msg).trim();
+  return line.length > 140 ? `${line.slice(0, 139)}…` : line;
 }
 /** Change the screen now, write, and put the screen back if the write is refused (F5, superseding
  *  DECISIONS D5(a)). Leaving the optimistic change in place meant the screen showed a row the disk never

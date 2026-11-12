@@ -8,7 +8,7 @@ import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
 import { getState, toast } from '../store/store';
 import { bootMarks } from '../services/bootClock';
-import { appVersion, clearCrashes, formatAllCrashes, formatCrash, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../services/problems';
+import { appVersion, clearCrashes, formatAllCrashes, formatCrash, groupCrashes, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../services/problems';
 
 /** Clipboard from react-native core. It is marked `@deprecated` (and logs one `warnOnce` the first time it is
  *  touched) but it is still a real native module in RN 0.86, and it is the only copy-to-clipboard available
@@ -71,7 +71,7 @@ export function DiagnosticsPage() {
       </Txt>
       <Hair />
       {list.length === 0 ? <Empty icon="note" text="Nothing has gone wrong. If something does, it lands here." /> : (
-        <View style={{ gap: 12 }}>{list.map((e) => (
+        <View style={{ gap: 12 }}>{groupCrashes(list).map(({ entry: e, count, first }) => (
           <HandBox key={e.id} seed={e.id} style={{ padding: 12, gap: 6 }}>
             <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
               {/* `boot`/`runtime` name the page the failure happened on; `save`/`data` happen with no
@@ -79,6 +79,7 @@ export function DiagnosticsPage() {
               <Txt f="bold" s={18} style={{ flexShrink: 1 }} numberOfLines={1}>{e.phase === 'boot' ? 'During boot' : e.phase === 'save' ? 'While saving' : e.phase === 'data' ? 'While reading data' : `On ${e.route}`}</Txt>
               <Txt f="serif" s={14} c="mut">{when(e.at)}</Txt>
             </Row>
+            {count > 1 && <Txt f="serif" s={14} c="mut">{count}× since {when(first)}</Txt>}
             <Txt f="bold" s={17} c="bad" numberOfLines={3}>{e.message}</Txt>
             <Txt f="type" s={13} c="mut" selectable style={{ lineHeight: 17 }}>{e.stack}</Txt>
             <Row><Btn small kind="ghost" label="Copy this one" onPress={() => copyOne(e)} /></Row>

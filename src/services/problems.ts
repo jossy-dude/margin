@@ -118,6 +118,21 @@ function parseLog(): CrashEntry[] {
 }
 export function readCrashes(): CrashEntry[] { return parseLog().slice(); }
 
+/** Identical failures folded into one row (BUGS.md #11): same phase and same first line of the message. One
+ *  lost database connection used to show as eight separate crashes. Newest group first; `entry` is the
+ *  newest of its group, `first` the oldest time. */
+export interface CrashGroup { entry: CrashEntry; count: number; first: number; last: number }
+export function groupCrashes(list: CrashEntry[]): CrashGroup[] {
+  const by = new Map<string, CrashGroup>();
+  for (const e of list) {
+    const k = `${e.phase}|${(e.message.split('\n')[0] ?? '').trim()}`;
+    const g = by.get(k);
+    if (!g) by.set(k, { entry: e, count: 1, first: e.at, last: e.at });
+    else { g.count++; if (e.at < g.first) g.first = e.at; if (e.at > g.last) { g.last = e.at; g.entry = e; } }
+  }
+  return [...by.values()].sort((a, b) => b.last - a.last);
+}
+
 export function crashCount(): number { return parseLog().length; }
 
 export function clearCrashes(): void {

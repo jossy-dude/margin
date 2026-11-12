@@ -10,6 +10,7 @@ import { getState, subscribe } from './core';
 import { bridgeIn, bridgeOut } from './bridge';
 import { readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
+import { connection } from '../data/sqlite';
 
 export interface VaultStatus { at: number; ok: boolean; note: string }
 let status: VaultStatus = { at: 0, ok: true, note: '' }, busy = false, written: string | null = null;
@@ -50,7 +51,9 @@ export async function vaultSync(): Promise<VaultStatus> {
 
 /** Starts the link's clock. Returns the function that stops it. */
 export function startVault(): () => void {
-  const tick = () => { if (AppState.currentState === 'active') void vaultSync(); };
+  /* No tick while the database connection is being replaced (BUGS.md #11): its writes would only queue
+     behind the reconnect and fail with it. */
+  const tick = () => { if (AppState.currentState === 'active' && !connection.reopening) void vaultSync(); };
   const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void vaultSync(); });
   const timer = setInterval(tick, 30_000);
   /* The app mounts before the saved settings load, so the vault folder is unknown at the first tick.

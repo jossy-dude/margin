@@ -15,7 +15,25 @@ export interface SqlDb {
    *  with it WAL/SHM). `wipe()` prefers it so a full reset removes the FILE, not its rows; the
    *  node:sqlite shim omits it and keeps the DELETE-all fallback. */
   closeAndDelete?(): Promise<void>;
+  /** Only the Expo adapter provides this: drops the (dead) native connection and opens a new one. Called by
+   *  the repository when a job failed with a lost connection (`isLostConnection`, BUGS.md #11). */
+  reopen?(): Promise<void>;
 }
+
+/** True for the errors expo-sqlite throws once the native half of a connection is gone: the React host was
+ *  torn down while JS kept running (shutdown, reboot, the OS reclaiming the activity; expo/expo#50432), so
+ *  every call fails with `Call to function 'NativeDatabase.prepareAsync' has been rejected … NullPointerException`
+ *  or "Access to closed resource". An SQL error (a constraint, a missing table) is not one: retrying it on a
+ *  new connection would only fail again. Pure, so it is unit-tested on the exact texts. */
+export function isLostConnection(e: unknown): boolean {
+  const msg = String((e as { message?: unknown })?.message ?? e ?? '');
+  if (/Access to closed resource/i.test(msg)) return true;
+  return /has been rejected/i.test(msg) && /NullPointerException|closed/i.test(msg);
+}
+
+/** Whether a reconnect is running right now. Timers that write (the Obsidian link's tick) skip their turn
+ *  while it is, instead of queuing more writes behind a connection that is being replaced. */
+export const connection = { reopening: false };
 /**
  * Where the adapter reports a stored value it skipped because it could not read it back (audits H2/H3).
  * The data layer does not decide where problems go — `src/data` imports nothing above it (depcruise
@@ -43,10 +61,23 @@ export class SqliteRepository implements Repository {
     /* A reset closes and deletes the file (`wipe`); a call that arrives afterwards on this instance would
        talk to a closed handle and fail with a native error nobody can read. It fails here instead, with a
        sentence, and the store re-opens a fresh repository. */
-    const run = () => (this.closed ? Promise.reject(new Error('The database was closed by a reset; it has to be re-opened.')) : f());
+    const run = () => (this.closed ? Promise.reject(new Error('The database was closed by a reset; it has to be re-opened.')) : this.run(f));
     const r = this.q.then(run, run);
     this.q = r.then(() => undefined, () => undefined);
     return r;
+  }
+
+  /* ── a lost connection is reopened once (BUGS.md #11) ────────────────────────────────────────────
+   * Every queued job is a whole transaction (or a read), so one that failed because the native connection
+   * was gone left nothing behind and running it again on a new connection is safe. One retry: a second
+   * failure is a real one and goes to the caller (`persist.ts` reverts and reports it). */
+  private async run<T>(f: () => Promise<T>): Promise<T> {
+    try { return await f(); } catch (e) {
+      if (!isLostConnection(e) || !this.db.reopen) throw e;
+      connection.reopening = true;
+      try { await this.db.reopen(); } finally { connection.reopening = false; }
+      return f();
+    }
   }
 
   async init() {

@@ -21,7 +21,10 @@ export interface AdapterDeps {
  *  inside the adapter keeps the pre-migration state available to a module that does not import
  *  expo-sqlite, and a failed copy is swallowed by `dumpBeforeMigration` — the migration always runs. */
 export async function openRepository(deps: AdapterDeps): Promise<Repository> {
-  const db = await openDatabaseAsync('marginalia.db');
+  /* `let`, and every method below reads the CURRENT handle, never a captured one: `reopen` swaps it when the
+     native side died under a live JS runtime (BUGS.md #11). `useNewConnection` makes expo-sqlite open a
+     fresh native connection instead of handing back its cached (dead) one. */
+  let db = await openDatabaseAsync('marginalia.db');
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;');
   const sql: SqlDb = {
     execAsync: (s) => db.execAsync(s),
@@ -31,6 +34,11 @@ export async function openRepository(deps: AdapterDeps): Promise<Repository> {
     /* The full reset deletes the FILE (close first, then the database row file; expo-sqlite removes
        the -wal/-shm siblings with it), so "Erase everything" can be exactly that. */
     closeAndDelete: async () => { await db.closeAsync(); await deleteDatabaseAsync('marginalia.db'); },
+    reopen: async () => {
+      try { await db.closeAsync(); } catch { /* the native half is already gone; that is why we are here */ }
+      db = await openDatabaseAsync('marginalia.db', { useNewConnection: true });
+      await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;');
+    },
   };
   const from = (await db.getAllAsync<{ user_version: number }>('PRAGMA user_version'))[0]?.user_version ?? 0;
   if (from < MIGRATIONS.length) {

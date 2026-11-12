@@ -79,8 +79,9 @@ describe('a failed write is still there tomorrow (W1/C · audit H1)', () => {
     const src = ['persist.ts', 'reminders.ts', 'ota.ts'].map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
     // persist + logNotif + schedNotif + the OTA update marker's write (v0.5 WS4). The last one is a
     // fourth write that must not vanish: a marker that fails to save means the post-reload sentence is
-    // never shown, and the Problems log is the only place that can say why.
-    expect(src.match(/recordCrash\(e, 'save', getState\(\)\.route\)/g)).toHaveLength(4);
+    // never shown, and the Problems log is the only place that can say why. `persist` has two arms since
+    // BUGS.md #11: a lost database connection is logged once a minute, every other failure each time.
+    expect(src.match(/recordCrash\(e, 'save', getState\(\)\.route\)/g)).toHaveLength(5);
     expect(src).not.toContain('.catch(() => undefined)');
   });
 });
