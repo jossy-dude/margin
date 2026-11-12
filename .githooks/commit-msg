@@ -1,0 +1,7 @@
+#!/bin/sh
+# Margin's commits carry no AI attribution (docs/plan.md hard rule). Enabled by:
+#   git config core.hooksPath .githooks
+if grep -qiE '^co-authored-by:.*(claude|anthropic)|generated with \[?claude|noreply@anthropic\.com' "$1"; then
+  echo "commit-msg: remove the Claude attribution line; this repo's commits carry none." >&2
+  exit 1
+fi

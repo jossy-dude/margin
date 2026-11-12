@@ -1,0 +1,42 @@
+name: Native compile
+
+# Compiles the Kotlin (app + modules/margin-native) on every push that touches native code, so a widget or
+# service error shows up on the push instead of in the next by-hand release build. Gradle runs here, never
+# on the owner's laptop.
+on:
+  push:
+    branches: [main, v2-improvements]
+    paths: ['android/**', 'modules/**', 'package.json', 'package-lock.json', '.github/workflows/native.yml']
+  pull_request:
+    paths: ['android/**', 'modules/**', 'package.json', 'package-lock.json']
+  workflow_dispatch:
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kotlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install
+        run: npm ci
+
+      - name: Compile Kotlin
+        run: |
+          chmod +x android/gradlew
+          cd android && ./gradlew :app:compileReleaseKotlin -PmarginVariant=over --no-daemon --stacktrace
