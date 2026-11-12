@@ -6,7 +6,7 @@
  * and it is rewritten only when its contents change — otherwise every sync would be a commit.
  */
 import { AppState } from 'react-native';
-import { getState } from './core';
+import { getState, subscribe } from './core';
 import { bridgeIn, bridgeOut } from './bridge';
 import { readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
@@ -53,6 +53,10 @@ export function startVault(): () => void {
   const tick = () => { if (AppState.currentState === 'active') void vaultSync(); };
   const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void vaultSync(); });
   const timer = setInterval(tick, 30_000);
+  /* The app mounts before the saved settings load, so the vault folder is unknown at the first tick.
+     Sync the moment it becomes known (start-up, or a folder just picked), not 30 s later. */
+  let known = getState().settings.vaultUri;
+  const unsub = subscribe(() => { const uri = getState().settings.vaultUri; if (uri !== known) { known = uri; if (uri) tick(); } });
   tick();
-  return () => { sub.remove(); clearInterval(timer); };
+  return () => { sub.remove(); clearInterval(timer); unsub(); };
 }
