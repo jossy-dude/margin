@@ -10,16 +10,22 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
   Kotlin sync hub (SyncService, SyncEngine, SAF vault writer, sync.db, no location permission) · Settings → Obsidian →
   "Sync with your desktop" · To-do filter (BUGS #7) · export counts (item 8) · migration 7 (components, task order,
   one-off moves) · component grade maths (R4) · no 30 s bridge polling (S9) · margin-bridge 0.7 live client (built).
+- Margin, morning (after you woke): alarm can be silenced (volume keys, double tap, Silence action), ramps 15 → 100 %
+  over 45 s, tone picker with Stop (N6/R10) · reminder rules engine + planner (R9) · widget 30-min wake-up gone (N7) ·
+  v2 building blocks: tokens (U1), sky (U3), glass card (U4), bubble (U5), nav island (U6), twelve faces (U7).
 - Desktop (`~/Documents/Projects/vault-sync`, local git): `sync-core` (30 tests) and `bone-syncd` hub (9 tests incl. the
   phone plugin end to end). Dry run on your vault: 2,802 files hashed in 1.2 s.
 - Vault: F1 phone notes full width · F2 graph per device + reason when empty · V0 Bone v2 skin switch + tokens
-  (contrast-checked) · V1 Log look. v2 is OFF until you pick it (Bone Home → Look, per device).
+  (contrast-checked) · V1 Log look · V3 veil (13 hidden, 91 blurred; Library "Hidden" filter; Recent covers).
+  v2 is OFF until you pick it (Bone Home → Look, per device).
 
 **Half-done**
 - Sync is built but never ran between real devices: the phone had no adb (see below). Kotlin compiles; behaviour on
   the A51 is untested. Text merge on the phone is left to the hub (decision B5). NSD discovery not written (pair text
   carries the address).
-- Redesign (Phases 4–7) not started in Margin; Bone F3, V2–V12 not started.
+- Margin redesign: components exist, screens not rebuilt on them yet (Phase 5); sound set (A1–A4) and the three
+  widgets (G1–G4) not started. Bone F3, V2, V4–V12 not started.
+- A full phone test (Opus agent, phone muted, DND on) ran this morning; its report goes to `docs/v07/TEST-REPORT.md`.
 
 **Needs you**
 1. Wireless adb was off (it resets on reboot): re-enable it so I can test on the phone.
