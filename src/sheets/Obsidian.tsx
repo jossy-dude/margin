@@ -6,6 +6,7 @@ import { act, useStore } from '../store/store';
 import { onVault, vaultStatus, vaultSync } from '../store/vault';
 import { leafOf, pickVault, vaultAvailable } from '../services/vaultFiles';
 import { fmtTime } from '../domain/time';
+import { SyncCard } from './SyncCard';
 
 /** Settings → Obsidian: choose the vault folder, see the last sync, sync now, disconnect. */
 export function ObsidianPage() {
@@ -23,6 +24,7 @@ export function ObsidianPage() {
         {uri ? <Btn small kind="ghost" icon="play" label="Sync now" testID="vault-sync" onPress={() => { void vaultSync(); }} /> : null}
         {uri ? <Btn small kind="ghost" icon="trash" label="Disconnect" testID="vault-off" onPress={() => act.setSettings({ vaultUri: null })} /> : null}
       </HandBox>
+      <SyncCard />
       <Txt f="serif" s={15} c="mut">1. Turn on the Margin Bridge plugin in Obsidian.</Txt>
       <Txt f="serif" s={15} c="mut">2. Choose the same vault folder here.</Txt>
       <Txt f="serif" s={15} c="mut">3. Your git sync carries the .margin folder between devices.</Txt>

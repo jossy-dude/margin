@@ -49,7 +49,7 @@ object SyncEngine {
 
   // ── identity and pairing ──────────────────────────────────────────────────────────────────────
   val deviceId: String get() = prefs.getString("deviceId", null) ?: Seal.newId().also { prefs.edit().putString("deviceId", it).apply() }
-  val paired: Boolean get() = prefs.getString("vaultId", null) != null && KeyVault.get(app, "hub") != null
+  val paired: Boolean get() = (prefs.getString("vaultId", null) != null && KeyVault.get(app, "hub") != null) || KeyVault.get(app, "hub-code") != null
   private val vaultId get() = prefs.getString("vaultId", null)
   private val hubId get() = prefs.getString("hubId", null)
   private val hubKey get() = KeyVault.get(app, "hub")
@@ -64,11 +64,16 @@ object SyncEngine {
       vault = u.getQueryParameter("vault"); hub = u.getQueryParameter("hub"); addrs = u.getQueryParameter("addr") ?: ""
       key = u.getQueryParameter("key")?.let { Base64.decode(it, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
     } else {
-      val parts = t.split("|")
-      if (parts.size >= 3) {
-        vault = parts[1].trim(); hub = parts[2].trim(); addrs = parts.getOrNull(3)?.trim() ?: ""
-        key = Seal.wordsToCode(parts[0])?.let { Seal.keyFromCode(it, vault) }
-      }
+      // "eight words" or "eight words @ 192.168.1.11:7428": the key needs the vault id, which the hub's
+      // challenge carries, so the code waits until the first connection (see onHubFrame "challenge").
+      val words = t.substringBefore('@').trim(); val at = t.substringAfter('@', "").trim()
+      val code = Seal.wordsToCode(words) ?: return "Type the eight words the desktop showed, then @ and its address."
+      if (at.isEmpty()) return "Add the desktop's address after the words, like: … @ 192.168.1.11"
+      KeyVault.put(app, "hub-code", code); KeyVault.remove(app, "hub")
+      prefs.edit().remove("vaultId").remove("hubId").putString("addrs", if (at.contains(':')) at else "$at:$PORT_HUB").apply()
+      store.cursor = 0
+      status("paired")
+      return null
     }
     if (key == null || key.size != 32 || vault.isNullOrEmpty() || hub.isNullOrEmpty()) return "That code is not a Bone sync pairing code."
     KeyVault.put(app, "hub", key)
@@ -78,7 +83,7 @@ object SyncEngine {
     return null
   }
   fun forget() {
-    KeyVault.remove(app, "hub"); KeyVault.remove(app, "obsidian")
+    KeyVault.remove(app, "hub"); KeyVault.remove(app, "hub-code"); KeyVault.remove(app, "obsidian")
     prefs.edit().remove("vaultId").remove("hubId").remove("addrs").remove("hints").apply()
     store.cursor = 0
     disconnect("forget")
@@ -164,6 +169,14 @@ object SyncEngine {
     val text = try { l.sealKey?.let { Seal.unseal(it, raw) } ?: raw } catch (e: Exception) { Log.w(TAG, "bad seal"); l.close(); return }
     val m = try { JSONObject(text) } catch (e: Exception) { return }
     if (m.optString("v") != V) return
+    // phrase pairing: the first challenge names the vault; the key is HKDF(code, vaultId), as on the desktop
+    if (m.optString("t") == "challenge" && vaultId == null) {
+      val code = KeyVault.get(app, "hub-code") ?: return
+      val v = m.optString("vault"); val h = m.optString("hub")
+      if (v.isEmpty() || h.isEmpty()) return
+      KeyVault.put(app, "hub", Seal.keyFromCode(code, v)); KeyVault.remove(app, "hub-code")
+      prefs.edit().putString("vaultId", v).putString("hubId", h).apply()
+    }
     val key = hubKey ?: return
     when (m.optString("t")) {
       "challenge" -> {

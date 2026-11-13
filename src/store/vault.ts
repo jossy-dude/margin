@@ -8,9 +8,10 @@
 import { AppState } from 'react-native';
 import { getState, subscribe } from './core';
 import { bridgeIn, bridgeOut } from './bridge';
-import { readVaultFile, writeVaultFile } from '../services/vaultFiles';
+import { leafOf, readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
 import { connection } from '../data/sqlite';
+import { syncConfigure, syncStart } from '../services/native';
 
 export interface VaultStatus { at: number; ok: boolean; note: string }
 let status: VaultStatus = { at: 0, ok: true, note: '' }, busy = false, written: string | null = null;
@@ -59,7 +60,11 @@ export function startVault(): () => void {
   /* The app mounts before the saved settings load, so the vault folder is unknown at the first tick.
      Sync the moment it becomes known (start-up, or a folder just picked), not 30 s later. */
   let known = getState().settings.vaultUri;
-  const unsub = subscribe(() => { const uri = getState().settings.vaultUri; if (uri !== known) { known = uri; if (uri) tick(); } });
+  /* v0.7: the native sync service writes the same vault folder while phone Obsidian is closed; it learns the
+     folder from here and starts if this phone is paired (a no-op otherwise, and off Android). */
+  const tellSync = (uri: string | null | undefined) => { syncConfigure(uri ?? null, uri ? leafOf(uri) : null); syncStart(); };
+  tellSync(known);
+  const unsub = subscribe(() => { const uri = getState().settings.vaultUri; if (uri !== known) { known = uri; tellSync(uri); if (uri) tick(); } });
   tick();
   return () => { sub.remove(); clearInterval(timer); unsub(); };
 }
