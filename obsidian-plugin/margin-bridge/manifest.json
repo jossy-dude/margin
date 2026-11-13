@@ -1,9 +1,9 @@
 {
   "id": "margin-bridge",
   "name": "Margin Bridge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "minAppVersion": "1.4.0",
-  "description": "Keeps tasks and the class timetable in step with the Margin school planner, through two files in the vault's .margin folder.",
+  "description": "Keeps tasks and the class timetable in step with the Margin school planner, through the vault's .margin folder, and live-syncs the phone vault with the desktop through Margin.",
   "author": "jossy-dude",
   "isDesktopOnly": false
 }
