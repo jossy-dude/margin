@@ -185,7 +185,7 @@ class AlarmService : Service() {
     } catch (e: Exception) { }
     try {
       // N6: the tone chosen on the Alarms page (the phone's default alarm until one is chosen)
-      val uri = AlarmTones.uri(this)
+      val uri = AlarmTones.uri(this) ?: throw IllegalStateException("no alarm tone on this phone")
       val p = MediaPlayer()
       p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
       p.setDataSource(this, uri)
