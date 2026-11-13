@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clock: 'field', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
-  hapticsOn: true, tickOn: true, lockAttendance: false, reduceMotion: 'system',
+  hapticsOn: true, tickOn: true, lockAttendance: false, reduceMotion: 'system', sky: 'live',
   taskFilter: 'open', taskSubject: '', taskSort: 'due', seededAt: 0,
   breakMin: 5, breaksPerRound: 2, focusFlow: true, focusPresetMin: 25,
   notif: DEFAULT_NOTIF,

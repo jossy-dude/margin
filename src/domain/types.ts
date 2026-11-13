@@ -118,7 +118,7 @@ export interface Settings {
    *  than reading it, so `domain/` still imports no store. */
   hour12: boolean;
   soundOn: boolean; soundVol: Record<SoundGroup, number>; hapticsOn: boolean; tickOn: boolean;
-  lockAttendance: boolean; reduceMotion: 'system' | 'on' | 'off';
+  lockAttendance: boolean; reduceMotion: 'system' | 'on' | 'off'; /** v0.7 Daylight sky: follows the clock, one image per theme, or flat (DESIGN.md D-3) */ sky: 'live' | 'still' | 'off';
   /** Absences as the teacher's register has them, per subject id. Typed in by hand: the register and
    *  the marks made here do not always agree, and the register is the one that counts. Absent = not set. */
   teacherAbsent?: Record<string, number>;
