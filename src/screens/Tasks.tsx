@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { Btn, Chip, Field, HStrip, Row, Txt } from '../ui/kit';
+import { Btn, DropChip, Field, Row, Segmented, Txt } from '../ui/kit';
 import { RunningTimer } from '../ui/RunningTimer';
 import { useNow } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
@@ -13,18 +13,24 @@ import type { Task } from '../domain/types';
 export const PAGE_ROWS = 60;
 
 export function TasksScreen() {
-  const tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
+  const tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), subj = useStore((s) => s.settings.taskSubject), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
   const st = { tasks, courses };
   /* The day groups and the cards' overdue marks only move at day granularity, so the list re-sorts on
      the wall clock twice a minute while it is under your finger — and does not tick at all while it is
      not, because a hidden page re-filtering and re-grouping for nobody is exactly the cost audit M5
      measured (~600 text nodes across the hidden pages every minute). */
   const live = useScreenLive();
-  const now = useNow(live ? 30_000 : 0), [q, setQ] = useState(''), [cid, setCid] = useState<string | null | 'all'>('all');
+  const now = useNow(live ? 30_000 : 0), [q, setQ] = useState('');
+  /* The subject choice is a setting now (BUGS #7: it was component state, reset on every visit). A subject that
+     was deleted since reads as "all". */
+  const cid: string | null | 'all' = subj === 'personal' ? null : subj && courses.some((c) => c.id === subj) ? subj : 'all';
+  const [pick, setPick] = useState(false);
   const list = useMemo(() => {
-    const f = st.tasks.filter((t) => (taskFilter === 'all' ? true : taskFilter === 'open' ? t.status !== 2 : t.status === 2) && (cid === 'all' || t.courseId === cid) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
+    const f = st.tasks.filter((t) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2) && (cid === 'all' || t.courseId === cid) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
     const cmp: Record<string, (a: Task, b: Task) => number> = { due: (a, b) => (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), priority: (a, b) => b.priority - a.priority || (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), created: (a, b) => b.createdAt - a.createdAt };
-    return [...f].sort((a, b) => (a.status === 2 ? 1 : 0) - (b.status === 2 ? 1 : 0) || (cmp[taskSort] as (a: Task, b: Task) => number)(a, b));
+    /* Done is the archive: newest finished first, whatever the sort says. */
+    if (taskFilter === 'done') return [...f].sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt));
+    return [...f].sort((cmp[taskSort] as (a: Task, b: Task) => number));
   }, [st.tasks, taskFilter, taskSort, cid, q]);
   const groups = useMemo(() => {
     const t0 = startOfDay(now), g: { title: string; items: Task[] }[] = [{ title: 'Late', items: [] }, { title: 'Today', items: [] }, { title: 'Tomorrow', items: [] }, { title: 'This week', items: [] }, { title: 'Later', items: [] }, { title: 'No date', items: [] }, { title: 'Done', items: [] }];
@@ -44,8 +50,23 @@ export function TasksScreen() {
   return (
     <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />}>
       <Field placeholder="Search tasks" value={q} onChangeText={setQ} returnKeyType="search" />
-      <Row>{(['all', 'open', 'done'] as const).map((f) => <Chip key={f} label={f[0]!.toUpperCase() + f.slice(1)} on={taskFilter === f} onPress={() => act.setSettings({ taskFilter: f })} small />)}<View style={{ width: 8 }} />{(['due', 'priority', 'created'] as const).map((f) => <Chip key={f} label={f === 'due' ? 'By date' : f === 'priority' ? 'By priority' : 'Newest'} on={taskSort === f} icon={undefined} onPress={() => act.setSettings({ taskSort: f })} small />)}</Row>
-      <HStrip gap={8}><Chip label="Every subject" on={cid === 'all'} onPress={() => setCid('all')} small /><Chip label="Personal" on={cid === null} onPress={() => setCid(null)} small />{st.courses.map((c) => <Chip key={c.id} label={c.name} on={cid === c.id} onPress={() => setCid(c.id)} small />)}</HStrip>
+      {/* BUGS #7: one quiet row, three controls with different shapes for different jobs. */}
+      <Row style={{ flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
+        <Segmented label="Show" value={taskFilter} options={[{ value: 'open', label: 'Open' }, { value: 'done', label: 'Done' }]} onChange={(v) => act.setSettings({ taskFilter: v })} />
+        <View style={{ flex: 1 }} />
+        <DropChip label={cid === 'all' ? 'All subjects' : cid === null ? 'Personal' : courses.find((c) => c.id === cid)?.name ?? 'All subjects'} chosen={cid !== 'all'}
+          onPress={() => setPick((x) => !x)} onClear={() => act.setSettings({ taskSubject: '' })} />
+        {taskFilter === 'open' ? <Btn small kind="ghost" icon="sort" label={taskSort === 'due' ? 'Due' : taskSort === 'priority' ? 'Priority' : 'Newest'} a11y={`Sort: ${taskSort === 'due' ? 'due date' : taskSort === 'priority' ? 'priority' : 'newest'}. Tap to change.`}
+          onPress={() => act.setSettings({ taskSort: taskSort === 'due' ? 'priority' : taskSort === 'priority' ? 'created' : 'due' })} /> : null}
+      </Row>
+      {pick ? (
+        <View testID="subject-menu" style={{ gap: 2 }}>
+          {[{ id: '', name: 'All subjects' }, { id: 'personal', name: 'Personal' }, ...courses.map((c) => ({ id: c.id, name: c.name }))].map((o) => {
+            const n = o.id === '' ? openN : tasks.filter((t) => t.status !== 2 && (o.id === 'personal' ? t.courseId === null : t.courseId === o.id)).length;
+            return <Btn key={o.id || 'all'} small kind={(subj || '') === o.id ? 'primary' : 'ghost'} label={`${o.name} · ${n}`} onPress={() => { act.setSettings({ taskSubject: o.id }); setPick(false); }} />;
+          })}
+        </View>
+      ) : null}
       {list.length === 0 ? <Empty icon="tasks" mood={q ? 'curious' : 'happy'} text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add one.'} /> : capped.map((g) => (
         <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.total}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</View>))}
       {hidden > 0 ? <Btn kind="ghost" testID="tasks-show-more" label={`Show ${Math.min(hidden, PAGE_ROWS)} more · ${hidden} not shown`} onPress={() => setMore({ key: askKey, n: shown + PAGE_ROWS })} /> : null}

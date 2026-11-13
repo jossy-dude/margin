@@ -30,13 +30,16 @@ export const DEFAULT_SETTINGS: Settings = {
   hour12: false,
   soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
   hapticsOn: true, tickOn: true, lockAttendance: false, reduceMotion: 'system',
-  taskFilter: 'all', taskSort: 'due', seededAt: 0,
+  taskFilter: 'open', taskSubject: '', taskSort: 'due', seededAt: 0,
   breakMin: 5, breaksPerRound: 2, focusFlow: true, focusPresetMin: 25,
   notif: DEFAULT_NOTIF,
 };
 
 export const withDefaults = (s: Partial<Settings>): Settings => ({
   ...DEFAULT_SETTINGS, ...s, ...lookUpgrade(s),
+  /* BUGS #7: "All" is gone (done tasks are an archive, not a mode of the list). A stored 'all' reads as 'open';
+     the KV row is rewritten on the next save, so no SQL migration. */
+  taskFilter: (s.taskFilter as string) === 'done' ? 'done' : 'open',
   soundVol: { ...DEFAULT_SETTINGS.soundVol, ...(s.soundVol ?? {}) },
   notif: { ...DEFAULT_NOTIF, ...(s.notif ?? {}) },
 });

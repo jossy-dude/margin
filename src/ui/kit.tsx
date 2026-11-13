@@ -180,6 +180,7 @@ const ICONS: Record<string, string> = {
   tasks: 'M5 4h14v16H5zM8.5 9.5l1.7 1.7 3.2-3.4M8.5 15h7',
   grades: 'M4 20V9M10 20V4M16 20v-8M22 20H2',
   stats: 'M3 18l5-6 4 3 6-9M3 21h18',
+  sort: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4', down: 'M6 9l6 6 6-6',
   plus: 'M12 5v14M5 12h14', check: 'M5 12.5l4.5 4.5L19 7', x: 'M6 6l12 12M18 6L6 18', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3', unlock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 016.8-1.2', bell: 'M6 17V11a6 6 0 0112 0v6l2 2H4zM10 21h4',
   timer: 'M12 8v5l3 2M9 2h6M12 4a8.5 8.5 0 100 17 8.5 8.5 0 000-17z', gear: 'M12 9a3 3 0 100 6 3 3 0 000-6zM12 4.7a7.3 7.3 0 100 14.6 7.3 7.3 0 000-14.6zM12 4.7V1.9M17.1 6.9L19.1 4.9M19.3 12h2.8M17.1 17.1l2 2M12 19.3v2.8M6.9 17.1l-2 2M4.7 12H1.9M6.9 6.9L4.9 4.9',
@@ -269,6 +270,40 @@ export function Btn({ label, icon, onPress, kind = 'primary', small, disabled, s
  * never an assignment of a fresh start, so ten taps in a second read as one continuous swell rather
  * than a strobe through zero ten times.
  */
+/** One question, two or three answers, exactly one chosen (BUGS #7; DESIGN.md's Segmented). A row of radio
+ *  buttons for TalkBack; the chosen segment is filled, the rest are plain text on one shared outline. */
+export function Segmented<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  const { c } = useTheme();
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', borderRadius: 999, borderWidth: 1, borderColor: c.rule, padding: 2 }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable key={o.value} testID={`seg-${tid(o.label)}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={o.label}
+            onPress={() => { if (!on) { fx.select(); onChange(o.value); } }} hitSlop={6}
+            style={{ paddingHorizontal: 14, minHeight: 34, justifyContent: 'center', borderRadius: 999, backgroundColor: on ? c.acc : 'transparent' }}>
+            <Txt f="bold" s={15} c={on ? c.onAcc : c.ink}>{o.label}</Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+/** A filter that opens a choice (BUGS #7): outlined until something is chosen, then filled with an ×. */
+export function DropChip({ label, chosen, onPress, onClear }: { label: string; chosen: boolean; onPress: () => void; onClear?: () => void }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 999, borderWidth: 1, borderColor: chosen ? c.acc : c.rule, backgroundColor: chosen ? c.acc : 'transparent', flexShrink: 1 }}>
+      <Pressable testID="drop-chip" accessibilityRole="button" accessibilityLabel={`${label}. Choose a subject`} onPress={() => { fx.select(); onPress(); }} hitSlop={6}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 12, paddingRight: chosen && onClear ? 2 : 10, minHeight: 34, flexShrink: 1 }}>
+        <Txt f="bold" s={15} c={chosen ? c.onAcc : c.ink} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
+        {!chosen ? <Icon name="down" size={16} color={c.mut} /> : null}
+      </Pressable>
+      {chosen && onClear ? <Pressable accessibilityRole="button" accessibilityLabel="Show all subjects" onPress={() => { fx.select(); onClear(); }} hitSlop={8} style={{ paddingHorizontal: 8, minHeight: 34, justifyContent: 'center' }}><Icon name="x" size={14} color={c.onAcc} /></Pressable> : null}
+    </View>
+  );
+}
+
 export function Chip({ label, on, onPress, icon, tone, small }: { label: string; on?: boolean; onPress?: () => void; icon?: string; tone?: string; small?: boolean }) {
   const { c } = useTheme(), reduce = useReduceMotion(), s = useSharedValue(1), was = useRef(!!on);
   const [focusProps, ring] = useFocusRing();

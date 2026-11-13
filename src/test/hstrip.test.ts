@@ -57,13 +57,14 @@ describe('horizontal strips announce that they scroll (BUG-026)', () => {
   it('every former site now goes through the one primitive', () => {
     const sites: [string, number][] = [
       // Rationale (Stats rebuild): the rings strip became the headline figures, so Stats keeps one strip (mark history).
-      ['screens/Stats.tsx', 1], ['screens/Today.tsx', 1], ['screens/Tasks.tsx', 1],
+      ['screens/Stats.tsx', 1], ['screens/Today.tsx', 1], ['screens/Tasks.tsx', 0],
+      // Rationale (BUGS #7, v0.7): To-do's subject strip became one DropChip, so it has no strip.
       ['screens/Grades.tsx', 1], ['sheets/forms.tsx', 2], ['sheets/WhenPicker.tsx', 2],
     ];
     for (const [file, n] of sites) expect([...read(file).matchAll(/<HStrip\b/g)]).toHaveLength(n);
     // The sixth reported clip was Today → Notes, whose row is the note cards rather than chips; it is
     // the Today.tsx site above, so every one of the six named places is covered by these nine strips.
-    expect(sites.reduce((a, [, n]) => a + n, 0)).toBe(8); // one fewer since the Stats rings strip became the headline
+    expect(sites.reduce((a, [, n]) => a + n, 0)).toBe(7); // Stats rings strip became the headline; To-do's subject strip became a DropChip
   });
 
   it('each strip passes the paper colour behind it, so the fade blends instead of banding', () => {
@@ -71,7 +72,6 @@ describe('horizontal strips announce that they scroll (BUG-026)', () => {
     // paints a visible rectangle over the row.
     for (const f of ['screens/Grades.tsx', 'sheets/forms.tsx', 'sheets/WhenPicker.tsx']) expect(read(f)).toContain('bg={c.card}');
     for (const f of ['screens/Stats.tsx']) expect(read(f)).toContain('bg={c.card}'); // rings + course chips are inside a Card
-    expect(read('screens/Tasks.tsx')).toContain('<HStrip gap={8}>'); // on the page: the c.paper default
     expect(read('screens/Today.tsx')).toContain('<HStrip gap={12}'); // ditto
   });
 

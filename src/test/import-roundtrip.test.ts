@@ -70,3 +70,30 @@ describe('export → import round trip (margin/2)', () => {
     expect(p.warnings.filter((w) => w.startsWith('settings.'))).toHaveLength(2);
   });
 });
+
+/* v0.7 item 8 (the move to the release key): a whole term of data the size of the owner's — every dataset's
+   count comes back equal, so "Bring my data back" after the reinstall can promise "everything". */
+describe('export → import of a full term keeps every count (v0.7 item 8)', () => {
+  const s = fullPlanner();
+  const c0 = s.courses[0]!;
+  for (let d = 0; d < 90; d++) {
+    const ymd = new Date(2026, 8, 7 + d).toISOString().slice(0, 10);
+    for (const t of ['09:00', '11:00', '14:00']) {
+      const key = `${ymd}|${t}|${c0.id}`;
+      s.attendance[key] = (d % 7 === 0 ? { key, status: 'a', why: 'sick', at: NOW - d * 1000, reason: 'flu' } : { key, status: 'p', at: NOW - d * 1000, reason: '' }) as never;
+    }
+  }
+  for (let i = 0; i < 60; i++) s.tasks.push({ ...s.tasks[0]!, id: `t-big-${i}`, title: `Task ${i}`, done: i % 3 === 0 } as never);
+  for (let i = 0; i < 40; i++) s.marks.push({ id: `k-big-${i}`, courseId: c0.id, name: `Quiz ${i}`, score: i % 10, weight: 1, on: true, sort: i, demo: false } as never);
+  for (let i = 0; i < 120; i++) s.focus.push({ ...(s.focus[0] ?? { id: 'f', startedAt: NOW, endedAt: NOW, minutes: 25 }), id: `f-big-${i}` } as never);
+  const plan = parseImport(toJson(s, NOW, [LIVE, TERM]), { now: NOW });
+  it('reads with no problems', () => expect(plan.problems).toEqual([]));
+  it.each(['courses', 'meetings', 'tasks', 'notices', 'marks', 'focus', 'trips', 'alarms', 'variants'] as const)('%s: same count', (k) => {
+    expect((plan.snapshot[k] as unknown[] | undefined)?.length ?? 0).toBe((s[k] as unknown[]).length);
+  });
+  it('attendance and day marks: same count, whys and reasons kept', () => {
+    expect(Object.keys(plan.snapshot.attendance ?? {})).toHaveLength(Object.keys(s.attendance).length);
+    expect(plan.snapshot.attendance).toEqual(s.attendance);
+    expect(Object.keys(plan.snapshot.dayMarks ?? {})).toHaveLength(Object.keys(s.dayMarks).length);
+  });
+});

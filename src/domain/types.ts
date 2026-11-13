@@ -118,7 +118,7 @@ export interface Settings {
   teacherAbsent?: Record<string, number>;
   /** The Obsidian vault folder this phone was given (a Storage Access Framework URI). Absent/null = not linked. */
   vaultUri?: string | null;
-  taskFilter: 'all' | 'open' | 'done'; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
+  taskFilter: 'open' | 'done'; /** the To-do page's subject filter: a course id, 'personal' (no subject) or '' for all (BUGS #7) */ taskSubject: string; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
   breakMin: number; breaksPerRound: number; focusFlow: boolean; focusPresetMin: number;
   /** How many builds of the onboarding tour this phone has finished. `0` or absent = not seen. See `toured()`
    *  in `domain/defaults.ts`. Optional on purpose: a settings row written before the tour existed has no such
