@@ -4,5 +4,5 @@
   <!-- D10: the runtime version an update is matched against. `runtimeVersion.policy: appVersion` in
        app.json means this must equal the app's `version` — a mismatch is an update the phone will
        refuse, and it fails silently. `src/test/native-config.test.ts` holds the two together. -->
-  <string name="expo_runtime_version" translatable="false">0.6.0</string>
+  <string name="expo_runtime_version" translatable="false">0.7.0</string>
 </resources>

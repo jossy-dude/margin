@@ -12,6 +12,13 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <!-- v0.7 sync with the desktop (SYNC_ANDROID.md §2): the service type for a paired device on the LAN or the
+       hotspot, and the network-state permissions it needs. All normal permissions: no prompt, no location. -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+  <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
   <application>
     <!-- Records that the person swiped the live countdown away, so it is not posted again for that class. -->
     <receiver android:name="app.marginalia.nativebits.LiveDismissReceiver" android:exported="false"/>
@@ -39,5 +46,9 @@
     <activity android:name="app.marginalia.nativebits.AlarmActivity" android:exported="false"
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:launchMode="singleInstance" android:excludeFromRecents="true"
       android:showWhenLocked="true" android:turnScreenOn="true" android:screenOrientation="portrait" android:taskAffinity=""/>
+
+    <!-- Sync: the always-on (but dormant) connection, and the 2-hourly catch-up job. -->
+    <service android:name="app.marginalia.nativebits.SyncService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
+    <service android:name="app.marginalia.nativebits.SyncJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE"/>
   </application>
 </manifest>

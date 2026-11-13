@@ -4,12 +4,19 @@ plugins {
 }
 
 group = 'app.marginalia'
-version = '0.5.0'
+version = '0.7.0'
 
 android {
   namespace "app.marginalia.nativebits"
   defaultConfig {
     versionCode 1
-    versionName "0.5.0"
+    versionName "0.7.0"
   }
+}
+
+dependencies {
+  // v0.7 sync (SYNC_ANDROID.md §5): OkHttp is already in the APK through React Native (same version, 0 KB
+  // added); Java-WebSocket is the small server for phone Obsidian on 127.0.0.1:7429 and the hotspot.
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+  implementation 'org.java-websocket:Java-WebSocket:1.6.0'
 }

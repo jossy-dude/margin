@@ -24,6 +24,37 @@ class MarginNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("MarginNative")
+    Events("onSyncStatus", "onBridgeRows", "onSyncTimer")
+
+    OnCreate {
+      SyncEngine.init(context)
+      SyncEngine.onStatus = { sendEvent("onSyncStatus", mapOf("json" to it.toString())) }
+      SyncEngine.onBridgeRows = { sendEvent("onBridgeRows", mapOf("json" to it)) }
+      SyncEngine.onTimer = { sendEvent("onSyncTimer", mapOf("json" to it)) }
+    }
+    OnDestroy { SyncEngine.onStatus = null; SyncEngine.onBridgeRows = null; SyncEngine.onTimer = null }
+
+    /* ── sync with the desktop (v0.7, SYNC_ANDROID.md) ──────────────────────────────────────────── */
+    /** Pairing text from the hub's QR (or "8 words|vaultId|hubId|addr"). Returns "" on success, else a sentence. */
+    Function("syncPair") { text: String -> SyncEngine.init(context); val err = SyncEngine.pair(text); if (err == null) SyncService.ensure(context); err ?: "" }
+    Function("syncForget") { SyncEngine.forget(); SyncService.stop(context); true }
+    /** The vault folder (SAF tree URI) and its Obsidian name, from settings. */
+    Function("syncConfigure") { vaultUri: String, vaultName: String -> SyncEngine.init(context); SyncEngine.configure(vaultUri.ifEmpty { null }, vaultName.ifEmpty { null }); true }
+    Function("syncStart") { SyncService.ensure(context); SyncEngine.paired }
+    Function("syncStatus") { SyncEngine.init(context); SyncEngine.statusJson().toString() }
+    /** Margin's own bridge rows (tasks, events, sessions) as JSON; JS debounces (750 ms). */
+    Function("syncPushBridge") { json: String -> SyncEngine.pushBridge(json); true }
+    Function("syncTimer") { json: String -> SyncEngine.timer(json); true }
+    /** Rows that arrived while JS was not running: [{kind, json}], removed once read. */
+    Function("syncInbox") {
+      SyncEngine.init(context)
+      val arr = org.json.JSONArray()
+      for ((k, j) in SyncStore.get(context).takeInbox()) arr.put(org.json.JSONObject().put("kind", k).put("json", j))
+      arr.toString()
+    }
+    /** A fresh 6-digit code for phone Obsidian (margin-bridge asks for it once). */
+    Function("syncObsidianCode") { SyncEngine.init(context); SyncEngine.obsidianCode() }
+    Function("syncNetworks") { SyncNet.describe() }
 
     Function("sdkInt") { Build.VERSION.SDK_INT }
 

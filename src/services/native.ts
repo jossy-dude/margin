@@ -28,6 +28,16 @@ interface MarginNative {
   openAlarmSettings(kind: string): boolean;
   hasWidgets(): boolean;
   pinWidget(kind: string): boolean;
+  syncPair(text: string): string;
+  syncForget(): boolean;
+  syncConfigure(vaultUri: string, vaultName: string): boolean;
+  syncStart(): boolean;
+  syncStatus(): string;
+  syncPushBridge(json: string): boolean;
+  syncTimer(json: string): boolean;
+  syncInbox(): string;
+  syncObsidianCode(): string;
+  syncNetworks(): string;
 }
 
 let resolved: MarginNative | null | undefined;
@@ -76,6 +86,28 @@ export const hasWidgets = () => safe((m) => m.hasWidgets(), false);
 export type WidgetKind = 'board';
 /** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
 export const pinWidget = (kind: WidgetKind) => safe((m) => m.pinWidget(kind), false);
+
+/* ── sync with the desktop (v0.7, SYNC_ANDROID.md) ──────────────────────────────────────────────── */
+/** What the sync service reports (Diagnostics → Sync, Settings → Sync). */
+export interface SyncStatus {
+  paired: boolean; state: 'off' | 'dormant' | 'ready' | 'live'; live: boolean; mode: string | null; obsidian: boolean; hotspot: boolean;
+  deviceId: string; lastOk: number; cursor: number; outbox: number; presence: { deviceId: string; role: string; name?: string }[];
+  lastError: string | null; vault: boolean; fast: boolean;
+  stats: { day: string; liveMs: number; connects: number; catchups: number; rx: number; tx: number; err: number; lastErr: string | null }[];
+}
+const parse = <T,>(s: string | null): T | null => { if (!s) return null; try { return JSON.parse(s) as T; } catch { return null; } };
+/** Pair with the desktop from the hub's QR text. `null` on success, else a sentence; "" when there is no native half. */
+export const syncPair = (text: string): string | null => { const r = safe<string | null>((m) => m.syncPair(text), 'This build cannot sync.'); return r === '' ? null : r; };
+export const syncForget = () => safe((m) => m.syncForget(), false);
+export const syncConfigure = (vaultUri: string | null, vaultName: string | null) => safe((m) => m.syncConfigure(vaultUri ?? '', vaultName ?? ''), false);
+export const syncStart = () => safe((m) => m.syncStart(), false);
+export const syncStatus = (): SyncStatus | null => parse<SyncStatus>(safe<string | null>((m) => m.syncStatus(), null));
+export const syncPushBridge = (rows: unknown) => safe((m) => m.syncPushBridge(JSON.stringify(rows)), false);
+export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify(op)), false);
+/** Rows the service received while JS was not running; each is returned once. */
+export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
+export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
+export const syncNetworks = () => safe<string | null>((m) => m.syncNetworks(), null);
 
 /** Tests only: forget the resolved module so a mock installed later is picked up. */
 export const resetNative = () => { resolved = undefined; };

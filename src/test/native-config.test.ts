@@ -23,7 +23,7 @@ const ROOT = join(__dirname, '..', '..');
 const ANDROID = join(ROOT, 'android');
 
 /** The last `versionCode` that actually reached a phone. Bump when a build ships. */
-const SHIPPED_VERSION_CODE = 2;
+const SHIPPED_VERSION_CODE = 5;
 
 const appJson = JSON.parse(readFileSync(join(ROOT, 'app.json'), 'utf8')) as {
   expo: {
@@ -240,11 +240,13 @@ describeIfNative('v0.5 release engineering (R1)', () => {
     return { 'tools:node': /tools:node="([^"]+)"/.exec(tag)?.[1] };
   };
 
-  /* Rationale (v0.6): the release bump — app.json, the shipped gradle file and the runtime string move together. */
-  it('ships as 0.6.0, version code 5', () => {
-    expect(appJson.expo.version).toBe('0.6.0');
-    expect(gradle).toMatch(/versionCode 5\b/);
-    expect(gradle).toContain('versionName "0.6.0"');
+  /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
+     file and the runtime string move together (RELEASING.md §4). */
+  it('ships as 0.7.0, version code 6', () => {
+    expect(appJson.expo.version).toBe('0.7.0');
+    expect(gradle).toMatch(/versionCode 6\b/);
+    expect(gradle).toContain('versionName "0.7.0"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.0</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {

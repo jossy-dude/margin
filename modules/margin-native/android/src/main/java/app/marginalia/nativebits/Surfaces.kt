@@ -65,6 +65,9 @@ object Ticker {
 class TickReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     Surfaces.refresh(context)
+    /* The sync service starts at boot (it may not start later from a network change) and piggybacks a short
+       catch-up on each class boundary that already wakes the phone (SYNC_ANDROID.md §4). */
+    try { SyncService.ensure(context, catchup = intent.action != Intent.ACTION_BOOT_COMPLETED) } catch (e: Exception) { }
     /* A reboot, a clock or timezone change, or an update of the app drops every alarm that was set. */
     val act = intent.action ?: return
     if (act == Intent.ACTION_BOOT_COMPLETED || act == Intent.ACTION_TIME_CHANGED || act == Intent.ACTION_TIMEZONE_CHANGED || act == Intent.ACTION_MY_PACKAGE_REPLACED) {
