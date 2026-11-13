@@ -18,8 +18,8 @@ import { palettes } from '../tokens/theme';
 
 const SRC = join(__dirname, '..');
 
-/** The only file allowed to contain colour literals. */
-const TOKEN_FILE = 'tokens/theme.ts';
+/** The only files allowed to contain colour literals: the palette, and v0.7's Daylight tokens (`tokens/v2.ts`). */
+const TOKEN_FILES = ['tokens/theme.ts', 'tokens/v2.ts'];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -44,7 +44,7 @@ describe('no colour literals outside the token file', () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
-  it.each(files.filter((f) => !f.endsWith(TOKEN_FILE)))('%s has no hardcoded hex colour', (file) => {
+  it.each(files.filter((f) => !TOKEN_FILES.some((t) => f.endsWith(t))))('%s has no hardcoded hex colour', (file) => {
     const rel = file.slice(SRC.length + 1);
     const src = readFileSync(file, 'utf8');
     const offenders = src
