@@ -71,6 +71,8 @@ export const TYPE = {
 export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 16, s5: 24, s6: 32, gutter: 16, card: 16, dense: 12 } as const;
 export const RADIUS = { chip: 6, control: 10, card: 16, sheet: 22, island: 28 } as const;
 export const TOUCH = 48;
+/** The one shadow colour (nav island, sheets, a lifted card); glass itself never has a shadow. */
+export const SHADOW = '#000000';
 
 /* ── D-5 motion (Reanimated 4); reduced motion makes every one instant ── */
 export const MOTION = {
