@@ -1,8 +1,9 @@
 import type { Repository } from '../data/repository';
+import type { Snapshot } from '../domain/types';
 import { MemoryRepository } from '../data/memory';
 import { seedSnapshot } from '../data/seed';
 import { TOUR_VERSION, toured } from '../domain/defaults';
-import { hasRealRows } from '../domain/rows';
+import { hasRealRows, sampleLeftovers, withoutSampleLeftovers } from '../domain/rows';
 import { parseImport, type ImportPlan } from '../domain/importPlan';
 import { packById } from '../domain/packs';
 import { recordCrash } from '../services/problems';
@@ -19,7 +20,11 @@ import { toast } from './toast';
 export async function hydrate(r: Repository) {
   db.repo = r;
   try {
-    const snap = await r.load();
+    let snap = await r.load();
+    /* BUG #12: a sample row left behind by an older hand-over (its subject gone, so it showed under
+       "Personal") is removed here, on the real database only; the owner's rows are never leftovers. */
+    const leftovers = db.demo ? [] : sampleLeftovers(snap, seedSnapshot(0));
+    if (leftovers.length) { await r.removeMany(leftovers); snap = await r.load(); }
     applySnapshot(snap); configureFx(getState().settings);
     const rows = await reconcileSemesters();
     set({ ready: true, now: Date.now(), semesters: rows ?? [] }); resync(1500);
@@ -136,14 +141,21 @@ export async function adoptDemo(keepSamples: boolean) {
   const r = db.real;
   const { seededAt: _drop, ...settings } = snap.settings; // a sample-made timestamp never migrates
   void _drop;
-  let failed: unknown = null;
+  let failed: unknown = null, adopted: Snapshot | null = null;
   try {
     /* ONE transaction (`importSnapshot`): the hand-over lands whole or not at all. Writing it row by row
        left a half-adopted database after any failure part-way, with no way to tell which half. */
-    await r.importSnapshot({
+    /* BUG #12: a sample row the user touched in the tour (a task finished through its form) lost its
+       `demo` flag, but its subject is still a sample one and does not migrate: it is dropped with the
+       term (`withoutSampleLeftovers`), never re-homed under "Personal" — with the attendance, grade
+       adjustments and alarms that hang on the sample term. */
+    adopted = withoutSampleLeftovers({ ...snap,
       courses: snap.courses.filter((x) => !x.demo), meetings: snap.meetings.filter((x) => !x.demo), tasks: snap.tasks.filter((x) => !x.demo),
       notices: snap.notices.filter((x) => !x.demo), marks: snap.marks.filter((x) => !x.demo), focus: snap.focus.filter((x) => !x.demo),
-      attendance: snap.attendance, dayMarks: snap.dayMarks, adjusts: snap.adjusts, trips: snap.trips, alarms: snap.alarms, settings,
+    }, seedSnapshot(0));
+    await r.importSnapshot({
+      courses: adopted.courses, meetings: adopted.meetings, tasks: adopted.tasks, notices: adopted.notices, marks: adopted.marks, focus: adopted.focus,
+      attendance: adopted.attendance, dayMarks: snap.dayMarks, adjusts: adopted.adjusts, trips: snap.trips, alarms: adopted.alarms, settings,
       variants: (snap.variants ?? []).filter((v) => snap.courses.some((c) => c.id === v.subjectId && !c.demo)),
     });
   } catch (e) { failed = e; recordCrash(e, 'save', 'Tour'); }
@@ -161,7 +173,14 @@ export async function adoptDemo(keepSamples: boolean) {
      is already empty and `setActiveRange`'s own no-active-row path re-reads and heals. */
   set({ semesters: [] });
   await loadSemesters();
-  set((s: State) => (keepSamples ? s : { courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo), notices: s.notices.filter((n) => !n.demo), marks: s.marks.filter((m) => !m.demo), tasks: s.tasks.filter((t) => !t.demo), focus: s.focus.filter((f) => !f.demo) }));
+  const a = adopted as Snapshot | null, kept = (list: { id: string }[] | undefined) => new Set((list ?? []).map((x) => x.id));
+  const tk = kept(a?.tasks), nk = kept(a?.notices), mk = kept(a?.marks), ek = kept(a?.meetings), fk = kept(a?.focus);
+  /* Off screen goes what did not migrate: the demo rows, and (when the hand-over landed) the sample leftovers with them. */
+  set((s: State) => (keepSamples ? s : {
+    courses: s.courses.filter((c) => !c.demo), meetings: s.meetings.filter((m) => !m.demo && (!a || ek.has(m.id))), notices: s.notices.filter((n) => !n.demo && (!a || nk.has(n.id))),
+    marks: s.marks.filter((m) => !m.demo && (!a || mk.has(m.id))), tasks: s.tasks.filter((t) => !t.demo && (!a || tk.has(t.id))), focus: s.focus.filter((f) => !f.demo && (!a || fk.has(f.id))),
+    ...(a ? { attendance: a.attendance, adjusts: a.adjusts, alarms: a.alarms } : {}),
+  }));
   if (failed) toast(`Couldn't save what you made in the tour: ${String((failed as Error)?.message ?? failed).slice(0, 50)}`);
   else toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
   resync(0);
