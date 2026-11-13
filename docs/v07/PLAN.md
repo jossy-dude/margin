@@ -225,6 +225,22 @@ Mascot replacement, every place Jot appears today:
 
 ---
 
+## Decisions (made while building, from 2026-11-13)
+
+All eleven questions below were answered with the recommendation (owner's standing approval). Judgement calls:
+
+| # | Decision | Why |
+|---|---|---|
+| B1 | Phase 1 does **not** ship as an OTA to 0.6. The fixes go into 0.7.0 (the branch's runtime is now 0.7.0, N1) | the owner said to skip OTA publishing tonight; the reconnect fix (#11) was committed first and alone, so it can be cherry-picked onto a 0.6.1 OTA later |
+| B2 | BUGS #3 (Plain doubling and gap) is **not** patched in the 0.6 Today screen | Question 2's answer (one look) removes Plain, and R1 rewrites Today with the current class shown once; patching a look that is about to be deleted is wasted work |
+| B3 | Networks are keyed by a `LinkProperties` fingerprint (SYNC_ANDROID §3), and the manifest has no location permission; a test pins that | owner's rule: SYNC_ANDROID wins on Android |
+| B4 | Phase 0 spikes are folded into the 0.7 dev build instead of a separate throwaway APK: `syncNetworks()` (P0.3), the fast/SAF vault writer (P0.4) and the sync counters are in the real code and are read from Diagnostics | one APK for the owner to install instead of two; nothing in them touches the real app's data (the `dev` variant installs beside it) |
+| B5 | Margin does not merge text itself yet (S8 deferred): when a file changed on the phone while the hub also changed it, Margin sends its version with the old base and the **hub** merges (`sync-core` merge3, the same rules) | with GitSync retired nothing but phone Obsidian edits the phone vault, and O sends through the hub anyway; a Kotlin port of the merge only matters for offline edits made with Obsidian closed, which cannot happen |
+| B6 | The sync notification is its own silent `IMPORTANCE_MIN` channel "Sync with your desktop" for now, not merged with the class pin | merging into `Surfaces.kt`'s pin is a UI change that wants the owner's eyes on the phone; the silent channel costs one collapsed line |
+| B7 | Phone Obsidian's key is `HKDF(6-digit code, salt "bone-sync/1 local", info "bone-sync/1 obsidian")`; the code is valid 10 minutes; 5 wrong proofs ban loopback logins for 10 minutes | the loopback port is reachable only from apps on the phone; 20 bits behind a ban is enough there, and no key ever travels |
+| B8 | margin-bridge 0.7 is built (`node build.mjs`) but **not yet copied into the vault**: the vault copy stays 0.6 until the dev APK has passed a phone check | the installed bridge is the owner's working setup; 0.7 drops the 30 s polling, so it should go in together with the Margin build that replaces it |
+| B9 | `vault-sync` got its own local git repo (no remote) for sync-core and the daemon | history for the desktop side; nothing is published |
+
 ## Questions for Jossy
 
 Numbered; each has my recommendation. Everything else I have decided (implementation, diagnostics, minor UX).
