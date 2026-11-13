@@ -184,7 +184,8 @@ class AlarmService : Service() {
       wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "margin:alarm").apply { acquire(RING_MS + 10_000L) }
     } catch (e: Exception) { }
     try {
-      val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+      // N6: the tone chosen on the Alarms page (the phone's default alarm until one is chosen)
+      val uri = AlarmTones.uri(this)
       val p = MediaPlayer()
       p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
       p.setDataSource(this, uri)

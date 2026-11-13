@@ -38,6 +38,11 @@ interface MarginNative {
   syncInbox(): string;
   syncObsidianCode(): string;
   syncNetworks(): string;
+  alarmTones(): string;
+  alarmTone(): string;
+  chooseAlarmTone(id: string): boolean;
+  previewTone(id: string): boolean;
+  stopPreview(): boolean;
 }
 
 let resolved: MarginNative | null | undefined;
@@ -108,6 +113,16 @@ export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
 export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
 export const syncNetworks = () => safe<string | null>((m) => m.syncNetworks(), null);
+
+/* ── alarm tones (v0.7 N6/R10) ───────────────────────────────────────────────────────────────────── */
+export interface AlarmTone { id: string; title: string }
+/** The phone's alarm tones ("default" first). Empty off Android. */
+export const alarmTones = (): AlarmTone[] => parse<AlarmTone[]>(safe<string | null>((m) => m.alarmTones(), null)) ?? [];
+export const alarmTone = () => safe<string>((m) => m.alarmTone(), 'default');
+export const chooseAlarmTone = (id: string) => safe((m) => m.chooseAlarmTone(id), false);
+/** Plays a tone inside the app for at most 10 s, ramping like the real alarm. Always stoppable with stopPreview. */
+export const previewTone = (id: string) => safe((m) => m.previewTone(id), false);
+export const stopPreview = () => safe((m) => m.stopPreview(), false);
 
 /** Tests only: forget the resolved module so a mock installed later is picked up. */
 export const resetNative = () => { resolved = undefined; };

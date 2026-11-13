@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, TimeField } from '../ui/fields';
@@ -102,8 +102,39 @@ export function AlarmsPage() {
         <Btn flex icon="plus" label="New alarm" onPress={() => { setDraft(newAlarm(uid('al'), now)); fx.tap(); }} />
         <Btn kind="ghost" label="Before class" onPress={() => { setDraft({ ...newAlarm(uid('al'), now), kind: 'class', lead: 60, label: '' }); fx.tap(); }} />
       </Row>
+      {has && <AlarmSound />}
       {has && <Btn kind="ghost" icon="bell" label="Ring a test alarm" onPress={() => { if (!native.ringNow('Test alarm')) toast('The alarm could not start. Check that notifications are allowed for Margin.'); }} />}
-      <Txt f="serif" s={14.5} c="mut">Rings at full volume, even on silent. Stops after five minutes.</Txt>
+      <Txt f="serif" s={14.5} c="mut">Starts soft and rises to full volume over 45 seconds, even on silent. Either volume key, a double tap on the alarm screen or Silence in the notification stops the sound; it stops by itself after five minutes.</Txt>
+    </View>
+  );
+}
+
+/** N6/R10 — which tone the alarm plays. Tapping a tone plays it here for up to 10 s; a large Stop button shows
+ *  while it plays, and leaving the page stops it (the owner could not find a way to stop the sound). */
+function AlarmSound() {
+  const { c } = useTheme();
+  const tones = useMemo(() => native.alarmTones(), []);
+  const [chosen, setChosen] = useState(() => native.alarmTone());
+  const [playing, setPlaying] = useState<string | null>(null);
+  useEffect(() => () => { native.stopPreview(); }, []);
+  useEffect(() => { if (!playing) return; const t = setTimeout(() => setPlaying(null), 10_000); return () => clearTimeout(t); }, [playing]);
+  if (tones.length === 0) return null;
+  const stop = () => { native.stopPreview(); setPlaying(null); };
+  return (
+    <View style={{ gap: 6 }}>
+      <Label>Alarm sound</Label>
+      {playing ? <Btn icon="pause" label="Stop" testID="tone-stop" onPress={stop} /> : null}
+      {tones.slice(0, 12).map((t) => (
+        <Pressable key={t.id} accessibilityRole="radio" accessibilityState={{ checked: chosen === t.id }} accessibilityLabel={`${t.title}. Tap to hear it and choose it`}
+          onPress={() => { native.chooseAlarmTone(t.id); setChosen(t.id); if (native.previewTone(t.id)) setPlaying(t.id); }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 8, borderRadius: 10, backgroundColor: chosen === t.id ? c.hl : 'transparent' }}>
+          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
+            {chosen === t.id ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.ink }} /> : null}
+          </View>
+          <Txt f="serif" s={16} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt>
+          {playing === t.id ? <Txt f="serif" s={13} c="mut">playing</Txt> : null}
+        </Pressable>
+      ))}
     </View>
   );
 }

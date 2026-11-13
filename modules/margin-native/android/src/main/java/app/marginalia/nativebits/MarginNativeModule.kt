@@ -89,6 +89,12 @@ class MarginNativeModule : Module() {
         true
       } catch (e: Exception) { false }
     }
+    /* ── alarm tones (N6/R10): list, choose, a 10 s preview that can always be stopped ── */
+    Function("alarmTones") { AlarmTones.list(context) }
+    Function("alarmTone") { AlarmTones.chosen(context) }
+    Function("chooseAlarmTone") { id: String -> AlarmTones.choose(context, id); true }
+    Function("previewTone") { id: String -> AlarmTones.play(context, id) }
+    Function("stopPreview") { AlarmTones.stop(); true }
     /** Opens the system page where full-screen alarms (kind "fullscreen") or exact alarms ("exact") are allowed. */
     Function("openAlarmSettings") { kind: String ->
       val action = when {
