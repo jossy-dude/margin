@@ -25,7 +25,8 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
   carries the address).
 - Margin redesign: components exist, screens not rebuilt on them yet (Phase 5); sound set (A1–A4) and the three
   widgets (G1–G4) not started. Bone F3, V2, V4–V12 not started.
-- A full phone test (Opus agent, phone muted, DND on) ran this morning; its report goes to `docs/v07/TEST-REPORT.md`.
+- A full phone test (Opus agent, phone muted, DND on) ran this morning; its report is `~/Documents/Projects/test-reports/2026-11-13/TEST-REPORT.md` (kept off GitHub: screenshots show vault content).
+  Fixed since: #1 an alarm is always stoppable, #3/#4 chess promotion and drags, #10/#11 To-do Done labels and counts.
 
 **Needs you**
 1. Wireless adb was off (it resets on reboot): re-enable it so I can test on the phone.
