@@ -24,7 +24,11 @@ export interface Course { id: string; name: string; rooms: string[]; teacher: st
  *  `ord` is the display order inside the subject, like `Course.sort` is for subjects. The three
  *  housekeeping columns every entity shares (`updated_at`, `deleted_at`, `rev`) live in SQL only, so
  *  a variant written by the import path gets the same `rev`/outbox discipline as any other row. */
-export interface SubjectVariant { id: string; subjectId: string; name: string; room: string; teacher: string; note: string; ord: number }
+export interface SubjectVariant { id: string; subjectId: string; name: string; room: string; teacher: string; note: string; ord: number;
+  /** v0.7 components (DATA_MODEL.md): absent on v0.6 rows. `weight` is the share of the course grade in %
+   *  (absent/null on every component = pooled, as before); `isBase` owns the rows with no variant id. */
+  kind?: ComponentKind | null; weight?: number | null; isBase?: boolean | null; scale?: number | null; attGoal?: number | null }
+export type ComponentKind = 'lecture' | 'lab' | 'tutorial' | 'seminar' | 'practical' | 'other';
 /** `variantId` is nullable on purpose: every meeting written before v0.5 has none, and that is the
  *  meaning ("the subject's own room/teacher"). Optional in the type so existing fixtures that name a
  *  meeting without it keep compiling; the adapter binds it, so a reload reports the column's null. */
@@ -46,6 +50,8 @@ export interface Task {
   reminders: ReminderSpec[]; subtasks: Subtask[]; demo: boolean;
   /** v0.6 bridge (docs/BRIDGE.md): who made it ('obsidian'; absent/null = Margin), the other side's id, and the note it lives in. */
   origin?: Origin | null; extId?: string | null; extPath?: string | null;
+  /** v0.7 To-do "My order" (R3): a sortable position; absent = never hand-ordered. */
+  ord?: number | null;
 }
 export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean; origin?: Origin | null; extId?: string | null }
 /** `variantId` (migration 5): a mark earned in one of the subject's variants (the lab, say). It still

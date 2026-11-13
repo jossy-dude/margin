@@ -6,7 +6,7 @@ type Kind = 'text' | 'int' | 'real' | 'bool' | 'json';
 export interface Field { p: string; c: string; k: Kind; nullable?: boolean; opt?: boolean }
 export interface Spec { table: string; pk: string; pkProp: string; fields: Field[] }
 const f = (p: string, k: Kind, nullable = false, c?: string): Field => ({ p, k, nullable, c: c ?? p.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()) });
-const o = (p: string): Field => ({ ...f(p, 'text', true), opt: true });
+const o = (p: string, k: Kind = 'text', c?: string): Field => ({ ...f(p, k, true, c), opt: true });
 
 export const SPECS: Record<EntityName, Spec> = {
   /* Migration 5: `rooms` (a JSON list) replaces the bound `room` string, which stays in the table
@@ -15,7 +15,7 @@ export const SPECS: Record<EntityName, Spec> = {
   meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id'), f('room', 'text', true)] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
-  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath')] },
+  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath'), o('ord', 'real')] },
   /* No `read` field: the flag was written and never read anywhere, so the object, the export column
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
@@ -35,7 +35,12 @@ export const SPECS: Record<EntityName, Spec> = {
   /* v0.5/WS8: a subject taught in more than one room, or by more than one teacher. Bound here (not
      read by the UI yet) so the import path writes a variant with the standard `put` — a `rev` and an
      outbox row in the same transaction — instead of a hand-rolled INSERT that would skip both. */
-  variant: { table: 'subject_variants', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('subjectId', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('note', 'text'), f('ord', 'int')] },
+  /* v0.7 (migration 7, DATA_MODEL.md): a variant is a COMPONENT of the course — its kind, its share of the
+     grade (`weight`, NULL = pooled as in v0.6), whether it is the base (owner of the variant-less rows), what
+     its marks are out of, and its own attendance goal. All optional on the object, so v0.6 rows and files
+     read exactly as before. */
+  variant: { table: 'subject_variants', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('subjectId', 'text'), f('name', 'text'), f('room', 'text'), f('teacher', 'text'), f('note', 'text'), f('ord', 'int'),
+    o('kind'), o('weight', 'real'), o('isBase', 'bool'), o('scale', 'real'), o('attGoal', 'real')] },
 };
 export const toSql = (fl: Field, v: unknown): string | number | null => {
   if (v === undefined || v === null) return null;
@@ -131,6 +136,21 @@ export const MIGRATIONS: string[] = [
    CREATE INDEX IF NOT EXISTS idx_task_upd ON task(updated_at);
    CREATE INDEX IF NOT EXISTS idx_notice_upd ON notice(updated_at);
    CREATE INDEX IF NOT EXISTS idx_focus_upd ON focus_session(updated_at);`,
+  /* Migration 7 (v0.7, DATA_MODEL.md Part 1 and PLAN N3). Variants become course components: kind, share of the
+     grade (`weight`, NULL everywhere = v0.6's pooled grade, so nothing changes on upgrade), the base flag, the
+     scale marks are out of, and an attendance goal. `task.ord` is To-do's "My order" (R3). `meeting_override`
+     holds one-off moves from Week's drag ("this week only", R2) so no attendance key is ever rewritten (F19).
+     The base rows are made by `BACKFILL[6]` in the same transaction. */
+  `ALTER TABLE subject_variants ADD COLUMN kind TEXT;
+   ALTER TABLE subject_variants ADD COLUMN weight REAL;
+   ALTER TABLE subject_variants ADD COLUMN is_base INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE subject_variants ADD COLUMN scale REAL NOT NULL DEFAULT 100;
+   ALTER TABLE subject_variants ADD COLUMN att_goal REAL;
+   ALTER TABLE task ADD COLUMN ord REAL;
+   CREATE TABLE IF NOT EXISTS meeting_override(id TEXT PRIMARY KEY, meeting_id TEXT NOT NULL, date TEXT NOT NULL, new_date TEXT, new_start TEXT, new_end TEXT, room TEXT, cancelled INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, deleted_at INTEGER, rev INTEGER DEFAULT 0);
+   CREATE INDEX IF NOT EXISTS idx_override_meeting ON meeting_override(meeting_id, date);
+   CREATE INDEX IF NOT EXISTS idx_meeting_variant ON meeting(variant_id);
+   CREATE INDEX IF NOT EXISTS idx_mark_variant ON mark(variant_id);`,
 ];
 
 /** Old letter → v0.6 state + why (the same table `domain/attendance.ts` `legacyStatus` reads). */
@@ -155,5 +175,21 @@ export const BACKFILL: Partial<Record<number, (db: BackfillDb) => Promise<void>>
       for (const [from, to, why] of LEGACY_LETTERS) await db.runAsync(`UPDATE ${t} SET status=?, why=? WHERE status=?`, [to, why, from]);
       await db.runAsync(`UPDATE ${t} SET why='' WHERE why IS NULL`, []);
     }
+  },
+  /* v0.7: every course that has a live variant gets an explicit base component (`<courseId>~base`, "Lecture",
+     the course's first room and teacher), so the base can carry a share and a teacher without rewriting a
+     single attendance key; then each other component gets a kind from its name. Weights stay NULL. */
+  6: async (db) => {
+    const courses = await db.getAllAsync<{ id: string; rooms: unknown; teacher: unknown }>(
+      'SELECT id, rooms, teacher FROM course WHERE deleted_at IS NULL AND id IN (SELECT subject_id FROM subject_variants WHERE deleted_at IS NULL)');
+    const now = Date.now();
+    for (const c of courses) {
+      let room = '';
+      try { const r = JSON.parse(String(c.rooms ?? '[]')) as unknown; if (Array.isArray(r) && typeof r[0] === 'string') room = r[0]; } catch { /* keep '' */ }
+      await db.runAsync(
+        'INSERT OR IGNORE INTO subject_variants(id, subject_id, name, room, teacher, note, ord, kind, is_base, scale, updated_at, rev) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+        [`${c.id}~base`, c.id, 'Lecture', room, typeof c.teacher === 'string' ? c.teacher : '', '', -1, 'lecture', 1, 100, now, 1]);
+    }
+    await db.runAsync(`UPDATE subject_variants SET kind = CASE WHEN lower(name) LIKE '%lab%' THEN 'lab' WHEN lower(name) LIKE '%tut%' THEN 'tutorial' ELSE 'other' END WHERE kind IS NULL AND is_base = 0`, []);
   },
 };
