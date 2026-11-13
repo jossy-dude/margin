@@ -1,7 +1,8 @@
 /**
  * The Obsidian link's transport (docs/BRIDGE.md): reads the plugin's file into Margin and writes
- * Margin's file into the vault. It runs when the app comes to the front, every 30 s while it is open,
- * and on demand from Settings → Obsidian. Git (GitSync on the phone, Obsidian Git on the desktop)
+ * Margin's file into the vault. It runs when the app comes to the front, 750 ms after Margin's own data
+ * changes, and on demand from Settings → Obsidian. v0.7 (S9): no 30 s polling any more (battery; the phone's
+ * Obsidian writes its file while Margin is in the background, and Margin reads it when it comes to the front). Git (GitSync on the phone, Obsidian Git on the desktop)
  * carries the folder between devices, so the file Margin writes is always its whole state, never a delta,
  * and it is rewritten only when its contents change — otherwise every sync would be a commit.
  */
@@ -11,7 +12,7 @@ import { bridgeIn, bridgeOut } from './bridge';
 import { leafOf, readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
 import { connection } from '../data/sqlite';
-import { syncConfigure, syncStart } from '../services/native';
+import { syncConfigure, syncInbox, syncPushBridge, syncStart } from '../services/native';
 
 export interface VaultStatus { at: number; ok: boolean; note: string }
 let status: VaultStatus = { at: 0, ok: true, note: '' }, busy = false, written: string | null = null;
@@ -38,7 +39,11 @@ export async function vaultSync(): Promise<VaultStatus> {
         try { written = mine ? envelopeBody(JSON.parse(mine) as BridgeEnvelope) : ''; } catch { written = ''; }
       }
       const body = envelopeBody(env);
-      if (body !== written) { await writeVaultFile(uri, 'margin.json', `${JSON.stringify(env, null, 1)}\n`); written = body; }
+      if (body !== written) {
+        await writeVaultFile(uri, 'margin.json', `${JSON.stringify(env, null, 1)}\n`); written = body;
+        /* the same rows to the desktop hub through the sync service (a no-op when not paired) */
+        syncPushBridge({ tasks: env.tasks, events: env.events, sessions: env.sessions });
+      }
     }
     status = { at: Date.now(), ok: true, note };
   } catch (e) {
@@ -50,13 +55,28 @@ export async function vaultSync(): Promise<VaultStatus> {
   return status;
 }
 
+const rowsOf = () => { const s = getState(); return { tasks: s.tasks, meetings: s.meetings, focus: s.focus, courses: s.courses }; };
 /** Starts the link's clock. Returns the function that stops it. */
 export function startVault(): () => void {
   /* No tick while the database connection is being replaced (BUGS.md #11): its writes would only queue
      behind the reconnect and fail with it. */
   const tick = () => { if (AppState.currentState === 'active' && !connection.reopening) void vaultSync(); };
-  const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void vaultSync(); });
-  const timer = setInterval(tick, 30_000);
+  const sub = AppState.addEventListener('change', (s) => {
+    if (s !== 'active') return;
+    /* rows the sync service received while JS was not running; the bridge file carries the same data on this
+       phone, so they are only drained here (the desktop-only rows matter once the desktop sends its own). */
+    syncInbox();
+    void vaultSync();
+  });
+  /* 750 ms after Margin's own rows change (S9), instead of a 30 s interval */
+  let soon: ReturnType<typeof setTimeout> | null = null, rows = rowsOf();
+  const unsubRows = subscribe(() => {
+    const next = rowsOf();
+    if (next.tasks === rows.tasks && next.meetings === rows.meetings && next.focus === rows.focus && next.courses === rows.courses) return;
+    rows = next;
+    if (soon) clearTimeout(soon);
+    soon = setTimeout(() => { soon = null; tick(); }, 750);
+  });
   /* The app mounts before the saved settings load, so the vault folder is unknown at the first tick.
      Sync the moment it becomes known (start-up, or a folder just picked), not 30 s later. */
   let known = getState().settings.vaultUri;
@@ -66,5 +86,5 @@ export function startVault(): () => void {
   tellSync(known);
   const unsub = subscribe(() => { const uri = getState().settings.vaultUri; if (uri !== known) { known = uri; tellSync(uri); if (uri) tick(); } });
   tick();
-  return () => { sub.remove(); clearInterval(timer); unsub(); };
+  return () => { sub.remove(); if (soon) clearTimeout(soon); unsubRows(); unsub(); };
 }
