@@ -1,5 +1,8 @@
 package app.marginalia.nativebits
 
+import android.os.SystemClock
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.KeyguardManager
@@ -160,6 +163,9 @@ class AlarmService : Service() {
       }
       ACTION_SNOOZE -> { val at = AlarmClock.snooze(this, id, label, snoozeMin, vibrate); quiet(); snoozedNote(at); finish() }
       ACTION_DISMISS -> { quiet(); finish() }
+      // N6: the volume keys, a double tap or "Silence" stop the sound and the buzz; the alarm still waits for
+      // Snooze or Dismiss (its screen and notification stay). A test ring has nothing to wait for: it ends.
+      ACTION_SILENCE -> { quiet(); if (id == "preview") finish() }
       else -> { if (player == null) finish() }
     }
     return START_NOT_STICKY
@@ -183,7 +189,7 @@ class AlarmService : Service() {
       p.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
       p.setDataSource(this, uri)
       p.isLooping = true
-      p.setOnPreparedListener { it.start() }
+      p.setOnPreparedListener { it.setVolume(RAMP_FROM, RAMP_FROM); it.start(); ramp(0) }
       p.setOnErrorListener { _, _, _ -> true }
       p.prepareAsync()
       player = p
@@ -208,8 +214,19 @@ class AlarmService : Service() {
     handler.postDelayed(giveUp, RING_MS)
   }
 
+  /** N6: 15 % → 100 % over 45 s, so an alarm starts soft and the owner has time to reach it. */
+  private fun ramp(step: Int) {
+    val steps = RAMP_MS / RAMP_TICK
+    if (step >= steps) return
+    handler.postDelayed({
+      val v = RAMP_FROM + (1f - RAMP_FROM) * (step + 1) / steps
+      try { player?.setVolume(v, v) } catch (e: Exception) { }
+      if (player != null) ramp(step + 1)
+    }, RAMP_TICK)
+  }
+
   private fun quiet() {
-    handler.removeCallbacks(giveUp)
+    handler.removeCallbacksAndMessages(null)
     try { player?.stop() } catch (e: Exception) { }
     try { player?.release() } catch (e: Exception) { }
     player = null
@@ -261,7 +278,7 @@ class AlarmService : Service() {
     channels(this)
     (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTE_SNOOZED)
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    val full = PendingIntent.getActivity(this, 63, Intent(this, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION).putExtra("label", label).putExtra("snooze", snoozeMin), flags)
+    val full = PendingIntent.getActivity(this, 63, Intent(this, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION).putExtra("id", id).putExtra("label", label).putExtra("snooze", snoozeMin), flags)
     val snooze = PendingIntent.getService(this, 64, Intent(this, AlarmService::class.java).setAction(ACTION_SNOOZE), flags)
     val dismiss = PendingIntent.getService(this, 65, Intent(this, AlarmService::class.java).setAction(ACTION_DISMISS), flags)
     val b = builder(this, CHANNEL_RING)
@@ -275,6 +292,7 @@ class AlarmService : Service() {
       .setColor(getColor(R.color.mg_acc))
       .setContentIntent(full)
       .setFullScreenIntent(full, true)
+      .addAction(Notification.Action.Builder(null, "Silence", PendingIntent.getService(this, 66, Intent(this, AlarmService::class.java).setAction(ACTION_SILENCE), flags)).build())
       .addAction(Notification.Action.Builder(null, "Snooze $snoozeMin min", snooze).build())
       .addAction(Notification.Action.Builder(null, "Dismiss", dismiss).build())
     if (Build.VERSION.SDK_INT < 26) {
@@ -290,6 +308,10 @@ class AlarmService : Service() {
     const val ACTION_RING = "app.marginalia.nativebits.ALARM_RING"
     const val ACTION_SNOOZE = "app.marginalia.nativebits.ALARM_SNOOZE"
     const val ACTION_DISMISS = "app.marginalia.nativebits.ALARM_DISMISS"
+    const val ACTION_SILENCE = "app.marginalia.nativebits.ALARM_SILENCE"
+    private const val RAMP_FROM = 0.15f
+    private const val RAMP_MS = 45_000L
+    private const val RAMP_TICK = 3_000L
     const val ACTION_DONE = "app.marginalia.nativebits.ALARM_DONE"
     private const val CHANNEL_RING = "alarm"
     private const val CHANNEL_NOTE = "alarm_note"
@@ -398,6 +420,33 @@ class AlarmActivity : Activity() {
   override fun onDestroy() {
     try { unregisterReceiver(done) } catch (e: Exception) { }
     super.onDestroy()
+  }
+
+  /** N6: either volume key silences the alarm (it still waits for Snooze or Dismiss). */
+  override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE) {
+      silence(); return true
+    }
+    return super.onKeyDown(keyCode, event)
+  }
+  private var lastTap = 0L
+  /** N6: a double tap anywhere on the alarm screen silences it. */
+  override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+    if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+      val now = SystemClock.uptimeMillis()
+      if (now - lastTap < 350) silence()
+      lastTap = now
+    }
+    return super.dispatchTouchEvent(ev)
+  }
+  private fun silence() {
+    try { startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_SILENCE)) } catch (e: Exception) { }
+    if (intent.getStringExtra("id") == "preview") finish()
+  }
+  /** A test ring ends when you leave its screen; a real alarm keeps ringing until it is answered. */
+  override fun onUserLeaveHint() {
+    super.onUserLeaveHint()
+    if (intent.getStringExtra("id") == "preview") answer(AlarmService.ACTION_DISMISS)
   }
 
   /** Back does not silence an alarm by accident; it has to be answered. */

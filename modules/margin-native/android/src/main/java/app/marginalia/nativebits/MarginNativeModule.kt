@@ -82,6 +82,10 @@ class MarginNativeModule : Module() {
       try {
         val i = Intent(context, AlarmService::class.java).setAction(AlarmService.ACTION_RING).putExtra("id", "preview").putExtra("label", label).putExtra("snooze", 5).putExtra("vib", true)
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(i) else context.startService(i)
+        /* N6: a test ring always opens the alarm screen too (the app is in front, so it may), so it can be
+           stopped there by Dismiss, a double tap, a volume key, or by leaving it. */
+        context.startActivity(Intent(context, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          .putExtra("id", "preview").putExtra("label", label).putExtra("snooze", 5))
         true
       } catch (e: Exception) { false }
     }
