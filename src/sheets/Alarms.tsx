@@ -11,6 +11,7 @@ import { DW, fmtDur, fmtTime, fmtWhen, relFire, uid } from '../domain/time';
 import type { AlarmRule } from '../domain/types';
 import { fx } from '../services/fx';
 import * as native from '../services/native';
+import * as notifs from '../services/notifications';
 
 /** "Mon–Fri", "Every day", "Weekends", "Mon, Wed" — the days an alarm rings, the way a person would say them. */
 export function daysLabel(days: readonly boolean[]): string {
@@ -69,7 +70,11 @@ export function AlarmsPage() {
         <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0 }}>Snooze</Txt><NumberField label="Snooze length" value={draft.snooze} min={1} max={30} unit="min" onChange={(v) => patch({ snooze: v ?? 10 })} /></Row>
         <Toggle label="Vibrate" value={draft.vib} onChange={(v) => patch({ vib: v })} />
         <Row style={{ gap: 10 }}>
-          <Btn flex label={isNew ? 'Add alarm' : 'Save'} icon="check" disabled={draft.kind === 'class' && !draft.days.some(Boolean)} onPress={() => { act.saveAlarm({ ...draft, on: true }); fx.done(); setDraft(null); setSure(false); }} />
+          <Btn flex label={isNew ? 'Add alarm' : 'Save'} icon="check" disabled={draft.kind === 'class' && !draft.days.some(Boolean)} onPress={() => {
+            act.saveAlarm({ ...draft, on: true }); fx.done(); setDraft(null); setSure(false);
+            /* test report #1: without notifications a ringing alarm had no screen and could not be stopped */
+            void notifs.ensurePermission(true).then((p) => { if (p !== 'granted' && p !== 'unavailable') toast('Allow notifications so a ringing alarm shows its Stop screen.'); });
+          }} />
           <Btn kind="ghost" label="Cancel" onPress={() => { setDraft(null); setSure(false); }} />
         </Row>
         {!isNew && <Btn kind={sure ? 'danger' : 'ghost'} icon="trash" label={sure ? 'Tap again to delete' : 'Delete this alarm'} onPress={() => { if (!sure) { setSure(true); return; } act.removeAlarm(draft.id); toast('Alarm deleted'); setDraft(null); setSure(false); }} />}
@@ -80,6 +85,7 @@ export function AlarmsPage() {
   const soonest = alarms.map((a) => nextRing(a, input)).filter((x): x is number => x !== null).sort((a, b) => a - b)[0];
   return (
     <View style={{ gap: 12 }}>
+      <Ringing />
       {!has && <Txt f="serif" s={15.5} c="warn">Alarms ring on the Android app only.</Txt>}
       {has && !exact && <Note text="Battery saving may delay alarms by minutes." action="Allow exact alarms" onPress={() => native.openAlarmSettings('exact')} />}
       {has && !full && <Note text="Alarms cannot show on the lock screen yet." action="Allow full screen" onPress={() => native.openAlarmSettings('fullscreen')} />}
@@ -94,7 +100,7 @@ export function AlarmsPage() {
               <Txt f="bold" s={a.kind === 'class' ? 21 : 30} c={a.on ? 'ink' : 'mut'} numberOfLines={1}>{alarmTitle(a, h12)}</Txt>
               <Txt f="serif" s={14.5} c="mut" numberOfLines={2}>{[a.label.trim(), daysLabel(a.days), a.on && at && a.kind === 'class' ? fmtWhen(at, now, h12) : ''].filter(Boolean).join(' · ')}</Txt>
             </Pressable>
-            <View style={{ width: 76 }}><Toggle label="" value={a.on} onChange={(v) => { act.toggleAlarm(a.id, v); if (v && !nextRing({ ...a, on: true, once: undefined }, input)) toast('On, but no class is coming up on its days'); }} /></View>
+            <View style={{ width: 76 }}><Toggle label="" value={a.on} onChange={(v) => { act.toggleAlarm(a.id, v); if (!v && native.alarmRinging() === a.id) native.stopAlarm(); if (v && !nextRing({ ...a, on: true, once: undefined }, input)) toast('On, but no class is coming up on its days'); }} /></View>
           </HandBox>
         );
       })}
@@ -137,6 +143,15 @@ function AlarmSound() {
       ))}
     </View>
   );
+}
+
+/** Test report #1: when an alarm (or a test ring) is ringing, the page says so and has a Stop button,
+ *  whatever the notification permission is. Polled every second while the page is open. */
+function Ringing() {
+  const [id, setId] = useState(() => native.alarmRinging());
+  useEffect(() => { const t = setInterval(() => setId(native.alarmRinging()), 1000); return () => clearInterval(t); }, []);
+  if (!id) return null;
+  return <Btn icon="pause" label={id === 'preview' ? 'Stop the test ring' : 'An alarm is ringing: stop it'} testID="alarm-stop" onPress={() => { native.stopAlarm(); setId(''); }} />;
 }
 
 function Note({ text, action, onPress }: { text: string; action: string; onPress: () => void }) {

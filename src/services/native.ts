@@ -38,6 +38,8 @@ interface MarginNative {
   syncInbox(): string;
   syncObsidianCode(): string;
   syncNetworks(): string;
+  alarmRinging(): string;
+  stopAlarm(): boolean;
   alarmTones(): string;
   alarmTone(): string;
   chooseAlarmTone(id: string): boolean;
@@ -113,6 +115,10 @@ export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
 export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
 export const syncNetworks = () => safe<string | null>((m) => m.syncNetworks(), null);
+
+/** The alarm ringing now ('' = none) and a way to stop it from the app (test report #1). */
+export const alarmRinging = () => safe<string>((m) => m.alarmRinging(), '');
+export const stopAlarm = () => safe((m) => m.stopAlarm(), false);
 
 /* ── alarm tones (v0.7 N6/R10) ───────────────────────────────────────────────────────────────────── */
 export interface AlarmTone { id: string; title: string }

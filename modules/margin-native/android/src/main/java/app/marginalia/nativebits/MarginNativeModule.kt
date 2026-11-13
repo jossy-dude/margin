@@ -90,6 +90,9 @@ class MarginNativeModule : Module() {
       } catch (e: Exception) { false }
     }
     /* ── alarm tones (N6/R10): list, choose, a 10 s preview that can always be stopped ── */
+    /** The id of the alarm ringing right now, or "" (test report #1: the app must be able to stop it). */
+    Function("alarmRinging") { AlarmService.ringingId ?: "" }
+    Function("stopAlarm") { AlarmService.stopRinging(context) }
     Function("alarmTones") { AlarmTones.list(context) }
     Function("alarmTone") { AlarmTones.chosen(context) }
     Function("chooseAlarmTone") { id: String -> AlarmTones.choose(context, id); true }

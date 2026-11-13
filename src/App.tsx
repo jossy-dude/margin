@@ -42,6 +42,7 @@ import { getState, set, useStore, useUpdateAnnouncement, wireLifecycle, act, boo
 import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudioSoon } from './services/audio';
 import { mark, reportBoot } from './services/bootClock';
+import { RingingPill } from './ui/RingingPill';
 
 const Book = createBookNavigator();
 
@@ -243,7 +244,7 @@ const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Itali
  *  and under a non-edge-to-edge window no app view is drawn there at all. */
 function Themed({ children }: { children: React.ReactNode }) {
   const { c, dark } = useTheme();
-  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={c.paper} />{children}</View>;
+  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={c.paper} />{children}<RingingPill /></View>;
 }
 
 export default function App() {

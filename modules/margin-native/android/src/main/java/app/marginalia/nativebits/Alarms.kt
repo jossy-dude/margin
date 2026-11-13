@@ -179,6 +179,16 @@ class AlarmService : Service() {
       fallbackNotify(this, label); stopSelf(); return
     }
     quiet()
+    ringingId = id
+    /* Test report #1: with notifications blocked the alarm rang with no notification and no screen, so nothing
+       could stop it. Open the alarm screen directly then (allowed while the alarm's own service runs; if Android
+       refuses, the app's banner and switching the alarm off still stop it). */
+    if (!(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()) {
+      try {
+        startActivity(Intent(this, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          .putExtra("id", id).putExtra("label", label).putExtra("snooze", snoozeMin))
+      } catch (e: Exception) { }
+    }
     try {
       val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
       wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "margin:alarm").apply { acquire(RING_MS + 10_000L) }
@@ -238,6 +248,7 @@ class AlarmService : Service() {
   }
 
   private fun finish() {
+    ringingId = null
     sendBroadcast(Intent(ACTION_DONE).setPackage(packageName))
     stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
@@ -306,6 +317,14 @@ class AlarmService : Service() {
   override fun onDestroy() { quiet(); super.onDestroy() }
 
   companion object {
+    /** Which alarm is ringing now (null = none): the app shows a Stop banner from it (test report #1). */
+    @Volatile var ringingId: String? = null
+    /** Stop whatever is ringing, from anywhere (the app's banner, switching that alarm off). */
+    fun stopRinging(c: Context): Boolean {
+      if (ringingId == null) return false
+      try { c.startService(Intent(c, AlarmService::class.java).setAction(ACTION_DISMISS)) } catch (e: Exception) { return false }
+      return true
+    }
     const val ACTION_RING = "app.marginalia.nativebits.ALARM_RING"
     const val ACTION_SNOOZE = "app.marginalia.nativebits.ALARM_SNOOZE"
     const val ACTION_DISMISS = "app.marginalia.nativebits.ALARM_DISMISS"
