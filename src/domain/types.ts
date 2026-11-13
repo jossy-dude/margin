@@ -1,3 +1,4 @@
+import type { ReminderRule } from './ruleReminders';
 /** v0.6: three states — Present, Absent, Cancelled — and the reason is a separate `why` code
  *  (`domain/attendance.ts` WHY) plus the free-text `reason` line. Older builds wrote `l`, `n`, `s` and `t`;
  *  migration 6 and `legacyStatus()` turn those into a state and a why, so nothing new ever holds them. */
@@ -134,6 +135,8 @@ export interface Settings {
   onboarded?: number;
   /** The alarms (v0.7). Optional for the same reason: an older row has none, and none is the answer. */
   alarms?: AlarmRule[];
+  /** Reminder rules (v0.7 R9, `domain/ruleReminders.ts`). Optional: an older row has none. */
+  reminders?: ReminderRule[];
   /** Which generation of the default look this settings row has been moved to (2 = the collage). Absent on
    *  a row written before the collage existed; `withDefaults` moves such a row over once. See there. */
   lookV?: number;

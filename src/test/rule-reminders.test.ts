@@ -1,6 +1,8 @@
 /** v0.7 R9 — "1 h before first class" moves with the timetable; sentences read right. */
 import { RULE_TEMPLATES, ruleHits, ruleSentence, type ReminderRule } from '../domain/ruleReminders';
 import type { Meeting, Task } from '../domain/types';
+import { planReminders } from '../domain/reminders';
+import { DEFAULT_NOTIF } from '../domain/defaults';
 
 const MON = new Date(2026, 10, 16); // Monday 16 Nov 2026
 const m = (id: string, weekday: number, start: string, end: string, courseId = 'db', variantId: string | null = null): Meeting => ({ id, courseId, weekday, start, end, demo: false, variantId });
@@ -38,5 +40,16 @@ describe('reminder rules', () => {
     expect(ruleSentence(rule({ kind: 'component', componentId: 'v-lab' }, -20), () => 'Lab')).toBe('20 min before every Lab · Mon–Fri');
     expect(RULE_TEMPLATES).toHaveLength(6);
     expect(RULE_TEMPLATES.every((r) => r.days.length === 7)).toBe(true);
+  });
+});
+
+describe('rules reach the notification planner', () => {
+  it('a rule becomes a planned notification; disabled ones do not', () => {
+    const base = { now: MON.getTime() - 3_600_000, courses: [], meetings, attendance: {}, dayMarks: {}, tasks: [], settings: { ...DEFAULT_NOTIF, quietEnabled: false } };
+    const r = rule({ kind: 'firstClass' }, -60);
+    const on = planReminders({ ...base, rules: [r] }).items.filter((x) => x.kind === 'rule');
+    expect(on.length).toBeGreaterThan(0);
+    expect(on[0]!.title).toBe('x');
+    expect(planReminders({ ...base, rules: [{ ...r, enabled: false }] }).items.filter((x) => x.kind === 'rule')).toHaveLength(0);
   });
 });

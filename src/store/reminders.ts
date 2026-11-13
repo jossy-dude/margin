@@ -65,7 +65,7 @@ export function resync(delay = 700) {
     /* The demo session plans nothing: a sample class must never arrive as a real bell. Leaving the
        tour calls resync(0) alongside adoption, so the real session starts planning at once. */
     if (db.demo) return;
-    const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12 });
+    const now = Date.now(), plan = planReminders({ now, courses: s.courses, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, settings: s.settings.notif, hour12: s.settings.hour12, rules: s.settings.reminders ?? [], variants: s.variants });
     let perm = await notifs.ensurePermission(false);
     /* No automatic ask (v0.5 C): the system prompt only ever follows its explanation — the onboarding's
        reminders page, or Settings → Reminders → Allow. A planner that was never asked simply plans nothing. */

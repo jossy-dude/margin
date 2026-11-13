@@ -2,8 +2,9 @@ import type { AttRecord, Course, DayMark, Meeting, NotifSettings, SubjectVariant
 import { addDays, atTime, fmtDur, fmtTime, hm, startOfDay, weekdayOf, ymd, DAY_MS } from './time';
 import { effective, isCancelled, occEnd, occKey, occurrencesBetween } from './attendance';
 import { roomOf } from './rooms';
+import { ruleHits, type ReminderRule } from './ruleReminders';
 
-export type PlannedKind = 'class' | 'ended' | 'task' | 'start' | 'exam';
+export type PlannedKind = 'class' | 'ended' | 'task' | 'start' | 'exam' | 'rule';
 export interface Planned {
   id: string; kind: PlannedKind; at: number; title: string; body: string;
   channel: 'classes' | 'tasks'; route: 'Today' | 'Tasks'; entityId: string; shiftedFrom?: number; why?: string;
@@ -18,6 +19,8 @@ export interface PlanInput {
   hour12?: boolean;
   /** The subject variants, so a lab's reminder names the lab's room. Absent = none. */
   variants?: SubjectVariant[];
+  /** v0.7 R9: the owner's reminder rules (`settings.reminders`). Absent = none. */
+  rules?: ReminderRule[];
 }
 export interface Plan { items: Planned[]; deferred: number; dropped: { id: string; why: string }[] }
 
@@ -212,6 +215,20 @@ export function planReminders(i: PlanInput): Plan {
       if (s.startBy && x.status === 0 && x.dueAt !== null && x.estimateMin !== null) {
         const w = workload(x, i, cx);
         if (w && w.startBy > i.now && w.startBy < horizon) push({ kind: 'start', at: w.startBy, title: `Start now: ${x.title}`, body: `Needs about ${fmtDur(w.needMin)} and that is all the free time you have before it is due.`, channel: 'tasks', route: 'Tasks', entityId: x.id + 'b' }, { notAfter: x.dueAt });
+      }
+    }
+  }
+  // v0.7 R9: reminder rules, anchored to the timetable (cancelled classes move "first class" on)
+  if (i.rules?.length) {
+    const cancelled = new Set<string>();
+    for (const o of occurrencesBetween(startOfDay(i.now), horizon + DAY_MS, i.meetings)) {
+      if (isCancelled(effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now))) cancelled.add(`${o.date.toDateString()}|${o.meeting.id}`);
+    }
+    for (const r of i.rules) {
+      for (const h of ruleHits(r, { meetings: i.meetings, tasks: i.tasks, from: i.now, to: horizon, cancelled })) {
+        const p: Omit<Planned, 'id'> = { kind: 'rule', at: h.at, title: h.text, body: 'Reminder', channel: 'tasks', route: 'Today', entityId: h.key };
+        if (r.ringInQuiet) raw.push({ ...p, id: `rule-${h.key}-${Math.round(h.at / MIN)}` });
+        else push(p, {});
       }
     }
   }
