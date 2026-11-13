@@ -121,3 +121,10 @@ export function parseDuration(text: string): number | null {
   if (!seen || consumed.replace(/\s/g, '') !== t.replace(/\s/g, '')) return null;
   return Math.round(total);
 }
+/** A finished task's line (phone test #10): how late it was WHEN it was finished, not time since. The old
+ *  `relDue(completedAt).replace('in ', '')` turned "0 min late" into "0 mlate" and kept growing. */
+export function doneLine(dueAt: number, completedAt: number): string {
+  const m = Math.round((completedAt - dueAt) / 60_000);
+  if (m <= 0) return 'done on time';
+  return `done ${m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`} late`;
+}

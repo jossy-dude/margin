@@ -9,7 +9,7 @@ import { useScreenLive } from '../ui/live';
 import type { ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
-import { addDays, fmtDur, fmtTime, startOfDay } from '../domain/time';
+import { addDays, fmtDur, fmtTime, startOfDay, doneLine } from '../domain/time';
 import type { AttStatus, AttWhy, Task } from '../domain/types';
 import { workload } from '../domain/reminders';
 import { ST, statusLabel } from '../domain/attendance';
@@ -144,7 +144,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
             <Txt f="bold" s={22} style={done ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{t.title}</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 2 }}>
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}><Icon name={KIND_ICON[t.kind]} size={15} color={c.mut} /><Txt f="serif" s={15} c="mut">{course?.name ?? 'Personal'}</Txt></View>
-              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? `done ${relDue(t.completedAt, now, h12)}`.replace('in ', '') : relDue(t.dueAt, now, h12)}</Txt>}
+              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? doneLine(t.dueAt, t.completedAt) : relDue(t.dueAt, now, h12)}</Txt>}
               {t.estimateMin ? <Txt f="serif" s={15} c="mut">~{fmtDur(t.estimateMin)}</Txt> : null}
               {/* The step count is a control, not a label: it used to be the one chip on the card that
                   could not be tapped, so ticking a step meant opening the sheet. Tap ticks the next

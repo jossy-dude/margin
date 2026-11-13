@@ -62,7 +62,9 @@ export function TasksScreen() {
       {pick ? (
         <View testID="subject-menu" style={{ gap: 2 }}>
           {[{ id: '', name: 'All subjects' }, { id: 'personal', name: 'Personal' }, ...courses.map((c) => ({ id: c.id, name: c.name }))].map((o) => {
-            const n = o.id === '' ? openN : tasks.filter((t) => t.status !== 2 && (o.id === 'personal' ? t.courseId === null : t.courseId === o.id)).length;
+            // counts for the segment being shown (phone test #11: Done showed the open counts)
+            const inSeg = (t: Task) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2);
+            const n = tasks.filter((t) => inSeg(t) && (o.id === '' || (o.id === 'personal' ? t.courseId === null : t.courseId === o.id))).length;
             return <Btn key={o.id || 'all'} small kind={(subj || '') === o.id ? 'primary' : 'ghost'} label={`${o.name} · ${n}`} onPress={() => { act.setSettings({ taskSubject: o.id }); setPick(false); }} />;
           })}
         </View>
