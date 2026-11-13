@@ -24,3 +24,10 @@ describe('sync service wiring (SYNC_ANDROID.md §2)', () => {
     expect(gradle).toContain("org.java-websocket:Java-WebSocket:1.6.0");
   });
 });
+
+describe('widgets do not wake the phone on a timer (PLAN N7, found issue F4)', () => {
+  it('updatePeriodMillis is 0: TICK at class boundaries and data changes redraw them instead', () => {
+    const xml = readFileSync(join(MOD, 'src', 'main', 'res', 'xml', 'mg_widget_board.xml'), 'utf8');
+    expect(xml).toContain('android:updatePeriodMillis="0"');
+  });
+});
