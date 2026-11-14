@@ -8,6 +8,7 @@ import * as notifs from '../../services/notifications';
 import { getState, set, type State } from '../core';
 import { optimistic, R } from '../persist';
 import { resync } from '../reminders';
+import { moveOrds, sortTasks } from '../../domain/taskOrder';
 import { toast } from '../toast';
 
 /* Every entity action is optimistic: the state moves synchronously, the write follows, and a refused
@@ -76,6 +77,18 @@ export function toggleTask(id: string) {
   saveTask(n); if (done) fx.done(); else fx.undone();
 }
 export function toggleSubtask(id: string, sid: string) { const t = getState().tasks.find((x) => x.id === id); if (!t) return; saveTask({ ...t, subtasks: t.subtasks.map((x) => (x.id === sid ? { ...x, done: !x.done } : x)) }); fx.select(); }
+/** A swipe on a task card (R3): an open task is finished with an Undo that puts it back exactly as it was; a done
+ *  task is reopened quietly. */
+export function completeTask(id: string) {
+  const prev = getState().tasks.find((x) => x.id === id); if (!prev) return;
+  toggleTask(id);
+  if (prev.status !== 2) toast(`Done: ${prev.title}`, () => { saveTask(prev); fx.undone(); });
+}
+/** "My order" (R3): put `id` just before `beforeId` (null = at the end) in the open list as To-do shows it. */
+export function moveTask(id: string, beforeId: string | null) {
+  const s = getState(), shown = sortTasks(s.tasks.filter((t) => t.status !== 2), 'mine');
+  for (const [tid, ord] of moveOrds(shown, id, beforeId)) { const t = getState().tasks.find((x) => x.id === tid); if (t) void saveRow('tasks', 'task', { ...t, ord }); }
+}
 export function removeTask(id: string) { removeRow('tasks', 'task', id, 'Task deleted', true); }
 
 /** A class stamp or a day mark: the record replaces whatever was there, and the undo puts that back. */
@@ -177,7 +190,7 @@ export function addSession(s0: Omit<FocusSession, 'id' | 'demo'>) { const f: Foc
 
 export const entityActions = {
   setSettings, setNotif,
-  saveTask, toggleTask, toggleSubtask, removeTask,
+  saveTask, toggleTask, completeTask, moveTask, toggleSubtask, removeTask,
   setAtt, clearAtt, setDay, clearDay,
   saveCourse, saveMeeting, removeMeeting, removeCourse, saveVariant, removeVariant, makeVariantOf,
   saveMark, removeMark, setAdjust, saveNotice, removeNotice,

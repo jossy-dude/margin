@@ -143,10 +143,12 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const open = () => act.open({ t: 'task', id: t.id });
   /* finishing a task is news for the page's face (D-21); reopening one is not */
   const finish = () => { const was = t.status === 2; act.toggleTask(t.id); if (!was) faceEvent('taskDone'); };
+  /* a swipe finishes with an Undo (R3), like a swipe to delete; the checkbox is its own undo */
+  const swiped = () => { const was = t.status === 2; act.completeTask(t.id); if (!was) faceEvent('taskDone'); };
   const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && t.dueAt !== null && t.dueAt < now, soon = !done && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
   return (
-    <SwipeCard onComplete={finish} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
+    <SwipeCard onComplete={swiped} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
       <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
         accessibilityRole="button" accessibilityLabel={`${t.title}, ${KIND_TAG[t.kind].label.toLowerCase()}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">

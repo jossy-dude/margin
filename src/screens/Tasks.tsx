@@ -8,6 +8,7 @@ import { act, useStore } from '../store/store';
 import { Empty, Page, TaskCard } from './common';
 import { addDays, startOfDay } from '../domain/time';
 import { emptyFace, pageFace } from '../ui/mascot/moments';
+import { sortTasks } from '../domain/taskOrder';
 import type { Task } from '../domain/types';
 
 /** How many task cards one "page" of the list draws. */
@@ -28,10 +29,9 @@ export function TasksScreen() {
   const [pick, setPick] = useState(false);
   const list = useMemo(() => {
     const f = st.tasks.filter((t) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2) && (cid === 'all' || t.courseId === cid) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
-    const cmp: Record<string, (a: Task, b: Task) => number> = { due: (a, b) => (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), priority: (a, b) => b.priority - a.priority || (a.dueAt ?? 9e15) - (b.dueAt ?? 9e15), created: (a, b) => b.createdAt - a.createdAt };
     /* Done is the archive: newest finished first, whatever the sort says. */
     if (taskFilter === 'done') return [...f].sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt));
-    return [...f].sort((cmp[taskSort] as (a: Task, b: Task) => number));
+    return sortTasks(f, taskSort);
   }, [st.tasks, taskFilter, taskSort, cid, q]);
   const groups = useMemo(() => {
     const t0 = startOfDay(now), g: { title: string; items: Task[] }[] = [{ title: 'Late', items: [] }, { title: 'Today', items: [] }, { title: 'Tomorrow', items: [] }, { title: 'This week', items: [] }, { title: 'Later', items: [] }, { title: 'No date', items: [] }, { title: 'Done', items: [] }];

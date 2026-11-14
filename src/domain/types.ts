@@ -128,7 +128,7 @@ export interface Settings {
   /** v0.7 R12: the folder the weekly backup goes to (a Storage Access Framework URI, picked once), and when the last
    *  one was written. Absent/null = no automatic backup. Phone-only, like `vaultUri`: neither travels in an export. */
   backupUri?: string | null; backupAt?: number | null;
-  taskFilter: 'open' | 'done'; /** the To-do page's subject filter: a course id, 'personal' (no subject) or '' for all (BUGS #7) */ taskSubject: string; taskSort: 'due' | 'priority' | 'created'; seededAt: number;
+  taskFilter: 'open' | 'done'; /** the To-do page's subject filter: a course id, 'personal' (no subject) or '' for all (BUGS #7) */ taskSubject: string; taskSort: 'due' | 'priority' | 'created' | 'mine'; seededAt: number;
   breakMin: number; breaksPerRound: number; focusFlow: boolean; focusPresetMin: number;
   /** How many builds of the onboarding tour this phone has finished. `0` or absent = not seen. See `toured()`
    *  in `domain/defaults.ts`. Optional on purpose: a settings row written before the tour existed has no such
