@@ -240,6 +240,15 @@ describeIfNative('v0.5 release engineering (R1)', () => {
     return { 'tools:node': /tools:node="([^"]+)"/.exec(tag)?.[1] };
   };
 
+  /* Rationale (v0.7, sync on the phone): Margin dials the desktop hub at ws://<lan ip>:7428. Android blocks
+     cleartext sockets in every non-debug build unless the app opts in, and OkHttp then fails before a byte
+     leaves the phone ("no hub answered", nothing in the hub's log). Hub frames are sealed with AES-GCM, so
+     ws:// is the design, not a gap (SYNC_PROTOCOL §3). */
+  it('lets the sync service open ws:// to the desktop in shipped builds', () => {
+    const app = manifest.match(/<application[^>]*>/)?.[0] ?? '';
+    expect(app).toContain('android:usesCleartextTraffic="true"');
+  });
+
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
   it('ships as 0.7.0, version code 6', () => {
