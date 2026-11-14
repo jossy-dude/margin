@@ -18,6 +18,8 @@ import type { AttStatus, AttWhy, Course, Mark, Meeting, Notice, ReminderSpec, Ta
 import { fx } from '../services/fx';
 import { hexA } from '../tokens/theme';
 import { STATUS_GLYPH, statusColor } from '../screens/common';
+import { attNews, markNews } from '../screens/faceNews';
+import { faceEvent } from '../ui/mascot/moments';
 
 const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'exam', l: 'Exam', i: 'exam' }, { k: 'deadline', l: 'Deadline', i: 'timer' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'other', l: 'Other', i: 'pencil' }];
 const PRI = ['None', 'Low', 'Medium', 'High'];
@@ -153,7 +155,7 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }
   const { closeRef, close } = useSheetClose();
   const [state, setState] = useState<AttStatus | null>(rec?.status ?? null), [why, setWhy] = useState<AttWhy>(rec?.why ?? ''), [note, setNote] = useState(rec?.reason ?? '');
   const pick = (s: AttStatus) => { setState(s); if (s !== state) setWhy(''); };
-  const save = () => { if (!state) return; if (isDay) act.setDay(spec.date, state, note.trim(), why); else act.setAtt(spec.key, state, note.trim(), why); close(); };
+  const save = () => { if (!state) return; if (isDay) act.setDay(spec.date, state, note.trim(), why); else { const news = attNews(spec.key, state, { ...getState(), now: Date.now() }); act.setAtt(spec.key, state, note.trim(), why); if (news) faceEvent(news); } close(); };
   return (
     <Sheet title={spec.title} onClose={act.close} maxH={0.8} closeRef={closeRef}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{rec && <Btn kind="ghost" icon="x" label="Automatic" a11y="Back to automatic" onPress={() => { if (isDay) act.clearDay(spec.date); else act.clearAtt(spec.key); close(); }} />}<Btn flex icon="check" label="Save" disabled={!state} onPress={save} /></Row>}>
@@ -238,7 +240,7 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
   const m0 = useStore((s) => s.marks.find((x) => x.id === id)), count = useStore((s) => s.marks.filter((m) => m.courseId === courseId).length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('k')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId), [name, setName] = useState(m0?.name ?? ''), [score, setScore] = useState(m0?.score ?? 70), [has, setHas] = useState(m0 ? m0.score !== null : true), [weight, setWeight] = useState(m0?.weight ?? 10), [on, setOn] = useState(m0?.on ?? true);
   return (
-    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null }; act.saveMark(mk); close(); })} /></Row>}>
+    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null }; const news = markNews(mk, getState()); act.saveMark(mk); if (news) faceEvent(news); close(); })} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={(v) => v && setCid(v)} none={null} />
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />

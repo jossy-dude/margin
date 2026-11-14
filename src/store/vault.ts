@@ -12,6 +12,7 @@ import { bridgeIn, bridgeOut } from './bridge';
 import { leafOf, readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
 import { connection } from '../data/sqlite';
+import { faceEvent } from '../ui/mascot/moments';
 import { syncConfigure, syncInbox, syncPushBridge, syncStart } from '../services/native';
 
 export interface VaultStatus { at: number; ok: boolean; note: string }
@@ -31,7 +32,7 @@ export async function vaultSync(): Promise<VaultStatus> {
   try {
     const theirs = await readVaultFile(uri, 'obsidian.json');
     let note = 'Waiting for Obsidian';
-    if (theirs) { const r = await bridgeIn(theirs); note = r.ok ? `${r.added} new · ${r.updated} changed · ${r.removed} removed` : r.problems[0] ?? 'Could not read Obsidian’s file'; }
+    if (theirs) { const r = await bridgeIn(theirs); if (r.ok && r.added > 0) faceEvent('taskArrived'); /* a new task from Obsidian (D-21) */ note = r.ok ? `${r.added} new · ${r.updated} changed · ${r.removed} removed` : r.problems[0] ?? 'Could not read Obsidian’s file'; }
     const env = await bridgeOut({ since: 0, move: false });
     if (env) {
       if (written === null) {

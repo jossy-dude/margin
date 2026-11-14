@@ -4,7 +4,8 @@ import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
 import { NumberField } from '../ui/fields';
 import { useNow, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
-import { act, useStore } from '../store/store';
+import { act, getState, useStore } from '../store/store';
+import { attNews } from './faceNews';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
 import { total, needed, letter } from '../domain/grades';
@@ -15,7 +16,7 @@ import { semesterFirstDay, semesterLabel } from '../domain/semester';
 import type { Course } from '../domain/types';
 import { subjectTint } from '../ui/collage/tint';
 import { hexA } from '../tokens/theme';
-import { emptyFace, pageFace } from '../ui/mascot/moments';
+import { emptyFace, faceEvent, pageFace } from '../ui/mascot/moments';
 
 function AttendanceGrid({ course }: { course: Course }) {
   const locked = useStore((s) => s.settings.lockAttendance), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
@@ -44,7 +45,7 @@ function AttendanceGrid({ course }: { course: Course }) {
           {occ.map(({ date, meeting }) => {
             const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${fmtTime(atTime(date.getTime(), meeting.start), hour12)}, ${spokenStatus(e)}`;
             return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} why={e.why} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
-              onTap={() => act.setAtt(key, e.status && e.inferred ? nextStatus(e.status) : 'p')} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
+              onTap={() => { const s = e.status && e.inferred ? nextStatus(e.status) : 'p', news = attNews(key, s, { ...getState(), now: Date.now() }); act.setAtt(key, s); if (news) faceEvent(news); }} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}
         </HStrip>)}
       <Row style={{ gap: 12 }}>{[['✓', 'present', c.ink], ['L', 'late entry', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.bad], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
