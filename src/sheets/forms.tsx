@@ -7,8 +7,9 @@ import { Label, Sheet, useSheetClose } from '../ui/Sheet';
 import { latch } from '../ui/latch';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { WhenPicker, nextHome } from './WhenPicker';
-import { RoomChips, ScheduleEditor } from './ScheduleEditor';
+import { PartsEditor, RoomChips, ScheduleEditor } from './ScheduleEditor';
 import { draftsOf, planSchedule, type SlotDraft } from '../domain/schedule';
+import { hasParts, kindsIn, partDraftsOf, planParts, roomsForParts, type PartDraft } from '../domain/parts';
 import { NOTE_LEVEL, noteDate } from '../ui/collage/notes';
 import { act, getState, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE, WHY, WHY_LABEL } from '../domain/attendance';
@@ -187,10 +188,13 @@ export function CourseSheet({ id }: { id?: string }) {
   const [rooms, setRooms] = useState<string[]>(c0?.rooms ?? []), [rows, setRows] = useState<SlotDraft[]>(() => (c0 ? draftsOf(c0.id, meetings, variants) : []));
   /* A new kind (Lab, Tutorial…) gets ONE variant id per form, remembered here, so a repeated save reuses it. */
   const [vids] = useState(() => new Map<string, string>()), vid = (k: string) => { const key = k.toLocaleLowerCase(); if (!vids.has(key)) vids.set(key, `${saveId}-${key}`); return vids.get(key)!; };
+  /* v0.71: each part's own teacher, room, group, grade share and attendance goal (domain/parts.ts) */
+  const [parts, setParts] = useState<Record<string, PartDraft>>(() => (c0 ? partDraftsOf(c0.id, variants) : {}));
+  const kinds = useMemo(() => kindsIn(rows), [rows]);
   const save = () => submit(() => {
     act.saveCourse({ id: saveId, name: name.trim(), rooms, teacher: teacher.trim(), goal: goal || null, sort: c0?.sort ?? count, demo: false, bar: c0?.bar ?? null });
-    const plan = planSchedule(saveId, rows, getState().meetings, getState().variants, vid);
-    plan.variants.forEach((v) => act.saveVariant(v));
+    const plan = planSchedule(saveId, roomsForParts(rows, parts), getState().meetings, getState().variants, vid);
+    planParts(saveId, kinds, parts, getState().variants, plan.variants, { teacher, rooms }).forEach((v) => act.saveVariant(v));
     plan.meetings.forEach((m) => { const was = getState().meetings.find((x) => x.id === m.id); if (!was || was.weekday !== m.weekday || was.start !== m.start || was.end !== m.end || (was.room ?? null) !== m.room || (was.variantId ?? null) !== m.variantId) act.saveMeeting(m); });
     plan.removed.forEach((mid) => act.removeMeeting(mid));
     if (plan.problems.length) toast(plan.problems[0]!);
@@ -201,7 +205,8 @@ export function CourseSheet({ id }: { id?: string }) {
       <Field label="Name" value={name} onChangeText={setName} autoFocus={!c0} placeholder="e.g. Organic Chemistry" /><Field label="Teacher" value={teacher} onChangeText={setTeacher} />
       <Label>Rooms</Label><RoomChips rooms={rooms} onChange={setRooms} />
       <Label>When it meets, every week</Label>
-      <ScheduleEditor rows={rows} onChange={setRows} rooms={rooms} hour12={hour12} />
+      <ScheduleEditor rows={rows} onChange={setRows} rooms={rooms} hour12={hour12} parts={parts} />
+      {hasParts(rows) ? <><Label>Lecture and lab</Label><PartsEditor kinds={kinds} drafts={parts} onChange={setParts} /></> : null}
       <Label>Grade goal</Label><NumberField label="goal" value={goal || null} onChange={(v) => setGoal(v ?? 0)} min={0} max={100} decimals={1} unit="%" emptyLabel="none" />
     </Sheet>
   );

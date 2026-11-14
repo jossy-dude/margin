@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Chip, HandBox, Icon, Txt, faceOf } from '../ui/kit';
-import { TimeField } from '../ui/fields';
+import { Chip, Field, HandBox, Icon, Txt, faceOf } from '../ui/kit';
+import { NumberField, TimeField } from '../ui/fields';
+import { blankPart, sharesNote, type PartDraft } from '../domain/parts';
 import { useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { DW, uid } from '../domain/time';
@@ -25,12 +26,39 @@ export function RoomChips({ rooms, onChange }: { rooms: string[]; onChange: (r: 
 }
 
 /**
+ * v0.71: one card per part of the subject (Lecture, Lab…), shown once a weekly class is a lab or tutorial. A lab
+ * has its own teacher, room and group number, its share of the grade and its own attendance goal. The lecture's
+ * teacher and rooms are the subject's (top of the sheet), so its card only asks for the group, share and goal.
+ */
+export function PartsEditor({ kinds, drafts, onChange }: { kinds: string[]; drafts: Record<string, PartDraft>; onChange: (d: Record<string, PartDraft>) => void }) {
+  const { tints } = useTheme();
+  const set = (k: string, p: Partial<PartDraft>) => { const key = k.toLocaleLowerCase(); onChange({ ...drafts, [key]: { ...(drafts[key] ?? blankPart()), ...p } }); };
+  return (
+    <View style={{ gap: 10 }}>
+      {kinds.map((k, i) => { const d = drafts[k.toLocaleLowerCase()] ?? blankPart(), name = kindLabel(k); return (
+        <HandBox key={k || 'lecture'} seed={`part-${k}`} fill={i % 2 ? tints.sky : tints.cream} cut="torn" style={{ padding: 12, gap: 6 }}>
+          <Txt f="type" s={13} c="mut" style={{ letterSpacing: 1.6 }}>{name.toUpperCase()}</Txt>
+          {k ? <><Field label={`${name} teacher`} value={d.teacher} onChangeText={(t) => set(k, { teacher: t })} placeholder="Same as the subject" />
+            <Field label={`${name} room`} value={d.room} onChangeText={(t) => set(k, { room: t })} placeholder="e.g. Lab 2" /></> : null}
+          <Field label="Group / section no." value={d.group} onChangeText={(t) => set(k, { group: t })} placeholder="e.g. G3" />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1, gap: 2 }}><Txt f="serif" s={15} c="mut">Share of grade</Txt><NumberField label={`${name} share of grade`} value={d.share} onChange={(v) => set(k, { share: v })} min={0} max={100} unit="%" emptyLabel="none" /></View>
+            <View style={{ flex: 1, gap: 2 }}><Txt f="serif" s={15} c="mut">Attendance goal</Txt><NumberField label={`${name} attendance goal`} value={d.attGoal} onChange={(v) => set(k, { attGoal: v })} min={0} max={100} unit="%" emptyLabel="80 %" /></View>
+          </View>
+        </HandBox>); })}
+      <Txt f="serif" s={15} c="mut">{sharesNote(kinds, drafts)} Each part keeps its own attendance.</Txt>
+    </View>
+  );
+}
+
+/**
  * The weekly schedule, right inside the subject (owner: "when creating the subject, add its schedule right
  * there"). Each row is one weekly class — day, times, room, and kind (lecture or a lab/tutorial, which becomes
  * the subject's variant). The rows are a draft; the sheet's Save writes them (`domain/schedule.planSchedule`).
  */
-export function ScheduleEditor({ rows, onChange, rooms, hour12 }: { rows: SlotDraft[]; onChange: (r: SlotDraft[]) => void; rooms: string[]; hour12: boolean }) {
+export function ScheduleEditor({ rows, onChange, rooms, hour12, parts }: { rows: SlotDraft[]; onChange: (r: SlotDraft[]) => void; rooms: string[]; hour12: boolean; parts?: Record<string, PartDraft> }) {
   const { c, tints } = useTheme();
+  const partRoom = (kind: string) => (kind.trim() ? parts?.[kind.trim().toLocaleLowerCase()]?.room.trim() ?? '' : '');
   const set = (k: string, p: Partial<SlotDraft>) => onChange(rows.map((r) => (r.key === k ? { ...r, ...p } : r)));
   return (
     <View style={{ gap: 10 }}>
@@ -52,7 +80,7 @@ export function ScheduleEditor({ rows, onChange, rooms, hour12 }: { rows: SlotDr
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
             {SLOT_KINDS.map((k) => <Chip key={k || 'lecture'} small label={kindLabel(k)} on={r.kind.toLocaleLowerCase() === k.toLocaleLowerCase()} onPress={() => set(r.key, { kind: k })} />)}
           </View>
-          {rooms.length > 1 ? (
+          {partRoom(r.kind) ? <Txt f="serif" s={15} c="mut">{`In ${partRoom(r.kind)}, the ${kindLabel(r.kind).toLowerCase()}'s room`}</Txt> : rooms.length > 1 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>{rooms.map((rm) => <Chip key={rm} small icon="today" label={rm} on={r.room === rm} onPress={() => set(r.key, { room: rm })} />)}</View>
           ) : null}
         </HandBox>
