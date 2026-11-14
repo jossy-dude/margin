@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, TAPE, PAPER, hexA, type Colors, type FontKey, type TypeMap } from '../tokens/theme';
@@ -103,7 +103,7 @@ export function Txt({ f = 'hand', s = 18, c = 'ink', style, ...p }: TxtProps) {
   const th = useTheme(), color = (th.c as unknown as Record<string, string>)[c] ?? c, fc = th.type[f];
   /* The line box is computed from the REQUESTED size, the glyphs from the scaled one: a role re-faced by the
      look keeps the exact height it had, so swapping the notebook hand for the collage grotesque moves nothing. */
-  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, fc.tnum ? TNUM : null, style]} />;
+  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam || undefined, fontWeight: fc.w, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, fc.tnum ? TNUM : null, style]} />;
 }
 
 const TNUM = { fontVariant: ['tabular-nums' as const] };
@@ -113,7 +113,7 @@ export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<Vi
   cut?: 'torn' | 'cut' }
 /** A card with a hand-cut outline (elliptical corners + wobble) and a hard offset shadow, drawn once per size. */
 export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed, cut }: HandBoxProps) {
-  const { c, look, dark } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
+  const { c, look, dark, sky } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
   /* The collage cuts a surface one of two ways, the way paper actually gets cut: anything big enough to be
      a sheet is TORN (a white core along the tear, no outline), a small control is cut with SCISSORS (a
      smooth pill with a faint hand). `cut` overrides the size rule. */
@@ -128,6 +128,12 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
     /* Plain: no drawing at all — a rounded view, a hairline, a soft native shadow. A coloured stroke is still a
        mark (selection, live, late) and keeps its weight; a ghost or dashed box keeps a visible outline. */
     const bare = fill === 'transparent' || dashed, mark = stroke && stroke !== c.ink ? stroke : null;
+    /* Daylight: the glass card (D-8) — radius 16, a one-pixel ring, no drop shadow; the sky shows through `card`. */
+    if (sky) return (
+      <View style={[{ position: 'relative', borderRadius: 16, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule), borderStyle: dashed ? 'dashed' : 'solid' }, style]}>
+        {children}
+      </View>
+    );
     return (
       <View style={[{ position: 'relative', borderRadius: 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : 1, borderColor: mark ?? (bare ? hexA(c.ink, dashed ? 0.45 : 0.5) : hexA(c.ink, dark ? 0.14 : 0.09)), borderStyle: dashed ? 'dashed' : 'solid' },
         shadow && !bare ? { boxShadow: dark ? `0 1px 2px ${hexA(c.shadow, 0.5)}, 0 6px 16px ${hexA(c.shadow, 0.35)}` : `0 1px 2px ${hexA(c.shadow, 0.06)}, 0 6px 16px ${hexA(c.shadow, 0.07)}` } : null, style]}>
@@ -442,7 +448,7 @@ export function Reveal({ open, children }: { open: boolean; children: React.Reac
  *  The vertical padding is 6 rather than 4 for one reason: a small chip is 34 dp tall, its hit area is
  *  34 + 10 (see `Chip`), and a ScrollView only hit-tests inside its own bounds — slop that pokes past
  *  the strip is slop a finger can never reach. 6 + 34 + 6 = 46, so the 44 dp target actually exists. */
-export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSizeChange, ref, ...rest }: ScrollViewProps & { gap?: number; bg?: string; contentStyle?: StyleProp<ViewStyle>; ref?: React.Ref<ScrollView> }) {
+export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSizeChange, ref, ...rest }: ScrollViewProps & { gap?: number; bg?: string; contentStyle?: StyleProp<ViewStyle>; ref?: React.Ref<ScrollViewInstance> }) {
   const { c } = useTheme(), id = useId(), [vw, setVw] = useState(0), [cw, setCw] = useState(0), [x, setX] = useState(0);
   const more = stripHasMore(cw, vw, x), paper = bg ?? c.paper;
   return (

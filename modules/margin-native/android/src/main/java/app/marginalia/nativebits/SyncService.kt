@@ -67,7 +67,9 @@ class SyncService : Service() {
     override fun onReceive(c: Context, i: Intent) {
       when (i.action) {
         Intent.ACTION_SCREEN_OFF -> { screenOn = false; main.removeCallbacks(goReady); main.postDelayed(goReady, 60_000) }
-        Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncEngine.ping() }
+        Intent.ACTION_SCREEN_ON -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncEngine.ping() }
+        // unlocked: whatever changed on the phone while it was locked goes now, not at the next 30 s tick
+        Intent.ACTION_USER_PRESENT -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncEngine.scanNow() }
       }
     }
   }

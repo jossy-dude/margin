@@ -34,7 +34,7 @@ export function wireLifecycle() {
   notifs.onOpened((o) => dispatchOpened(o, notifEffects()));
   /* v0.7: a widget, the pinned class or an alarm opened the app with a link. Only once the planner is on
      screen — a link that arrives during the introduction is dropped rather than opening a sheet over it. */
-  const follow = (url: string | null) => {
+  const follow = (url: string | null | undefined) => {
     const to = linkTarget(url), st = getState();
     if (!to || !st.ready) return;
     if (to.t === 'route') set({ route: to.route, prevRoute: st.route, sheet: null });

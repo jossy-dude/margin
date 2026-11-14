@@ -86,10 +86,11 @@ export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; row
                 <Txt f="type" s={17} c={low ? 'bad' : 'ink'} maxFontSizeMultiplier={FS}>{pct(r.rate)}</Txt>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, paddingLeft: 20 }} accessible accessibilityLabel={`${r.course.name}, each class: ${r.dots.map((d) => (d.inferred ? 'present, not marked' : statusLabel(d.status, d.why))).join(', ') || 'none held yet'}`}>
-                {r.dots.map((d) => {
+                {r.dots.map((d, i) => {
                   const col = d.status === 'a' ? c.bad : d.status === 'c' ? c.mut : d.why === 'late' ? c.warn : c.ink;
                   const hollow = d.status === 'c';
-                  return <View key={d.date} style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: hollow ? 'transparent' : d.inferred ? hexA(col, 0.28) : col, borderWidth: hollow ? 1.5 : 0, borderColor: col }} />;
+                  // a subject can meet twice in a day (lecture + lab), so the date alone is not a unique key
+                  return <View key={`${d.date}#${i}`} style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: hollow ? 'transparent' : d.inferred ? hexA(col, 0.28) : col, borderWidth: hollow ? 1.5 : 0, borderColor: col }} />;
                 })}
               </View>
               {r.held > 0 && (

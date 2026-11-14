@@ -81,6 +81,7 @@ class SyncVault(private val c: Context, treeUriString: String) {
   fun walk(ignore: SyncIgnore): List<Entry> {
     val out = ArrayList<Entry>()
     fileRoot?.let { root ->
+      if (!root.canRead()) throw IllegalStateException("cannot read ${root.path}")
       root.walkTopDown().onEnter { d -> d == root || !ignore.matches(d.relativeTo(root).invariantSeparatorsPath + "/") }.forEach { f ->
         if (f.isFile) { val rel = f.relativeTo(root).invariantSeparatorsPath; if (!ignore.matches(rel)) out.add(Entry(rel, f.length(), f.lastModified())) }
       }
@@ -90,15 +91,15 @@ class SyncVault(private val c: Context, treeUriString: String) {
       val kids = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId(rel))
       val cols = arrayOf(Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED)
       val dirs = ArrayList<String>()
-      try {
-        cr.query(kids, cols, null, null, null)?.use {
-          while (it.moveToNext()) {
-            val p = if (rel.isEmpty()) it.getString(0) else "$rel/${it.getString(0)}"
-            if (it.getString(1) == Document.MIME_TYPE_DIR) { if (!ignore.matches("$p/")) dirs.add(p) }
-            else if (!ignore.matches(p)) out.add(Entry(p, it.getLong(2), it.getLong(3)))
-          }
+      // a folder that cannot be listed THROWS: a partial list would look like deleted files (v0.7.1)
+      val cur = cr.query(kids, cols, null, null, null) ?: throw IllegalStateException("cannot list ${rel.ifEmpty { "the vault folder" }}")
+      cur.use {
+        while (it.moveToNext()) {
+          val p = if (rel.isEmpty()) it.getString(0) else "$rel/${it.getString(0)}"
+          if (it.getString(1) == Document.MIME_TYPE_DIR) { if (!ignore.matches("$p/")) dirs.add(p) }
+          else if (!ignore.matches(p)) out.add(Entry(p, it.getLong(2), it.getLong(3)))
         }
-      } catch (e: Exception) { }
+      }
       dirs.forEach { rec(it) }
     }
     rec("")

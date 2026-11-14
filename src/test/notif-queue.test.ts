@@ -70,8 +70,8 @@ describe('sync makes the queue equal the plan', () => {
     await sync(plan(item({ id: 'c1', channel: 'classes' }), item({ id: 't1', kind: 'task', channel: 'tasks', route: 'Tasks', entityId: 'x' })), '#000');
     const got = [...mockState.queue.values()].map((q) => ({ id: q.identifier, type: q.trigger.type, channelId: q.trigger.channelId, date: (q.trigger.date as Date).getTime() }));
     expect(got).toEqual([
-      { id: 'c1', type: 'date', channelId: 'classes', date: NOW + 600_000 },
-      { id: 't1', type: 'date', channelId: 'tasks', date: NOW + 600_000 },
+      { id: 'c1', type: 'date', channelId: 'classes_v2', date: NOW + 600_000 },
+      { id: 't1', type: 'date', channelId: 'tasks_v2', date: NOW + 600_000 },
     ]);
   });
 
@@ -93,7 +93,7 @@ describe('the focus-end notification', () => {
   it('is scheduled as a DATE trigger on the focus channel', async () => {
     await scheduleFocusEnd(NOW + 90_000, 'Round finished', 'Take a break');
     const q = mockState.queue.get('focus-end')!;
-    expect(q.trigger).toMatchObject({ type: 'date', channelId: 'focus' });
+    expect(q.trigger).toMatchObject({ type: 'date', channelId: 'focus_v2' });
     expect((q.trigger.date as Date).getTime()).toBe(NOW + 90_000);
     expect(q.content).toMatchObject({ title: 'Round finished', body: 'Take a break', data: { route: 'Today', kind: 'focus' } });
   });

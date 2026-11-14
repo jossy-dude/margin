@@ -82,7 +82,19 @@ export const PENS: Record<Settings['pen'], { light: string; dark: string }> = {
 /** The red margin rule of a ruled exercise book: the same in every palette and with every pen, because
  *  it is printed on the paper, not written on it. */
 export const MARGIN = { light: '#C0392B', dark: '#E0705F' } as const;
-export const palettes = { collage: COLLAGE, plain: PLAIN, refined: REFINED, original: ORIGINAL };
+/**
+ * Daylight (v0.7, docs/v07/DESIGN.md D-2). The same tokens as `tokens/v2.ts`, mapped onto the shared roles so
+ * every screen that is not one of the rebuilt v2 pages (Tasks, Grades, Stats, Focus, the sheets, Settings)
+ * wears the look too. The page is the sky (`PaperBg` draws `Sky` when `Theme.sky` is set; `paper` is only its
+ * flat fallback), and `card` is the glass: an 8-digit hex, so a card lets the sky through the way the v2
+ * cards do. `hexA` reads the first seven characters, so tinting a card colour still works. Contrast is held
+ * against the glass composited over the brightest and darkest sky of each theme (`ui.test.ts`).
+ */
+const DAYLIGHT: Record<'light' | 'dark', Colors> = {
+  light: { paper: '#F4F5F7', card: '#FFFFFFBD', desk: '#E4E7EC', ink: '#1A1E24', mut: '#48505B', acc: '#35619A', hl: '#F6E3B8', rule: '#1118211A', dot: '#11182112', shadow: '#000000', ok: '#287A4E', warn: '#8A5A12', bad: '#B8304A', slab: '#1A1E24', slabInk: '#F4F5F7', slabMut: '#C3C8D0', deck: '#2B3038', deckInk: '#F4F5F7', deckMut: '#C3C8D0', grain: 0, photo: 0, onAcc: '#FFFFFF' },
+  dark: { paper: '#0E1116', card: '#10141BAD', desk: '#07090C', ink: '#ECEEF1', mut: '#B5BBC4', acc: '#9BBBE0', hl: '#4A3F22', rule: '#FFFFFF1A', dot: '#FFFFFF12', shadow: '#000000', ok: '#5CC48A', warn: '#E0A64A', bad: '#F2768A', slab: '#07090C', slabInk: '#ECEEF1', slabMut: '#B5BBC4', deck: '#E3E6EA', deckInk: '#14181F', deckMut: '#48505B', grain: 0, photo: 0, onAcc: '#0E1116' },
+};
+export const palettes = { collage: COLLAGE, plain: PLAIN, refined: REFINED, original: ORIGINAL, daylight: DAYLIGHT };
 
 /** Art constants that are deliberately theme-independent, so they are tokens rather than literals
  *  pasted into components. `ONYX.dark` is the dial material of the dark-native clock faces: they keep it in the
@@ -140,7 +152,7 @@ export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', seri
  */
 export type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type' | 'script';
 /** `tnum`: tabular figures, so a ticking number never shifts its neighbours (the plain look's numerals). */
-export interface Face { fam: string; k: number; track: number; tnum?: boolean }
+export interface Face { fam: string; k: number; track: number; tnum?: boolean; w?: '400' | '500' | '600' | '700' }
 export type TypeMap = Record<FontKey, Face>;
 const INK_TYPE: TypeMap = {
   hand: { fam: FONT.hand, k: 1, track: 0 }, bold: { fam: FONT.handBold, k: 1, track: 0 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
@@ -156,6 +168,13 @@ const PLAIN_TYPE: TypeMap = {
   hand: { fam: FONT.plain, k: 0.88, track: 0 }, bold: { fam: FONT.plainSemi, k: 0.88, track: -0.1 }, serif: { fam: FONT.plain, k: 0.9, track: 0 }, serifB: { fam: FONT.plainMid, k: 0.9, track: 0 },
   marker: { fam: FONT.wide, k: 0.8, track: -0.6 }, type: { fam: FONT.plainMid, k: 0.9, track: 0, tnum: true }, script: { fam: FONT.plainMid, k: 0.88, track: 0 },
 };
+/** Daylight: the platform grotesque the v2 Today and Week pages are set in (D-1 names Inter; until its files
+ *  ship, the system face at Inter's weights), the italic serif kept for the mascot's voice (D-1 "Voice"), and
+ *  tabular figures everywhere. An empty family is the system face; `w` carries the weight it cannot. */
+const DAY_TYPE: TypeMap = {
+  hand: { fam: '', k: 0.86, track: 0, w: '400' }, bold: { fam: '', k: 0.84, track: 0, w: '600' }, serif: { fam: FONT.serif, k: 0.96, track: 0 }, serifB: { fam: FONT.serifB, k: 0.96, track: 0 },
+  marker: { fam: '', k: 0.86, track: -0.35, w: '600' }, type: { fam: '', k: 0.86, track: 0, tnum: true, w: '500' }, script: { fam: '', k: 0.86, track: 0, w: '500' },
+};
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;
 export const RS = { h: [30, 12, 26, 10], v: [10, 24, 12, 30] } as const;
@@ -164,11 +183,12 @@ export const RS = { h: [30, 12, 26, 10], v: [10, 24, 12, 30] } as const;
  *  `collage` = torn coloured paper with a white core along the tear and a soft lift shadow, `plain` = a clean
  *  rounded card with a hairline and a soft shadow, on smooth stock. */
 export type Look = 'ink' | 'collage' | 'plain';
-export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints }
+/** `sky`: Daylight. The look is still `plain` (rounded, no drawing), but the page is the sky and a card is glass. */
+export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints; sky?: boolean }
 export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean): Theme {
   const dark = s.theme === 'auto' ? systemDark : s.theme === 'dark', mode = dark ? 'dark' : 'light';
-  const pal = palettes[s.palette] ? s.palette : 'collage', base = palettes[pal][mode];
-  const acc = (PENS[s.pen] ?? PENS.denim)[mode], look: Look = pal === 'collage' ? 'collage' : pal === 'plain' ? 'plain' : 'ink';
-  return { c: { ...base, acc }, dark, font: FONT, look, type: look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode] };
+  const pal = palettes[s.palette] ? s.palette : 'collage', base = palettes[pal][mode], sky = pal === 'daylight';
+  const acc = (PENS[s.pen] ?? PENS.denim)[mode], look: Look = pal === 'collage' ? 'collage' : pal === 'plain' || sky ? 'plain' : 'ink';
+  return { c: { ...base, acc }, dark, font: FONT, look, type: sky ? DAY_TYPE : look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode], sky };
 }
 export const hexA = (hex: string, a: number) => `${hex.slice(0, 7)}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

@@ -7,7 +7,9 @@ import { NavScrap } from '../ui/collage/NavScrap';
 import { useTheme } from '../ui/theme-context';
 import { act, useStore, type RouteName } from '../store/store';
 import { hexA } from '../tokens/theme';
+import { SHADOW, V2 } from '../tokens/v2';
 import { FS, NAV_BODY, navInset } from '../ui/fit';
+import { toured } from '../domain/defaults';
 import { TornSheet } from '../ui/collage/Torn';
 import { useKeyboardUp } from '../ui/keyboard';
 import { ScreenLive } from '../ui/live';
@@ -56,7 +58,7 @@ function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
 }
 function BookView({ initialRouteName, children, screenOptions, id }: { initialRouteName?: string; children: React.ReactNode; screenOptions?: object; id?: string }) {
   const { state, descriptors, navigation, NavigationContent } = useNavigationBuilder(TabRouter, { initialRouteName, children, screenOptions, id } as never) as unknown as { state: Nav; descriptors: Record<string, { render: () => React.ReactNode }>; navigation: { navigate: (n: never) => void }; NavigationContent: React.ComponentType<{ children: React.ReactNode }> };
-  const route = useStore((s) => s.route), { c, look, tints } = useTheme(), ins = useSafeAreaInsets(), [navW, setNavW] = useState(0);
+  const route = useStore((s) => s.route), { c, look, tints, sky, dark } = useTheme(), ins = useSafeAreaInsets(), [navW, setNavW] = useState(0);
   /* The tour points at three of the five tabs — it rings the Week tab, then the To-do tab, then the
      Grades tab as the stand-in for the two that read the marks back. Three slots and one lookup is the
      whole of the tour's footprint in this file; the other two tabs are never pointed at. */
@@ -93,7 +95,10 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
      tap on it would be `act.go` to the route it already holds, which does nothing. */
   /* `adjustResize` already leaves the bar at the bottom of the *visible* area, so a floating bar and a
      62 dp + button sitting on the content being typed near is what is wrong; both yield to the keyboard. */
-  const hideNav = cur === 'Focus' || kbUp;
+  const touring = !toured(useStore((s) => s.settings.onboarded));
+  /* The tour covers the shell, but on Android the bar's shadow (elevation) draws above a later sibling
+     whatever its zIndex, so it showed through onboarding. The tour never uses the nav, so it is not drawn. */
+  const hideNav = cur === 'Focus' || kbUp || touring;
   return (
     <NavigationContent>
       <View style={{ flex: 1, backgroundColor: c.paper }}>
@@ -124,11 +129,12 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
           </View>
         ) : (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
-            <HandBox seed="nav" fill={c.card} sw={2} amp={1.6} style={{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }}>
+            {/* Daylight: the nav island (D-10) — a strong-glass pill with a shadow, the current tab in a quiet `fill` capsule. */}
+            <HandBox seed="nav" fill={sky ? V2[dark ? 'dark' : 'light'].glassStrong : c.card} sw={2} amp={1.6} style={[{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }, sky ? { borderRadius: 28, boxShadow: `0 8px 24px ${hexA(SHADOW, 0.14)}` } : null]}>
               {TABS.map((t) => { const on = cur === t.name; return (
                 <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? hexA(c.acc, 0.2) : 'transparent', borderWidth: on ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
-                  <Txt f="bold" s={14.5} c={on ? 'acc' : 'mut'}>{t.label}</Txt>
+                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? (sky ? V2[dark ? 'dark' : 'light'].fill : hexA(c.acc, 0.2)) : 'transparent', borderWidth: on && !sky ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on && !sky ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
+                  <Txt f="bold" s={14.5} c={sky ? (on ? 'ink' : 'mut') : on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}
             </HandBox>
           </View>))}

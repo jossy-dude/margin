@@ -7,6 +7,8 @@ import { useReduceMotion, useTheme } from './theme-context';
 import { useStore } from '../store/store';
 import { MARGIN, PAPER } from '../tokens/theme';
 import { FLECKS, TILE, grainOn } from './paper-flecks';
+import { V2 } from '../tokens/v2';
+import { Sky } from './Sky';
 
 /* How long a ruling or texture change takes to fade. */
 const PAPER_MS = 220;
@@ -18,6 +20,19 @@ const RULED = 28;
  * mounted copies sharing a literal id resolve each other's `url(#…)`.
  */
 export function PaperBg({ card = false }: { card?: boolean }) {
+  const { sky } = useTheme(), skyMode = useStore((s) => s.settings.sky);
+  /* Daylight has no paper: a page is the sky of the hour, a sheet is strong glass (D-3, D-17). */
+  if (sky) return <DayGround card={card} mode={skyMode} />;
+  return <Paper card={card} />;
+}
+
+function DayGround({ card, mode }: { card: boolean; mode: 'live' | 'still' | 'off' }) {
+  const { dark } = useTheme(), scheme = dark ? 'dark' as const : 'light' as const;
+  if (card) return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].glassStrong }]} />;
+  return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><Sky mode={mode} scheme={scheme} /></>;
+}
+
+function Paper({ card }: { card: boolean }) {
   const { c, dark, look } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), setTex = useStore((s) => s.settings.texture);
   const on = look === 'plain' ? 0 : grainOn(setTex);
   const id = useId();

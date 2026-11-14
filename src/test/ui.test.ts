@@ -2,6 +2,9 @@ import { makeTheme, palettes, PENS, RG } from '../tokens/theme';
 import { handPath, outline, scaleRadii, tornTape } from '../ui/hand';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { SOUND_NAMES } from '../services/audio';
+
+jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({}), setAudioModeAsync: async () => {} }));
 
 const lum = (h: string) => { const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const [r, g, b] = [1, 3, 5].map((i) => f(parseInt(h.slice(i, i + 2), 16) / 255)); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
 const cr = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
@@ -111,7 +114,8 @@ describe('the palette invariants that are not contrast', () => {
     // Rationale (collage look): a third palette joined the two, and it is the new default; the two old
     // ones are kept, untouched, and still selectable.
     // Rationale (v0.6): the plain look is a fourth palette beside them; nothing old was removed.
-    expect(Object.keys(palettes).sort()).toEqual(['collage', 'original', 'plain', 'refined']);
+    // Rationale (v0.7): Daylight is a fifth Style; its own pages draw from tokens/v2, the rest borrow Plain's paper.
+    expect(Object.keys(palettes).sort()).toEqual(['collage', 'daylight', 'original', 'plain', 'refined']);
     for (const p of Object.values(palettes)) for (const mode of ['light', 'dark'] as const) expect(p[mode].paper).toMatch(/^#[0-9A-F]{6}$/i);
   });
 });
@@ -128,96 +132,35 @@ describe('hand-drawn geometry', () => {
   });
 });
 
-/* ------------------------------------------------------------------ WAV, no dependencies.
-   The manifest is written by the same script that writes the audio, so grading the manifest
-   against itself proves nothing. Everything below opens the real bytes. */
-interface Wav { x: Float64Array; rate: number }
-function readWav(path: string): Wav {
-  const b = readFileSync(path);
-  if (b.toString('latin1', 0, 4) !== 'RIFF' || b.toString('latin1', 8, 12) !== 'WAVE') throw new Error(`${path}: not RIFF/WAVE`);
-  let off = 12, rate = 0, bits = 0, fmt = 0, ch = 1, data: Buffer | null = null;
-  while (off + 8 <= b.length) {
-    const id = b.toString('latin1', off, off + 4), sz = b.readUInt32LE(off + 4);
-    if (id === 'fmt ') { fmt = b.readUInt16LE(off + 8); ch = b.readUInt16LE(off + 10); rate = b.readUInt32LE(off + 12); bits = b.readUInt16LE(off + 22); }
-    else if (id === 'data') data = b.subarray(off + 8, Math.min(off + 8 + sz, b.length));
-    off = off + 8 + sz + (sz % 2);
-  }
-  if (!data || fmt !== 1 || bits !== 16) throw new Error(`${path}: expected 16-bit PCM`);
-  const n = Math.floor(data.length / 2 / ch), x = new Float64Array(n);
-  for (let i = 0; i < n; i++) x[i] = (data.readInt16LE(i * 2 * ch) as number) / 32768;
-  return { x, rate };
-}
-/** 2nd-order RBJ section, Q defaulting to Butterworth. */
-function biquad(x: Float64Array, type: 'lp' | 'hp', f: number, rate: number, q = 0.7071): Float64Array {
-  const w = (2 * Math.PI * f) / rate, c = Math.cos(w), al = Math.sin(w) / (2 * q);
-  const [b0, b1, b2] = type === 'lp' ? [(1 - c) / 2, 1 - c, (1 - c) / 2] : [(1 + c) / 2, -(1 + c), (1 + c) / 2];
-  const a0 = 1 + al, a1 = -2 * c, a2 = 1 - al, y = new Float64Array(x.length);
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < x.length; i++) { const o = (b0 * (x[i] as number) + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x[i] as number; y2 = y1; y1 = o; y[i] = o; }
-  return y;
-}
-const rms = (x: Float64Array) => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / x.length); };
-/** 200 Hz-8 kHz RMS: the band a phone speaker can actually reproduce. */
-const bandRms = (x: Float64Array, rate: number) => rms(biquad(biquad(x, 'hp', 200, rate), 'lp', 8000, rate));
-/** Energy-weighted spectrum: sub-200 Hz share and spectral centroid.
-    N=4096 at hop=512, and short files are centred in the frame. Both matter: a 45 ms tick is one
-    frame, and content sitting at the start of the frame lands where a Hann window is shut, which
-    would report pure leakage instead of the sound. */
-function spectrum(x: Float64Array, rate: number) {
-  const N = 4096, hop = 512, win = new Float64Array(N);
-  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
-  const pad = x.length < N ? (N - x.length) >> 1 : 0, m = x.length + 2 * pad;
-  let low = 0, tot = 0, num = 0;
-  for (let s = 0; s < m; s += hop) {
-    const re = new Float64Array(N), im = new Float64Array(N);
-    for (let i = 0; i < N && s + i < m; i++) { const j = s + i - pad; if (j >= 0 && j < x.length) re[i] = (x[j] as number) * (win[i] as number); }
-    for (let i = 1, j = 0; i < N; i++) { let bit = N >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { const t = re[i] as number; re[i] = re[j] as number; re[j] = t; } }
-    for (let len = 2; len <= N; len <<= 1) {
-      const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang);
-      for (let i = 0; i < N; i += len) { let cr = 1, ci = 0; for (let k = 0; k < len / 2; k++) { const h = len / 2, ur = re[i + k] as number, ui = im[i + k] as number; const vr = (re[i + k + h] as number) * cr - (im[i + k + h] as number) * ci, vi = (re[i + k + h] as number) * ci + (im[i + k + h] as number) * cr; re[i + k] = ur + vr; im[i + k] = ui + vi; re[i + k + h] = ur - vr; im[i + k + h] = ui - vi; const nc = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nc; } }
-    }
-    for (let k = 1; k < N / 2; k++) { const e = (re[k] as number) ** 2 + (im[k] as number) ** 2, f = (k * rate) / N; tot += e; if (f < 200) low += e; num += f * e; }
-  }
-  return { sub200: tot ? (100 * low) / tot : 100, centroid: tot ? num / tot : 0 };
-}
-const stats = (x: Float64Array, rate: number) => {
-  let peak = 0, sum = 0;
-  for (const v of x) { const a = Math.abs(v); if (a > peak) peak = a; sum += v; }
-  return { seconds: x.length / rate, peak, dc: sum / x.length, bandDb: 20 * Math.log10(bandRms(x, rate)), ...spectrum(x, rate) };
-};
-
-/* One sound folder. The palette checks below used to run on a tracked copy in `assets/sounds-candidates/`
-   (gitignored, yet 29 files were still committed), which meant they measured files the app never loads. v0.5
-   points them at `assets/sounds/`, the folder `src/services/audio.ts` requires, and untracks the copy. */
+/* The shipped set: scripts/sounds/build.mjs writes assets/sounds/*.ogg from picks.json (v0.7, chosen by ear on the
+   audition page). The old WAV checks read 16-bit PCM directly; OGG needs a decoder, so lengths and levels are checked
+   by `build.mjs --measure` and this test pins the file list and the credits instead. */
 const LIVE = join(__dirname, '../../assets/sounds');
-/** Every sound src/services/fx.ts can ask for (the keys of `src/services/audio.ts`). nudge has its own file:
-    the off-track warning had been borrowing tick.wav, so muting the clock also silenced the warning. It is
-    back in this list because the shipped folder has it; the candidate copy never did. */
-const EXPECTED = ['blip', 'break-start', 'bump', 'clack', 'crumple', 'detent-1', 'detent-2', 'detent-3', 'detent-4', 'done', 'flutter', 'notify', 'nudge', 'place', 'round-done', 'shuffle', 'stamp-absent', 'stamp-cancel', 'stamp-here', 'stamp-late', 'stamp-sick', 'tape-peel', 'thud', 'thunk', 'tick', 'tock', 'toggle-off', 'toggle-on'];
-/** Fired faster than the eye can follow, so these must stay inside the 30-120 ms window. */
-const RAPID = ['tick', 'tock', 'toggle-on', 'toggle-off', 'clack', 'detent-1', 'detent-2', 'detent-3', 'detent-4'];
+/** Every sound src/services/fx.ts can ask for (the keys of `src/services/audio.ts`). `n_*` and `alarm_*` are the
+    notification and alarm tones; they are copied into res/raw and never loaded by Metro. */
+const EXPECTED = ['absent', 'absent_sick', 'break', 'cancel', 'chime', 'click', 'crumple', 'detent_a', 'detent_b', 'detent_c', 'done', 'done_undone', 'knock', 'knock_low', 'low', 'mark', 'mark_late', 'page', 'peel', 'pop', 'pop_off', 'round', 'slide', 'start', 'tick', 'tick_tock'];
 
 describe('shipped palette (assets/sounds/, the files the app loads)', () => {
-  const files = readdirSync(LIVE).filter((f) => f.endsWith('.wav')).map((f) => f.replace('.wav', '')).sort();
-  it('covers exactly the sounds fx.ts asks for, no gaps and no strays', () => {
+  const files = readdirSync(LIVE).filter((f) => f.endsWith('.ogg') && !/^(n|alarm)_/.test(f)).map((f) => f.replace('.ogg', '')).sort();
+  it('covers exactly the sounds audio.ts loads, no gaps and no strays', () => {
     expect(files).toEqual(EXPECTED);
-    expect(files).toHaveLength(28);
+    expect([...SOUND_NAMES].sort()).toEqual(EXPECTED);
   });
-  const shipped = new Map(files.map((n) => { const w = readWav(join(LIVE, `${n}.wav`)); return [n, stats(w.x, w.rate)] as const; }));
-  it('rapid-fire sounds stay inside the 30-120 ms window, nothing runs long and nothing clips', () => {
-    for (const n of RAPID) { const s = shipped.get(n) as { seconds: number }; expect({ sound: n, rapid: s.seconds >= 0.03 && s.seconds <= 0.12 }).toEqual({ sound: n, rapid: true }); }
-    for (const [n, s] of shipped) { expect({ sound: n, len: s.seconds > 0.03 && s.seconds < 1.3, peak: s.peak < 1 }).toEqual({ sound: n, len: true, peak: true }); }
+  it('ships the notification and alarm tones next to them', () => {
+    const tones = readdirSync(LIVE).filter((f) => /^(n|alarm)_.*\.ogg$/.test(f));
+    expect(tones).toEqual(expect.arrayContaining(['n_class.ogg', 'n_task.ogg', 'n_focus.ogg', 'alarm_musicbox.ogg', 'alarm_classic.ogg']));
   });
 });
-describe('the sounds are credited recordings (scripts/fetch-sounds.mjs)', () => {
+describe('the sounds are credited recordings (scripts/sounds/build.mjs)', () => {
   const credits = readFileSync(join(LIVE, 'CREDITS.md'), 'utf8');
   it('every credited clip is public domain and names its source', () => {
     const rows = credits.split('\n').filter((l) => l.startsWith('| `'));
-    expect(rows.length).toBeGreaterThanOrEqual(20);
-    for (const r of rows) { expect(r).toContain('CC0 1.0'); expect(r).toMatch(/https?:\/\//); expect(r).not.toMatch(/\| LL-/); }
+    expect(rows.length).toBeGreaterThanOrEqual(30);
+    for (const r of rows) { expect(r).toMatch(/CC0 1\.0|PDM/); expect(r).toMatch(/https?:\/\//); }
   });
-  it('credits only sounds the app ships', () => {
-    for (const n of [...credits.matchAll(/^\| `([\w-]+)`/gm)].map((m) => m[1]!)) expect(EXPECTED).toContain(n);
+  it('credits only files that are shipped', () => {
+    const shipped = readdirSync(LIVE);
+    for (const n of [...credits.matchAll(/^\| `([\w.-]+)`/gm)].map((m) => m[1]!)) expect(shipped).toContain(n);
   });
 });
 

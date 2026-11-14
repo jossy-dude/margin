@@ -130,17 +130,25 @@ function AlarmSound() {
     <View style={{ gap: 6 }}>
       <Label>Alarm sound</Label>
       {playing ? <Btn icon="pause" label="Stop" testID="tone-stop" onPress={stop} /> : null}
-      {tones.slice(0, 12).map((t) => (
-        <Pressable key={t.id} accessibilityRole="radio" accessibilityState={{ checked: chosen === t.id }} accessibilityLabel={`${t.title}. Tap to hear it and choose it`}
-          onPress={() => { native.chooseAlarmTone(t.id); setChosen(t.id); if (native.previewTone(t.id)) setPlaying(t.id); }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 8, borderRadius: 10, backgroundColor: chosen === t.id ? c.hl : 'transparent' }}>
-          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
-            {chosen === t.id ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.ink }} /> : null}
+      {[['margin', 'Margin tones'], ['phone', "Phone's tones"]].map(([kind, title]) => {
+        const list = tones.filter((t) => (t.kind ?? 'phone') === kind).slice(0, 12);
+        return list.length === 0 ? null : (
+          <View key={kind} style={{ gap: 6 }}>
+            <Txt f="serif" s={13} c="mut">{title}</Txt>
+            {list.map((t) => (
+              <Pressable key={t.id} accessibilityRole="radio" accessibilityState={{ checked: chosen === t.id }} accessibilityLabel={`${t.title}. Tap to hear it and choose it`}
+                onPress={() => { native.chooseAlarmTone(t.id); setChosen(t.id); if (native.previewTone(t.id)) setPlaying(t.id); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 8, borderRadius: 10, backgroundColor: chosen === t.id ? c.hl : 'transparent' }}>
+                <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
+                  {chosen === t.id ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.ink }} /> : null}
+                </View>
+                <Txt f="serif" s={16} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt>
+                {playing === t.id ? <Txt f="serif" s={13} c="mut">playing</Txt> : null}
+              </Pressable>
+            ))}
           </View>
-          <Txt f="serif" s={16} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt>
-          {playing === t.id ? <Txt f="serif" s={13} c="mut">playing</Txt> : null}
-        </Pressable>
-      ))}
+        );
+      })}
     </View>
   );
 }

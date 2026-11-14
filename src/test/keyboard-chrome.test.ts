@@ -15,7 +15,7 @@ const kb = readFileSync(join(__dirname, '..', 'ui', 'keyboard.ts'), 'utf8');
 describe('floating chrome yields to the keyboard (BUG-028)', () => {
   it('the nav is hidden while the keyboard is up, and only for that reason added', () => {
     // `hideNav` already covered the Focus route; the keyboard is the second reason.
-    expect(book).toMatch(/const hideNav = cur === 'Focus' \|\| kbUp;/);
+    expect(book).toMatch(/const hideNav = cur === 'Focus' \|\| kbUp \|\| touring;/);
     expect(book).toMatch(/!hideNav && \(/);
   });
 

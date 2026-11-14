@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Keyboard, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
+import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Btn, Chip, HandBox, Icon, Txt, faceOf } from '../ui/kit';
 import { PACKS, programs, sectionsOf } from '../domain/packs';
 import { PaperBg } from '../ui/PaperBg';
@@ -21,7 +21,10 @@ import type { OnboardDoor } from '../store/session';
 import * as notifs from '../services/notifications';
 import { fx } from '../services/fx';
 import { Legend } from './Legend';
-import { PAPER } from '../tokens/theme';
+import { PAPER, hexA, makeTheme } from '../tokens/theme';
+import { SKY as DAY_SKY, V2 } from '../tokens/v2';
+import { Sky as DaySky } from '../ui/Sky';
+import type { Settings } from '../domain/types';
 
 /* ──────────────────────────────────────────────────────────────────────────────────────────────────────
  * The onboarding: five pages of paper, swiped like a stack of index cards.
@@ -43,8 +46,12 @@ const REST = [ONBOARDING.welcome, ONBOARDING.layout, ONBOARDING.name, ONBOARDING
 type Perm = 'unknown' | 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
 export function Onboarding({ firstRun }: { firstRun: boolean }) {
-  const { c } = useTheme(), ins = useSafeAreaInsets(), { width: W, height: H } = useWindowDimensions(), reduce = useReduceMotion();
-  const settings = useStore((s) => s.settings);
+  const { c, look: cut, dark } = useTheme(), ins = useSafeAreaInsets(), win = useWindowDimensions(), reduce = useReduceMotion();
+  /* The tour's own laid-out size, not the window's. On Android edge-to-edge the window height can leave out
+     the system navigation strip, and a tour sized from it stopped short of the bottom with the app showing
+     through underneath. The root fills its parent (absoluteFill) and every page is sized from what it got. */
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null), W = box?.w ?? win.width, H = box?.h ?? win.height;
+  const settings = useStore((s) => s.settings), daylight = settings.palette === 'daylight', scheme = dark ? 'dark' as const : 'light' as const;
   const [page, setPage] = useState(0), [name, setName] = useState(settings.name ?? ''), [typing, setTyping] = useState(false);
   const [range, setRange] = useState({ semesterStart: settings.semesterStart, semesterEnd: settings.semesterEnd });
   const [door, setDoor] = useState<OnboardDoor>(firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
@@ -58,9 +65,9 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const pager = useRef<Animated.ScrollView>(null), gone = useRef(false), touch = useRef({ x: 0, y: 0, t: 0 }), steerT = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* Where Scrap stands on each page: centre x, centre y, scale. */
-  const heroBottom = ins.top + 56 + Math.min(H * 0.42, 380), hero5 = ins.top + 56 + Math.min(H * 0.27, 230);
+  const heroBottom = ins.top + 56 + Math.min(H * 0.27, 230), hero5 = ins.top + 56 + Math.min(H * 0.27, 230);
   const anchors = [
-    { cx: W / 2, cy: heroBottom - 34 - (SZH * 1.2) / 2, s: 1.2 },
+    { cx: W / 2, cy: heroBottom - 22 - (SZH * 1.05) / 2, s: 1.05 },
     { cx: W - 58, cy: ins.top + 96, s: 0.36 },
     { cx: W - 70, cy: ins.top + 150, s: 0.5 },
     { cx: W - 58, cy: ins.top + 96, s: 0.36 },
@@ -141,7 +148,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   /* Each page clips its own collage: a piece drifting with the swipe never wanders onto the next page. */
   const pageShell = (i: number, art: React.ReactNode, body: React.ReactNode) => (
     <View key={i} style={{ width: W, height: H, overflow: 'hidden' }}>
-      <Drift x={x} i={i} W={W}>{art}</Drift>
+      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : null}</Drift>
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 62, paddingHorizontal: 24, paddingBottom: FOOT + ins.bottom + 12, minHeight: H }}>
         <Words x={x} i={i} W={W}>{body}</Words>
       </ScrollView>
@@ -151,20 +158,26 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
      the art — the reference's hero, cut the same way. */
   const heroShell = (i: number, top: number, art: React.ReactNode, body: React.ReactNode) => (
     <View key={i} style={{ width: W, height: H, overflow: 'hidden' }}>
-      <Drift x={x} i={i} W={W}>{art}</Drift>
+      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : <Halo cx={anchors[i]!.cx} cy={anchors[i]!.cy} r={(SZH * anchors[i]!.s) * 0.62} />}</Drift>
       <Animated.ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={i === 0 ? onY0 : onY4} contentContainerStyle={{ minHeight: H }}>
         <View style={{ height: top }} />
-        <TornSheet seed={`ob-sheet-${i}`} style={{ flexGrow: 1 }}>
-          <View style={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: FOOT + ins.bottom + 12 }}><Words x={x} i={i} W={W}>{body}</Words></View>
-        </TornSheet>
+        <Sheet i={i}>
+          <View style={{ paddingHorizontal: 24, paddingTop: cut === 'collage' ? 10 : 22, paddingBottom: FOOT + ins.bottom + 12 }}><Words x={x} i={i} W={W}>{body}</Words></View>
+        </Sheet>
       </Animated.ScrollView>
     </View>
   );
 
   return (
-    <Animated.View testID="onboarding" style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H, zIndex: 5000, backgroundColor: c.paper }, lifted]}
+    <Animated.View testID="onboarding" style={[StyleSheet.absoluteFill, { zIndex: 5000, backgroundColor: daylight ? V2[scheme].flat : c.paper }, lifted]}
+      onLayout={(e) => {
+        /* Whole dp and a 1 dp dead band: the page sizes are derived from this box, so a sub-pixel wobble in the
+           measured size must not set state again, or layout → state → layout loops ("Maximum update depth"). */
+        const w = Math.round(e.nativeEvent.layout.width), h = Math.round(e.nativeEvent.layout.height);
+        if (w > 0 && h > 0 && (!box || Math.abs(w - box.w) > 1 || Math.abs(h - box.h) > 1)) setBox({ w, h });
+      }}
       onTouchStart={onTouchStart} onTouchMove={steerAt} onTouchEnd={onTouchEnd}>
-      <PaperBg />
+      {daylight ? <DaySky mode={settings.sky === 'off' ? 'still' : settings.sky} scheme={scheme} /> : <PaperBg />}
       <Animated.ScrollView ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
         onMomentumScrollEnd={(e) => { const j = Math.round(e.nativeEvent.contentOffset.x / W); if (j !== page) arrive(j); }}>
         {heroShell(0, heroBottom - 6, <>
@@ -175,9 +188,12 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <Art name="leaf" w={44} rot={-24} style={{ position: 'absolute', left: 18, top: heroBottom - 150 }} />
           <Art name="leaf-sage" w={38} rot={14} style={{ position: 'absolute', left: 52, top: heroBottom - 134 }} />
         </>, <>
-          <Kicker>Your school planner</Kicker>
           <Title>Hi, I&apos;m Jot.</Title>
-          <Body>I juggle your classes, homework and exams so you don&apos;t have to. All on this phone, no account.</Body>
+          <Kicker style={{ marginTop: 14 }}>Pick your style</Kicker>
+          <StylePicker W={W} value={settings.palette === 'original' ? 'refined' : settings.palette} onChange={(p) => { void act.setSettings({ palette: p }); fx.select(); faceRef.current?.bounce(); }} />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }} accessibilityRole="radiogroup" accessibilityLabel="Light or dark">
+            {([['light', 'Light'], ['dark', 'Dark'], ['auto', 'Auto']] as const).map(([v, l]) => <Chip key={v} small label={l} on={settings.theme === v} onPress={() => { void act.setSettings({ theme: v }); fx.select(); }} />)}
+          </View>
         </>)}
         {pageShell(1, <>
           <Art name="dot" w={74} style={{ position: 'absolute', right: 20, top: ins.top + 56 }} />
@@ -194,8 +210,8 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
         </>, <>
           <Kicker>First things first</Kicker>
           <Title style={{ marginRight: 112 }}>What should I call you?</Title>
-          <NamePaper name={name} onName={onName} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} onDone={() => goTo(3)} />
-          <Txt f="serif" s={17} c="mut" style={{ marginTop: 14, minHeight: 24 }}>{name.trim() ? `Nice to meet you, ${name.trim()}.` : 'First name, or leave it blank.'}</Txt>
+          <NamePaper cut={cut} name={name} onName={onName} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} onDone={() => goTo(3)} />
+          <Txt f="serif" s={17} c="mut" style={{ marginTop: 14, minHeight: 24 }}>{name.trim() ? `Nice to meet you, ${name.trim()}.` : ''}</Txt>
         </>)}
         {pageShell(3, <>
           <Art name="scrap-sand" w={150} rot={9} style={{ position: 'absolute', right: -64, top: ins.top + 210 }} />
@@ -206,7 +222,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <HandBox seed="ob-term" fill={c.card} style={{ padding: 14, marginTop: 14 }}>
             <SemesterRange start={range.semesterStart} end={range.semesterEnd} onChange={(p) => setRange(p)} />
           </HandBox>
-          <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where&apos;s your timetable?</Txt>
+          <Kicker style={{ marginTop: 22 }}>Your timetable</Kicker>
           <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); if (d === 'import') play('importPreview'); else clear(); }} />
         </>)}
         {heroShell(4, hero5 - 6, <>
@@ -216,23 +232,21 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
         </>, <>
           <Kicker>Reminders</Kicker>
           <Title>A nudge before class.</Title>
-          <View style={{ gap: 10, marginTop: 12 }}>
-            <Why icon="clock" text="Before each class, with the room." />
-            <Why icon="exam" text="Before a deadline or exam." />
-            <Why icon="timer" text="When a focus round ends." />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+            <Why icon="clock" text="Classes" />
+            <Why icon="exam" text="Deadlines" />
+            <Why icon="timer" text="Focus" />
           </View>
-          <Txt f="serif" s={15} c="mut" style={{ marginTop: 12 }}>Sent from this phone only. Tune them in Settings → Reminders.</Txt>
           <View style={{ marginTop: 16, gap: 8 }}>
             {perm === 'granted'
               ? <PermNote tone="ok" text="Reminders are on." />
-              : perm === 'denied' ? <PermNote tone="warn" text="No problem. Turn them on later in Settings → Reminders." />
+              : perm === 'denied' ? <PermNote tone="warn" text="Later, in Settings → Reminders." />
               : perm === 'unavailable' ? <PermNote tone="mut" text="The web preview cannot send reminders." />
               : <Btn kind="primary" icon="bell" label="Allow reminders" onPress={() => { void ask(); }} />}
           </View>
           {PACKS.length ? (
             <View style={{ marginTop: 22, gap: 6 }}>
-              <Txt f="bold" s={20} accessibilityRole="header">Because I&apos;m generous like that</Txt>
-              <Txt f="serif" s={15.5} c="mut">In DRB2503? Pick your section and your whole timetable is done.</Txt>
+              <Kicker>Your class, ready-made</Kicker>
               <ClassPicker value={pack} onChange={(id) => { setPack(pack === id ? null : id); fx.select(); faceRef.current?.bounce(); }} />
               {pack ? <PermNote tone="ok" text="Done. Long-press a class on Week to change it." /> : null}
             </View>
@@ -265,13 +279,18 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
 
 /* ── pieces ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-const Kicker = ({ children }: { children: string }) => <Txt f="type" s={13} c="acc" maxFontSizeMultiplier={FS} style={{ letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 }}>{children}</Txt>;
+const Kicker = ({ children, style }: { children: string; style?: object }) => <Txt f="type" s={13} c="acc" maxFontSizeMultiplier={FS} accessibilityRole="header" style={[{ letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 }, style]}>{children}</Txt>;
 const Title = ({ children, style }: { children: React.ReactNode; style?: object }) => <Txt f="marker" s={44} maxFontSizeMultiplier={1.3} accessibilityRole="header" style={[{ lineHeight: 50 }, style]}>{children}</Txt>;
-const Body = ({ children }: { children: React.ReactNode }) => <Txt f="serif" s={19} c="mut" style={{ marginTop: 12, lineHeight: 26 }}>{children}</Txt>;
 
+/** One thing a reminder is sent for: an icon on a tile and one word. */
 function Why({ icon, text }: { icon: string; text: string }) {
   const { c } = useTheme();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={19} color={c.acc} /></View><Txt f="hand" s={19} style={{ flex: 1 }}>{text}</Txt></View>;
+  return (
+    <HandBox seed={`why-${icon}`} fill={c.card} style={{ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 14 }}>
+      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: hexA(c.acc, 0.14), alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={21} color={c.acc} /></View>
+      <Txt f="bold" s={15} maxFontSizeMultiplier={FS}>{text}</Txt>
+    </HandBox>
+  );
 }
 function PermNote({ tone, text }: { tone: 'ok' | 'warn' | 'mut'; text: string }) {
   const { c } = useTheme();
@@ -279,9 +298,18 @@ function PermNote({ tone, text }: { tone: 'ok' | 'warn' | 'mut'; text: string })
 }
 
 /** The name is written on a torn piece of ruled paper, in a hand. */
-function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; onName: (s: string) => void; onFocus: () => void; onBlur: () => void; onDone: () => void }) {
+function NamePaper({ cut, name, onName, onFocus, onBlur, onDone }: { cut: 'ink' | 'collage' | 'plain'; name: string; onName: (s: string) => void; onFocus: () => void; onBlur: () => void; onDone: () => void }) {
   /* The scrap is cream in both themes, so its ink is fixed dark, never the theme's. */
   const th = useTheme(), { c } = th, { width } = useWindowDimensions();
+  /* The torn ruled scrap is a collage piece; every other style writes the name on its own kind of card. */
+  if (cut !== 'collage') return (
+    <HandBox seed="ob-name" fill={c.card} style={{ marginTop: 22, paddingHorizontal: 18, paddingVertical: 14 }}>
+      <TextInput testID="onboarding-name" value={name} onChangeText={onName} onFocus={onFocus} onBlur={onBlur} onSubmitEditing={onDone} placeholder="Your name" placeholderTextColor={c.mut}
+        autoCapitalize="words" autoCorrect={false} maxLength={40} returnKeyType="next" accessibilityLabel="Your name" selectionColor={c.acc} maxFontSizeMultiplier={FS}
+        style={{ ...faceOf(th, cut === 'ink' ? 'script' : 'bold', cut === 'ink' ? 36 : 28), color: c.ink, paddingVertical: 0, height: 48 }} />
+      <View style={{ height: 2, borderRadius: 1, backgroundColor: name.trim() ? c.acc : hexA(c.ink, 0.15), marginTop: 4 }} />
+    </HandBox>
+  );
   return (
     <View style={{ marginTop: 22, height: 132, transform: [{ rotate: '-1.4deg' }] }}>
       <Art name="ruled-wide" w={Math.min(400, width - 30)} style={{ position: 'absolute', left: -14, top: -12 }} />
@@ -294,23 +322,23 @@ function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; on
   );
 }
 
-const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
-  { id: 'import', icon: 'import', title: 'Bring my data back', line: 'A Margin backup or export, or a JSON or CSV file.', tint: 'sky' },
-  { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, add subjects with +.', tint: 'sage', first: true },
-  { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample term to try.', tint: 'sand', first: true },
-  { id: 'keep', icon: 'check', title: 'Keep my planner as it is', line: 'Nothing changes.', tint: 'cream', later: true },
+const DOORS: { id: OnboardDoor; icon: string; title: string; short: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
+  { id: 'import', icon: 'import', title: 'Bring my data back', short: 'Import', line: 'A Margin backup or export, or a JSON or CSV file.', tint: 'sky' },
+  { id: 'hand', icon: 'pencil', title: 'Set it up by hand', short: 'By hand', line: 'Start empty, add subjects with +.', tint: 'sage', first: true },
+  { id: 'sample', icon: 'book', title: 'Look around first', short: 'Sample', line: 'A sample term to try.', tint: 'sand', first: true },
+  { id: 'keep', icon: 'check', title: 'Keep my planner as it is', short: 'Keep mine', line: 'Nothing changes.', tint: 'cream', later: true },
 ];
 function Doors({ firstRun, value, onChange }: { firstRun: boolean; value: OnboardDoor; onChange: (d: OnboardDoor) => void }) {
   const { c, tints } = useTheme();
   const list = DOORS.filter((d) => (firstRun ? !d.later : !d.first) && (!d.packs || PACKS.length > 0));
   return (
-    <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+    <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
       {list.map((d, i) => { const on = d.id === value; return (
-        <Pressable key={d.id} testID={`door-${d.id}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${d.title}. ${d.line}`} onPress={() => onChange(d.id)}>
-          <HandBox seed={`door-${d.id}`} fill={tints[d.tint]} stroke={on ? c.acc : undefined} cut="torn" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, transform: [{ rotate: `${(i % 2 ? 0.6 : -0.5)}deg` }, { scale: on ? 1.015 : 1 }] }}>
-            <Icon name={d.icon} size={22} color={c.ink} />
-            <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={18}>{d.title}</Txt><Txt f="serif" s={14.5} c="mut">{d.line}</Txt></View>
-            <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: on ? c.acc : c.mut, alignItems: 'center', justifyContent: 'center' }}>{on && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.acc }} />}</View>
+        /* A tile per door: the icon and one or two words. The full sentence is what a screen reader says. */
+        <Pressable key={d.id} testID={`door-${d.id}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${d.title}. ${d.line}`} onPress={() => onChange(d.id)} style={{ flex: 1 }}>
+          <HandBox seed={`door-${d.id}`} fill={on ? tints[d.tint] : c.card} stroke={on ? c.acc : undefined} sw={on ? 2.4 : 1.6} cut="cut" style={{ alignItems: 'center', gap: 8, paddingVertical: 16, paddingHorizontal: 4, minHeight: 96, transform: [{ rotate: `${(i % 2 ? 0.6 : -0.5)}deg` }, { scale: on ? 1.03 : 1 }] }}>
+            <Icon name={d.icon} size={24} color={on ? c.ink : c.mut} />
+            <Txt f="bold" s={15} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ textAlign: 'center' }}>{d.short}</Txt>
           </HandBox>
         </Pressable>); })}
     </View>
@@ -328,6 +356,72 @@ function ClassPicker({ value, onChange }: { value: string | null; onChange: (id:
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{sectionsOf(prog).map((p) => <Chip key={p.id} label={`Section ${p.section}`} on={value === p.id} onPress={() => onChange(p.id)} />)}</View>
     </HandBox>
   );
+}
+
+/** Page one's choice: the four Styles, each drawn as a tiny page of itself (its own paper, card, accent
+ *  and display face) so the choice is seen rather than read. Picking one restyles the tour at once. */
+const STYLES: readonly (readonly [Exclude<Settings['palette'], 'original'>, string])[] = [['collage', 'Collage'], ['plain', 'Plain'], ['refined', 'Notebook'], ['daylight', 'Daylight']];
+function StylePicker({ W, value, onChange }: { W: number; value: Settings['palette']; onChange: (p: Settings['palette']) => void }) {
+  const w = Math.floor((Math.min(W, 520) - 48 - 10) / 2);
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }} accessibilityRole="radiogroup" accessibilityLabel="Style">
+      {STYLES.map(([id, label]) => <StyleCard key={id} id={id} label={label} w={w} on={value === id} onPress={() => onChange(id)} />)}
+    </View>
+  );
+}
+function StyleCard({ id, label, w, on, onPress }: { id: Settings['palette']; label: string; w: number; on: boolean; onPress: () => void }) {
+  const { c } = useTheme(), s = useStore((st) => st.settings), sys = useColorScheme() === 'dark';
+  const p = makeTheme({ theme: s.theme, palette: id, pen: s.pen }, sys), sc = p.dark ? 'dark' as const : 'light' as const, day = id === 'daylight';
+  const r = p.look === 'plain' ? 12 : p.look === 'collage' ? 2 : 5, line = day ? V2[sc].ink3 : hexA(p.c.ink, 0.28);
+  return (
+    <Pressable testID={`style-${id}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${label} style`} onPress={onPress}
+      style={{ width: w, height: 112, borderRadius: r + 6, overflow: 'hidden', borderWidth: on ? 2.5 : 1, borderColor: on ? c.acc : hexA(c.ink, 0.18), backgroundColor: day ? DAY_SKY[sc].noon[1] : p.c.paper }}>
+      {day ? <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 56, backgroundColor: DAY_SKY[sc].noon[0] }} /> : null}
+      <View style={{ margin: 10, marginBottom: 0, padding: 8, gap: 5, borderRadius: r, backgroundColor: day ? V2[sc].glassStrong : p.c.card, borderWidth: p.look === 'ink' ? 1.4 : 0, borderColor: p.c.ink, transform: [{ rotate: p.look === 'collage' ? '-1.5deg' : '0deg' }] }}>
+        <View style={{ width: 28, height: 6, borderRadius: 3, backgroundColor: day ? V2[sc].now : p.c.acc }} />
+        <View style={{ width: '82%', height: 4, borderRadius: 2, backgroundColor: line }} />
+        <View style={{ width: '56%', height: 4, borderRadius: 2, backgroundColor: line }} />
+      </View>
+      <Text maxFontSizeMultiplier={FS} numberOfLines={1} style={{ fontFamily: p.type.marker.fam, fontSize: 19, color: day ? V2[sc].ink : p.c.ink, marginHorizontal: 12, marginTop: 8 }}>{label}</Text>
+      {on ? <View style={{ position: 'absolute', right: 8, top: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: c.acc, alignItems: 'center', justifyContent: 'center' }}><Icon name="check" size={14} color={c.onAcc} sw={2.6} /></View> : null}
+    </Pressable>
+  );
+}
+
+/** What Jot stands in front of on the two hero pages, per Style: the collage has its hills and sun; Plain a
+ *  soft disc of colour, Notebook a pencilled ring, Daylight a pool of light in its sky. */
+function Halo({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  const { c, look, tints, dark } = useTheme(), day = useStore((s) => s.settings.palette === 'daylight');
+  const size = r * 2.6, half = size / 2;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: cx - half, top: cy - half, width: size, height: size }}>
+      <Svg width={size} height={size}>
+        {day ? <>
+          <Circle cx={half} cy={half} r={r * 1.25} fill={dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.35)'} />
+          <Circle cx={half} cy={half} r={r} fill={dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.55)'} />
+        </> : look === 'plain' ? <>
+          <Circle cx={half + r * 0.55} cy={half - r * 0.5} r={r * 0.42} fill={hexA(tints.sand, 0.9)} />
+          <Circle cx={half} cy={half} r={r} fill={hexA(tints.sky, 0.85)} />
+        </> : <>
+          <Circle cx={half} cy={half} r={r} fill={hexA(c.acc, 0.08)} stroke={c.ink} strokeWidth={1.6} strokeDasharray="7 6" />
+          <Path d={`M${half - r * 0.9} ${half + r * 1.12} q${r * 0.45} -10 ${r * 0.9} 0 t${r * 0.9} 0`} stroke={c.acc} strokeWidth={2.2} fill="none" strokeLinecap="round" />
+        </>}
+      </Svg>
+    </View>
+  );
+}
+
+/** The sheet the hero pages' words sit on, per Style: torn paper, a rounded card, a ruled page, or glass. */
+function Sheet({ i, children }: { i: number; children: React.ReactNode }) {
+  const { c, look, dark } = useTheme(), day = useStore((s) => s.settings.palette === 'daylight');
+  if (look === 'collage' && !day) return <TornSheet seed={`ob-sheet-${i}`} style={{ flexGrow: 1 }}>{children}</TornSheet>;
+  const sc = dark ? 'dark' : 'light';
+  const st = day
+    ? { backgroundColor: V2[sc].glassStrong, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: StyleSheet.hairlineWidth, borderColor: V2[sc].ring }
+    : look === 'plain'
+      ? { backgroundColor: c.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }
+      : { backgroundColor: c.card, borderTopLeftRadius: 6, borderTopRightRadius: 6, borderTopWidth: 1.6, borderColor: c.ink };
+  return <View style={[{ flexGrow: 1 }, st]}>{children}</View>;
 }
 
 /** Scrap's travel between page anchors: position and size follow the pager exactly, with a hop in between. */

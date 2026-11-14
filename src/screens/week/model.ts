@@ -25,7 +25,12 @@ export interface WeekVM {
 
 const short = (ms: number) => `${new Date(ms).getDate()} ${MO[new Date(ms).getMonth()]?.slice(0, 3)}`;
 /** Minutes since midnight as `HH:MM`, the timetable's own format. */
-export const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+/** Which weekday columns the grid draws (Monday = 0). Monday to Friday always; Saturday and Sunday only when
+ *  something is on them (a class or a due task), so an empty weekend does not take two sevenths of the width
+ *  and squeeze every clash into slivers. `busy[i]` says whether day i has anything. */
+export const shownDays = (busy: readonly boolean[]): number[] => [0, 1, 2, 3, 4, 5, 6].filter((i) => i < 5 || !!busy[i]);
+
+export const hhmm =(m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 export function weekView(i: WeekInput): WeekVM {
   const today = startOfDay(i.now), mon = addDays(mondayOf(i.now), i.off * 7);

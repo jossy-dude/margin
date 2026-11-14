@@ -15,16 +15,19 @@ import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
 import { pageFace } from '../ui/mascot/moments';
+import { shownDays } from './week/model';
 
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks };
   /* In the collage each class is a slip of its subject's own paper (the colour it has everywhere else). */
   const { c, look, tints } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
-  const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 0.95, H = (end - start) * PX;
-  const gw = width - 32, tw = 30, cw = (gw - tw) / 7, hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start / 60 + i);
+  const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 1.2, H = (end - start) * PX;
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
   const due = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= mon && t.dueAt < mon + 7 * 86_400_000);
+  /* An empty weekend is not drawn: seven columns left a clash two ~25 dp slivers with the room cut to "L…". */
+  const cols = shownDays(DW.map((_, i) => { const d = addDays(mon, i); return occurrencesOn(new Date(d), st.meetings).length > 0 || due.some((t) => startOfDay(t.dueAt as number) === d); }));
+  const gw = width - 32, tw = 30, cw = (gw - tw) / cols.length, hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start / 60 + i);
   const nowY = ((now - startOfDay(now)) / 60_000 - start) * PX;
   /* The tour's attendance step rings the first block of the week — Monday's first class — which is the
      block it says "tap once, then hold" about. It is a ref on a control that already exists; the tour
@@ -55,7 +58,7 @@ export function WeekScreen() {
       right={<Row style={{ gap: 4, flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="back" a11y="Previous week" onPress={() => { setOff(off - 1); fx.swipe(); }} />{off !== 0 ? <Btn small kind="ghost" label="Today" onPress={() => setOff(0)} /> : null}<Btn small kind="ghost" icon="chevron" a11y="Next week" onPress={() => { setOff(off + 1); fx.swipe(); }} /></Row>}>
       <Animated.View style={turned}>
       <HandBox seed="wk" style={{ padding: 0 }} sw={1.8}>
-        <View style={{ flexDirection: 'row', paddingLeft: tw }}>{DW.map((d, i) => { const day = addDays(mon, i), today = day === startOfDay(now); return <View key={d} style={{ width: cw, alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1.4, borderColor: c.rule }}><Txt f="serif" s={12.5} c={today ? 'acc' : 'mut'}>{d}</Txt><Txt f="marker" s={17} c={today ? 'acc' : 'ink'}>{new Date(day).getDate()}</Txt></View>; })}</View>
+        <View style={{ flexDirection: 'row', paddingLeft: tw }}>{cols.map((i) => { const d = DW[i] as string, day = addDays(mon, i), today = day === startOfDay(now); return <View key={d} style={{ width: cw, alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1.4, borderColor: c.rule }}><Txt f="serif" s={12.5} c={today ? 'acc' : 'mut'}>{d}</Txt><Txt f="marker" s={17} c={today ? 'acc' : 'ink'}>{new Date(day).getDate()}</Txt></View>; })}</View>
         <View style={{ height: H, flexDirection: 'row' }}>
           {/* This grid used to open with a `<Defs><Pattern id="hx" … patternTransform="rotate(45)">` — a
               45° hatch at 6 px that NOTHING filled with. `rg 'url(#hx)' src/` returns no hits, so it was
@@ -63,7 +66,7 @@ export function WeekScreen() {
               the page. The rules below are the grid; the hatch was never on it. */}
           <Svg width={gw} height={H} style={{ position: 'absolute' }}>
             {hours.map((h, i) => <Line key={h} x1={tw - 4} x2={gw} y1={i * 60 * PX + 0.5} y2={i * 60 * PX + 0.5} stroke={c.dot} strokeWidth={1} />)}
-            {DW.map((_, i) => <Line key={i} x1={tw + i * cw} x2={tw + i * cw} y1={0} y2={H} stroke={c.dot} strokeWidth={1} />)}
+            {cols.map((_, j) => <Line key={j} x1={tw + j * cw} x2={tw + j * cw} y1={0} y2={H} stroke={c.dot} strokeWidth={1} />)}
             {off === 0 && nowY > 0 && nowY < H && <Line x1={tw - 4} x2={gw} y1={nowY} y2={nowY} stroke={c.acc} strokeWidth={2} />}
             {off === 0 && nowY > 0 && nowY < H && <Rect x={tw - 8} y={nowY - 3} width={6} height={6} rx={3} fill={c.acc} />}
           </Svg>
@@ -72,7 +75,7 @@ export function WeekScreen() {
                 (the gutter is 30 px wide with `right: 4`, and `12p` measures ~20 px at s=11.5, so it fits); 24-hour stays bare. */}
             {hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: hourTop(i, H, PX), right: 4 }}>{hour12 ? String(h % 12 === 0 ? 12 : h % 12) + (h < 12 ? 'a' : 'p') : h}</Txt>)}
           </View>
-          {DW.map((_, i) => {
+          {cols.map((i) => {
             const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
             /* S2: classes that overlap share the column side by side instead of stacking on one spot. */
             const lay = lanes(occ.map(({ meeting: m }) => { const a = hm(m.start), b = hm(m.end); return { start: a, end: b > a ? b : b + 24 * 60 }; }));

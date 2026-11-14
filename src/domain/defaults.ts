@@ -1,14 +1,10 @@
 import type { NotifSettings, Settings, SoundGroup } from './types';
 
 export const SOUND_GROUPS: { id: SoundGroup; label: string; hint: string }[] = [
-  { id: 'paper', label: 'Paper', hint: 'page placing, swiping, crumpling' },
-  { id: 'stamp', label: 'Attendance stamp', hint: 'marking a class' },
-  { id: 'done', label: 'Task done', hint: 'pencil tick and chime' },
-  { id: 'notify', label: 'Reminder chime', hint: 'in-app, while the app is open' },
-  { id: 'toggle', label: 'Switches', hint: 'settings clicks' },
-  { id: 'dial', label: 'Focus dial', hint: 'crunchy detents, start, stop' },
-  { id: 'clock', label: 'Clock tick', hint: 'old-clock tik-tak while focusing' },
-  { id: 'break', label: 'Break', hint: 'tape stick and peel' },
+  { id: 'taps', label: 'Taps', hint: 'page turns, swipes, switches, the focus dial and clock tick' },
+  { id: 'marks', label: 'Marks', hint: 'attendance, deleting, peeling the break sticker' },
+  { id: 'confirm', label: 'Confirmations', hint: 'task done, in-app reminder chime' },
+  { id: 'focus', label: 'Focus', hint: 'focus start, round done, break' },
 ];
 
 export const DEFAULT_NOTIF: NotifSettings = {
@@ -28,19 +24,31 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '', theme: 'light', paper: 'ruled', pen: 'warm', palette: 'refined', texture: 'grain', lookV: LOOK_V,
   clock: 'field', bar: 'glass', semesterStart: '2026-09-07', semesterEnd: '',
   hour12: false,
-  soundOn: true, soundVol: { paper: 0.8, stamp: 0.9, done: 0.9, notify: 0.9, toggle: 0.6, dial: 0.9, clock: 0.35, break: 0.8 },
+  soundOn: true, soundVol: { taps: 0.8, marks: 0.9, confirm: 0.9, focus: 0.9 },
   hapticsOn: true, tickOn: true, lockAttendance: false, reduceMotion: 'system', sky: 'live',
   taskFilter: 'open', taskSubject: '', taskSort: 'due', seededAt: 0,
   breakMin: 5, breaksPerRound: 2, focusFlow: true, focusPresetMin: 25,
   notif: DEFAULT_NOTIF,
 };
 
+/** v0.6 stored eight sliders (paper, stamp, done, dial, …); v0.7 has four. Each new slider takes the old one that
+ *  covered most of its sounds, so a phone keeps its levels; the old keys are dropped on the next save. */
+const OLD_SOUND: Record<SoundGroup, string> = { taps: 'paper', marks: 'stamp', confirm: 'done', focus: 'dial' };
+function soundVolOf(v: Partial<Record<string, number>> | undefined): Record<SoundGroup, number> {
+  const out = { ...DEFAULT_SETTINGS.soundVol };
+  for (const g of Object.keys(out) as SoundGroup[]) {
+    const n = v?.[g] ?? v?.[OLD_SOUND[g]];
+    if (typeof n === 'number' && Number.isFinite(n)) out[g] = n;
+  }
+  return out;
+}
+
 export const withDefaults = (s: Partial<Settings>): Settings => ({
   ...DEFAULT_SETTINGS, ...s, ...lookUpgrade(s),
   /* BUGS #7: "All" is gone (done tasks are an archive, not a mode of the list). A stored 'all' reads as 'open';
      the KV row is rewritten on the next save, so no SQL migration. */
   taskFilter: (s.taskFilter as string) === 'done' ? 'done' : 'open',
-  soundVol: { ...DEFAULT_SETTINGS.soundVol, ...(s.soundVol ?? {}) },
+  soundVol: soundVolOf(s.soundVol),
   notif: { ...DEFAULT_NOTIF, ...(s.notif ?? {}) },
 });
 

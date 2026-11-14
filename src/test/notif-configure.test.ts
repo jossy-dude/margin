@@ -70,27 +70,34 @@ describe('configureNotifications', () => {
     expect(mockState.handler).toHaveLength(1);
     expect(await behaves()).toEqual({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false });
     expect(mockState.categories).toEqual([CAT_ATT, CAT_TASK]);
-    expect(mockState.channels.map((c) => c.id)).toEqual(['classes', 'tasks', 'focus']);
+    expect(mockState.channels.map((c) => c.id)).toEqual(['classes_v2', 'tasks_v2', 'focus_v2']);
   });
 
   it('gives each channel a name, a description, an importance and a vibration pattern', async () => {
     reset();
     await boot();
     const c = channels();
-    for (const id of ['classes', 'tasks', 'focus'] as const) {
+    for (const id of ['classes_v2', 'tasks_v2', 'focus_v2'] as const) {
       expect({ id, name: typeof c[id]!.name, desc: typeof c[id]!.description }).toEqual({ id, name: 'string', desc: 'string' });
       expect((c[id]!.name as string).length).toBeGreaterThan(0);
       expect((c[id]!.vibrationPattern as number[]).length).toBeGreaterThan(0);
     }
     // The two reminder channels are heads-up; the focus one is not allowed to interrupt.
-    expect([c.classes!.importance, c.tasks!.importance, c.focus!.importance]).toEqual([4, 4, 3]);
-    expect([c.classes!.enableVibrate, c.tasks!.enableVibrate]).toEqual([true, true]);
+    expect([c.classes_v2!.importance, c.tasks_v2!.importance, c.focus_v2!.importance]).toEqual([4, 4, 3]);
+    expect([c.classes_v2!.enableVibrate, c.tasks_v2!.enableVibrate]).toEqual([true, true]);
+  });
+
+  it('v0.7: each channel rings its own chime from res/raw (a channel keeps its first sound, hence the _v2 ids)', async () => {
+    reset();
+    await boot();
+    const c = channels();
+    expect([c.classes_v2!.sound, c.tasks_v2!.sound, c.focus_v2!.sound]).toEqual(['n_class.ogg', 'n_task.ogg', 'n_focus.ogg']);
   });
 
   it('a category this phone refuses no longer costs the channels (F-04.1)', async () => {
     reset({ category: true });
     await expect(boot()).resolves.toBeDefined(); // …the refusal must not escape either
-    expect(mockState.channels.map((c) => c.id)).toEqual(['classes', 'tasks', 'focus']);
+    expect(mockState.channels.map((c) => c.id)).toEqual(['classes_v2', 'tasks_v2', 'focus_v2']);
     expect(mockState.handler).toHaveLength(1);
   });
 
@@ -101,9 +108,9 @@ describe('configureNotifications', () => {
   });
 
   it('one channel refused does not cost the other two', async () => {
-    reset({ channel: 'tasks' });
+    reset({ channel: 'tasks_v2' });
     await boot();
-    expect(mockState.channels.map((c) => c.id)).toEqual(['classes', 'focus']);
+    expect(mockState.channels.map((c) => c.id)).toEqual(['classes_v2', 'focus_v2']);
   });
 
   it('a second call changes nothing — boot configures once, not once per screen', async () => {
@@ -128,15 +135,15 @@ describe('configureNotifications', () => {
     reset();
     await boot(undefined, true);
     const c = channels();
-    expect([c.classes!.lockscreenVisibility, c.tasks!.lockscreenVisibility, c.focus!.lockscreenVisibility]).toEqual([undefined, undefined, undefined]);
+    expect([c.classes_v2!.lockscreenVisibility, c.tasks_v2!.lockscreenVisibility, c.focus_v2!.lockscreenVisibility]).toEqual([undefined, undefined, undefined]);
   });
 
   it('puts SECRET on the two reminder channels when the toggle is off, and not on the focus channel', async () => {
     reset();
     await boot(undefined, false);
     const c = channels();
-    expect([c.classes!.lockscreenVisibility, c.tasks!.lockscreenVisibility]).toEqual([3, 3]);
-    expect(c.focus!.lockscreenVisibility).toBeUndefined();
+    expect([c.classes_v2!.lockscreenVisibility, c.tasks_v2!.lockscreenVisibility]).toEqual([3, 3]);
+    expect(c.focus_v2!.lockscreenVisibility).toBeUndefined();
   });
 });
 
@@ -146,7 +153,7 @@ describe('applyLockscreenText (the D4 toggle re-applying the channels)', () => {
     const m = await boot();
     mockState.channels = []; mockState.handler = []; mockState.categories = [];
     await m.applyLockscreenText(false);
-    expect(mockState.channels.map((c) => c.id)).toEqual(['classes', 'tasks']);
+    expect(mockState.channels.map((c) => c.id)).toEqual(['classes_v2', 'tasks_v2']);
     expect(mockState.channels.map((c) => c.cfg.lockscreenVisibility)).toEqual([3, 3]);
     // The handler and categories are boot's business; re-applying a toggle must not re-register them.
     expect({ handler: mockState.handler.length, categories: mockState.categories.length }).toEqual({ handler: 0, categories: 0 });
@@ -168,13 +175,13 @@ describe('status reads the lock-screen visibility back off the phone', () => {
   it('reports what the classes channel actually does, not what the setting asked for', async () => {
     reset();
     const m = await boot();
-    mockState.readChannels = { classes: { lockscreenVisibility: 3 } };
+    mockState.readChannels = { classes_v2: { lockscreenVisibility: 3 } };
     expect((await m.status()).lockText).toBe('secret');
-    mockState.readChannels = { classes: { lockscreenVisibility: 1 } };
+    mockState.readChannels = { classes_v2: { lockscreenVisibility: 1 } };
     expect((await m.status()).lockText).toBe('public');
-    mockState.readChannels = { classes: { lockscreenVisibility: 2 } };
+    mockState.readChannels = { classes_v2: { lockscreenVisibility: 2 } };
     expect((await m.status()).lockText).toBe('private');
-    mockState.readChannels = { classes: { lockscreenVisibility: 0 } };
+    mockState.readChannels = { classes_v2: { lockscreenVisibility: 0 } };
     expect((await m.status()).lockText).toBe('unknown');
   });
 
@@ -182,7 +189,7 @@ describe('status reads the lock-screen visibility back off the phone', () => {
     reset();
     const m = await boot();
     expect((await m.status()).lockText).toBeNull(); // no channel has ever been created
-    mockState.readChannels = { classes: { lockscreenVisibility: 3 } }; mockState.readFails = true;
+    mockState.readChannels = { classes_v2: { lockscreenVisibility: 3 } }; mockState.readFails = true;
     expect((await m.status()).lockText).toBeNull(); // the read itself failed
   });
 });

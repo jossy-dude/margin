@@ -11,7 +11,7 @@ import { Face } from '../ui/mascot/Face';
 import { TodayPage } from '../screens/today/TodayPage';
 import { TIPS } from '../screens/today/TodayV2';
 import { splitPlace } from '../screens/today/kitv2';
-import { getState, hydrate, stopResync } from '../store/store';
+import { getState, hydrate, stopResync, act as act2 } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
@@ -77,7 +77,7 @@ async function page(tasks: Task[] = []) {
   jest.useFakeTimers({ now: NOW });
   const repo = new MemoryRepository(() => NOW);
   await repo.seed({ courses: [course('B', 'Database Systems', ['L-4']), course('E', 'Intro to Economics', ['B-12'])], meetings: [meeting('m1', 'B', '09:00', '09:50'), meeting('m2', 'E', '13:15', '14:05')],
-    attendance: {}, dayMarks: {}, tasks, notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9 } });
+    attendance: {}, dayMarks: {}, tasks, notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9, palette: 'daylight', lookV: 2 } });
   await hydrate(repo);
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => { r = TestRenderer.create(React.createElement(TodayPage)); });
@@ -90,16 +90,19 @@ const has = (r: TestRenderer.ReactTestRenderer, id: string) => r.root.findAll((n
 const faces = (r: TestRenderer.ReactTestRenderer) => r.root.findAllByType(Face);
 
 describe('Today route (R1)', () => {
-  it('shows the v0.7 Today; "Classic Today" shows the v0.6 one, and the pill brings the new one back', async () => {
+  it('Daylight shows the v0.7 Today; every other Style shows the v0.6 one, and switching Style swaps it live', async () => {
     const r = await page();
     expect(has(r, 'today-v2')).toBe(true);
     expect(has(r, 'now-card')).toBe(true);
     expect(has(r, 'clock-face')).toBe(false);
-    await press(r, 'today-classic');
-    expect(has(r, 'today-v2')).toBe(false);
-    expect(has(r, 'clock-face')).toBe(true); // the v0.6 page, whole: its clock, its deck, its lists
-    expect(leaves(r.toJSON()).join(' | ')).toContain('This week');
-    await press(r, 'today-new');
+    expect(has(r, 'today-classic')).toBe(false); // no peek button any more: the Style is the switch
+    for (const palette of ['collage', 'plain', 'refined'] as const) {
+      await act(async () => { act2.setSettings({ palette }); });
+      expect(has(r, 'today-v2')).toBe(false);
+      expect(has(r, 'clock-face')).toBe(true); // the v0.6 page, whole: its clock, its deck, its lists
+      expect(leaves(r.toJSON()).join(' | ')).toContain('This week');
+    }
+    await act(async () => { act2.setSettings({ palette: 'daylight' }); });
     expect(has(r, 'today-v2')).toBe(true);
   });
 

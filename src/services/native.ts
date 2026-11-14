@@ -35,6 +35,8 @@ interface MarginNative {
   syncStatus(): string;
   syncPushBridge(json: string): boolean;
   syncTimer(json: string): boolean;
+  syncNow(): boolean;
+  syncClearErrors(): boolean;
   syncInbox(): string;
   syncObsidianCode(): string;
   syncNetworks(): string;
@@ -100,6 +102,11 @@ export interface SyncStatus {
   paired: boolean; state: 'off' | 'dormant' | 'ready' | 'live'; live: boolean; mode: string | null; obsidian: boolean; hotspot: boolean;
   deviceId: string; lastOk: number; cursor: number; outbox: number; presence: { deviceId: string; role: string; name?: string }[];
   lastError: string | null; vault: boolean; fast: boolean;
+  /** v0.7.1: newest first, last 20; absent on older builds */
+  errors?: { at: number; msg: string }[];
+  /** hub clock − phone clock, ms (timer maths) */
+  offset?: number; hubOnline?: boolean;
+  scanAt?: number; scanMs?: number; scanFiles?: number; pushedAt?: number; sending?: number;
   stats: { day: string; liveMs: number; connects: number; catchups: number; rx: number; tx: number; err: number; lastErr: string | null }[];
 }
 const parse = <T,>(s: string | null): T | null => { if (!s) return null; try { return JSON.parse(s) as T; } catch { return null; } };
@@ -111,6 +118,9 @@ export const syncStart = () => safe((m) => m.syncStart(), false);
 export const syncStatus = (): SyncStatus | null => parse<SyncStatus>(safe<string | null>((m) => m.syncStatus(), null));
 export const syncPushBridge = (rows: unknown) => safe((m) => m.syncPushBridge(JSON.stringify(rows)), false);
 export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify(op)), false);
+/** Send the phone vault's changes now; false on builds before 0.7.1. */
+export const syncNow = () => safe((m) => m.syncNow(), false);
+export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
 /** Rows the service received while JS was not running; each is returned once. */
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
 export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
@@ -121,8 +131,8 @@ export const alarmRinging = () => safe<string>((m) => m.alarmRinging(), '');
 export const stopAlarm = () => safe((m) => m.stopAlarm(), false);
 
 /* ── alarm tones (v0.7 N6/R10) ───────────────────────────────────────────────────────────────────── */
-export interface AlarmTone { id: string; title: string }
-/** The phone's alarm tones ("default" first). Empty off Android. */
+export interface AlarmTone { id: string; title: string; /** v0.7: Margin's bundled tones, or the phone's own */ kind?: 'margin' | 'phone' }
+/** Margin's bundled tones, then the phone's ("default" first). Empty off Android and in Expo Go. */
 export const alarmTones = (): AlarmTone[] => parse<AlarmTone[]>(safe<string | null>((m) => m.alarmTones(), null)) ?? [];
 export const alarmTone = () => safe<string>((m) => m.alarmTone(), 'default');
 export const chooseAlarmTone = (id: string) => safe((m) => m.chooseAlarmTone(id), false);

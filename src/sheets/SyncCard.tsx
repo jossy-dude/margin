@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Field, HandBox, Txt } from '../ui/kit';
 import { useTheme } from '../ui/theme-context';
-import { syncForget, syncObsidianCode, syncPair, syncStatus, nativeAvailable, type SyncStatus } from '../services/native';
+import { syncClearErrors, syncForget, syncNow, syncObsidianCode, syncPair, syncStatus, nativeAvailable, type SyncStatus } from '../services/native';
 import { fmtTime } from '../domain/time';
 import { useStore } from '../store/store';
 
@@ -44,6 +44,14 @@ export function SyncCard() {
           <Btn small kind="ghost" icon="note" label="Connect phone Obsidian" testID="sync-obsidian-code" onPress={() => setCode(syncObsidianCode())} />
           {code ? <Txt f="bold" s={28} selectable testID="sync-code">{code.replace(/(\d{3})(\d{3})/, '$1 $2')}</Txt> : null}
           {code ? <Txt f="serif" s={14.5} c="mut">In Obsidian: Settings → Margin Bridge → Connect to Margin, type this code. It works for 10 minutes.</Txt> : null}
+          <Btn small kind="ghost" icon="check" label="Sync now" testID="sync-now" onPress={() => { syncNow(); setTimeout(() => setSt(syncStatus()), 1500); }} />
+          {st.scanAt ? <Txt f="type" s={13} c="mut" selectable testID="sync-scan">Phone vault checked {fmtTime(st.scanAt, hour12)} · {st.scanFiles} files in {((st.scanMs ?? 0) / 1000).toFixed(1)} s{st.pushedAt ? ` · last sent ${fmtTime(st.pushedAt, hour12)}` : ''}{st.sending ? ` · sending ${st.sending}` : ''}</Txt> : null}
+          {st.errors?.length ? (
+            <View style={{ gap: 4 }} testID="sync-errors">
+              {st.errors.slice(0, 5).map((e) => <Txt key={e.at + e.msg} f="serif" s={14} c="bad" selectable>{fmtTime(e.at, hour12)} · {e.msg}</Txt>)}
+              <Btn small kind="ghost" icon="trash" label="Clear sync problems" testID="sync-clear" onPress={() => { syncClearErrors(); setTimeout(() => setSt(syncStatus()), 300); }} />
+            </View>
+          ) : null}
           {today ? <Txt f="type" s={13} c="mut" selectable>Today: {today.connects} connects · {Math.round(today.liveMs / 60000)} min live · {Math.round((today.rx + today.tx) / 1024)} KB · {today.catchups} catch-ups{today.err ? ` · ${today.err} errors (${today.lastErr ?? ''})` : ''} · queue {st.outbox}</Txt> : null}
           <Btn small kind="ghost" icon="trash" label="Forget this desktop" testID="sync-forget" onPress={() => { syncForget(); setCode(null); setSt(syncStatus()); }} />
         </View>

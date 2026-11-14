@@ -209,7 +209,7 @@ function MovePanel({ d, vm, hour12, onChange, onClose }: { d: Draft; vm: WeekVM;
  * (the timetable). Under reduced motion nothing drags: holding a class opens the same choice with a day and a time.
  * One face (the top bar's, `pageFace('Week')`); a timetable with no classes at all is the page-wide empty state.
  */
-export function WeekV2({ onClassic }: { onClassic?: () => void }) {
+export function WeekV2() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance);
   const dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12), moves = useStore((s) => s.settings.moves), skyMode = useStore((s) => s.settings.sky);
   const { t, scheme } = useV2(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), live = useScreenLive();
@@ -293,7 +293,6 @@ export function WeekV2({ onClassic }: { onClassic?: () => void }) {
           </GlassCard>
         ) : null}
         {!empty ? <Button small kind="text" label="Add a class" a11y={`Add a class on ${vm.sel.dw}`} onPress={() => act.open({ t: 'meeting', weekday: vm.sel.wd })} style={{ alignSelf: 'flex-start' }} /> : null}
-        {onClassic ? <Button small kind="text" label="Classic Week" a11y="Show the classic Week, from version 0.6" testID="week-classic" onPress={onClassic} style={{ alignSelf: 'center', marginTop: SPACE.s2 }} /> : null}
       </ScrollView>
       {draft ? <MovePanel d={draft} vm={vm} hour12={hour12} onChange={setDraft} onClose={() => setDraft(null)} /> : null}
     </View>

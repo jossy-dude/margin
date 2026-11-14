@@ -171,8 +171,8 @@ describe('nothing is written until the end, then all of it in order', () => {
   });
   it('"Bring my data back" (D-22, R11) finishes and opens Import, where a backup, an export or a paste all land', async () => {
     const s = await mount(true);
-    expect(s.text()).toContain('Bring my data back');
-    expect(s.text()).toContain('A Margin backup or export, or a JSON or CSV file.');
+    /* the tile shows one word; the full sentence is what a screen reader hears */
+    expect(s.root.findAll((n) => n.props.testID === 'door-import')[0]!.props.accessibilityLabel).toBe('Bring my data back. A Margin backup or export, or a JSON or CSV file.');
     await s.press('door-import');
     await s.press('onboarding-start');
     expect(getState().sheet).toEqual({ t: 'settings' });
@@ -207,5 +207,20 @@ describe('the notification prompt follows its explanation and a tap, never an ar
   });
   it('the planner no longer asks by itself when it schedules', () => {
     expect(readFileSync(join(__dirname, '..', 'store', 'reminders.ts'), 'utf8')).not.toContain('ensurePermission(true)');
+  });
+});
+
+describe('page one picks the Style (v0.7)', () => {
+  it('shows the four Styles and a tap restyles at once', async () => {
+    const s = await mount(true, { palette: 'collage' });
+    for (const id of ['collage', 'plain', 'refined', 'daylight']) expect(s.root.findAll((n) => n.props.testID === `style-${id}`).length).toBeGreaterThan(0);
+    await s.press('style-daylight');
+    expect(getState().settings.palette).toBe('daylight');
+    expect(s.root.findAll((n) => n.props.testID === 'style-daylight' && n.props.accessibilityState)[0]!.props.accessibilityState).toEqual({ checked: true });
+  });
+  it('the tour fills its parent instead of the window, so nothing shows under it', () => {
+    const src = readFileSync(join(__dirname, '..', 'onboarding', 'Onboarding.tsx'), 'utf8');
+    expect(src).toContain('style={[StyleSheet.absoluteFill, { zIndex: 5000');
+    expect(src).not.toMatch(/position: 'absolute', left: 0, top: 0, width: W, height: H/);
   });
 });

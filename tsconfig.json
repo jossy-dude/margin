@@ -4,8 +4,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": { "@/*": ["./src/*"] },
     "types": ["jest", "node"]
   },
   "include": ["src/**/*", "index.ts", "*.d.ts"],

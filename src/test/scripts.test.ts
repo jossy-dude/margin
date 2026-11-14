@@ -18,8 +18,9 @@ function localPaths(cmd: string): string[] {
 describe('every npm script runs something that exists (BUG-012)', () => {
   it('the scripts block is not empty, so the check below is not vacuous', () => {
     expect(Object.keys(pkg.scripts).length).toBeGreaterThan(5);
-    expect(pkg.scripts.sounds).toContain('fetch-sounds.mjs'); // the one script that does exist
-    expect(existsSync(join(ROOT, 'scripts/fetch-sounds.mjs'))).toBe(true);
+    expect(pkg.scripts.sounds).toContain('scripts/sounds/build.mjs'); // v0.7: the Openverse build replaced fetch-sounds.mjs
+    expect(existsSync(join(ROOT, 'scripts/sounds/build.mjs'))).toBe(true);
+    expect(existsSync(join(ROOT, 'scripts/fetch-sounds.mjs'))).toBe(false);
     expect(existsSync(join(ROOT, 'scripts/synth-sounds.mjs'))).toBe(false); // v0.6: the synthesiser is gone, the sounds are recordings
   });
 
@@ -41,7 +42,7 @@ describe('every npm script runs something that exists (BUG-012)', () => {
   });
 
   it('the sounds script it kept still works, and no other script was touched', () => {
-    expect(pkg.scripts.sounds).toBe('node scripts/fetch-sounds.mjs --apply');
+    expect(pkg.scripts.sounds).toBe('node scripts/sounds/build.mjs --build --measure --install'); // v0.7 sound set
     for (const kept of ['check', 'test', 'lint', 'typecheck', 'boundaries', 'bundle']) expect(pkg.scripts[kept]).toBeTruthy();
   });
 

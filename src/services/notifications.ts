@@ -8,7 +8,18 @@ export interface NotifStatus { permission: 'granted' | 'denied' | 'undetermined'
    *  when there is no channel yet / the phone would not answer. The setting is the wish; this is the
    *  truth, and Delivery status prints this, not the wish. */
   lockText: ChannelVisibility | null }
-const CH = { classes: 'classes', tasks: 'tasks', focus: 'focus' } as const;
+/** v0.7: new ids, because Android fixes a channel's sound when the channel is created; the old ones are deleted.
+ *  The sounds are res/raw/n_*.ogg (scripts/sounds/build.mjs --install). */
+const CH = { classes: 'classes_v2', tasks: 'tasks_v2', focus: 'focus_v2' } as const;
+const OLD_CH = ['classes', 'tasks', 'focus'];
+/** Expo Go is its own app: our res/raw is not in it, and a channel naming a missing sound rings silent. There the
+ *  channels keep the phone's default sound (Settings already says "Expo Go uses the system sound"). */
+const inExpoGo = (() => {
+  // Lazy and guarded: tests that stub react-native cannot load expo-constants' native half.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  try { return (require('expo-constants').default as { executionEnvironment?: string }).executionEnvironment === 'storeClient'; } catch { return false; }
+})();
+const sound = (file: string) => (inExpoGo ? {} : { sound: file });
 const TEST = 'test';
 /** Exported so Delivery status can say a row is the test it sent, rather than passing a real
  *  reminder's row off as something the planner scheduled. */
@@ -21,9 +32,9 @@ type ChanCfg = Parameters<typeof N.setNotificationChannelAsync>[1];
  *  `lockscreenVisibility: SECRET` on the two reminder channels. The `focus` channel is not reminder
  *  text (it says a round ended), so D4 does not reach it. */
 const channelConfigs = (lockText: boolean): Record<'classes' | 'tasks' | 'focus', ChanCfg> => ({
-  classes: { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true, ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
-  tasks: { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true, ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
-  focus: { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120] },
+  classes: { name: 'Classes', description: 'Class starting soon and class ended', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 180, 90, 180], enableVibrate: true, ...sound('n_class.ogg'), ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
+  tasks: { name: 'Tasks & exams', description: 'Task, exam and start-by reminders', importance: N.AndroidImportance.HIGH, vibrationPattern: [0, 250, 120, 250], enableVibrate: true, ...sound('n_task.ogg'), ...(lockText ? {} : { lockscreenVisibility: N.AndroidNotificationVisibility.SECRET }) },
+  focus: { name: 'Focus timer', description: 'Round and break finished', importance: N.AndroidImportance.DEFAULT, vibrationPattern: [0, 120, 80, 120, 80, 120], ...sound('n_focus.ogg') },
 });
 
 let configured = false;
@@ -56,6 +67,7 @@ async function configureNow(lockText: boolean) {
     await chan(CH.classes, cfgs.classes);
     await chan(CH.tasks, cfgs.tasks);
     await chan(CH.focus, cfgs.focus);
+    for (const id of OLD_CH) { try { await N.deleteNotificationChannelAsync(id); } catch { /* already gone */ } }
   }
 }
 /** D4: re-apply the two reminder channels when the lock-screen text toggle changes. Boot already built

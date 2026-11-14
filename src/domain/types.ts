@@ -78,7 +78,8 @@ export interface Trip { id: string; startedAt: number; endedAt: number | null; r
  *  decision, and a `TEXT NOT NULL DEFAULT 'leave'` column needs no migration to carry a new one. */
 export interface Alarm { id: string; at: number; label: string; enabled: boolean; kind: string; taskId: string | null }
 
-export type SoundGroup = 'paper' | 'clock' | 'stamp' | 'done' | 'notify' | 'toggle' | 'dial' | 'break';
+/** v0.7: four sliders. Older rows store the eight v0.6 keys; `withDefaults` folds them in. */
+export type SoundGroup = 'taps' | 'marks' | 'confirm' | 'focus';
 export interface NotifSettings {
   enabled: boolean;
   classSoon: boolean; classLeadMin: number; courseLead: Record<string, number>;
@@ -108,7 +109,7 @@ export interface NotifSettings {
 export interface AlarmRule { id: string; label: string; kind: 'clock' | 'class'; h: number; m: number; days: boolean[]; lead: number; on: boolean; snooze: number; vib: boolean; once?: number }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
-  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original'; texture: 'grain' | 'none';
+  pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original' | 'daylight'; texture: 'grain' | 'none';
   clock: string; bar: string; semesterStart: string;
   /** The last day of term, `YYYY-MM-DD`; `''` means open-ended, which is the default. A settings KV
    *  row written before v0.3.1 has no such key, so `withDefaults` fills the empty string in — no SQL

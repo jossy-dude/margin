@@ -11,7 +11,7 @@ import { Face } from '../ui/mascot/Face';
 import { WeekPage } from '../screens/week/WeekPage';
 import { dropSlot, hhmm, slotId, slotOf, weekView, type WeekInput } from '../screens/week/model';
 import { gridName } from '../screens/week/WeekV2';
-import { getState, hydrate, stopResync } from '../store/store';
+import { getState, hydrate, stopResync, act as act2 } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
@@ -107,7 +107,7 @@ afterEach(async () => { await act(async () => { live?.unmount(); }); live = unde
 async function page() {
   jest.useFakeTimers({ now: THU });
   const repo = new MemoryRepository(() => THU);
-  await repo.seed({ courses: COURSES, meetings: MEETINGS, attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9 } });
+  await repo.seed({ courses: COURSES, meetings: MEETINGS, attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9, palette: 'daylight', lookV: 2 } });
   await hydrate(repo);
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => { r = TestRenderer.create(React.createElement(WeekPage)); });
@@ -120,14 +120,17 @@ const has = (r: TestRenderer.ReactTestRenderer, id: string) => r.root.findAll((n
 const disabled = (r: TestRenderer.ReactTestRenderer, id: string) => r.root.findAll((n) => n.props.testID === id && n.props.accessibilityState)[0]?.props.accessibilityState.disabled;
 
 describe('Week route (R2)', () => {
-  it('shows the v0.7 Week with one face; "Classic Week" shows the v0.6 one and the pill brings the new one back', async () => {
+  it('Daylight shows the v0.7 Week with one face; every other Style shows the v0.6 one', async () => {
     const r = await page();
     expect(has(r, 'week-v2')).toBe(true);
     expect(r.root.findAllByType(Face)).toHaveLength(1);
     expect(r.root.findAllByType(Face)[0]!.props).toMatchObject({ size: 28, decorative: true });
-    await call(r, 'week-classic');
-    expect(has(r, 'week-v2')).toBe(false);
-    await call(r, 'week-new');
+    expect(has(r, 'week-classic')).toBe(false);
+    for (const palette of ['collage', 'plain', 'refined'] as const) {
+      await act(async () => { act2.setSettings({ palette }); });
+      expect(has(r, 'week-v2')).toBe(false);
+    }
+    await act(async () => { act2.setSettings({ palette: 'daylight' }); });
     expect(has(r, 'week-v2')).toBe(true);
   });
 

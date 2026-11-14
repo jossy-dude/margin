@@ -45,6 +45,9 @@ class MarginNativeModule : Module() {
     /** Margin's own bridge rows (tasks, events, sessions) as JSON; JS debounces (750 ms). */
     Function("syncPushBridge") { json: String -> SyncEngine.pushBridge(json); true }
     Function("syncTimer") { json: String -> SyncEngine.timer(json); true }
+    /** Send the phone's changes now (and connect first if needed); v0.7.1. */
+    Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncEngine.scanNow(); true }
+    Function("syncClearErrors") { SyncEngine.init(context); SyncEngine.clearErrors(); true }
     /** Rows that arrived while JS was not running: [{kind, json}], removed once read. */
     Function("syncInbox") {
       SyncEngine.init(context)

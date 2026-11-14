@@ -13,7 +13,7 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
 - Margin, morning (after you woke): alarm can be silenced (volume keys, double tap, Silence action), ramps 15 → 100 %
   over 45 s, tone picker with Stop (N6/R10) · reminder rules engine + planner (R9) · widget 30-min wake-up gone (N7) ·
   v2 building blocks: tokens (U1), sky (U3), glass card (U4), bubble (U5), nav island (U6), twelve faces (U7).
-- Desktop (`~/Documents/Projects/vault-sync`, local git): `sync-core` (30 tests) and `bone-syncd` hub (9 tests incl. the
+- Desktop (`~/Documents/Projects/tools/vault-sync`, local git): `sync-core` (30 tests) and `bone-syncd` hub (9 tests incl. the
   phone plugin end to end). Dry run on your vault: 2,802 files hashed in 1.2 s.
 - Vault: F1 phone notes full width · F2 graph per device + reason when empty · V0 Bone v2 skin switch + tokens
   (contrast-checked) · V1 Log look · V3 veil (13 hidden, 91 blurred; Library "Hidden" filter; Recent covers).
@@ -25,7 +25,7 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
   carries the address).
 - Margin redesign: components exist, screens not rebuilt on them yet (Phase 5); sound set (A1–A4) and the three
   widgets (G1–G4) not started. Bone F3, V2, V4–V12 not started.
-- A full phone test (Opus agent, phone muted, DND on) ran this morning; its report is `~/Documents/Projects/test-reports/2026-11-13/TEST-REPORT.md` (kept off GitHub: screenshots show vault content).
+- A full phone test (Opus agent, phone muted, DND on) ran this morning; its report is `~/Documents/Projects/experiments/test-reports/2026-11-13/TEST-REPORT.md` (kept off GitHub: screenshots show vault content).
   Fixed since: #1 an alarm is always stoppable, #3/#4 chess promotion and drags, #10/#11 To-do Done labels and counts.
   Then (2026-11-14): #12 sample term removed whole (`b3cc37c`) · #13 time fields open the number keyboard (`73d4686`) ·
   #17 Focus pause: the clock logic holds still, pinned by a test (`868a455`); likely screenshot lag, recheck on the phone.
@@ -35,8 +35,8 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
 **Needs you**
 1. Wireless adb was off (it resets on reboot): re-enable it so I can test on the phone.
 2. Install the dev APK (`output/margin-0.7.0-dev-android.apk` once CI finishes; it installs beside the real app).
-3. Start the hub: `ln -s ~/Documents/Projects/vault-sync/systemd/bone-syncd.service ~/.config/systemd/user/ &&
-   systemctl --user enable --now bone-syncd`, then `node ~/Documents/Projects/vault-sync/daemon/bone-syncd.mjs pair`
+3. Start the hub: `ln -s ~/Documents/Projects/tools/vault-sync/systemd/bone-syncd.service ~/.config/systemd/user/ &&
+   systemctl --user enable --now bone-syncd`, then `node ~/Documents/Projects/tools/vault-sync/daemon/bone-syncd.mjs pair`
    and paste the text into the dev app (Settings → Obsidian). My sandbox refused to add a service.
 4. Release-key secrets (N2) and the data move stay yours, as agreed.
 
@@ -65,7 +65,7 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - **v0.7 in progress** (`docs/v07/PLAN.md`, decisions B1–B9 there):
   - done: BUGS #11 reconnect (`f63f727`), #7 To-do filter, item 8 export counts; N1 version, N4/N5 sync module + manifest
     (native CI green); Settings → Obsidian → Sync card; margin-bridge 0.7 live client (built, not yet in the vault).
-  - desktop half lives in `~/Documents/Projects/vault-sync/` (sync-core + `bone-syncd`, read-only first).
+  - desktop half lives in `~/Documents/Projects/tools/vault-sync/` (sync-core + `bone-syncd`, read-only first).
   - not started: N2 release signing (owner), N3 migration 7, N6 alarm engine, N7 widgets, Phases 4–7 (redesign, sound, widgets).
 ## Open facts
 - No release-key build has ever run: the four secrets in `docs/RELEASING.md` §1 are unset.

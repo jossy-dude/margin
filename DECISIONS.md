@@ -308,6 +308,24 @@ pages that set the term up; and an app that feels more fluid. Keep the old, but 
 **Open:** the owner's reference image for the clock faces ("they need a bit more extra") did not arrive;
 the faces are unchanged until it does.
 
+## D14 — Daylight is a fourth Style, not the only look (2026-11-14)
+
+The owner reversed PLAN Question 2 ("one look"). The v0.7 design (`Margin v0.7.html`, "Daylight sheet") is a
+**fourth Style** next to Collage, Plain and Notebook, picked in Settings → Look & feel and, later, on the
+first onboarding page.
+- **The Style is the only switch.** Today and Week show the v0.7 pages in Daylight and the v0.6 pages in the
+  other three; the session-only "Classic Today / Classic Week" peek is gone.
+- ~~Until the rest is rebuilt, Daylight's other screens borrow Plain's paper and cut.~~ The owner asked for the
+  whole app in Daylight at once, so it became a theme rather than five screen rebuilds: `palettes.daylight`
+  holds the D-2 colours (a card is translucent glass), `Theme.sky` makes `PaperBg` draw the sky behind every
+  page and strong glass behind every sheet, `HandBox` draws the glass card (radius 16, hairline ring, no
+  shadow), the nav becomes the glass island, and text is the system grotesque at Inter's weights with the
+  italic serif kept for the voice. Inter itself is not bundled yet. Per-screen layouts from D-13…D-18
+  (segmented controls, BubbleRows, the course-component Grades card) remain separate work.
+- **Order, one release each:** (1) the switch; (2) each remaining screen in Daylight, one per release;
+  (3) dark mode checked for all four Styles; (4) the Style picker on onboarding's first page;
+  (5) onboarding drawn in each Style; (6) a consistency pass over every Style.
+
 ---
 
 _More questions will be appended as workstreams surface real forks (each with screenshots where visual)._

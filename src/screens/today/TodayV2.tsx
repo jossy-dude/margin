@@ -57,10 +57,9 @@ const SubHead = ({ children, tone }: { children: string; tone?: 'bad' }) => <T k
  *
  * One face on the page (the one-face rule, `ui/mascot/moments.ts`): the top bar's, resting on `pageFace('Today')`
  * and reacting to a task done, a class marked, a week fully attended. Empty cards are words only.
- * `sky` stays true until the shell draws the sky once for every page. `onClassic` shows the v0.6 Today
- * (`TodayPage`) while the other screens are still being rebuilt.
+ * `sky` stays true until the shell draws the sky once for every page. Shown only in the Daylight Style (`TodayPage`).
  */
-export function TodayV2({ sky = true, onClassic }: { sky?: boolean; onClassic?: () => void }) {
+export function TodayV2({ sky = true }: { sky?: boolean }) {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance);
   const dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
   const name = useStore((s) => s.settings.name), hour12 = useStore((s) => s.settings.hour12), bar = useStore((s) => s.settings.bar), skyMode = useStore((s) => s.settings.sky), locked = useStore((s) => s.settings.lockAttendance);
@@ -165,7 +164,6 @@ export function TodayV2({ sky = true, onClassic }: { sky?: boolean; onClassic?: 
               </Tap>
             ))}
         </GlassCard>
-        {onClassic ? <Button small kind="text" label="Classic Today" a11y="Show the classic Today, from version 0.6" testID="today-classic" onPress={onClassic} style={{ alignSelf: 'center', marginTop: SPACE.s2 }} /> : null}
       </ScrollView>
     </View>
   );

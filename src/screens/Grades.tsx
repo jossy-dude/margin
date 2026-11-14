@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View, type ScrollViewInstance } from 'react-native';
 import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
 import { NumberField } from '../ui/fields';
 import { useNow, useTheme } from '../ui/theme-context';
@@ -31,7 +31,7 @@ function AttendanceGrid({ course }: { course: Course }) {
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).
      An inline `ref` callback used to call scrollToEnd on EVERY render of this grid — the ref was
      detached and re-attached each time — which made every store write force a scroll here. */
-  const gridRef = useRef<ScrollView>(null);
+  const gridRef = useRef<ScrollViewInstance>(null);
   const toEnd = useCallback(() => { gridRef.current?.scrollToEnd({ animated: false }); }, []);
   return (
     <View style={{ gap: 6 }}>

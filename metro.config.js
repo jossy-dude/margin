@@ -1,5 +1,7 @@
-// Expo's default Metro config. (v0.5 had pushed `.riv` for a Rive mascot; Scrap is cut from paper bitmaps,
-// `.webp`, which Metro bundles by default, so nothing is added here any more.)
+// Expo's default Metro config, plus `.ogg`: the v0.7 sounds are Ogg Vorbis (scripts/sounds/build.mjs) and Metro's
+// default asset list has wav/mp3 but not ogg. (v0.5 had pushed `.riv` for a Rive mascot; that is gone.)
 const { getDefaultConfig } = require('expo/metro-config');
 
-module.exports = getDefaultConfig(__dirname);
+const config = getDefaultConfig(__dirname);
+config.resolver.assetExts.push('ogg');
+module.exports = config;
