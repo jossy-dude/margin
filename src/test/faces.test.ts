@@ -1,6 +1,8 @@
 /** v0.7 U7 — the twelve faces: all present, morphable mouths, ≤ 6 strokes, parser-safe paths. (Which face shows
  *  where is `face-moments.test.ts`.) */
-import { BLUSH_D, EYE_SHAPES, FACES, FACE_NAMES, SWEAT_D, VIEW_H, VIEW_W, eyePath, mixMouth, mouthPath, nextBlink, strokeFor, type EyeKind } from '../ui/mascot/faces';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BLUSH_D, EYE_SHAPES, FACES, FACE_NAMES, SWEAT_D, VIEW_H, VIEW_W, eyePath, gazeAlong, gazeAt, mixMouth, mouthPath, nextBlink, strokeFor, type EyeKind } from '../ui/mascot/faces';
 
 const ALL_EYES = Object.keys(EYE_SHAPES) as EyeKind[];
 
@@ -68,5 +70,30 @@ describe('faces', () => {
     for (let i = 0; i < 5000; i++) if (nextBlink(rand).double) doubles++;
     expect(doubles / 5000).toBeGreaterThan(0.17);
     expect(doubles / 5000).toBeLessThan(0.23);
+  });
+});
+
+/* Moved from the old `scrap-rig.test.ts` when Jot was retired (U7): the gaze helpers live on in `faces.ts`,
+   and the mascot is still drawn in code. */
+describe('gaze', () => {
+  it('looks toward a finger and saturates instead of overshooting', () => {
+    const r = gazeAt(80, -40), far = gazeAt(4000, 0);
+    expect(r.x).toBeGreaterThan(0); expect(r.y).toBeLessThan(0);
+    expect(far.x).toBeLessThan(1); expect(far.x).toBeGreaterThan(0.99);
+    expect(gazeAt(0, 0)).toEqual({ x: 0, y: 0 });
+  });
+  it('reads along a name left to right, looking down at the field', () => {
+    expect(gazeAlong(0).x).toBeCloseTo(-0.75);
+    expect(gazeAlong(11).x).toBeCloseTo(0);
+    expect(gazeAlong(99).x).toBeCloseTo(0.75);
+    expect(gazeAlong(5).y).toBeGreaterThan(0);
+  });
+});
+
+describe('the face is drawn in code', () => {
+  const dir = join(__dirname, '..', 'ui', 'mascot');
+  it('requires no bitmap, and the old Scrap and Jot components are gone', () => {
+    for (const f of ['Face.tsx', 'faces.ts']) expect(readFileSync(join(dir, f), 'utf8')).not.toMatch(/require\(|<Image/);
+    for (const f of ['Scrap.tsx', 'Jot.tsx', 'scrap-rig.ts']) expect(existsSync(join(dir, f))).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import { MemoryRepository } from '../data/memory';
 import { act as store, getState, hydrate, stopResync, toast, dismissToast } from '../store/store';
 import { TasksScreen } from '../screens/Tasks';
 import { GradesScreen } from '../screens/Grades';
+import { StatsScreen } from '../screens/Stats';
 import { Face } from '../ui/mascot/Face';
 import { ScreenLive } from '../ui/live';
 import type { Task } from '../domain/types';
@@ -81,6 +82,12 @@ describe('one face per page', () => {
   });
   it('Grades with no subjects is a wink at 64 dp, and no face in the top bar', async () => {
     const r = await mount(React.createElement(GradesScreen));
+    expect(faces(r)).toEqual([{ name: 'wink', size: 64 }]);
+    expect(topFace(r)).toHaveLength(0);
+    await act(async () => { r.unmount(); });
+  });
+  it('Stats with nothing to report: a 64 dp wink on its card, and no face in the top bar', async () => {
+    const r = await mount(React.createElement(StatsScreen));
     expect(faces(r)).toEqual([{ name: 'wink', size: 64 }]);
     expect(topFace(r)).toHaveLength(0);
     await act(async () => { r.unmount(); });

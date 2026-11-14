@@ -6,7 +6,8 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { HandBox, HStrip, Icon, Toggle, Txt, usePressIn } from '../ui/kit';
 import { NumberField } from '../ui/fields';
 import { PaperBg } from '../ui/PaperBg';
-import { Jot } from '../ui/mascot/Jot';
+import { Face } from '../ui/mascot/Face';
+import { MOMENTS, useFaceMoment } from '../ui/mascot/moments';
 import { subjectTint } from '../ui/collage/tint';
 import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
 import { useScreenLive } from '../ui/live';
@@ -110,6 +111,7 @@ export function FocusScreen() {
     const s = act.timerFinish(true, true); fx.clack();
     if (s) setSaved({ s, sum: focusSummary([...getState().focus], getState().courses, Date.now()) });
   };
+  const focusFace = useFaceMoment(MOMENTS.focusStart, focused);
   const summary = useMemo(() => focusSummary(sessions, courses, minute * 60_000), [sessions, courses, minute]);
 
   const stampS = useAnimatedStyle(() => ({ opacity: stamp.get(), transform: [{ rotate: '-8deg' }, { scale: interpolate(stamp.get(), [0, 1], [1.5, 1]) }] }));
@@ -138,6 +140,8 @@ export function FocusScreen() {
         ) : (
           <View style={{ flex: 1, paddingHorizontal: 24 }}>
             <View style={{ alignItems: 'center', marginTop: 18 }}>
+              {/* Focus's own face (D-21): calm, with slow blinks, while the round runs; no top-bar face here */}
+              <Face {...focusFace.face} size={72} awake={focused} decorative style={{ marginBottom: 10 }} />
               <SubjectTag name={course?.name ?? 'Something else'} tint={course ? subjectTint(course.id, tints) : c.card} />
               {task ? <Txt f="serif" s={16} c="mut" numberOfLines={1} style={{ marginTop: 6 }}>{task.title}</Txt> : null}
             </View>
@@ -272,6 +276,8 @@ const Stat = ({ k, v }: { k: string; v: string }) => (
 /* ── after a round: the receipt ─────────────────────────────────────────────────────────────────────── */
 
 function Saved({ s, sum, courseName, onDone }: { s: Summary; sum: FocusSummary; courseName: string; onDone: () => void }) {
+  const { face, play } = useFaceMoment('laugh');
+  useEffect(() => { play('focusEnd'); }, [play]);
   const { c } = useTheme(), ins = useSafeAreaInsets(), reduce = useReduceMotion(), y = useSharedValue(reduce ? 0 : 1);
   useEffect(() => { if (!reduce) y.set(withSpring(0, { duration: 520, dampingRatio: 0.78 })); }, [reduce, y]);
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() * 420 }, { rotate: `${y.get() * 6 - 1}deg` }] }));
@@ -281,7 +287,7 @@ function Saved({ s, sum, courseName, onDone }: { s: Summary; sum: FocusSummary; 
       <Animated.View style={st}>
         <HandBox seed="focus-saved" fill={c.card} style={{ padding: 18, gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Jot size={78} mood="proud" cue={{ kind: 'hop', n: 1 }} />
+            <Face {...face} size={72} decorative />
             <View style={{ flex: 1 }}>
               <Txt f="type" s={13} c="acc" style={{ letterSpacing: 2 }}>SESSION SAVED</Txt>
               <Txt f="marker" s={30} accessibilityRole="header">{fmtDur(Math.max(1, Math.round(s.focusSec / 60)))} of {courseName}</Txt>

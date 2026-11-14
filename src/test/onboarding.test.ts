@@ -14,6 +14,7 @@ import { seedSnapshot } from '../data/seed';
 import { getState, hydrate, set, stopResync } from '../store/store';
 import { DEFAULT_SETTINGS, TOUR_VERSION, toured } from '../domain/defaults';
 import { ThemeProvider } from '../ui/theme-context';
+import { Face } from '../ui/mascot/Face';
 
 const askLog: boolean[] = [];
 jest.mock('../services/notifications', () => {
@@ -122,6 +123,30 @@ describe('five pages, every one of them reachable and said out loud', () => {
     s = await mount(false);
     expect(s.root.findAll((n) => n.props.testID === 'door-keep').length).toBeGreaterThan(0);
     expect(s.root.findAll((n) => n.props.testID === 'door-sample').length).toBe(0);
+  });
+});
+
+describe('the face (U7, D-22)', () => {
+  it('one face, 160 dp, rides the pages: smirk on the welcome, sleepy on the nudge', async () => {
+    const s = await mount(true);
+    const faces = () => s.root.findAllByType(Face);
+    expect(faces().map((f) => [f.props.name, f.props.size])).toEqual([['smirk', 160]]);
+    const tab = s.root.findAll((n) => n.props.accessibilityLabel === 'Page 5 of 5' && typeof n.props.onPress === 'function')[0]!;
+    await act(async () => { tab.props.onPress(); });
+    expect(faces().map((f) => [f.props.name, f.props.size])).toEqual([['sleepy', 160]]);
+  });
+  it('typing a name makes it blush and look along the field; clearing it lets go', async () => {
+    const s = await mount(true);
+    const tab = s.root.findAll((n) => n.props.accessibilityLabel === 'Page 3 of 5' && typeof n.props.onPress === 'function')[0]!;
+    await act(async () => { tab.props.onPress(); });
+    const field = s.root.findAll((x) => x.props.testID === 'onboarding-name' && typeof x.props.onFocus === 'function')[0]!;
+    await act(async () => { field.props.onFocus(); });
+    await s.type('Jossy');
+    const f = s.root.findByType(Face);
+    expect(f.props.name).toBe('blush');
+    expect(f.props.look?.y).toBeGreaterThan(0);
+    await s.type('');
+    expect(s.root.findByType(Face).props.name).toBe('smirk');
   });
 });
 

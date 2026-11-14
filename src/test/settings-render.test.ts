@@ -648,6 +648,22 @@ describe('About and Reset are two pages, and the support row is absent until its
     expect(r.root.findAll((n) => (n.props as { accessibilityLabel?: unknown }).accessibilityLabel === 'Buy Jossy a gursha')).toHaveLength(0);
   });
 
+  it('About has one face, a 72 dp wink, and a star makes it smile (U7)', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const { Face } = jest.requireActual<typeof import('../ui/mascot/Face')>('../ui/mascot/Face');
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => { r = TestRenderer.create(React.createElement(AboutPage)); });
+    expect(r.root.findAllByType(Face).map((f) => [f.props.name, f.props.size])).toEqual([['wink', 72]]);
+    const t = r.root.findAll((n) => String(n.type) === 'Text').map((n) => String(n.children[0] ?? '')).join(' ');
+    expect(t).toContain('A star makes Jot smile.');
+    const star = r.root.findAll((n) => n.props.a11y === 'Star Margin on GitHub' && typeof n.props.onPress === 'function')[0]!;
+    await act(async () => { star.props.onPress(); });
+    expect(r.root.findByType(Face).props.name).toBe('happy');
+    expect(r.root.findByType(Face).props.react).toMatchObject({ motion: 'bounce' });
+    await act(async () => { r.unmount(); });
+    open.mockRestore();
+  });
+
   it('the star button opens the GitHub repository', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const s = await page(['about']);

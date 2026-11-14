@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Image, Linking, Platform, Pressable, View } from 'react-native';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Btn, HandBox, Hair, Row, Txt, usePressIn } from '../ui/kit';
-import { Jot } from '../ui/mascot/Jot';
+import { Face } from '../ui/mascot/Face';
+import { useFaceMoment } from '../ui/mascot/moments';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { fx } from '../services/fx';
 import { FONT } from '../tokens/theme';
@@ -31,12 +32,12 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
   const [mine, setMine] = useState<CheckResult | 'idle' | 'checking'>(() => (updateStaged() ? 'ready' : 'idle'));
   const native = useNativeUpdates(), ota = otaView(native, mine);
   const check = async () => { if (ota === 'checking' || ota === 'downloading') return; setMine('checking'); setMine(await checkForUpdate()); };
-  const support = supportUrl.trim(), [hop, setHop] = useState<{ kind: 'celebrate'; n: number } | null>(null);
+  const support = supportUrl.trim(), { face, play } = useFaceMoment('wink');
 
   return (
     <>
       <View style={{ alignItems: 'center', gap: 2, paddingTop: 4 }}>
-        <Jot size={92} mood="happy" cue={hop} />
+        <Face {...face} size={72} />
         <Txt f="marker" s={34} style={{ textAlign: 'center' }} accessibilityRole="header">Margin</Txt>
         <Txt f="serif" s={17} c="mut" style={{ textAlign: 'center' }}>A school planner — on paper, in your pocket.</Txt>
       </View>
@@ -59,8 +60,8 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
       </Section>
 
       <Section title="It's open source">
-        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes Jot hop.</Txt>
-        <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Margin on GitHub" onPress={() => { setHop((h) => ({ kind: 'celebrate', n: (h?.n ?? 0) + 1 })); openLink(GITHUB_URL); }} /></Row>
+        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes Jot smile.</Txt>
+        <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Margin on GitHub" onPress={() => { play('starred'); openLink(GITHUB_URL); }} /></Row>
       </Section>
 
       {support ? (

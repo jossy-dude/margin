@@ -11,8 +11,9 @@ import { Art } from '../ui/collage/Art';
 import { Sky, Sun } from '../ui/collage/Sun';
 import { skyPhase } from '../ui/collage/sky';
 import { TornSheet } from '../ui/collage/Torn';
-import { Jot, JOT_H, JOT_W } from '../ui/mascot/Jot';
-import { gazeAlong, gazeAt, type ScrapCue, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig';
+import { Face, type FaceHandle } from '../ui/mascot/Face';
+import { VIEW_H, VIEW_W, gazeAlong, gazeAt } from '../ui/mascot/faces';
+import { ONBOARDING, useFaceMoment } from '../ui/mascot/moments';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { FS } from '../ui/fit';
 import { act, refreshNotifStatus, useStore } from '../store/store';
@@ -36,7 +37,9 @@ import { PAPER } from '../tokens/theme';
  * held here, so leaving half-way leaves nothing half-done.
  * ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-const N = 5, SZ = 220, SZH = (SZ * JOT_H) / JOT_W, FOOT = 108;
+/* the face is 160 dp tall (D-22); the walker's box is its drawing's shape */
+const N = 5, SZH = 160, SZ = (SZH * VIEW_W) / VIEW_H, FOOT = 108;
+const REST = [ONBOARDING.welcome, ONBOARDING.layout, ONBOARDING.name, ONBOARDING.data, ONBOARDING.reminders] as const;
 type Perm = 'unknown' | 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
 export function Onboarding({ firstRun }: { firstRun: boolean }) {
@@ -46,13 +49,13 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const [range, setRange] = useState({ semesterStart: settings.semesterStart, semesterEnd: settings.semesterEnd });
   const [door, setDoor] = useState<OnboardDoor>(firstRun ? 'hand' : 'keep'), [pack, setPack] = useState<string | null>(null), [perm, setPerm] = useState<Perm>(() => (Platform.OS === 'web' ? 'unavailable' : 'unknown'));
   const [phase] = useState(() => skyPhase(new Date().getHours()));
-  const [mood, setMood] = useState<ScrapMood>('idle'), [cue, setCue] = useState<ScrapCue | null>(null), [steer, setSteer] = useState(false);
-  const x = useSharedValue(0), gx = useSharedValue(0), gy = useSharedValue(0.2), leave = useSharedValue(0);
+  const x = useSharedValue(0), leave = useSharedValue(0);
+  /* One face rides the pages, resting on each page's face (D-22); `look` follows the name being typed. */
+  const { face, play, clear } = useFaceMoment(REST[page]!), faceRef = useRef<FaceHandle>(null), [look, setLook] = useState<{ x: number; y: number } | null>(null);
   /* how far each hero page is scrolled, so Scrap rides up with the page instead of covering its words */
   const y0 = useSharedValue(0), y4 = useSharedValue(0);
   const onY0 = useAnimatedScrollHandler({ onScroll: (e) => { y0.set(e.contentOffset.y); } }), onY4 = useAnimatedScrollHandler({ onScroll: (e) => { y4.set(e.contentOffset.y); } });
   const pager = useRef<Animated.ScrollView>(null), gone = useRef(false), touch = useRef({ x: 0, y: 0, t: 0 }), steerT = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const play = useCallback((kind: ScrapCueKind) => setCue((q) => ({ kind, n: (q?.n ?? 0) + 1 })), []);
 
   /* Where Scrap stands on each page: centre x, centre y, scale. */
   const heroBottom = ins.top + 56 + Math.min(H * 0.42, 380), hero5 = ins.top + 56 + Math.min(H * 0.27, 230);
@@ -69,9 +72,11 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   /* Arriving on a page: what Scrap feels there. Called from the two things that change the page (a tap
      on onward or a number, and a swipe settling), so the mood is set with the page, not after it. */
   const arrive = useCallback((j: number) => {
-    setPage(j); fx.page();
-    setMood(j === 1 ? 'curious' : j === 2 ? (name.trim() ? 'happy' : 'idle') : j === 4 ? (perm === 'granted' ? 'happy' : perm === 'denied' ? 'worried' : 'curious') : 'idle');
-  }, [name, perm]);
+    setPage(j); fx.page(); clear();
+    if (j === 2 && name.trim()) play('nameTyped');
+  }, [name, play, clear]);
+  /* the welcome: a wink, a moment after arriving */
+  useEffect(() => { if (page !== 0) return; const t = setTimeout(() => play('hello'), 600); return () => clearTimeout(t); }, [page, play]);
   const goTo = useCallback((i: number) => {
     const j = Math.max(0, Math.min(N - 1, i));
     Keyboard.dismiss();
@@ -84,34 +89,33 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   /* A finger anywhere on the page: Scrap watches it. A tap on Scrap himself makes him hop. */
   const steerAt = (e: GestureResponderEvent) => {
     const { pageX, pageY } = e.nativeEvent, g = gazeAt(pageX - at.cx, pageY - at.cy, 200);
-    gx.set(withTiming(g.x, { duration: 90 })); gy.set(withTiming(g.y, { duration: 90 }));
+    faceRef.current?.look(g.x, g.y);
   };
   const onTouchStart = (e: GestureResponderEvent) => {
     touch.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, t: Date.now() };
     if (steerT.current) clearTimeout(steerT.current);
-    setSteer(true); steerAt(e);
+    steerAt(e);
   };
   const onTouchEnd = (e: GestureResponderEvent) => {
     const t = touch.current, dx = e.nativeEvent.pageX - t.x, dy = e.nativeEvent.pageY - t.y;
     const onHim = Math.abs(t.x - at.cx) < (SZ * at.s) / 2 && Math.abs(t.y - at.cy) < (SZH * at.s) / 2;
-    if (onHim && Math.hypot(dx, dy) < 10 && Date.now() - t.t < 400) { const k = Math.random() < 0.5 ? 'hop' : 'celebrate'; play(k); fx.tap(); setMood('happy'); setTimeout(() => setMood(page === 1 ? 'curious' : 'idle'), 1600); }
-    steerT.current = setTimeout(() => setSteer(false), 1100);
+    if (onHim && Math.hypot(dx, dy) < 10 && Date.now() - t.t < 400) { faceRef.current?.bounce(); fx.tap(); }
   };
   useEffect(() => () => { if (steerT.current) clearTimeout(steerT.current); }, []);
 
   /* Typing the name: he reads along it, left to right. */
   const onName = (v: string) => {
-    setName(v); setMood('curious');
-    const g = gazeAlong(v.length); gx.set(withSpring(g.x, { duration: 220, dampingRatio: 0.8 })); gy.set(withSpring(g.y, { duration: 220, dampingRatio: 0.8 }));
+    setName(v);
+    if (v.trim()) play('nameTyped'); else clear();
+    setLook(gazeAlong(v.length));
   };
 
   const ask = async () => {
     fx.tap();
     const got = (await notifs.ensurePermission(true)) as Perm;
     setPerm(got); void refreshNotifStatus();
-    if (got === 'granted') { setMood('happy'); play('celebrate'); fx.done(); }
-    else if (got === 'denied') { setMood('worried'); play('shake'); fx.denied(); }
-    else setMood('idle');
+    if (got === 'granted') { play('remindersOn'); fx.done(); }
+    else if (got === 'denied') { faceRef.current?.droop(); fx.denied(); }
   };
   /* Read, never ask, on arrival. The web build has no notification service at all: say so plainly. */
   useEffect(() => { if (Platform.OS !== 'web') void notifs.ensurePermission(false).then((p) => setPerm(p as Perm)).catch(() => setPerm('unavailable')); }, []);
@@ -126,10 +130,10 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
     const choice = { door: dd, name, semesterStart: range.semesterStart, semesterEnd: range.semesterEnd, pack };
     const done = () => { void act.finishOnboarding(choice); };
     if (reduce) { done(); return; }
-    setMood('happy'); play('celebrate'); fx.done();
+    faceRef.current?.bounce(); fx.done();
     /* The whole stack is lifted off the desk: up and away, the way a sheet is taken off a pad. */
     leave.set(withSequence(withTiming(0, { duration: 650 }), withTiming(1, { duration: 420, easing: Easing.in(Easing.cubic) }, (f) => { if (f) runOnJS(done)(); })));
-  }, [name, range, reduce, leave, play, pack, firstRun]);
+  }, [name, range, reduce, leave, pack, firstRun]);
 
   const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: -leave.get() * H * 1.05 }, { rotate: `${leave.get() * -4}deg` }] }));
   const skipDoor: OnboardDoor = firstRun ? 'sample' : 'keep';
@@ -182,7 +186,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <Kicker>The layout</Kicker>
           <Title style={{ marginRight: 88 }}>Everything has its place.</Title>
           <View style={{ height: 14 }} />
-          <Legend active={page === 1} onLook={(r, of) => { setSteer(true); gx.set(withSpring(-0.85, { duration: 260 })); gy.set(withSpring(-0.2 + (r / of) * 1.4, { duration: 260 })); play('nod'); if (steerT.current) clearTimeout(steerT.current); steerT.current = setTimeout(() => setSteer(false), 1600); }} />
+          <Legend active={page === 1} onLook={(r, of) => { faceRef.current?.look(-0.85, -0.2 + (r / of) * 1.4); }} />
         </>)}
         {pageShell(2, <>
           <Sun size={76} phase={phase} style={{ position: 'absolute', left: -82, top: ins.top + 106 }} />
@@ -190,7 +194,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
         </>, <>
           <Kicker>First things first</Kicker>
           <Title style={{ marginRight: 112 }}>What should I call you?</Title>
-          <NamePaper name={name} onName={onName} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); if (name.trim()) { setMood('happy'); play('hop'); } }} onDone={() => goTo(3)} />
+          <NamePaper name={name} onName={onName} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} onDone={() => goTo(3)} />
           <Txt f="serif" s={17} c="mut" style={{ marginTop: 14, minHeight: 24 }}>{name.trim() ? `Nice to meet you, ${name.trim()}.` : 'First name, or leave it blank.'}</Txt>
         </>)}
         {pageShell(3, <>
@@ -203,7 +207,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
             <SemesterRange start={range.semesterStart} end={range.semesterEnd} onChange={(p) => setRange(p)} />
           </HandBox>
           <Txt f="bold" s={20} style={{ marginTop: 22, marginBottom: 8 }} accessibilityRole="header">Where&apos;s your timetable?</Txt>
-          <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); play('nod'); setMood(d === 'sample' ? 'happy' : d === 'import' || d === 'class' ? 'curious' : 'idle'); }} />
+          <Doors firstRun={firstRun} value={door} onChange={(d) => { setDoor(d); fx.select(); if (d === 'import') play('importPreview'); else clear(); }} />
         </>)}
         {heroShell(4, hero5 - 6, <>
           <Sun size={84} phase={phase} style={{ position: 'absolute', left: -83, top: ins.top - 5 }} />
@@ -229,7 +233,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
             <View style={{ marginTop: 22, gap: 6 }}>
               <Txt f="bold" s={20} accessibilityRole="header">Because I&apos;m generous like that</Txt>
               <Txt f="serif" s={15.5} c="mut">In DRB2503? Pick your section and your whole timetable is done.</Txt>
-              <ClassPicker value={pack} onChange={(id) => { setPack(pack === id ? null : id); fx.select(); setMood('happy'); play('celebrate'); }} />
+              <ClassPicker value={pack} onChange={(id) => { setPack(pack === id ? null : id); fx.select(); faceRef.current?.bounce(); }} />
               {pack ? <PermNote tone="ok" text="Done. Long-press a class on Week to change it." /> : null}
             </View>
           ) : null}
@@ -238,7 +242,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
 
       {/* Scrap, above every page. */}
       <Walker x={x} W={W} anchors={anchors} reduce={reduce} y0={y0} y4={y4}>
-        <Jot size={SZ} mood={mood} cue={cue} lookX={gx} lookY={gy} attentive={steer || (page === 2 && typing)} />
+        <Face {...face} ref={faceRef} size={SZH} look={page === 2 && typing ? look : null} />
       </Walker>
 
       {/* The masthead and the way out. */}

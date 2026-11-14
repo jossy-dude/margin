@@ -149,11 +149,11 @@ test('the sweep found worklets, so the rule is reading something', () => {
   // without this the test above would pass on an empty sweep after a refactor that broke the matcher
   // v0.5 U1: the time ruler's `release` runs inside a `withTiming` callback, so it is a worklet too.
   // v0.7: the clock beats from a timer on the JS thread, so `handAngles` is a plain function again.
-  // v0.6: the mascot's arm angles are read by both the arms and the strings that hold them, on the UI thread.
+  // v0.6's mascot (Jot) had arm-angle worklets; it was retired in v0.7 U7 for the face below.
   // v0.7 U7: the face rebuilds its path data on the UI thread (`Face.tsx`'s animated props), so the drawing maths in
   // `faces.ts` is all worklets, down to the circle and the rounding.
   expect([...workletised].sort()).toEqual([
-    'ui/fields.tsx: release', 'ui/mascot/Jot.tsx: armL', 'ui/mascot/Jot.tsx: armR',
+    'ui/fields.tsx: release',
     'ui/mascot/faces.ts: ease', 'ui/mascot/faces.ts: extraAt', 'ui/mascot/faces.ts: eyeFrame', 'ui/mascot/faces.ts: eyeProps',
     'ui/mascot/faces.ts: mixMouth', 'ui/mascot/faces.ts: mouthAt', 'ui/mascot/faces.ts: mouthPath', 'ui/mascot/faces.ts: n2',
     'ui/mascot/faces.ts: poseAt', 'ui/mascot/faces.ts: ring', 'ui/mascot/faces.ts: shapePath',
