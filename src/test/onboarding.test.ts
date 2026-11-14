@@ -169,8 +169,10 @@ describe('nothing is written until the end, then all of it in order', () => {
     expect(getState().courses.length).toBe(before);
     expect(getState().settings.onboarded).toBe(TOUR_VERSION);
   });
-  it('"Bring a file" finishes and opens Import, where a file or a paste both land', async () => {
+  it('"Bring my data back" (D-22, R11) finishes and opens Import, where a backup, an export or a paste all land', async () => {
     const s = await mount(true);
+    expect(s.text()).toContain('Bring my data back');
+    expect(s.text()).toContain('A Margin backup or export, or a JSON or CSV file.');
     await s.press('door-import');
     await s.press('onboarding-start');
     expect(getState().sheet).toEqual({ t: 'settings' });

@@ -324,3 +324,39 @@ describe('importPlan', () => {
     await rebuildsAfter(0);
   });
 });
+
+/* v0.7 R11 (DATA_MODEL.md "The move", step 5): a fresh install, onboarding's "Bring my data back", then the export
+   the owner made on the old phone. On an empty database the merge-only import is a full restore: every collection
+   comes back with the count it left with. */
+describe('Bring my data back', () => {
+  it('an export restored on an empty install has the same counts as the phone it came from', async () => {
+    const { toJson } = jest.requireActual<typeof import('../services/export')>('../services/export');
+    // the old phone: the sample term, but as the owner's own rows
+    const own = <T extends { demo?: boolean }>(rows: T[]) => rows.map((r) => ({ ...r, demo: false }));
+    const seed = seedSnapshot(NOW);
+    const oldRepo = new MemoryRepository(() => NOW);
+    await oldRepo.seed({ ...seed, courses: own(seed.courses), meetings: own(seed.meetings), tasks: own(seed.tasks), notices: own(seed.notices), marks: own(seed.marks), focus: own(seed.focus) });
+    const old = freshStore();
+    await old.hydrate(oldRepo);
+    await old.act.loadSemesters();
+    const was = old.getState(), file = toJson(old.snapshotOf(was), NOW, was.semesters);
+
+    // the new phone: fresh install, onboarding with "Bring my data back"
+    const real = device();
+    const s = freshStore();
+    await s.boot();
+    await s.act.finishOnboarding({ door: 'import', name: '', semesterStart: s.getState().settings.semesterStart, semesterEnd: s.getState().settings.semesterEnd });
+    expect(s.R()).toBe(real);
+    expect(s.getState().settingsPath).toEqual(['data', 'import']);
+    const st = s.getState();
+    const plan = parseImport(file, { courses: st.courses, meetings: st.meetings, tasks: st.tasks, attendance: st.attendance, dayMarks: st.dayMarks, marks: st.marks, variants: st.variants, now: NOW });
+    expect(plan.problems).toEqual([]);
+    await expect(s.act.importPlan(plan)).resolves.toBe(true);
+
+    const now = s.getState(), n = (x: object) => Object.keys(x).length;
+    expect({ courses: now.courses.length, meetings: now.meetings.length, tasks: now.tasks.length, notices: now.notices.length, marks: now.marks.length, focus: now.focus.length, alarms: now.alarms.length, trips: now.trips.length, attendance: n(now.attendance), dayMarks: n(now.dayMarks), adjusts: n(now.adjusts) })
+      .toEqual({ courses: was.courses.length, meetings: was.meetings.length, tasks: was.tasks.length, notices: was.notices.length, marks: was.marks.length, focus: was.focus.length, alarms: was.alarms.length, trips: was.trips.length, attendance: n(was.attendance), dayMarks: n(was.dayMarks), adjusts: n(was.adjusts) });
+    expect(was.courses.length).toBeGreaterThan(0);
+    expect((await real.load()).courses).toHaveLength(was.courses.length);
+  });
+});

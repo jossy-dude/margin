@@ -295,7 +295,7 @@ function NamePaper({ name, onName, onFocus, onBlur, onDone }: { name: string; on
 }
 
 const DOORS: { id: OnboardDoor; icon: string; title: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
-  { id: 'import', icon: 'import', title: 'Bring a file', line: 'Import a JSON or CSV file.', tint: 'sky' },
+  { id: 'import', icon: 'import', title: 'Bring my data back', line: 'A Margin backup or export, or a JSON or CSV file.', tint: 'sky' },
   { id: 'hand', icon: 'pencil', title: 'Set it up by hand', line: 'Start empty, add subjects with +.', tint: 'sage', first: true },
   { id: 'sample', icon: 'book', title: 'Look around first', line: 'A sample term to try.', tint: 'sand', first: true },
   { id: 'keep', icon: 'check', title: 'Keep my planner as it is', line: 'Nothing changes.', tint: 'cream', later: true },
