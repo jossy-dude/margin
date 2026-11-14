@@ -142,6 +142,6 @@ describe('Stats does not re-derive the whole dataset on every render (BUG-014)',
     // Rationale (v0.6 Stats): the per-day heat strip became a dot per class; both new derivations live in the same `now`-keyed memo.
     expect(src).toContain('attendanceBreakdown');
     expect(src).toContain('classDots');
-    expect(src).toContain('[courses, meetings, attendance, dayMarks, now]');
+    expect(src).toContain('[courses, meetings, attendance, dayMarks, now, variants]');
   });
 });

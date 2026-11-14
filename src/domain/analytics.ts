@@ -1,4 +1,4 @@
-import type { AttRecord, AttStatus, AttWhy, Course, DayMark, FocusSession, Mark, Meeting, Task } from './types';
+import type { AttRecord, AttStatus, AttWhy, Course, DayMark, FocusSession, Mark, Meeting, SubjectVariant, Task } from './types';
 import { addDays, fmtDur, pad, parseYmd, plural, startOfDay, ymd } from './time';
 import { attendanceRate, effective, occurrencesBetween, occurrencesOn, type Occurrence } from './attendance';
 import { total } from './grades';
@@ -111,6 +111,19 @@ export function attendanceByCourse(courses: Course[], meetings: Meeting[], att: 
   });
 }
 export type AttRow = ReturnType<typeof attendanceByCourse>[number];
+/** v0.7 R5 (D-15): a course's attendance per part (lecture, lab…), each against its own goal (`attGoal` %, else the
+ *  app-wide 80 %). A part owns the classes filed under it; the base part also owns the ones filed under none.
+ *  Empty for a course with fewer than two parts, whose course row already says it all. */
+export function attendanceByPart(course: Course, meetings: Meeting[], variants: readonly SubjectVariant[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+  const parts = variants.filter((v) => v.subjectId === course.id).sort((a, b) => a.ord - b.ord);
+  if (parts.length < 2) return [];
+  const from = addDays(startOfDay(now), -(nDays - 1)), base = parts.find((p) => p.isBase) ?? null;
+  return parts.map((p) => {
+    const mine = meetings.filter((m) => m.courseId === course.id && ((m.variantId ?? null) === p.id || (!m.variantId && base?.id === p.id)));
+    const r = attendanceRate(occurrencesBetween(from, now, mine), att, days, now), goal = p.attGoal && p.attGoal > 0 ? p.attGoal : 80;
+    return { id: p.id, name: p.name, goal, ...r, canMiss: canMiss(r.here, r.held, goal / 100) };
+  }).filter((r) => r.held > 0 || r.rate !== null);
+}
 /**
  * The whole timetable's attendance, summed from the per-subject rows Stats already has. It replaces
  * `overallAttendance`, which re-ran `attendanceByCourse` to get the same rows a second time — a second

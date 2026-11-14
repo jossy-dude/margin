@@ -45,7 +45,7 @@ function Key({ col, n, label, hollow }: { col: string; n: number; label: string;
   );
 }
 
-export interface SubjectAtt { course: Course; rate: number | null; here: number; held: number; canMiss: number; dots: { date: string; status: AttStatus; why?: AttWhy; inferred: boolean }[] }
+export interface SubjectAtt { course: Course; rate: number | null; here: number; held: number; canMiss: number; /** v0.7 R5: per part, each against its own goal */ parts?: { id: string; name: string; goal: number; rate: number | null; here: number; held: number; canMiss: number }[]; dots: { date: string; status: AttStatus; why?: AttWhy; inferred: boolean }[] }
 export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; rows: SubjectAtt[]; tint: (id: string) => string; floor?: number }) {
   const { c } = useTheme(), rate = b.held ? b.present / b.held : null;
   const onTime = b.present - b.late;
@@ -97,6 +97,14 @@ export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; row
                   {low ? `Under ${Math.round(floor * 100)}% — every class from here counts.` : r.canMiss === 0 ? `At the line: missing the next class takes it under ${Math.round(floor * 100)}%.` : `You can miss ${r.canMiss} more before ${Math.round(floor * 100)}%.`}
                 </Txt>
               )}
+              {r.parts?.map((p) => {
+                const under = p.rate !== null && p.rate < p.goal / 100;
+                return (
+                  <Txt key={p.id} f="serif" s={14} c={under ? 'bad' : 'mut'} style={{ paddingLeft: 20 }} maxFontSizeMultiplier={FS}>
+                    {`${p.name} · ${pct(p.rate)} · ${under ? `under its ${p.goal}%` : p.canMiss === 0 ? `at its ${p.goal}% line` : `can miss ${p.canMiss} more before ${p.goal}%`}`}
+                  </Txt>
+                );
+              })}
             </View>
           );
         })}
