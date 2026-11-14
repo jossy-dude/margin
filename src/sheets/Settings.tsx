@@ -24,6 +24,7 @@ import { fx } from '../services/fx';
 import * as notifs from '../services/notifications';
 import { runExport, type ExportFormat, type ExportTarget } from '../services/exportFile';
 import { safetyInfo, shareNewestSafetyCopy, type SafetyInfo } from '../services/safety';
+import { leafOf, pickFolder, vaultAvailable } from '../services/vaultFiles';
 import { crashCount, subscribeCrashes } from '../services/problems';
 import { DiagnosticsPage } from './Diagnostics';
 import { ImportPage } from './Import';
@@ -119,6 +120,25 @@ const MinStep = ({ label, value, onChange }: { label: string; value: string; onC
   const hour12 = useStore((x) => x.settings.hour12);
   return <View style={{ gap: 4 }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS}>{label}</Txt><TimeField label={label} value={hm(value)} hour12={hour12} onChange={(m) => onChange(fromMin(m))} /></View>;
 };
+
+/* ───── Automatic backup (v0.7 R12) ───── */
+/** Once a week a full export goes into a folder picked once (Documents/Margin is the suggestion); the newest four are
+ *  kept. A reinstall, a new phone or a wipe is then a restore from that folder. */
+function AutoBackup({ now, h12 }: { now: number; h12: boolean }) {
+  const uri = useStore((s) => s.settings.backupUri), at = useStore((s) => s.settings.backupAt), [busy, setBusy] = useState(false);
+  if (!vaultAvailable()) return <Txt f="serif" s={15.5} c="mut">Only on Android: it needs a folder on the phone.</Txt>;
+  const choose = async () => { const d = await pickFolder(); if (d) { act.setSettings({ backupUri: d, backupAt: null }); setBusy(true); const ok = await act.backupNow(); setBusy(false); toast(ok ? 'Backed up to the folder' : 'Could not write to that folder', undefined, ok ? 'success' : 'error'); } };
+  const now1 = async () => { setBusy(true); const ok = await act.backupNow(); setBusy(false); toast(ok ? 'Backed up' : 'Could not write to the backup folder', undefined, ok ? 'success' : 'error'); };
+  return (<>
+    <Txt f="bold" s={19}>{uri ? `Weekly, to ${leafOf(uri) || 'your folder'}` : 'Off'}</Txt>
+    <Txt f="serif" s={14.5} c="mut">{uri ? `${at ? `Last ${fmtWhen(at, now, h12)}. ` : 'Not written yet. '}The newest four are kept.` : 'Pick a folder (Documents/Margin) and a full copy goes there every week. The newest four are kept.'}</Txt>
+    <Row>
+      <Btn small icon="export" label={uri ? 'Change folder…' : 'Choose folder…'} disabled={busy} onPress={() => void choose()} />
+      {uri ? <Btn small kind="ghost" label="Back up now" disabled={busy} onPress={() => void now1()} /> : null}
+      {uri ? <Btn small kind="ghost" label="Turn off" disabled={busy} onPress={() => act.setSettings({ backupUri: null, backupAt: null })} /> : null}
+    </Row>
+  </>);
+}
 
 /* ───── Safety copies ───── */
 /** The backup folder is read ONCE, in this component's lazy initial state — the component mounts when
@@ -408,6 +428,9 @@ export function SettingsSheet() {
     </>) : null}
     <Hair />
     <Nav icon="import" label="Import" hint="Paste a JSON export or AI file" to="import" />
+    <Section title="Automatic backup">
+      <AutoBackup now={now} h12={s.hour12} />
+    </Section>
     <Section title="Safety copies">
       <SafetyCopies now={now} h12={s.hour12} />
     </Section>

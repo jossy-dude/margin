@@ -52,3 +52,24 @@ export async function writeVaultFile(vault: string, name: string, text: string):
   const file = (await child(dir, name)) ?? await s.createFileAsync(dir, name.replace(/\.json$/, ''), 'application/json');
   await s.writeAsStringAsync(file, text);
 }
+
+/* ── any picked folder (v0.7 R12/R11: the backup folder) ── */
+/** Asks for a folder. `null` when cancelled or unavailable. */
+export const pickFolder = pickVault;
+/** The files directly in a picked folder, by name. Empty when the folder cannot be read. */
+export async function listFolder(dir: string): Promise<{ name: string; uri: string }[]> {
+  const s = saf();
+  if (!s) return [];
+  return (await s.readDirectoryAsync(dir)).map((uri) => ({ name: leafOf(uri), uri }));
+}
+/** Writes `name` in `dir`, replacing a file of that name (SAF would otherwise add "name (1)"). */
+export async function writeFolderFile(dir: string, name: string, text: string, mime = 'application/json'): Promise<void> {
+  const s = saf();
+  if (!s) throw new Error('No folder access on this device');
+  const file = (await child(dir, name)) ?? await s.createFileAsync(dir, name.replace(/\.json$/, ''), mime);
+  await s.writeAsStringAsync(file, text);
+}
+export async function deleteDocument(uri: string): Promise<void> {
+  const s = saf();
+  if (s) await s.deleteAsync(uri, { idempotent: true });
+}

@@ -24,6 +24,7 @@ import { bridgeActions } from './bridge';
 import { alarmActions } from './actions/alarms';
 import './ota'; // binds the OTA marker to the open repository on load
 
+import { backupNow } from './backup';
 export type { RouteName, SheetSpec, Toast, Moved, PlanInfo, State } from './core';
 export { getState, subscribe, set, useStore, snapshotOf } from './core';
 export { R, ensureRepo } from './persist';
@@ -43,4 +44,5 @@ export const act = {
   ...semesterActions,
   ...bridgeActions,
   ...alarmActions,
+  backupNow,
 };

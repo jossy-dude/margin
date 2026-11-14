@@ -9,6 +9,7 @@ import { getState, set } from './core';
 import { logNotif, refreshNotifStatus, resync } from './reminders';
 import { toast } from './toast';
 import { setAtt, toggleTask } from './actions/entities';
+import { maybeBackup } from './backup';
 
 /* ───── lifecycle ───── */
 let wired = false;
@@ -27,7 +28,9 @@ const notifEffects = () => {
 };
 export function wireLifecycle() {
   if (wired) return; wired = true;
-  RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); void checkOnForeground(); } });
+  RNAppState.addEventListener('change', (st) => { if (st === 'active') { set({ now: Date.now() }); resync(400); void refreshNotifStatus(); void checkOnForeground(); void maybeBackup(); } });
+  /* v0.7 R12: the weekly backup also gets a chance a little after start, once the planner has loaded */
+  setTimeout(() => { void maybeBackup(); }, 8000);
   notifs.onOpened((o) => dispatchOpened(o, notifEffects()));
   /* v0.7: a widget, the pinned class or an alarm opened the app with a link. Only once the planner is on
      screen — a link that arrives during the introduction is dropped rather than opening a sheet over it. */
