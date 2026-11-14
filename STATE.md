@@ -27,6 +27,10 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
   widgets (G1–G4) not started. Bone F3, V2, V4–V12 not started.
 - A full phone test (Opus agent, phone muted, DND on) ran this morning; its report is `~/Documents/Projects/test-reports/2026-11-13/TEST-REPORT.md` (kept off GitHub: screenshots show vault content).
   Fixed since: #1 an alarm is always stoppable, #3/#4 chess promotion and drags, #10/#11 To-do Done labels and counts.
+  Then (2026-11-14): #12 sample term removed whole (`b3cc37c`) · #13 time fields open the number keyboard (`73d4686`) ·
+  #17 Focus pause: the clock logic holds still, pinned by a test (`868a455`); likely screenshot lag, recheck on the phone.
+  Still open: #13 Save covering the next field with the keyboard up, #14 onboarding page 5 card under the dots (both
+  need the phone to see), #15 never-idle UI (goes with R1, Today), #2 (next dev build).
 
 **Needs you**
 1. Wireless adb was off (it resets on reboot): re-enable it so I can test on the phone.
