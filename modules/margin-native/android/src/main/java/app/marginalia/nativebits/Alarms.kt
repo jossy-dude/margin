@@ -29,6 +29,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.TextView
 import java.util.Calendar
 
@@ -390,8 +391,10 @@ class SnoozeCancelReceiver : BroadcastReceiver() {
 
 /** The alarm, full screen, over the lock screen: the time, what it is for, and two large answers. */
 class AlarmActivity : Activity() {
+  /** Set by Dismiss: the screen stays 400 ms to show the happy face, so the service's "done" must not close it first. */
+  private var leaving = false
   private val done = object : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) { finish() }
+    override fun onReceive(context: Context, intent: Intent) { if (!leaving) finish() }
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -423,13 +426,22 @@ class AlarmActivity : Activity() {
     val snoozeBtn = findViewById<TextView>(R.id.mg_al_snooze)
     snoozeBtn.text = "Snooze $snooze min"
     snoozeBtn.setOnClickListener { answer(AlarmService.ACTION_SNOOZE) }
-    findViewById<TextView>(R.id.mg_al_dismiss).setOnClickListener { answer(AlarmService.ACTION_DISMISS) }
+    findViewById<TextView>(R.id.mg_al_dismiss).setOnClickListener { dismissHappy() }
     val filter = IntentFilter(AlarmService.ACTION_DONE)
     if (Build.VERSION.SDK_INT >= 33) {
       registerReceiver(done, filter, Context.RECEIVER_NOT_EXPORTED)
     } else {
       registerReceiver(done, filter)
     }
+  }
+
+  /** v0.7 U7: the sleepy face wakes up happy, then the screen goes (the alarm itself stops at once). */
+  private fun dismissHappy() {
+    if (leaving) return
+    leaving = true
+    findViewById<ImageView>(R.id.mg_al_face).setImageResource(R.drawable.mg_face_happy)
+    try { startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_DISMISS)) } catch (e: Exception) { }
+    Handler(Looper.getMainLooper()).postDelayed({ if (!isFinishing) finish() }, 400)
   }
 
   private fun answer(action: String) {

@@ -289,6 +289,17 @@ describe('the margin-native module', () => {
     expect(pkg.dependencies['react-native-nitro-modules']).toBeUndefined();
     expect(readFileSync(join(ROOT, 'metro.config.js'), 'utf8')).not.toContain("assetExts.push('riv')");
   });
+  /* v0.7 U7: the full-screen alarm wears the mascot as static vectors made from the same paths as the app's face
+     (polish-pass/handoff/mascot/export/build.mjs): sleepy while it rings, happy for 400 ms after Dismiss. */
+  it('the alarm screen shows the sleepy face, and Dismiss shows the happy one before it closes', () => {
+    const res = (...p: string[]) => mod('android', 'src', 'main', 'res', ...p);
+    for (const f of ['sleepy', 'happy']) expect(res('drawable', `mg_face_${f}.xml`)).toMatch(/<vector[\s\S]*android:viewportWidth="120" android:viewportHeight="64"/);
+    const layout = res('layout', 'mg_alarm.xml');
+    expect(layout).toMatch(/<ImageView android:id="@\+id\/mg_al_face" android:layout_width="180dp" android:layout_height="96dp"[^>]*android:src="@drawable\/mg_face_sleepy"[^>]*android:tint="@color\/mg_alarm_ink"/);
+    const kt = mod('android', 'src', 'main', 'java', 'app', 'marginalia', 'nativebits', 'Alarms.kt');
+    expect(kt).toContain('setImageResource(R.drawable.mg_face_happy)');
+    expect(kt).toMatch(/postDelayed\(\{[^}]*finish\(\)[^}]*\}, 400\)/);
+  });
 
 });
 

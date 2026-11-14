@@ -11,7 +11,11 @@
     android:textColor="@color/mg_alarm_ink" android:textSize="26sp" android:fontFamily="sans-serif-medium" android:maxLines="3" android:ellipsize="end"/>
   <TextView android:id="@+id/mg_al_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp"
     android:textColor="@color/mg_alarm_mut" android:textSize="16sp" android:maxLines="3" android:ellipsize="end"/>
-  <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+  <!-- the mascot (v0.7 U7): sleepy while it rings, happy for a moment after Dismiss (AlarmActivity) -->
+  <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <ImageView android:id="@+id/mg_al_face" android:layout_width="180dp" android:layout_height="96dp" android:layout_gravity="center"
+      android:src="@drawable/mg_face_sleepy" android:tint="@color/mg_alarm_ink" android:importantForAccessibility="no"/>
+  </FrameLayout>
   <TextView android:id="@+id/mg_al_snooze" android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center"
     android:background="@drawable/mg_alarm_ghost" android:textColor="@color/mg_alarm_ink" android:textSize="18sp" android:fontFamily="sans-serif-medium"
     android:clickable="true" android:focusable="true"/>
