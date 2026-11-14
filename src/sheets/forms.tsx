@@ -239,9 +239,14 @@ export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?
 export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
   const m0 = useStore((s) => s.marks.find((x) => x.id === id)), count = useStore((s) => s.marks.filter((m) => m.courseId === courseId).length), { closeRef, close } = useSheetClose(), [saveId] = useState(() => m0?.id ?? uid('k')), [submit] = useState(latch);
   const [cid, setCid] = useState(m0?.courseId ?? courseId), [name, setName] = useState(m0?.name ?? ''), [score, setScore] = useState(m0?.score ?? 70), [has, setHas] = useState(m0 ? m0.score !== null : true), [weight, setWeight] = useState(m0?.weight ?? 10), [on, setOn] = useState(m0?.on ?? true);
+  const variants = useStore((s) => s.variants);
+  const parts = useMemo(() => (variants ?? []).filter((v) => v.subjectId === cid).sort((a, b) => a.ord - b.ord), [variants, cid]);
+  const baseId = parts.find((p) => p.isBase)?.id ?? null, [vid, setVid] = useState<string | null>(m0?.variantId ?? null);
   return (
-    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null }; const news = markNews(mk, getState()); act.saveMark(mk); if (news) faceEvent(news); close(); })} /></Row>}>
-      <Label>Subject</Label><CourseChips value={cid} onChange={(v) => v && setCid(v)} none={null} />
+    <Sheet title={m0 ? 'Edit mark' : 'Add mark'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete mark" onPress={() => { act.removeMark(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={!name.trim() || !cid} onPress={() => submit(() => { const mk: Mark = { id: saveId, courseId: cid, name: name.trim(), score: has ? score : null, weight, on, sort: m0?.sort ?? count, demo: false, variantId: parts.length > 1 ? vid : m0 && m0.courseId === cid ? m0.variantId ?? null : null }; const news = markNews(mk, getState()); act.saveMark(mk); if (news) faceEvent(news); close(); })} /></Row>}>
+      <Label>Subject</Label><CourseChips value={cid} onChange={(v) => { if (v) { setCid(v); setVid(null); } }} none={null} />
+      {/* D-17 "course + component" (R7): only a course with two or more components asks which one the mark is for */}
+      {parts.length > 1 ? <><Label>Part</Label><Row style={{ flexWrap: 'wrap' }}>{parts.map((p) => <Chip key={p.id} small label={p.name} on={(vid ?? baseId) === p.id} onPress={() => setVid(p.id)} />)}</Row></> : null}
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />
       {has && <><Label>Score</Label><NumberField label="score" value={score} onChange={(v) => setScore(v ?? 0)} min={0} max={100} decimals={1} unit="%" /></>}
