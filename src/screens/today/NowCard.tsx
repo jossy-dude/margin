@@ -69,7 +69,8 @@ export function NowCard({ card, live, hour12, bar, tintFor, onPick, onMark, onMa
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: SPACE.s2, rowGap: SPACE.s1 }}>
           <T k={compact ? 'subtitle' : 'title'} accessibilityRole="header" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 180 }}>{card.title}</T>
           {card.room ? <View style={{ marginTop: 1 }}><Chip text={card.room} /></View> : null}
-          {card.state === 'picked' ? <Button small kind="text" label="Today" a11y="Back to today" onPress={onToday} testID="now-today" /> : null}
+          {/* the 40 dp button's label sits on the title's line: lifted by half the height difference */}
+          {card.state === 'picked' ? <Button small kind="text" label="Today" a11y="Back to today" onPress={onToday} testID="now-today" style={{ marginTop: -SPACE.s2 }} /> : null}
         </View>
         {card.meta ? <T k="bodyS" c="ink2" style={{ marginTop: 2 }}>{card.meta}</T> : null}
       </View>

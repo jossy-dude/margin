@@ -147,11 +147,9 @@ export function TodayV2({ sky = true, onClassic }: { sky?: boolean; onClassic?: 
         {strip ? (
           <Animated.View entering={reduce ? undefined : FadeIn.duration(200)} style={[glassStyle(scheme), { padding: SPACE.s2, gap: SPACE.s1 }]}>
             <WeekStrip week={vm.week} onPick={(d) => setPicked(d)} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.s1 }}>
-              <Button small kind="text" testID="mark-day" label={vm.dayMark ? `Whole day: ${vm.dayMark}` : `Mark ${vm.isToday ? 'today' : vm.card.title} for every class`}
-                onPress={() => act.open({ t: 'status', mode: 'day', key: vm.selDate, title: vm.isToday ? 'Today' : vm.card.title, date: vm.selDate })} />
-              {!vm.isToday ? <Button small kind="text" label="Today" a11y="Back to today" onPress={() => setPicked(null)} /> : null}
-            </View>
+            {/* one way back to today, on the card itself (it shows while the strip is closed too) */}
+            <Button small kind="text" testID="mark-day" label={vm.dayMark ? `Whole day: ${vm.dayMark}` : `Mark ${vm.isToday ? 'today' : vm.card.title} for every class`} style={{ alignSelf: 'flex-start' }}
+              onPress={() => act.open({ t: 'status', mode: 'day', key: vm.selDate, title: vm.isToday ? 'Today' : vm.card.title, date: vm.selDate })} />
           </Animated.View>
         ) : null}
         <NowCard card={vm.card} live={focused} hour12={hour12} bar={bar} tintFor={tint}

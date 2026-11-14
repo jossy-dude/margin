@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { MOTION, RADIUS, SPACE, TINTS, TOUCH, TYPE, V2, type Scheme, type V2Colors } from '../../tokens/v2';
@@ -39,6 +39,18 @@ export function T({ k = 'body', c = 'ink', style, children, ...p }: TextProps & 
   return <Text maxFontSizeMultiplier={k === 'display' ? 1.3 : undefined} {...p} style={[s, style]}>{children}</Text>;
 }
 
+/** The style keys that place a pressable among its siblings. They go on the `Pressable` (the node the parent lays
+ *  out); everything else (background, padding, border, children's layout) goes on the view that dips. With all of it
+ *  on the inner view, a `flex: 1` never reached the row: the week strip's days sat bunched at the left. Pure. */
+const PLACE = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical', 'position', 'top', 'left', 'right', 'bottom', 'zIndex'] as const;
+export function splitPlace(style: StyleProp<ViewStyle>): { place: ViewStyle; look: ViewStyle } {
+  const all = (StyleSheet.flatten(style) ?? {}) as Record<string, unknown>, place: Record<string, unknown> = {}, look: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(all)) ((PLACE as readonly string[]).includes(k) ? place : look)[k] = v;
+  /* a pressable that grows: the dipping view fills it */
+  if (place.flex !== undefined || place.flexGrow !== undefined) look.flexGrow = 1;
+  return { place: place as ViewStyle, look: look as ViewStyle };
+}
+
 /** Anything pressable: dips to 0.97 in 120 ms (D-5 `press`), instant under reduced motion. */
 export function Tap({ onPress, onLongPress, delayLongPress, label, hint, role = 'button', selected, disabled, testID, style, hitSlop, children }: {
   onPress?: () => void; onLongPress?: () => void; delayLongPress?: number; label: string; hint?: string; role?: 'button' | 'tab' | 'radio' | 'switch' | 'link';
@@ -46,13 +58,14 @@ export function Tap({ onPress, onLongPress, delayLongPress, label, hint, role = 
 }) {
   const reduce = useReduceMotion(), s = useSharedValue(1);
   const dip = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
+  const { place, look } = splitPlace(style);
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={delayLongPress} disabled={disabled} testID={testID} hitSlop={hitSlop}
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={delayLongPress} disabled={disabled} testID={testID} hitSlop={hitSlop} style={place}
       accessibilityRole={role} accessibilityLabel={label} accessibilityHint={hint}
       accessibilityState={{ disabled: !!disabled, ...(role === 'tab' || role === 'radio' ? { selected: !!selected } : null) }}
       onPressIn={() => { if (!reduce) s.set(withTiming(MOTION.press.scale, { duration: MOTION.press.ms })); }}
       onPressOut={() => { s.set(reduce ? 1 : withTiming(1, { duration: MOTION.press.ms })); }}>
-      <Animated.View style={[style, dip, disabled ? { opacity: 0.45 } : null]}>{children}</Animated.View>
+      <Animated.View style={[look, dip, disabled ? { opacity: 0.45 } : null]}>{children}</Animated.View>
     </Pressable>
   );
 }

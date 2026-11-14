@@ -10,6 +10,7 @@ import type { Course, Meeting, Task } from '../domain/types';
 import { Face } from '../ui/mascot/Face';
 import { TodayPage } from '../screens/today/TodayPage';
 import { TIPS } from '../screens/today/TodayV2';
+import { splitPlace } from '../screens/today/kitv2';
 import { getState, hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -132,5 +133,16 @@ describe('Today route (R1)', () => {
     await press(r, 'due-done-t1');
     expect(getState().tasks.find((t) => t.id === 't1')?.status).toBe(2);
     expect(faces(r)[0]!.props).toMatchObject({ name: 'happy', react: { motion: 'bounce', n: 2 } });
+  });
+});
+
+describe('the v2 Tap', () => {
+  it('places itself with its own flex and margins, and dips everything else (the week strip stretches)', () => {
+    expect(splitPlace([{ flex: 1, minHeight: 64, borderRadius: 12, backgroundColor: 'red' }, { marginLeft: -12 }])).toEqual({
+      place: { flex: 1, marginLeft: -12 },
+      look: { minHeight: 64, borderRadius: 12, backgroundColor: 'red', flexGrow: 1 },
+    });
+    expect(splitPlace({ padding: 8 })).toEqual({ place: {}, look: { padding: 8 } });
+    expect(splitPlace(undefined)).toEqual({ place: {}, look: {} });
   });
 });
