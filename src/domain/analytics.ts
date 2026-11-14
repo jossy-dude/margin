@@ -1,6 +1,7 @@
 import type { AttRecord, AttStatus, AttWhy, Course, DayMark, FocusSession, Mark, Meeting, SubjectVariant, Task } from './types';
 import { addDays, fmtDur, pad, parseYmd, plural, startOfDay, ymd } from './time';
 import { attendanceRate, effective, occurrencesBetween, occurrencesOn, type Occurrence } from './attendance';
+import type { ClassMove } from './moves';
 import { total } from './grades';
 
 /** oldest → newest, ending today */
@@ -92,21 +93,21 @@ export const statsEmptyHint = (x: { focusMinutes: number; finished: number }): s
 /** One day of one subject's attendance strip. `cls` says whether the subject meets that day at all, which
  *  `status: null` alone cannot: a class later today and a day with no class both have no status yet. */
 export interface AttCell { date: string; status: AttStatus | null; why: AttWhy; inferred: boolean; cls: boolean }
-export function attendanceHeat(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+export function attendanceHeat(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now(), moves: readonly ClassMove[] = []) {
   const keys = lastDays(nDays, now);
   return courses.filter((c) => meetings.some((m) => m.courseId === c.id)).map((c) => ({
     course: c,
     cells: keys.map<AttCell>((k) => {
-      const d = parseYmd(k), m = occurrencesOn(d, meetings.filter((x) => x.courseId === c.id))[0];
+      const d = parseYmd(k), m = occurrencesOn(d, meetings.filter((x) => x.courseId === c.id), moves)[0];
       if (!m) return { date: k, status: null, why: '', inferred: false, cls: false };
       const e = effective(d, m.meeting, att, days, now); return { date: k, status: e.status, why: e.why ?? '', inferred: e.inferred, cls: true };
     }),
   }));
 }
-export function attendanceByCourse(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+export function attendanceByCourse(courses: Course[], meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now(), moves: readonly ClassMove[] = []) {
   const from = addDays(startOfDay(now), -(nDays - 1));
   return courses.filter((c) => meetings.some((m) => m.courseId === c.id)).map((c) => {
-    const occ: Occurrence[] = occurrencesBetween(from, now, meetings.filter((m) => m.courseId === c.id));
+    const occ: Occurrence[] = occurrencesBetween(from, now, meetings.filter((m) => m.courseId === c.id), moves);
     return { course: c, ...attendanceRate(occ, att, days, now) };
   });
 }
@@ -114,13 +115,13 @@ export type AttRow = ReturnType<typeof attendanceByCourse>[number];
 /** v0.7 R5 (D-15): a course's attendance per part (lecture, lab…), each against its own goal (`attGoal` %, else the
  *  app-wide 80 %). A part owns the classes filed under it; the base part also owns the ones filed under none.
  *  Empty for a course with fewer than two parts, whose course row already says it all. */
-export function attendanceByPart(course: Course, meetings: Meeting[], variants: readonly SubjectVariant[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+export function attendanceByPart(course: Course, meetings: Meeting[], variants: readonly SubjectVariant[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now(), moves: readonly ClassMove[] = []) {
   const parts = variants.filter((v) => v.subjectId === course.id).sort((a, b) => a.ord - b.ord);
   if (parts.length < 2) return [];
   const from = addDays(startOfDay(now), -(nDays - 1)), base = parts.find((p) => p.isBase) ?? null;
   return parts.map((p) => {
     const mine = meetings.filter((m) => m.courseId === course.id && ((m.variantId ?? null) === p.id || (!m.variantId && base?.id === p.id)));
-    const r = attendanceRate(occurrencesBetween(from, now, mine), att, days, now), goal = p.attGoal && p.attGoal > 0 ? p.attGoal : 80;
+    const r = attendanceRate(occurrencesBetween(from, now, mine, moves), att, days, now), goal = p.attGoal && p.attGoal > 0 ? p.attGoal : 80;
     return { id: p.id, name: p.name, goal, ...r, canMiss: canMiss(r.here, r.held, goal / 100) };
   }).filter((r) => r.held > 0 || r.rate !== null);
 }
@@ -290,9 +291,9 @@ export function statsHeadline(x: HeadlineIn): string | null {
 /** Every class held in the window, counted by state and reason (the v0.6 attendance model). An inferred
  *  "present" (a class that ended unmarked) counts as present with no reason; future classes are left out. */
 export interface AttBreakdown { present: number; late: number; absent: number; cancelled: number; held: number; why: { a: Partial<Record<AttWhy, number>>; c: Partial<Record<AttWhy, number>>; p: Partial<Record<AttWhy, number>> } }
-export function attendanceBreakdown(meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()): AttBreakdown {
+export function attendanceBreakdown(meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now(), moves: readonly ClassMove[] = []): AttBreakdown {
   const from = addDays(startOfDay(now), -(nDays - 1)), out: AttBreakdown = { present: 0, late: 0, absent: 0, cancelled: 0, held: 0, why: { a: {}, c: {}, p: {} } };
-  for (const o of occurrencesBetween(from, now, meetings)) {
+  for (const o of occurrencesBetween(from, now, meetings, moves)) {
     const e = effective(o.date, o.meeting, att, days, now);
     if (!e.status) continue;
     const w = e.why ?? '';
@@ -304,9 +305,9 @@ export function attendanceBreakdown(meetings: Meeting[], att: Record<string, Att
   return out;
 }
 /** One subject's classes in the window, oldest first: a dot per class held or cancelled (not per day). */
-export function classDots(courseId: string, meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now()) {
+export function classDots(courseId: string, meetings: Meeting[], att: Record<string, AttRecord>, days: Record<string, DayMark>, nDays: number, now = Date.now(), moves: readonly ClassMove[] = []) {
   const from = addDays(startOfDay(now), -(nDays - 1));
-  return occurrencesBetween(from, now, meetings.filter((m) => m.courseId === courseId))
+  return occurrencesBetween(from, now, meetings.filter((m) => m.courseId === courseId), moves)
     .map((o) => ({ date: ymd(o.date), ...effective(o.date, o.meeting, att, days, now) }))
     .filter((e) => e.status !== null) as { date: string; status: AttStatus; why?: AttWhy; inferred: boolean; explicit: boolean }[];
 }

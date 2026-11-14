@@ -13,6 +13,7 @@
 import type { Course, FocusSession, Meeting, Notice, Task, TaskKind } from './types';
 import { addDays, atTime, pad, startOfDay, ymd } from './time';
 import { occEnd, occurrencesBetween } from './attendance';
+import type { ClassMove } from './moves';
 
 export const BRIDGE_FORMAT = 'margin-bridge/1';
 export type BridgeApp = 'margin' | 'bone';
@@ -77,6 +78,8 @@ export interface EnvelopeInput {
   cancelled?: (occKeyDate: string, m: Meeting) => boolean;
   /** How many days of timetable to publish ahead. */
   horizonDays?: number;
+  /** One-week class moves (`settings.moves`), so a moved class is published at its new time. */
+  moves?: readonly ClassMove[];
 }
 /** Margin's envelope: changed tasks / notices / sessions since `since`, plus the timetable ahead (always whole,
  *  because occurrences are derived, not stored — the reader replaces its class events wholesale). */
@@ -91,7 +94,7 @@ export function buildEnvelope(i: EnvelopeInput): BridgeEnvelope {
     ...(r.deleted ? { deleted: true } : { data: { title: r.value.text, at: r.value.dueAt, end: null, kind: 'notice', course: cname(r.value.courseId), room: null, cancelled: false } }),
   }));
   const from = startOfDay(i.now), to = addDays(from, i.horizonDays ?? 14);
-  const classes = occurrencesBetween(from, to, i.meetings.filter((m) => !m.demo)).map<BridgeItem<BridgeEvent>>(({ date, meeting }) => {
+  const classes = occurrencesBetween(from, to, i.meetings.filter((m) => !m.demo), i.moves ?? []).map<BridgeItem<BridgeEvent>>(({ date, meeting }) => {
     const d = ymd(date), c = i.courses.find((x) => x.id === meeting.courseId);
     return {
       id: `c-${d}-${meeting.start}-${meeting.courseId}${meeting.variantId ? `~${meeting.variantId}` : ''}`, origin: 'margin', updatedAt: i.now,

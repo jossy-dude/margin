@@ -486,6 +486,15 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
           if (sameShape(v, dflt)) (settings as Record<string, unknown>)[k] = k === 'notif' ? { ...(dflt as object), ...(v as object) } : v;
           else warnings.push(`settings.${k}: not the kind of value this setting takes; the phone's own was kept.`);
         }
+        /* v0.7 R2: one-week class moves live in the settings (`settings.moves`, not a default key), so they are read
+           here: each with its ids, YYYY-MM-DD dates and HH:MM times, or it is left out with a warning. */
+        if (Array.isArray(raw.settings.moves)) {
+          const hm = (x: unknown) => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x);
+          const ok = raw.settings.moves.filter((v): v is { id: string; meetingId: string; date: string; to: string; start: string; end: string } =>
+            isRec(v) && !!nonEmpty(v.id) && !!nonEmpty(v.meetingId) && typeof v.date === 'string' && isYmd(v.date) && typeof v.to === 'string' && isYmd(v.to) && hm(v.start) && hm(v.end));
+          if (ok.length < raw.settings.moves.length) warnings.push(`settings.moves: ${raw.settings.moves.length - ok.length} class move(s) could not be read and were left out.`);
+          if (ok.length) settings.moves = ok.map((v) => ({ id: v.id, meetingId: v.meetingId, date: v.date, to: v.to, start: v.start, end: v.end }));
+        }
         if (settings.name) profileName = settings.name;
       }
     }

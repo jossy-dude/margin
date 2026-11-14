@@ -20,7 +20,7 @@ export function buildTables(s: Snapshot, now: number, terms: readonly SemesterRo
   const vn = (id: string | null | undefined) => (id ? (s.variants ?? []).find((v) => v.id === id)?.name ?? '' : '');
   const st = s.settings as Record<string, unknown>;
   const first = semesterFirstDay(s.settings, now);
-  const occ = occurrencesBetween(first, clampToSemester(now, s.settings), s.meetings).filter((o) => inSemester(o.date, s.settings));
+  const occ = occurrencesBetween(first, clampToSemester(now, s.settings), s.meetings, s.settings.moves ?? []).filter((o) => inSemester(o.date, s.settings));
   const tables: Table[] = [
     { name: 'Courses', header: ['id', 'name', 'room', 'teacher', 'goal', 'total'], rows: s.courses.map((c) => [c.id, c.name, roomsLabel(c), c.teacher, c.goal, total(s.marks.filter((m) => m.courseId === c.id), s.adjusts[c.id] ?? 0)]) },
     { name: 'Variants', header: ['subject', 'variant', 'room', 'teacher', 'note'], rows: (s.variants ?? []).map((v) => [cn(v.subjectId), v.name, v.room, v.teacher, v.note]) },

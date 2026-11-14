@@ -11,7 +11,10 @@ import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Page } from './common';
 import * as A from '../domain/analytics';
+import type { ClassMove } from '../domain/moves';
 import { fmtDur, plural, startOfDay } from '../domain/time';
+
+const NO_MOVES: ClassMove[] = [];
 
 /* ──────────────────────────────────────────────────────────────────────────────────────────────────────
  * Stats, as a report (owner, collage pass: "the stats are useful but not shown properly"). Three figures and
@@ -27,7 +30,7 @@ const WEEKS = 15;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function StatsScreen() {
-  const variants = useStore((s) => s.variants), focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
+  const variants = useStore((s) => s.variants), moves = useStore((s) => s.settings.moves) ?? NO_MOVES, focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
   const { c, tints } = useTheme(), { width } = useWindowDimensions();
   const live = useScreenLive(), now = useNow(live ? 60_000 : 0), iw = width - 32 - 32, [gc, setGc] = useState<string | null>(null);
   const day = startOfDay(now);
@@ -40,11 +43,11 @@ export function StatsScreen() {
     hours: A.doneByHour(tasks), fh: A.focusByHour(focus), series: A.markSeries(gCourse, marks),
   }), [tasks, focus, courses, marks, adjusts, gCourse, focusD, doneD, days]);
   const att = useMemo(() => {
-    const rows = A.attendanceByCourse(courses, meetings, attendance, dayMarks, 28, now);
-    const subjects = rows.map((r) => ({ course: r.course, rate: r.rate, here: r.here, held: r.held, canMiss: A.canMiss(r.here, r.held), parts: A.attendanceByPart(r.course, meetings, variants ?? [], attendance, dayMarks, 28, now), dots: A.classDots(r.course.id, meetings, attendance, dayMarks, 28, now) }))
+    const rows = A.attendanceByCourse(courses, meetings, attendance, dayMarks, 28, now, moves);
+    const subjects = rows.map((r) => ({ course: r.course, rate: r.rate, here: r.here, held: r.held, canMiss: A.canMiss(r.here, r.held), parts: A.attendanceByPart(r.course, meetings, variants ?? [], attendance, dayMarks, 28, now, moves), dots: A.classDots(r.course.id, meetings, attendance, dayMarks, 28, now, moves) }))
       .sort((a, b) => (a.rate ?? 2) - (b.rate ?? 2) || a.course.name.localeCompare(b.course.name));
-    return { rows, totals: A.attendanceTotals(rows), b: A.attendanceBreakdown(meetings.filter((m) => courses.some((x) => x.id === m.courseId)), attendance, dayMarks, 28, now), subjects };
-  }, [courses, meetings, attendance, dayMarks, now, variants]);
+    return { rows, totals: A.attendanceTotals(rows), b: A.attendanceBreakdown(meetings.filter((m) => courses.some((x) => x.id === m.courseId)), attendance, dayMarks, 28, now, moves), subjects };
+  }, [courses, meetings, attendance, dayMarks, now, variants, moves]);
   const { ot, fs, ds, bySub, gb, hours, fh, series } = data;
   const work = useMemo(() => A.workNow(tasks, now), [tasks, now]);
   const todayWd = (new Date(day).getDay() + 6) % 7, weekly = A.weeklySums(doneD, 8, todayWd);

@@ -25,7 +25,7 @@ export async function bridgeOut(opts: { since?: number; now?: number; move?: boo
   const now = opts.now ?? Date.now(), since = opts.since ?? await cursor(OUT), s = getState();
   const [tasks, notices, focus] = await Promise.all([R().changes('task', since), R().changes('notice', since), R().changes('focus', since)]);
   const env = buildEnvelope({
-    now, since, courses: s.courses, meetings: s.meetings, tasks, notices, focus,
+    now, since, courses: s.courses, meetings: s.meetings, tasks, notices, focus, moves: s.settings.moves ?? [],
     cancelled: (d, m) => isCancelled(effective(new Date(`${d}T12:00:00`), m, s.attendance, s.dayMarks, now)),
   });
   if (opts.move !== false) await R().setKv(OUT, String(now));

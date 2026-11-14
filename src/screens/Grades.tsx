@@ -19,12 +19,12 @@ import { hexA } from '../tokens/theme';
 import { emptyFace, faceEvent, pageFace } from '../ui/mascot/moments';
 
 function AttendanceGrid({ course }: { course: Course }) {
-  const locked = useStore((s) => s.settings.lockAttendance), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
+  const locked = useStore((s) => s.settings.lockAttendance), moves = useStore((s) => s.settings.moves), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
   /* The grid's own clock, frozen while this page is not the one on screen (audit M5) — an inferred
      "Here" only appears once a class has ended, so the tick is only useful under the finger. */
   const live = useScreenLive();
   const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = semesterFirstDay(settings, now);
-  const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id)), [sem, now, meetings, course.id]);
+  const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id), moves ?? []), [sem, now, meetings, course.id, moves]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
   const teacher = settings.teacherAbsent?.[course.id];
   const setTeacher = (n: number) => { fx.select(); act.setSettings({ teacherAbsent: { ...settings.teacherAbsent, [course.id]: Math.max(0, Math.min(99, n)) } }); };
@@ -45,7 +45,7 @@ function AttendanceGrid({ course }: { course: Course }) {
           {occ.map(({ date, meeting }) => {
             const e = effective(date, meeting, attendance, dayMarks, now), key = occKey(ymd(date), meeting), label = `${DW[(date.getDay() + 6) % 7]} ${date.getDate()}, ${fmtTime(atTime(date.getTime(), meeting.start), hour12)}, ${spokenStatus(e)}`;
             return <AttCell key={key} testID={`att-cell-${key}`} status={e.status} why={e.why} inferred={e.inferred} future={!e.status} locked={locked} label={label} pulse={pulseKey}
-              onTap={() => { const s = e.status && e.inferred ? nextStatus(e.status) : 'p', news = attNews(key, s, { ...getState(), now: Date.now() }); act.setAtt(key, s); if (news) faceEvent(news); }} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
+              onTap={() => { const s = e.status && e.inferred ? nextStatus(e.status) : 'p', news = attNews(key, s, { ...getState(), now: Date.now(), moves: getState().settings.moves }); act.setAtt(key, s); if (news) faceEvent(news); }} onHold={() => act.open({ t: 'status', mode: 'class', key, title: `${course.name} · ${fmtDay(date.getTime(), now)}`, date: ymd(date) })} />;
           })}
         </HStrip>)}
       <Row style={{ gap: 12 }}>{[['✓', 'present', c.ink], ['L', 'late entry', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.bad], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
