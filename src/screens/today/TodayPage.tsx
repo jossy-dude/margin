@@ -25,14 +25,14 @@ export function TodayPage() {
   );
 }
 
-/** One small glass pill over the classic page, beside the + button, the way back. */
-function BackToNew({ onPress }: { onPress: () => void }) {
+/** One small glass pill over the classic page, beside the + button, the way back (Today and Week). */
+export function BackToNew({ onPress, label = 'New Today' }: { onPress: () => void; label?: string }) {
   const { t, scheme } = useV2(), ins = useSafeAreaInsets();
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end', alignItems: 'flex-start', padding: SPACE.gutter, paddingBottom: navHeight(ins.bottom) + FAB_GAP + SPACE.s2 }]}>
-      <Tap onPress={onPress} label="Back to the new Today" testID="today-new"
+      <Tap onPress={onPress} label={`Back to the ${label.toLowerCase()}`} testID={label === 'New Today' ? 'today-new' : 'week-new'}
         style={[glassStyle(scheme, true), { flexDirection: 'row', alignItems: 'center', gap: SPACE.s1, minHeight: 48, paddingVertical: 0, paddingHorizontal: SPACE.s4, borderRadius: RADIUS.island }]}>
-        <T k="label" style={{ fontWeight: '600' }}>New Today</T>
+        <T k="label" style={{ fontWeight: '600' }}>{label}</T>
         <Glyph name="chevron" size={16} color={t.ink2} />
       </Tap>
     </View>
