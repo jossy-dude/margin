@@ -29,7 +29,7 @@ import { PaperBg } from './ui/PaperBg';
 import { Btn, HandBox, Icon, Tape, Txt } from './ui/kit';
 import { Overlay } from './ui/Overlay';
 import { createBookNavigator } from './navigation/Book';
-import { TodayScreen } from './screens/Today';
+import { TodayPage } from './screens/today/TodayPage';
 import { WeekScreen } from './screens/Week';
 import { TasksScreen } from './screens/Tasks';
 import { GradesScreen } from './screens/Grades';
@@ -56,7 +56,7 @@ const guarded = (route: string, C: React.ComponentType) => {
   Page.displayName = `${route}Page`;
   return Page;
 };
-const TodayGuarded = guarded('Today', TodayScreen), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
+const TodayGuarded = guarded('Today', TodayPage), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
 const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('Stats', StatsScreen), FocusGuarded = guarded('Focus', FocusScreen);
 
 /** Exported only so `test/ota-loop` can draw the real shell and see the update sentence on screen. */
