@@ -214,7 +214,7 @@ object SyncEngine {
       "challenge" -> {
         if (hubId != null && m.optString("hub", hubId!!) != hubId) { l.close(); return }
         l.serverNonce = m.getString("nonce"); l.nonce = Seal.nonce()
-        val hello = frame("hello", JSONObject().put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.0")
+        val hello = frame("hello", JSONObject().put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.1")
           .put("proof", Seal.proof(key, l.serverNonce!!, deviceId, vaultId!!)).put("nonce", l.nonce).put("cursor", store.cursor).put("clientTime", System.currentTimeMillis()))
         l.send(hello.toString())
       }

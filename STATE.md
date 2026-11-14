@@ -61,7 +61,9 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
 
 ## Now
-- **Shipped:** v0.6.0 (versionCode 5), tag `v0.6`. Branch `v2-improvements` is now **0.7.0 / versionCode 6** (unreleased).
+- **Shipped:** v0.71 (0.7.1, versionCode 7, tag `v0.71`, 2026-11-15): lab/tutorial parts editable in the subject
+  sheet (own teacher, room, group no., grade share, attendance goal; `domain/parts.ts`). Before it: v0.6.0 (vc 5).
+- **Next candidates:** one "Manage" page for every subject, test and less-used setting (asked 2026-11-15).
 - **v0.7 in progress** (`docs/v07/PLAN.md`, decisions B1–B9 there):
   - done: BUGS #11 reconnect (`f63f727`), #7 To-do filter, item 8 export counts; N1 version, N4/N5 sync module + manifest
     (native CI green); Settings → Obsidian → Sync card; margin-bridge 0.7 live client (built, not yet in the vault).
