@@ -3,6 +3,7 @@ import { Clipboard, View } from 'react-native';
 import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
 import { Jot } from '../ui/mascot/Jot';
+import { FaceTester } from '../ui/mascot/FaceTester';
 import { MOODS, type ScrapCueKind, type ScrapMood } from '../ui/mascot/scrap-rig';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
@@ -87,6 +88,8 @@ export function DiagnosticsPage() {
         ))}</View>
       )}
       <Hair />
+      <Label>Face check</Label>
+      <FaceTester />
       <Label>Mascot check</Label>
       <MascotCheck />
       <Label>What gets recorded</Label>

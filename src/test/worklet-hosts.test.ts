@@ -150,7 +150,14 @@ test('the sweep found worklets, so the rule is reading something', () => {
   // v0.5 U1: the time ruler's `release` runs inside a `withTiming` callback, so it is a worklet too.
   // v0.7: the clock beats from a timer on the JS thread, so `handAngles` is a plain function again.
   // v0.6: the mascot's arm angles are read by both the arms and the strings that hold them, on the UI thread.
-  expect([...workletised].sort()).toEqual(['ui/fields.tsx: release', 'ui/mascot/Jot.tsx: armL', 'ui/mascot/Jot.tsx: armR']);
+  // v0.7 U7: the face rebuilds its path data on the UI thread (`Face.tsx`'s animated props), so the drawing maths in
+  // `faces.ts` is all worklets, down to the circle and the rounding.
+  expect([...workletised].sort()).toEqual([
+    'ui/fields.tsx: release', 'ui/mascot/Jot.tsx: armL', 'ui/mascot/Jot.tsx: armR',
+    'ui/mascot/faces.ts: ease', 'ui/mascot/faces.ts: extraAt', 'ui/mascot/faces.ts: eyeFrame', 'ui/mascot/faces.ts: eyeProps',
+    'ui/mascot/faces.ts: mixMouth', 'ui/mascot/faces.ts: mouthAt', 'ui/mascot/faces.ts: mouthPath', 'ui/mascot/faces.ts: n2',
+    'ui/mascot/faces.ts: poseAt', 'ui/mascot/faces.ts: ring', 'ui/mascot/faces.ts: shapePath',
+  ]);
 });
 
 describe('the real bundle, when one is being served', () => {
@@ -181,13 +188,14 @@ describe('the real bundle, when one is being served', () => {
     }
     // A workletised declaration is rewritten to `var f = function <name>Factory(_refN) { var _worklet_<hash>_init_data = …`.
     // A plain function keeps its own body, which on the UI thread is a *remote* call and a hard throw.
-    for (const name of [] as string[]) {
+    // v0.7 U7: the face's drawing maths, called from `Face.tsx`'s animated props (checked against a real bundle).
+    for (const name of ['eyeProps', 'mouthAt', 'extraAt', 'poseAt', 'eyeFrame', 'shapePath', 'mouthPath', 'mixMouth']) {
       const factory = new RegExp(`var ${name} = function \\w+Factory\\(_ref`).test(bundle!);
       expect({ name, workletFactory: factory }).toEqual({ name, workletFactory: true });
     }
     // …and the control: a same-file export that is *not* a worklet is still emitted plainly, so the check
     // above cannot be passing because the pattern matches everything.
-    for (const name of ['compositeSvg', 'dialPal', 'handAngles']) {
+    for (const name of ['compositeSvg', 'dialPal', 'handAngles', 'strokeFor']) {
       expect({ name, workletFactory: new RegExp(`var ${name} = function \\w+Factory\\(_ref`).test(bundle!) }).toEqual({ name, workletFactory: false });
     }
   });
