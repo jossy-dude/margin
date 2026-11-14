@@ -2,6 +2,7 @@ import type { AttRecord, Course, DayMark, Meeting, Notice, SubjectVariant, Task 
 import { effective, isCancelled, occEnd, occKey, occurrencesOn, statusLabel } from '../../domain/attendance';
 import { DW, MO, addDays, atTime, fmtTime, mondayOf, plural, startOfDay, weekdayOf, ymd } from '../../domain/time';
 import { roomOf } from '../../domain/rooms';
+import type { ClassMove } from '../../domain/moves';
 import { bubbleOf, bubbleWords, type BubbleState } from '../../ui/Bubble';
 import type { FaceName } from '../../ui/mascot/faces';
 import { pageFace } from '../../ui/mascot/moments';
@@ -73,14 +74,16 @@ export interface TodayInput {
   attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
   tasks: Task[]; notices: Notice[];
   hour12: boolean; name: string;
+  /** one-off class moves (`settings.moves`, R2): a class moved this week shows where it went */
+  moves?: readonly ClassMove[];
 }
 
 const shortDay = (ms: number) => { const d = new Date(ms); return `${DW[weekdayOf(d)]} ${d.getDate()} ${MO[d.getMonth()]?.slice(0, 3)}`; };
 
 /** Every class on `day`, in start order, with its attendance and its words. */
-export function classesOn(day: number, i: Pick<TodayInput, 'now' | 'meetings' | 'courses' | 'variants' | 'attendance' | 'dayMarks' | 'hour12'>): ClassItem[] {
+export function classesOn(day: number, i: Pick<TodayInput, 'now' | 'meetings' | 'courses' | 'variants' | 'attendance' | 'dayMarks' | 'hour12' | 'moves'>): ClassItem[] {
   const date = new Date(startOfDay(day));
-  return occurrencesOn(date, i.meetings).map(({ meeting: m }) => {
+  return occurrencesOn(date, i.meetings, i.moves).map(({ meeting: m }) => {
     const course = i.courses.find((c) => c.id === m.courseId), v = m.variantId ? i.variants.find((x) => x.id === m.variantId) : undefined;
     const e = effective(date, m, i.attendance, i.dayMarks, i.now), start = atTime(date.getTime(), m.start), end = occEnd(date.getTime(), m);
     const cancelled = isCancelled(e), live = !cancelled && i.now >= start && i.now < end, over = end <= i.now;
@@ -234,14 +237,7 @@ export function todayView(i: TodayInput): TodayVM {
   /* The rows under the card are today's classes minus the card's own: the current class appears once (C1). */
   const rest = isToday ? todays.filter((x) => !shown.has(x.key)) : [];
   const later = rest.filter((x) => !x.over), earlier = rest.filter((x) => x.over);
-  const mon = mondayOf(sel);
-  const week: WeekPill[] = Array.from({ length: 7 }, (_, k) => {
-    const day = addDays(mon, k), items = classesOn(day, i), on = items.filter((x) => !x.cancelled).length, d = new Date(day);
-    return {
-      day, dw: DW[k]!, date: d.getDate(), isToday: day === today, selected: day === sel, bubbles: items.map((x) => x.bubble),
-      label: `${DW[k]} ${d.getDate()} ${MO[d.getMonth()]}, ${plural(on, 'class', 'classes')}${day === today ? ', today' : ''}`,
-    };
-  });
+  const week = weekPills(sel, i);
   const h = new Date(i.now).getHours(), hello = h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const dm = i.dayMarks[ymd(new Date(sel))];
   return {
@@ -251,6 +247,18 @@ export function todayView(i: TodayInput): TodayVM {
     dayMark: dm ? statusLabel(dm.status, dm.why) : null,
     week, due: dueOf(i), notes: notesOf(i),
   };
+}
+
+/** The week strip's seven days around `sel`, Monday first: each day's classes as small bubbles (Today and Week). */
+export function weekPills(sel: number, i: Pick<TodayInput, 'now' | 'meetings' | 'courses' | 'variants' | 'attendance' | 'dayMarks' | 'hour12' | 'moves'>): WeekPill[] {
+  const today = startOfDay(i.now), mon = mondayOf(sel);
+  return Array.from({ length: 7 }, (_, k) => {
+    const day = addDays(mon, k), items = classesOn(day, i), on = items.filter((x) => !x.cancelled).length, d = new Date(day);
+    return {
+      day, dw: DW[k]!, date: d.getDate(), isToday: day === today, selected: day === startOfDay(sel), bubbles: items.map((x) => x.bubble),
+      label: `${DW[k]} ${d.getDate()} ${MO[d.getMonth()]}, ${plural(on, 'class', 'classes')}${day === today ? ', today' : ''}`,
+    };
+  });
 }
 
 /** What a bubble says, for the track's and the strip's TalkBack labels. */

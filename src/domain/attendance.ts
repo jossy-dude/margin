@@ -1,5 +1,6 @@
 import type { AttRecord, AttStatus, AttWhy, Course, DayMark, Meeting } from './types';
 import { addDays, atTime, hm, selectedDay, startOfDay, weekdayOf, ymd } from './time';
+import { dayMeetings, type ClassMove } from './moves';
 
 export const ST: Record<AttStatus, string> = { p: 'Present', a: 'Absent', c: 'Cancelled' };
 export const CYCLE: AttStatus[] = ['p', 'a', 'c'];
@@ -82,9 +83,12 @@ export const nextStatus = (s: AttStatus | null): AttStatus => {
 };
 
 export interface Occurrence { date: Date; meeting: Meeting }
-export function occurrencesOn(date: Date, meetings: Meeting[]): Occurrence[] {
+/** The classes on `date`, in start order. With `moves` (one-off moves, `domain/moves.ts`) a class moved away is not
+ *  there and one moved in is, at its new time; without, it is the weekly timetable as before. */
+export function occurrencesOn(date: Date, meetings: Meeting[], moves: readonly ClassMove[] = []): Occurrence[] {
   const wd = weekdayOf(date);
-  return meetings.filter((m) => m.weekday === wd).sort((a, b) => hm(a.start) - hm(b.start)).map((meeting) => ({ date, meeting }));
+  const day = moves.length ? dayMeetings(ymd(date), wd, meetings, moves) : meetings.filter((m) => m.weekday === wd);
+  return day.sort((a, b) => hm(a.start) - hm(b.start)).map((meeting) => ({ date, meeting }));
 }
 
 /** One day's classes as the day bar draws them: named, timed, and flagged cancelled. */
@@ -112,9 +116,9 @@ export function dayBlock(now: number, meetings: Meeting[], courses: Course[], at
   const day = startOfDay(selectedDay(now, picked)), occ = occurrencesOn(new Date(day), meetings), periods = periodsOn(occ, courses, att, days, now);
   return { day, date: ymd(new Date(day)), occ, periods, cur: periods.find((p) => now >= p.start && now < p.end && !p.cancelled), next: periods.find((p) => p.start > now && !p.cancelled) };
 }
-export function occurrencesBetween(fromMs: number, toMs: number, meetings: Meeting[]): Occurrence[] {
+export function occurrencesBetween(fromMs: number, toMs: number, meetings: Meeting[], moves: readonly ClassMove[] = []): Occurrence[] {
   const out: Occurrence[] = [];
-  for (let t = startOfDay(fromMs); t <= toMs; ) { const d = new Date(t); out.push(...occurrencesOn(d, meetings)); const n = new Date(t); n.setDate(n.getDate() + 1); t = n.getTime(); }
+  for (let t = startOfDay(fromMs); t <= toMs; ) { const d = new Date(t); out.push(...occurrencesOn(d, meetings, moves)); const n = new Date(t); n.setDate(n.getDate() + 1); t = n.getTime(); }
   return out;
 }
 export function attendanceRate(occ: Occurrence[], att: Record<string, AttRecord>, days: Record<string, DayMark>, now = Date.now()) {

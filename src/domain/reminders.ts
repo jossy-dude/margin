@@ -3,6 +3,7 @@ import { addDays, atTime, fmtDur, fmtTime, hm, startOfDay, weekdayOf, ymd, DAY_M
 import { effective, isCancelled, occEnd, occKey, occurrencesBetween } from './attendance';
 import { roomOf } from './rooms';
 import { ruleHits, type ReminderRule } from './ruleReminders';
+import type { ClassMove } from './moves';
 
 export type PlannedKind = 'class' | 'ended' | 'task' | 'start' | 'exam' | 'rule';
 export interface Planned {
@@ -21,6 +22,8 @@ export interface PlanInput {
   variants?: SubjectVariant[];
   /** v0.7 R9: the owner's reminder rules (`settings.reminders`). Absent = none. */
   rules?: ReminderRule[];
+  /** v0.7 R2: one-off class moves (`settings.moves`): a moved class rings at its new time. Absent = none. */
+  moves?: readonly ClassMove[];
 }
 export interface Plan { items: Planned[]; deferred: number; dropped: { id: string; why: string }[] }
 
@@ -32,7 +35,7 @@ export interface Ctx { s: NotifSettings; busy: [number, number][]; }
  * Merged & disjoint so consumers can subtract or binary-search without double counting. */
 function busyIntervals(i: PlanInput, from: number, to: number): [number, number][] {
   const out: [number, number][] = [];
-  for (const o of occurrencesBetween(from, to, i.meetings)) {
+  for (const o of occurrencesBetween(from, to, i.meetings, i.moves)) {
     if (isCancelled(effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now))) continue;
     // `occEnd`, not `meeting.end`: a class stored 23:30–00:30 ends the NEXT day, and a raw end would
     // build an inverted interval that blocks nothing — the hours after midnight would read free.
@@ -189,7 +192,7 @@ export function planReminders(i: PlanInput): Plan {
     raw.push({ ...p, id: `${p.kind}-${p.entityId}-${Math.round(r.at / MIN)}`, at: r.at, ...(r.at !== p.at ? { shiftedFrom: p.at, why: r.why } : {}) });
   };
   // classes
-  for (const o of occurrencesBetween(startOfDay(i.now), horizon, i.meetings)) {
+  for (const o of occurrencesBetween(startOfDay(i.now), horizon, i.meetings, i.moves)) {
     const e = effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now);
     if (isCancelled(e)) continue;
     const course = cn(o.meeting.courseId), name = course?.name ?? 'Class', start = atTime(o.date.getTime(), o.meeting.start), end = occEnd(o.date.getTime(), o.meeting);
@@ -221,11 +224,11 @@ export function planReminders(i: PlanInput): Plan {
   // v0.7 R9: reminder rules, anchored to the timetable (cancelled classes move "first class" on)
   if (i.rules?.length) {
     const cancelled = new Set<string>();
-    for (const o of occurrencesBetween(startOfDay(i.now), horizon + DAY_MS, i.meetings)) {
+    for (const o of occurrencesBetween(startOfDay(i.now), horizon + DAY_MS, i.meetings, i.moves)) {
       if (isCancelled(effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now))) cancelled.add(`${o.date.toDateString()}|${o.meeting.id}`);
     }
     for (const r of i.rules) {
-      for (const h of ruleHits(r, { meetings: i.meetings, tasks: i.tasks, from: i.now, to: horizon, cancelled })) {
+      for (const h of ruleHits(r, { meetings: i.meetings, moves: i.moves, tasks: i.tasks, from: i.now, to: horizon, cancelled })) {
         const p: Omit<Planned, 'id'> = { kind: 'rule', at: h.at, title: h.text, body: 'Reminder', channel: 'tasks', route: 'Today', entityId: h.key };
         if (r.ringInQuiet) raw.push({ ...p, id: `rule-${h.key}-${Math.round(h.at / MIN)}` });
         else push(p, {});

@@ -53,9 +53,10 @@ export function setSettings(patch: Partial<Settings>) {
     () => R().putSettings(patch),
     () => { set((s) => ({ settings: { ...s.settings, ...before } })); configureFx(getState().settings); },
   );
-  // The 12/24-hour choice reaches the notification BODIES the planner writes (`PlanInput.hour12`), so
-  // flipping it has to rebuild the queue; every other display setting leaves the plan identical.
-  if (patch.hour12 !== undefined) resync(400);
+  // The 12/24-hour choice reaches the notification BODIES the planner writes (`PlanInput.hour12`), and a one-off
+  // class move (`moves`, R2) changes when a class rings and what the widgets list, so both rebuild the queue and the
+  // surfaces; every other display setting leaves the plan identical.
+  if (patch.hour12 !== undefined || patch.moves !== undefined) resync(400);
 }
 export function setNotif(patch: Partial<NotifSettings>) {
   const before = getState().settings.notif, notif = { ...before, ...patch };

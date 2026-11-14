@@ -5,6 +5,7 @@
  * delivered as notifications through the existing planner (within its cap, quiet hours respected).
  */
 import type { Meeting, Task } from './types';
+import type { ClassMove } from './moves';
 import { occurrencesOn } from './attendance';
 
 export type Anchor =
@@ -28,7 +29,7 @@ const hm = (s: string) => { const [h, m] = s.split(':').map(Number); return (h ?
 const at = (day: Date, minutes: number) => { const d = new Date(day); d.setHours(0, 0, 0, 0); return d.getTime() + minutes * 60_000; };
 
 /** Every time a rule fires between `from` and `to` (ms). `cancelled` holds occurrence keys that do not happen. */
-export function ruleHits(rule: ReminderRule, i: { meetings: Meeting[]; tasks: Task[]; from: number; to: number; cancelled?: ReadonlySet<string> }): RuleHit[] {
+export function ruleHits(rule: ReminderRule, i: { meetings: Meeting[]; moves?: readonly ClassMove[]; tasks: Task[]; from: number; to: number; cancelled?: ReadonlySet<string> }): RuleHit[] {
   if (!rule.enabled) return [];
   const out: RuleHit[] = [];
   const push = (ms: number, key: string) => { if (ms >= i.from && ms < i.to) out.push({ ruleId: rule.id, at: ms, text: rule.text, key: `${rule.id}|${key}` }); };
@@ -46,7 +47,7 @@ export function ruleHits(rule: ReminderRule, i: { meetings: Meeting[]; tasks: Ta
   for (let d = new Date(start); d.getTime() < i.to + 86_400_000; d.setDate(d.getDate() + 1)) {
     const day = new Date(d);
     if (a.kind === 'time') { if (rule.days[day.getDay()]) push(at(day, hm(a.at)), day.toDateString()); continue; }
-    const occ = occurrencesOn(day, i.meetings).filter((o) => !i.cancelled?.has(`${day.toDateString()}|${o.meeting.id}`));
+    const occ = occurrencesOn(day, i.meetings, i.moves).filter((o) => !i.cancelled?.has(`${day.toDateString()}|${o.meeting.id}`));
     const pick = a.kind === 'firstClass' ? occ.slice(0, 1)
       : a.kind === 'lastClass' ? occ.slice(-1)
       : a.kind === 'course' ? occ.filter((o) => o.meeting.courseId === a.courseId)

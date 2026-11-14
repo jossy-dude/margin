@@ -1,3 +1,4 @@
+import type { ClassMove } from './moves';
 import type { ReminderRule } from './ruleReminders';
 /** v0.6: three states — Present, Absent, Cancelled — and the reason is a separate `why` code
  *  (`domain/attendance.ts` WHY) plus the free-text `reason` line. Older builds wrote `l`, `n`, `s` and `t`;
@@ -140,6 +141,9 @@ export interface Settings {
   alarms?: AlarmRule[];
   /** Reminder rules (v0.7 R9, `domain/ruleReminders.ts`). Optional: an older row has none. */
   reminders?: ReminderRule[];
+  /** One-off class moves from Week ("This week only", v0.7 R2, `domain/moves.ts`). Optional: an older row has none,
+   *  and none is the answer. The weekly timetable stays in `meeting`; a move only says where one week's class went. */
+  moves?: ClassMove[];
   /** Which generation of the default look this settings row has been moved to (2 = the collage). Absent on
    *  a row written before the collage existed; `withDefaults` moves such a row over once. See there. */
   lookV?: number;

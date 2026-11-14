@@ -21,7 +21,7 @@ export interface AgendaDoc { v: 1; at: number; h12: boolean; pinClass: boolean; 
 export interface AgendaInput {
   now: number; courses: readonly Course[]; meetings: readonly Meeting[]; variants?: readonly SubjectVariant[];
   attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>; tasks: readonly Task[];
-  settings: Pick<Settings, 'hour12' | 'semesterStart' | 'semesterEnd' | 'alarms' | 'notif'>;
+  settings: Pick<Settings, 'hour12' | 'semesterStart' | 'semesterEnd' | 'alarms' | 'notif' | 'moves'>;
 }
 
 /** How far ahead the classes are written out. The app refreshes it on every open, so two weeks is slack, not a limit. */
@@ -35,7 +35,7 @@ function classesOn(day: number, i: AgendaInput): AgendaClass[] {
   const date = new Date(day);
   if (!inSemester(date, i.settings)) return [];
   const out: AgendaClass[] = [];
-  for (const { meeting } of occurrencesOn(date, i.meetings as Meeting[])) {
+  for (const { meeting } of occurrencesOn(date, i.meetings as Meeting[], i.settings.moves)) {
     if (isCancelled(effective(date, meeting, i.attendance, i.dayMarks, i.now))) continue;
     const course = i.courses.find((c) => c.id === meeting.courseId);
     if (!course) continue;

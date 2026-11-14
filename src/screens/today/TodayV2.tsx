@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Bubble } from '../../ui/Bubble';
@@ -18,7 +18,8 @@ import { act, useStore } from '../../store/store';
 import { SPACE, TOUCH } from '../../tokens/v2';
 import { Button, Glyph, T, Tap, tintOf, useV2 } from './kitv2';
 import { ClassRow, NowCard } from './NowCard';
-import { completesWeek, todayView, type ClassItem, type DueRow, type TodayVM, type WeekPill } from './model';
+import { completesWeek, todayView, type ClassItem, type DueRow, type TodayVM } from './model';
+import { WeekStrip } from './WeekStrip';
 
 /** What a tap on the face says (D-21: "Tap = a short line … tip of the day"). About this page, in the app's voice. */
 export const TIPS = [
@@ -28,30 +29,6 @@ export const TIPS = [
   'Tap a card’s title to fold it away.',
   'Pin a note and it waits for you here.',
 ] as const;
-
-/** The day picker, opened from the date: seven pills, each with that day's classes as small bubbles. */
-function WeekStrip({ week, onPick }: { week: WeekPill[]; onPick: (day: number) => void }) {
-  const { t } = useV2();
-  return (
-    <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: SPACE.s1 }}>
-      {week.map((p, k) => (
-        <Tap key={p.day} role="tab" selected={p.selected} label={`${p.label}${p.selected ? ', shown' : ''}`} testID={`day-${k}`} onPress={() => onPick(p.day)}
-          style={{ flex: 1, minHeight: 64, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 2,
-            backgroundColor: p.selected ? t.glassStrong : 'transparent', borderWidth: StyleSheet.hairlineWidth, borderColor: p.selected ? t.ring : 'transparent' }}>
-          <T k="caps" c={p.selected ? 'ink' : 'ink3'}>{p.dw}</T>
-          <T k="subtitle" c={p.isToday || p.selected ? 'ink' : 'ink2'} style={p.isToday ? { textDecorationLine: 'underline' } : null}>{String(p.date)}</T>
-          <View style={{ flexDirection: 'row', gap: 2, height: 6 }}>
-            {p.bubbles.slice(0, 5).map((b, i) => (
-              <View key={i} style={{ width: 6, height: 6, borderRadius: 3, borderWidth: 1,
-                borderColor: b === 'absent' ? t.absent : b === 'now' ? t.now : b === 'filled' || b === 'half' ? t.present : t.ink3,
-                backgroundColor: b === 'absent' ? t.absent : b === 'filled' || b === 'half' ? t.present : 'transparent' }} />
-            ))}
-          </View>
-        </Tap>
-      ))}
-    </View>
-  );
-}
 
 /** A task due: the bubble is "done" (tap it), the row opens the task. Late dates read in `bad`. */
 function DueItem({ row, divider }: { row: DueRow; divider: boolean }) {
@@ -93,8 +70,9 @@ export function TodayV2({ sky = true, onClassic }: { sky?: boolean; onClassic?: 
   const now = useNow(focused ? 30_000 : 0);
   const [picked, setPicked] = useState<number | null>(null), [strip, setStrip] = useState(false), [pick, setPick] = useState<{ slot: string; i: number } | null>(null);
   const [fold, setFold] = useState<Record<string, boolean>>({ earlier: true, notes: true });
-  const input = { now, picked, meetings, courses, variants, attendance, dayMarks, tasks, notices, hour12, name };
-  const first = useMemo(() => todayView({ ...input, pick: pick?.i ?? 0 }), [now, picked, meetings, courses, variants, attendance, dayMarks, tasks, notices, hour12, name, pick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const moves = useStore((s) => s.settings.moves);
+  const input = { now, picked, meetings, courses, variants, attendance, dayMarks, tasks, notices, hour12, name, moves };
+  const first = useMemo(() => todayView({ ...input, pick: pick?.i ?? 0 }), [now, picked, meetings, courses, variants, attendance, dayMarks, tasks, notices, hour12, name, moves, pick]); // eslint-disable-line react-hooks/exhaustive-deps
   /* A remembered tab belongs to the slot it was chosen in; a new slot starts at its first class. */
   const vm: TodayVM = pick && pick.slot !== first.card.slot ? todayView({ ...input, pick: 0 }) : first;
   const { face, play } = useFaceMoment(vm.face, focused);
