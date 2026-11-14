@@ -2364,8 +2364,13 @@ function merge3(base, ours, theirs, opts = {}) {
   return { text, clean: conflicts === 0, conflicts };
 }
 
-/** A diff-match-patch patch text that turns `from` into `to` (the `put {enc:"patch"}` body). */
-const makePatch = (from, to) => dmp.patch_toText(dmp.patch_make(from, to));
+/** A diff-match-patch patch text that turns `from` into `to` (the `put {enc:"patch"}` body), or null when
+ *  it cannot be written: diff-match-patch diffs UTF-16 units, so swapping one emoji for another that shares
+ *  its first half (🧠 → 🪞) leaves a lone surrogate in a hunk and its encodeURI throws. The caller then
+ *  sends the whole text, which every peer already accepts. */
+function makePatch(from, to) {
+  try { return dmp.patch_toText(dmp.patch_make(from, to)); } catch (e) { if (e instanceof URIError) return null; throw e; }
+}
 /** Apply a patch made by makePatch to exactly the base it was made from. Throws if any hunk failed. */
 function applyPatch(base, patchText) {
   const [text, ok] = dmp.patch_apply(dmp.patch_fromText(patchText), base);
@@ -2646,8 +2651,9 @@ const TYPES = Object.keys(REQ);
 const TIMER_OPS = ['start', 'pause', 'resume', 'extend', 'stop', 'done'];
 
 function frame(t, fields = {}, { vault, from } = {}) {
-  // the common fields go last: a payload field named t, v or vault must never change what the frame is
-  return { ...fields, v: V, t, id: fields.id ?? ulid(), vault, from };
+  // the common fields go last: a payload field named t, v or vault must never change what the frame is.
+  // `mv` is the one frame whose payload `from` is a path (§5), so there the sender id is left out.
+  return { ...fields, v: V, t, id: fields.id ?? ulid(), vault, from: t === 'mv' ? fields.from : from };
 }
 
 /** Returns null when the frame is acceptable, else a short reason. `vault` = the vault this node serves
@@ -2694,7 +2700,7 @@ var __client = (function () {
 const { V, frame } = __proto;
 const { proofOf, sameHex, sessionKey, seal, unseal, newNonce, unhex } = __seal;
 function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, role, app = '0.7.0', key /* hex */, vault, hubId = null,
-  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {} }) {
+  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {} }) {
   const ws = new WebSocketImpl(url);
   const st = { ws, ready: false, sealKey: null, offset: 0, hubId, mode: null, closed: false };
   let nonce = null, q = Promise.resolve(), out = Promise.resolve();
@@ -2720,7 +2726,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
       nonce = newNonce();
       if (!vault && m.vault) { vault = m.vault; ids.vault = vault; }
       const proof = await proofOf(unhex(key), m.nonce, deviceId, vault);
-      rawSend(JSON.stringify(frame('hello', { deviceId, name, role, app, proof, nonce, cursor, clientTime: Date.now() }, ids)));
+      rawSend(JSON.stringify(frame('hello', { ...hello, deviceId, name, role, app, proof, nonce, cursor, clientTime: Date.now() }, ids)));
       st.serverNonce = m.nonce;
       return;
     }
@@ -2943,8 +2949,19 @@ class MarginBridge extends obsidian.Plugin {
     this.app.workspace.onLayoutReady(() => this.sync(false));
     this.live = new LiveSync(this);
     this.live.start();
+    /* v0.7.1: the shared focus timer's transport (Bone Tasks draws it), see 30_timer.js */
+    this.timerLink = new TimerLink(this);
+    this.timerLink.startDesktop();
   }
-  onunload() { this.live?.stop(); }
+  onunload() { this.live?.stop(); this.timerLink?.stop(); }
+  /** data.json changed on disk (another device, through sync): take it, so the next save keeps it. */
+  async onExternalSettingsChange() {
+    const d = await this.loadData();
+    if (!d) return;
+    this.state = Object.assign({}, DEFAULTS, d);
+    this.state.seen = this.state.seen || {}; this.state.sent = this.state.sent || {};
+    this.savedAs = this.stateText();
+  }
   liveChanged(state, note) {
     this.liveState = state;
     if (note) new obsidian.Notice(`Margin: ${note}`);
@@ -3161,6 +3178,9 @@ class LiveSync {
     if (m.t === 'ack') return this.onAck(m);
     if (m.t === 'conflict') { new obsidian.Notice(`Merged edits in ${m.p.split('/').pop()} (phone + desktop)`); return; }
     if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.state); }
+    if (m.t === 'timer') { this.p.timerLink?.receive(m); return; }
+    // Margin wrote a file in `.obsidian/` that this app cannot watch (a plugin's data.json): let it reload
+    if (m.t === 'changed') return reloadPluginData(this.app, m.p);
   }
   skip(p) { return this.ignore(p) || p.startsWith('.obsidian/'); }
   async hashOf(path) {
@@ -3281,7 +3301,95 @@ class LiveSync {
   }
 }
 
+/* ── 30_timer.js ── */
+/* ── the shared focus timer (v0.7.1) ──────────────────────────────────────────────────────────────
+ * ONE timer across Margin, phone Obsidian and desktop Obsidian, held by the desktop hub (bone-syncd,
+ * vault-sync/docs/v07/SYNC_PROTOCOL.md §8). This plugin is the transport; Bone Tasks draws the timer.
+ *   · phone: frames travel on the live link to Margin, which relays them to the hub;
+ *   · desktop: a small link straight to bone-syncd on 127.0.0.1:7428 with the hub's local key
+ *     (~/.config/bone-sync/keys.json). The hub already watches the desktop's files, so this link asks for
+ *     no file traffic (`files: false`): only the timer and who is online.
+ * Other plugins use `app.plugins.plugins['margin-bridge'].timerLink`:
+ *   send(op) → start / pause / resume / extend / stop / done; false when no hub is reachable (run locally)
+ *   on(fn)   → the hub's timer state whenever it changes (with `offset` = hub clock − this clock); returns off()
+ *   me       → this device's id, to compare with the timer's `owner` (the device that records the session)
+ *   online   → is a hub reachable right now
+ */
+const DESK = { dev: 'margin-bridge-desk-device', off: 'margin-bridge-desk-off' };
+class TimerLink {
+  constructor(plugin) { this.p = plugin; this.app = plugin.app; this.subs = new Set(); this.last = null; this.desk = null; this.retry = null; this.wait = 15000; this.stopped = false; }
+  get deskId() { let d = this.app.loadLocalStorage(DESK.dev); if (!d) { d = BoneSyncCore.newId(); this.app.saveLocalStorage(DESK.dev, d); } return d; }
+  get phoneLink() { const l = this.p.live?.link; return l?.ready ? l : null; }
+  get deskLink() { return this.desk?.ready ? this.desk : null; }
+  get online() { return !!(this.phoneLink || this.deskLink); }
+  get me() { return this.phoneLink ? this.p.live.deviceId : this.deskLink ? this.deskId : (obsidian.Platform.isMobile ? this.p.live?.deviceId : this.deskId); }
+  send(op) {
+    const l = this.phoneLink || this.deskLink;
+    if (!l) return false;
+    try { l.send(l.frame('timer', { ...op })); return true; } catch (e) { console.error('Margin timer: send', e); return false; }
+  }
+  on(fn) { this.subs.add(fn); if (this.last) { try { fn(this.last); } catch (e) { console.error(e); } } return () => this.subs.delete(fn); }
+  /** A frame from either link. Raw ops relayed from another client carry no `status`: not state, skipped. */
+  receive(m) {
+    if (!m || !m.status || !m.timerId) return;
+    this.last = { ...m, offset: (Number(m.serverTime) || Date.now()) - Date.now() };
+    for (const f of this.subs) { try { f(this.last); } catch (e) { console.error('Margin timer: listener', e); } }
+  }
+
+  /** Desktop only, and only where bone-syncd is installed (its keys file exists). Retries with back-off. */
+  startDesktop() {
+    if (!obsidian.Platform.isDesktopApp || this.app.loadLocalStorage(DESK.off) === 'true') return;
+    let keys = null;
+    try {
+      const fs = require('fs'), os = require('os'), path = require('path');
+      keys = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.config', 'bone-sync', 'keys.json'), 'utf8'));
+    } catch { return; }   // no hub on this computer: nothing to do, and nothing to complain about
+    if (!keys?.local || !keys?.vaultId) return;
+    const open = () => {
+      if (this.stopped || this.desk) return;
+      this.desk = BoneSyncCore.connect({
+        url: globalThis.__marginHubUrl || 'ws://127.0.0.1:7428', deviceId: this.deskId, name: 'Obsidian (desktop)', role: 'desktop-obsidian',
+        app: this.p.manifest.version, key: keys.local, vault: keys.vaultId, cursor: Number.MAX_SAFE_INTEGER,
+        onFrame: (m) => {
+          if (m.t === 'timer') this.receive(m);
+          else if (m.t === 'changed') reloadPluginData(this.app, m.p);
+          else if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.p.liveState); }
+        },
+        onState: (s) => {
+          if (s === 'ready') { this.wait = 15000; this.p.liveChanged?.(this.p.liveState); }
+          if (s === 'closed' || s === 'error') {
+            this.desk = null;
+            if (this.stopped) return;
+            clearTimeout(this.retry);
+            this.retry = setTimeout(open, this.wait); this.wait = Math.min(this.wait * 2, 5 * 60_000);
+          }
+        },
+        log: () => {},
+        hello: { files: false },
+      });
+    };
+    open();
+  }
+  stop() { this.stopped = true; clearTimeout(this.retry); if (this.desk) { try { this.desk.close(); } catch { /* */ } this.desk = null; } }
+}
+
+/** A file of a plugin changed under it through sync (phone: Margin wrote it, and Obsidian reports no events for its
+ *  config folder; desktop: the hub wrote it). Ask the plugin to reload, so its next save does not put back what it
+ *  had in memory: `data.json` → Obsidian's own `onExternalSettingsChange()`; any other file (chess studies.json,
+ *  YT history.json) → `onExternalFileChange(name)`, a Bone convention. */
+async function reloadPluginData(app, p) {
+  const m = /^\.obsidian\/plugins\/([^/]+)\/(.+)$/.exec(p || '');
+  const pl = m && app.plugins?.plugins?.[m[1]];
+  if (!pl) return;
+  try {
+    if (m[2] === 'data.json') { if (typeof pl.onExternalSettingsChange === 'function') await pl.onExternalSettingsChange(); }
+    else if (typeof pl.onExternalFileChange === 'function') await pl.onExternalFileChange(m[2]);
+  } catch (e) { console.error(`Margin sync: ${m[1]} could not reload ${m[2]}`, e); }
+}
+
 /* ── 90_exports.js ── */
 module.exports = MarginBridge;
 module.exports.pure = { FORMAT, taskLine, parseTaskLine, parseEnvelope, applyMargin, patchLine, collectFile, tombstones, buildOut, sameOut, timetableNote, blockId };
 module.exports.LiveSync = LiveSync;
+module.exports.TimerLink = TimerLink;
+module.exports.reloadPluginData = reloadPluginData;

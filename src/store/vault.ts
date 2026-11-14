@@ -13,7 +13,16 @@ import { leafOf, readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
 import { connection } from '../data/sqlite';
 import { faceEvent } from '../ui/mascot/moments';
-import { syncConfigure, syncInbox, syncPushBridge, syncStart } from '../services/native';
+import { onSyncEvent, syncConfigure, syncInbox, syncPushBridge, syncStart } from '../services/native';
+import { timerActions } from './actions/timer';
+
+/** Rows the sync service queued while JS slept: only the newest timer state matters (bridge rows reach this
+ *  phone through the bridge file too). */
+function drainInbox() {
+  const timers = syncInbox().filter((x) => x.kind === 'timer');
+  const last = timers[timers.length - 1];
+  if (last) timerActions.timerFromHub(last.json);
+}
 
 export interface VaultStatus { at: number; ok: boolean; note: string }
 let status: VaultStatus = { at: 0, ok: true, note: '' }, busy = false, written: string | null = null;
@@ -66,7 +75,7 @@ export function startVault(): () => void {
     if (s !== 'active') return;
     /* rows the sync service received while JS was not running; the bridge file carries the same data on this
        phone, so they are only drained here (the desktop-only rows matter once the desktop sends its own). */
-    syncInbox();
+    drainInbox();
     void vaultSync();
   });
   /* 750 ms after Margin's own rows change (S9), instead of a 30 s interval */
@@ -87,5 +96,14 @@ export function startVault(): () => void {
   tellSync(known);
   const unsub = subscribe(() => { const uri = getState().settings.vaultUri; if (uri !== known) { known = uri; tellSync(uri); if (uri) tick(); } });
   tick();
-  return () => { sub.remove(); if (soon) clearTimeout(soon); unsubRows(); unsub(); };
+  /* the shared focus timer: the hub's state as it changes, and a rejoin when the desktop link comes back */
+  drainInbox();
+  const offTimer = onSyncEvent('onSyncTimer', (json) => timerActions.timerFromHub(json));
+  let wasOnline = false;
+  const offStatus = onSyncEvent('onSyncStatus', (json) => {
+    let online = false; try { online = !!(JSON.parse(json) as { live?: boolean }).live; } catch { /* */ }
+    if (online && !wasOnline) timerActions.timerRejoin();
+    wasOnline = online;
+  });
+  return () => { sub.remove(); if (soon) clearTimeout(soon); unsubRows(); unsub(); offTimer(); offStatus(); };
 }

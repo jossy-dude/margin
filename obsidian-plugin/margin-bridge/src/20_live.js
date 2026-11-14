@@ -99,6 +99,9 @@ class LiveSync {
     if (m.t === 'ack') return this.onAck(m);
     if (m.t === 'conflict') { new obsidian.Notice(`Merged edits in ${m.p.split('/').pop()} (phone + desktop)`); return; }
     if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.state); }
+    if (m.t === 'timer') { this.p.timerLink?.receive(m); return; }
+    // Margin wrote a file in `.obsidian/` that this app cannot watch (a plugin's data.json): let it reload
+    if (m.t === 'changed') return reloadPluginData(this.app, m.p);
   }
   skip(p) { return this.ignore(p) || p.startsWith('.obsidian/'); }
   async hashOf(path) {

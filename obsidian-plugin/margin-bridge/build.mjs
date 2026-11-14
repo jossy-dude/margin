@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 const here = new URL('.', import.meta.url);
 if (process.argv.includes('--core')) {
-  const src = `${homedir()}/Documents/Projects/vault-sync/core/dist/sync-core.cjs`;
+  const src = `${homedir()}/Documents/Projects/tools/vault-sync/core/dist/sync-core.cjs`;
   if (!existsSync(src)) throw new Error(`no ${src}: run node bundle.mjs in vault-sync/core`);
   writeFileSync(new URL('src/00_sync-core.js', here), readFileSync(src, 'utf8').replace(/^if \(typeof module.*\n/m, ''));
 }

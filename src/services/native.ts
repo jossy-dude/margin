@@ -119,6 +119,12 @@ export const syncStatus = (): SyncStatus | null => parse<SyncStatus>(safe<string
 export const syncPushBridge = (rows: unknown) => safe((m) => m.syncPushBridge(JSON.stringify(rows)), false);
 export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify(op)), false);
 /** Send the phone vault's changes now; false on builds before 0.7.1. */
+/** Events from the sync service (Expo module events). Returns the unsubscribe; a no-op without the native half. */
+export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus', fn: (json: string) => void): () => void {
+  const m = mod() as unknown as { addListener?: (n: string, f: (e: { json: string }) => void) => { remove(): void } } | null;
+  if (!m?.addListener) return () => {};
+  try { const sub = m.addListener(name, (e) => { try { fn(e.json); } catch { /* a bad frame must not break the app */ } }); return () => sub.remove(); } catch { return () => {}; }
+}
 export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
 /** Rows the service received while JS was not running; each is returned once. */

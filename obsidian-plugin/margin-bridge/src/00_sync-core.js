@@ -2362,8 +2362,13 @@ function merge3(base, ours, theirs, opts = {}) {
   return { text, clean: conflicts === 0, conflicts };
 }
 
-/** A diff-match-patch patch text that turns `from` into `to` (the `put {enc:"patch"}` body). */
-const makePatch = (from, to) => dmp.patch_toText(dmp.patch_make(from, to));
+/** A diff-match-patch patch text that turns `from` into `to` (the `put {enc:"patch"}` body), or null when
+ *  it cannot be written: diff-match-patch diffs UTF-16 units, so swapping one emoji for another that shares
+ *  its first half (🧠 → 🪞) leaves a lone surrogate in a hunk and its encodeURI throws. The caller then
+ *  sends the whole text, which every peer already accepts. */
+function makePatch(from, to) {
+  try { return dmp.patch_toText(dmp.patch_make(from, to)); } catch (e) { if (e instanceof URIError) return null; throw e; }
+}
 /** Apply a patch made by makePatch to exactly the base it was made from. Throws if any hunk failed. */
 function applyPatch(base, patchText) {
   const [text, ok] = dmp.patch_apply(dmp.patch_fromText(patchText), base);
@@ -2644,8 +2649,9 @@ const TYPES = Object.keys(REQ);
 const TIMER_OPS = ['start', 'pause', 'resume', 'extend', 'stop', 'done'];
 
 function frame(t, fields = {}, { vault, from } = {}) {
-  // the common fields go last: a payload field named t, v or vault must never change what the frame is
-  return { ...fields, v: V, t, id: fields.id ?? ulid(), vault, from };
+  // the common fields go last: a payload field named t, v or vault must never change what the frame is.
+  // `mv` is the one frame whose payload `from` is a path (§5), so there the sender id is left out.
+  return { ...fields, v: V, t, id: fields.id ?? ulid(), vault, from: t === 'mv' ? fields.from : from };
 }
 
 /** Returns null when the frame is acceptable, else a short reason. `vault` = the vault this node serves
@@ -2692,7 +2698,7 @@ var __client = (function () {
 const { V, frame } = __proto;
 const { proofOf, sameHex, sessionKey, seal, unseal, newNonce, unhex } = __seal;
 function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, role, app = '0.7.0', key /* hex */, vault, hubId = null,
-  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {} }) {
+  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {} }) {
   const ws = new WebSocketImpl(url);
   const st = { ws, ready: false, sealKey: null, offset: 0, hubId, mode: null, closed: false };
   let nonce = null, q = Promise.resolve(), out = Promise.resolve();
@@ -2718,7 +2724,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
       nonce = newNonce();
       if (!vault && m.vault) { vault = m.vault; ids.vault = vault; }
       const proof = await proofOf(unhex(key), m.nonce, deviceId, vault);
-      rawSend(JSON.stringify(frame('hello', { deviceId, name, role, app, proof, nonce, cursor, clientTime: Date.now() }, ids)));
+      rawSend(JSON.stringify(frame('hello', { ...hello, deviceId, name, role, app, proof, nonce, cursor, clientTime: Date.now() }, ids)));
       st.serverNonce = m.nonce;
       return;
     }

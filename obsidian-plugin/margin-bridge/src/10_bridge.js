@@ -192,8 +192,19 @@ class MarginBridge extends obsidian.Plugin {
     this.app.workspace.onLayoutReady(() => this.sync(false));
     this.live = new LiveSync(this);
     this.live.start();
+    /* v0.7.1: the shared focus timer's transport (Bone Tasks draws it), see 30_timer.js */
+    this.timerLink = new TimerLink(this);
+    this.timerLink.startDesktop();
   }
-  onunload() { this.live?.stop(); }
+  onunload() { this.live?.stop(); this.timerLink?.stop(); }
+  /** data.json changed on disk (another device, through sync): take it, so the next save keeps it. */
+  async onExternalSettingsChange() {
+    const d = await this.loadData();
+    if (!d) return;
+    this.state = Object.assign({}, DEFAULTS, d);
+    this.state.seen = this.state.seen || {}; this.state.sent = this.state.sent || {};
+    this.savedAs = this.stateText();
+  }
   liveChanged(state, note) {
     this.liveState = state;
     if (note) new obsidian.Notice(`Margin: ${note}`);

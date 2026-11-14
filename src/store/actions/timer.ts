@@ -6,6 +6,22 @@ import { getState, set } from '../core';
 import { toast } from '../toast';
 import { addSession } from './entities';
 import { go } from './nav';
+import type { TimerState } from '../../domain/timer';
+import { fromHub, opFor, parseHubTimer } from '../../domain/sharedTimer';
+import { syncStatus, syncTimer } from '../../services/native';
+
+/* ── the shared timer (domain/sharedTimer.ts): one timer across Margin, phone and desktop Obsidian ── */
+let sharedId: string | null = null, sharedOwner: string | null = null, applying = false;
+/** A joined timer belongs to the device that started it: that device saves the session (exactly once). */
+const joined = () => !!sharedId && !!sharedOwner && sharedOwner !== (syncStatus()?.deviceId ?? '');
+/** Tell the hub what Margin's own change means (a no-op when not paired or offline: the hub decides). */
+function announce(before: TimerState, after: TimerState) {
+  if (applying) return;
+  const r = opFor(before, after, sharedId, Date.now());
+  if (r.op?.op === 'start') sharedOwner = syncStatus()?.deviceId ?? null;
+  sharedId = r.sharedId; if (!sharedId) sharedOwner = null;
+  if (r.op) syncTimer(r.op);
+}
 
 function applyEvents(ev: string[]) {
   if (ev.length) set({ fev: { k: ev[ev.length - 1] as string, at: Date.now() } });
@@ -33,15 +49,17 @@ export const timerActions = {
   timerSetMin(min: number) { set((s) => ({ timer: setMinutes(s.timer, min) })); },
   timerSetFlow(flow: boolean) { set((s) => ({ timer: { ...s.timer, flow } })); },
   timerToggle() {
-    const now = Date.now(), r = timerToggleEngine(getState().timer, now); set({ timer: r.state }); applyEvents(r.events);
+    const now = Date.now(), before = getState().timer, r = timerToggleEngine(before, now); set({ timer: r.state }); applyEvents(r.events); announce(before, r.state);
     const t = r.state;
     if (t.running && t.phase === 'focus') void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · ${t.planMin} min done. Take a breath.`); else void notifs.cancelFocusEnd();
     return t;
   },
-  timerBreak() { const now = Date.now(), t = startBreak(getState().timer, now); if (t.phase !== 'break') { fx.denied(); return; } set({ timer: t }); fx.breakStart(); void notifs.scheduleFocusEnd(now + t.breakLeftMs, 'Break is over', 'Back to it when you are ready.'); },
-  timerBackNow() { const now = Date.now(), t = endBreak(getState().timer, now); set({ timer: t }); fx.peel(); setTimeout(() => fx.fall(), 350); if (t.running) void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · done.`); },
+  timerBreak() { const now = Date.now(), before = getState().timer, t = startBreak(before, now); if (t.phase !== 'break') { fx.denied(); return; } set({ timer: t }); announce(before, t); fx.breakStart(); void notifs.scheduleFocusEnd(now + t.breakLeftMs, 'Break is over', 'Back to it when you are ready.'); },
+  timerBackNow() { const now = Date.now(), before = getState().timer, t = endBreak(before, now); set({ timer: t }); announce(before, t); fx.peel(); setTimeout(() => fx.fall(), 350); if (t.running) void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · done.`); },
   /** `quiet`: the caller shows its own receipt (Focus's saved card), so the toast would say it twice. */
   timerFinish(save = true, quiet = false) {
+    // a timer joined from another device is saved there (its owner), never twice
+    if (save && !applying && joined()) { save = false; if (!quiet) toast('Saved on the device that started it'); quiet = true; }
     const now = Date.now(), sum = save ? finish(getState().timer, now) : null; void notifs.cancelFocusEnd();
     /* `finish` refuses a session with less than a minute of focus, and the refusal is the whole point: the
        row would say a study session happened when nothing did, and it would land in the export and the
@@ -52,7 +70,8 @@ export const timerActions = {
     if (sum) { addSession(sum); if (!quiet) toast(`Saved ${Math.round(sum.focusSec / 60)} min of focus`); }
     else if (save) toast('Under a minute, so nothing was saved');
     const st = getState().settings, tm = getState().timer;
-    set({ timer: initTimer({ planMin: st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId: tm.taskId, courseId: tm.courseId, title: tm.title }) });
+    const next = initTimer({ planMin: st.focusPresetMin, flow: st.focusFlow, breakMs: st.breakMin * 60_000, breaksAllowed: st.breaksPerRound, taskId: tm.taskId, courseId: tm.courseId, title: tm.title });
+    set({ timer: next }); announce(tm, next);
     return sum;
   },
   /** called by the UI ticker; writes state only when something happened so a 4 Hz tick costs nothing */
@@ -60,7 +79,30 @@ export const timerActions = {
     const t = getState().timer; if (!t.running) return; const r = advance(t, now);
     // A clock that moved back re-anchors inside `advance`; that has to be committed too, or every later
     // view would re-derive from the old (future) checkpoint and the timer would sit still.
-    if (r.events.length || now < t.checkpoint) { set({ timer: r.state }); applyEvents(r.events); }
+    if (r.events.length || now < t.checkpoint) { set({ timer: r.state }); applyEvents(r.events); if (r.events.includes('breakDone')) announce(t, r.state); }
+  },
+  /** The hub's timer state arrived (a frame from the sync service, or one queued while JS slept). */
+  timerFromHub(json: string) {
+    const h = parseHubTimer(json); if (!h) return;
+    const st = getState(), s = st.settings, now = Date.now(), status = syncStatus();
+    const r = fromHub(st.timer, h, { sharedId, me: status?.deviceId ?? '', now, offset: status?.offset ?? 0, flow: s.focusFlow, breakMs: s.breakMin * 60_000, breaksAllowed: s.breaksPerRound,
+      knownTask: (id) => { const t = st.tasks.find((x) => x.id === id); return t ? { courseId: t.courseId } : null; } });
+    sharedId = r.sharedId; if (r.owner !== undefined) sharedOwner = r.owner;
+    if (r.action === 'none') return;
+    applying = true;
+    try {
+      if (r.action === 'end') { const sum = timerActions.timerFinish(!!r.save, true); toast(sum ? `Focus ended on your other device · saved ${Math.round(sum.focusSec / 60)} min` : 'Focus ended on your other device'); return; }
+      if (r.saveFirst) timerActions.timerFinish(true, true);
+      const t = r.state!; set({ timer: t });
+      if (t.running && t.phase === 'focus') void notifs.scheduleFocusEnd(now + t.focusLeftMs, 'Round finished', `${t.title || 'Focus'} · done.`); else void notifs.cancelFocusEnd();
+      if (h.conflict === 'running') toast('Joined the timer already running on your other device');
+    } finally { applying = false; }
+  },
+  /** The link to the desktop came back: say again what Margin is running, so the hub knows or answers with its own. */
+  timerRejoin() {
+    const t = getState().timer;
+    if (!t.running || t.phase !== 'focus' || !sharedId || applying) return;
+    syncTimer({ op: 'start', timerId: sharedId, durationMs: Math.max(1000, t.focusLeftMs), label: t.title || 'Focus', task: t.taskId ? { marginId: t.taskId } : null, flow: t.flow });
   },
   /** swap the task shown on the Focus page (only while the dial is still being set) */
   timerSwap() {
