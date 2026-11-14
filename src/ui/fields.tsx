@@ -169,7 +169,7 @@ export function TimeField({ value, onChange, min = 0, max = 1435, hour12 = false
       <Box seed={label} focus={focus} width={hour12 ? 136 : 104}>
         <TextInput
           value={d.text} onChangeText={d.edit} onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); commit(); }} onSubmitEditing={commit}
-          keyboardType="numbers-and-punctuation" returnKeyType="done" autoCapitalize="none" autoCorrect={false} selectTextOnFocus maxLength={8}
+          keyboardType="numeric" returnKeyType="done" autoCapitalize="none" autoCorrect={false} selectTextOnFocus maxLength={8}
           selectionColor={c.acc} accessibilityLabel={`${label}, ${shown}. Type a time like 930`} testID={`time-${tid(label)}`}
           maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, textAlign: 'center' }}
         />

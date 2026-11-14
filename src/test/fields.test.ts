@@ -120,6 +120,12 @@ describe('DurationField', () => {
 });
 
 describe('TimeField', () => {
+  /* phone test #13: Android has no "numbers-and-punctuation" keyboard (iOS only), so the alarm time opened the full
+     text keyboard. `numeric` is digits plus . and -, and `930`, `9.30` and a 12-hour field's half of the day need no more. */
+  it('opens a number keyboard that Android has, not the text keyboard', async () => {
+    const r = await mount(React.createElement(TimeField, { label: 'start', value: 540, ruler: false, onChange: () => {} }));
+    expect(input(r, 'time-start').props.keyboardType).toBe('numeric');
+  });
   it('reads 930 as 09:30, keeps a 12-hour field in its half of the day, and refuses junk', async () => {
     const seen: number[] = [];
     const r = await mount(React.createElement(TimeField, { label: 'start', value: 540, ruler: false, onChange: (v: number) => seen.push(v) }));
