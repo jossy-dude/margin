@@ -4,10 +4,10 @@
    node scripts/sounds/build.mjs --fetch               re-read every candidate's Openverse record, refuse any licence
                                                        but CC0 / CC BY / PDM, download the file to .cache/src/
    node scripts/sounds/build.mjs --choices FILE        apply the audition page's "Copy my choices" JSON to picks.json
-   node scripts/sounds/build.mjs --build               the picks → assets/sounds/v2/*.ogg + credits.json + CREDITS.md
+   node scripts/sounds/build.mjs --build               the picks → assets/sounds/*.ogg + credits.json + CREDITS.md
    node scripts/sounds/build.mjs --measure             check every built file; exit 1 when one fails
    node scripts/sounds/build.mjs --audition --out DIR  every candidate → DIR/sounds/*.ogg + DIR/index.html, and
-                                                       measurements.json next to this script
+                                                       measurements.json next to this script (--only a,b: just those events)
    node scripts/sounds/build.mjs --install             copy n_*.ogg / alarm_*.ogg into the Android res/raw folders
 
    Flags combine; they always run in the order above. `--all --out DIR` = fetch, build, measure, audition.
@@ -22,7 +22,7 @@ import * as D from './dsp.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
 const SRC = path.join(HERE, '.cache', 'src');
-const OUT = path.join(ROOT, 'assets', 'sounds', 'v2');
+const OUT = path.join(ROOT, 'assets', 'sounds');
 const PICKS = path.join(HERE, 'picks.json');
 const MEASURE = path.join(HERE, 'measurements.json');
 const RAW_APP = path.join(ROOT, 'android', 'app', 'src', 'main', 'res', 'raw');
@@ -158,6 +158,8 @@ function render(e, c) {
   if (c.mix) {
     // A rendered pattern: each note keeps its full ring (no length cap), then the loop wraps the tails around.
     x = D.mix(c.mix.map((s) => ({ x: shape(s, { ...p, ...(s.shape ?? {}), max: null, tail: -60, fadeOut: 0.05 }), at: s.at, gain: s.gain })));
+    // A one-shot cut from a pattern (no loop): keep the first `max` seconds and fade them out.
+    if (!c.loop && p.max) x = D.fades(x.slice(0, Math.round(p.max * D.SR)), 0.001, Math.min(p.fadeOut ?? 0.03, p.max / 2));
   } else {
     x = shape(c, p, Boolean(c.loop));
   }
@@ -166,6 +168,13 @@ function render(e, c) {
     if (c.loop.fadeIn) D.fades(x, c.loop.fadeIn, 0); // only for a loop that starts on a cut note
   }
   return [{ suffix: '', x, ...level(x, g, p) }];
+}
+
+/** Play `x` at `rate` (1.12 = higher and shorter), linear interpolation: plenty for clips under a second. */
+function resample(x, rate) {
+  const out = new Float32Array(Math.floor((x.length - 1) / rate));
+  for (let i = 0; i < out.length; i++) { const p = i * rate, k = Math.floor(p), f = p - k; out[i] = x[k] * (1 - f) + (x[k + 1] ?? 0) * f; }
+  return out;
 }
 
 const quality = (g) => picks.format.quality[g.kind] ?? 6;
@@ -190,7 +199,11 @@ function build() {
   for (const e of picks.events) {
     const c = e.candidates.find((k) => k.id === e.pick);
     if (!c) throw new Error(`${e.key}: pick "${e.pick}" is not one of its candidates`);
-    for (const t of render(e, c)) {
+    const takes = render(e, c);
+    // Pitch variants (late, sick, undone, tock, toggle off): the same take played faster or slower, rendered as its
+    // own file so the app needs no runtime rate control (expo-audio in Expo Go has none that shifts pitch).
+    for (const v of e.variants ?? []) takes.push({ ...takes[0], suffix: v.suffix, x: D.gain(resample(takes[0].x, v.rate), v.level ?? 0) });
+    for (const t of takes) {
       const name = fileName(e, t.suffix), g = groupOf(e);
       encode(t.x, path.join(OUT, name), { quality: quality(g), loop: g.kind === 'alarm' });
       rows.push({ file: name, event: e.key, group: e.group, candidate: c.id, gain_db: t.gainDb, peak_limited: t.limited, sources: credit(e, c) });
@@ -214,8 +227,13 @@ function checks(e, m, t) {
   if (m.peak < -30) bad.push(`too quiet (peak ${m.peak} dBFS)`);
   if (m.peak > -0.3) bad.push(`clips (peak ${m.peak} dBFS)`);
   if (g.kind !== 'alarm' && m.onsetMs > 30) bad.push(`starts late (${m.onsetMs} ms of silence)`);
-  if (e.shape?.max && m.dur > e.shape.max + 0.02) bad.push(`too long (${m.dur} s > ${e.shape.max} s)`);
-  if (g.kind === 'alarm' && m.seamDb > 3) bad.push(`loop seam jumps ${m.seamDb} dB`);
+  // Audible length: Vorbis can pad a very short file with ~20 ms of near-silence (−70 dB) that is not part of the sound.
+  const dur = m.audibleDur ?? m.dur;
+  const max = e.shape?.max && e.shape.max / (m.rate ?? 1); // a slowed variant is longer by design
+  if (max && dur > max + 0.02) bad.push(`too long (${dur} s > ${Math.round(max * 1000) / 1000} s)`);
+  // A musical loop may restart on a new note (a level step is fine and was heard 3× on the audition page);
+  // what must not happen is a click: a sample jump at the join.
+  if (g.kind === 'alarm' && m.seamJump > -20) bad.push(`loop seam clicks (jump ${m.seamJump} dB)`);
   if (t && !t.limited) {
     const got = g.kind === 'alarm' ? m.lufs : m.loud;
     if (Math.abs(got - t.target) > 1.5) bad.push(`level ${got} vs target ${t.target}`);
@@ -229,7 +247,9 @@ function measureBuilt() {
   log('file                    dur s  peak  loud  LUFS  onset  centroid  phone%  check');
   for (const r of credits) {
     const e = picks.events.find((k) => k.key === r.event), g = groupOf(e);
-    const m = D.measure(decode(path.join(OUT, r.file)), { loop: g.kind === 'alarm' });
+    const x = decode(path.join(OUT, r.file)), m = D.measure(x, { loop: g.kind === 'alarm' });
+    m.audibleDur = Math.round((D.endIndex(x, -60) / D.SR) * 1000) / 1000;
+    m.rate = (e.variants ?? []).find((v) => r.file === `${e.file}_${v.suffix}.ogg`)?.rate;
     const target = g.kind === 'alarm' ? g.lufs : g.loud;
     const bad = checks(e, m, { limited: r.peak_limited, target: target + (({ ...(e.shape ?? {}), ...(e.candidates.find((c) => c.id === r.candidate).shape ?? {}) }).level ?? 0) });
     if (bad.length) fail++;
@@ -246,7 +266,8 @@ function audition(dir) {
   fs.rmSync(sounds, { recursive: true, force: true });
   fs.mkdirSync(sounds, { recursive: true });
   const data = { built: new Date().toISOString().slice(0, 10), groups: picks.groups, events: [] }, all = {};
-  for (const e of picks.events) {
+  const only = val('--only')?.split(','); // a second round: audition just these events
+  for (const e of picks.events.filter((k) => !only || only.includes(k.key))) {
     const g = groupOf(e), ev = { ...e, candidates: [] };
     for (const c of e.candidates) {
       const takes = render(e, c).map((t) => {

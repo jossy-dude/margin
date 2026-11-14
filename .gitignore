@@ -23,3 +23,6 @@ assets/sounds-candidates/
 *.jks
 !android/app/debug.keystore
 *.b64
+
+# sound build cache (downloaded sources)
+scripts/sounds/.cache/

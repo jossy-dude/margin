@@ -1,0 +1,956 @@
+[
+ {
+  "file": "page.ogg",
+  "event": "page",
+  "group": "taps",
+  "candidate": "gynation",
+  "gain_db": -3.1,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "9f6c8594-c8a1-4366-9ee4-7cf1ea801467",
+    "title": "paper flip 1.wav",
+    "creator": "gynation",
+    "creator_url": "https://freesound.org/people/gynation",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/gynation/sounds/82377",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"paper flip 1.wav\" by gynation is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "slide.ogg",
+  "event": "slide",
+  "group": "taps",
+  "candidate": "envelope",
+  "gain_db": 9.6,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "224c60fe-feca-4d07-817f-62e68625953b",
+    "title": "Sliding Envelope.wav",
+    "creator": "MTJohnson",
+    "creator_url": "https://freesound.org/people/MTJohnson",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/MTJohnson/sounds/444431",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Sliding Envelope.wav\" by MTJohnson is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "pop.ogg",
+  "event": "pop",
+  "group": "taps",
+  "candidate": "pop4",
+  "gain_db": 1.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "1650f4fb-4a33-41fe-b53b-01cd4e92bf84",
+    "title": "Pop 4",
+    "creator": "greenvwbeetle",
+    "creator_url": "https://freesound.org/people/greenvwbeetle",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/greenvwbeetle/sounds/244652",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Pop 4\" by greenvwbeetle is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "pop_off.ogg",
+  "event": "pop",
+  "group": "taps",
+  "candidate": "pop4",
+  "gain_db": 1.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "1650f4fb-4a33-41fe-b53b-01cd4e92bf84",
+    "title": "Pop 4",
+    "creator": "greenvwbeetle",
+    "creator_url": "https://freesound.org/people/greenvwbeetle",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/greenvwbeetle/sounds/244652",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Pop 4\" by greenvwbeetle is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "click.ogg",
+  "event": "click",
+  "group": "taps",
+  "candidate": "benzix",
+  "gain_db": -4.3,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "d3ab488b-dee1-4c40-89ab-67837664b616",
+    "title": "UI Button Click",
+    "creator": "benzix2",
+    "creator_url": "https://freesound.org/people/benzix2",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/benzix2/sounds/467951",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"UI Button Click\" by benzix2 is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "tick.ogg",
+  "event": "tick",
+  "group": "taps",
+  "candidate": "breviceps",
+  "gain_db": -7.6,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "4a9a644a-fab0-44d8-91b1-5c50095a156f",
+    "title": "Tic Toc Click",
+    "creator": "Breviceps",
+    "creator_url": "https://freesound.org/people/Breviceps",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Breviceps/sounds/448081",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Tic Toc Click\" by Breviceps is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "tick_tock.ogg",
+  "event": "tick",
+  "group": "taps",
+  "candidate": "breviceps",
+  "gain_db": -7.6,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "4a9a644a-fab0-44d8-91b1-5c50095a156f",
+    "title": "Tic Toc Click",
+    "creator": "Breviceps",
+    "creator_url": "https://freesound.org/people/Breviceps",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Breviceps/sounds/448081",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Tic Toc Click\" by Breviceps is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "detent_a.ogg",
+  "event": "detent",
+  "group": "taps",
+  "candidate": "wind",
+  "gain_db": 12.8,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "d4f6307e-bdd0-4bfb-80fc-d0adfe2e29f6",
+    "title": "SingleWind1.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96149",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind1.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "8983c6df-7c53-4c6b-b3f0-21ea9075fdcf",
+    "title": "SingleWind2.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96150",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind2.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "3175bc8d-b8d2-4964-8432-76b3185af40a",
+    "title": "SingleWind3.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96151",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind3.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "detent_b.ogg",
+  "event": "detent",
+  "group": "taps",
+  "candidate": "wind",
+  "gain_db": 16.5,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "d4f6307e-bdd0-4bfb-80fc-d0adfe2e29f6",
+    "title": "SingleWind1.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96149",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind1.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "8983c6df-7c53-4c6b-b3f0-21ea9075fdcf",
+    "title": "SingleWind2.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96150",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind2.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "3175bc8d-b8d2-4964-8432-76b3185af40a",
+    "title": "SingleWind3.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96151",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind3.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "detent_c.ogg",
+  "event": "detent",
+  "group": "taps",
+  "candidate": "wind",
+  "gain_db": 13.1,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "d4f6307e-bdd0-4bfb-80fc-d0adfe2e29f6",
+    "title": "SingleWind1.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96149",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind1.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "8983c6df-7c53-4c6b-b3f0-21ea9075fdcf",
+    "title": "SingleWind2.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96150",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind2.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "3175bc8d-b8d2-4964-8432-76b3185af40a",
+    "title": "SingleWind3.wav",
+    "creator": "BMacZero",
+    "creator_url": "https://freesound.org/people/BMacZero",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BMacZero/sounds/96151",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SingleWind3.wav\" by BMacZero is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "knock.ogg",
+  "event": "knock",
+  "group": "taps",
+  "candidate": "impact",
+  "gain_db": -13.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "7f3dc6f7-0aca-436c-828c-11670ee8b47f",
+    "title": "Hit Impact",
+    "creator": "Mrguff",
+    "creator_url": "https://freesound.org/people/Mrguff",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Mrguff/sounds/369711",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Hit Impact\" by Mrguff is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "knock_low.ogg",
+  "event": "knock",
+  "group": "taps",
+  "candidate": "impact",
+  "gain_db": -13.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "7f3dc6f7-0aca-436c-828c-11670ee8b47f",
+    "title": "Hit Impact",
+    "creator": "Mrguff",
+    "creator_url": "https://freesound.org/people/Mrguff",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Mrguff/sounds/369711",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Hit Impact\" by Mrguff is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "mark.ogg",
+  "event": "mark",
+  "group": "marks",
+  "candidate": "correct-short",
+  "gain_db": -10.8,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+    "title": "correct",
+    "creator": "ertfelda",
+    "creator_url": "https://freesound.org/people/ertfelda",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/ertfelda/sounds/243701",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"correct\" by ertfelda is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "mark_late.ogg",
+  "event": "mark",
+  "group": "marks",
+  "candidate": "correct-short",
+  "gain_db": -10.8,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+    "title": "correct",
+    "creator": "ertfelda",
+    "creator_url": "https://freesound.org/people/ertfelda",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/ertfelda/sounds/243701",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"correct\" by ertfelda is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "absent.ogg",
+  "event": "absent",
+  "group": "marks",
+  "candidate": "mpuffenbarger",
+  "gain_db": -6.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "f65de1b6-13d5-4a1e-a99a-6f00ce0be2c7",
+    "title": "Thump.mp3",
+    "creator": "mpuffenbarger",
+    "creator_url": "https://freesound.org/people/mpuffenbarger",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/mpuffenbarger/sounds/683031",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Thump.mp3\" by mpuffenbarger is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "absent_sick.ogg",
+  "event": "absent",
+  "group": "marks",
+  "candidate": "mpuffenbarger",
+  "gain_db": -6.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "f65de1b6-13d5-4a1e-a99a-6f00ce0be2c7",
+    "title": "Thump.mp3",
+    "creator": "mpuffenbarger",
+    "creator_url": "https://freesound.org/people/mpuffenbarger",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/mpuffenbarger/sounds/683031",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Thump.mp3\" by mpuffenbarger is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "cancel.ogg",
+  "event": "cancel",
+  "group": "marks",
+  "candidate": "docket",
+  "gain_db": -1.9,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "7329914e-5953-45a0-854a-296dc69d2649",
+    "title": "SFX_STICKERRIPPER_docket_01.wav",
+    "creator": "MrFossy",
+    "creator_url": "https://freesound.org/people/MrFossy",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/MrFossy/sounds/590275",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"SFX_STICKERRIPPER_docket_01.wav\" by MrFossy is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "crumple.ogg",
+  "event": "crumple",
+  "group": "marks",
+  "candidate": "j1987",
+  "gain_db": -3.1,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "ca3b8b54-2e53-4939-8ab2-843c1419dfa3",
+    "title": "crumple.wav",
+    "creator": "j1987",
+    "creator_url": "https://freesound.org/people/j1987",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/j1987/sounds/106127",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"crumple.wav\" by j1987 is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "peel.ogg",
+  "event": "peel",
+  "group": "marks",
+  "candidate": "tear",
+  "gain_db": -9.7,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "a14b6385-de14-4425-951d-9cf6a5a72304",
+    "title": "duct tape tear rip",
+    "creator": "AlaskaRobotics",
+    "creator_url": "https://freesound.org/people/AlaskaRobotics",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/AlaskaRobotics/sounds/245198",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"duct tape tear rip\" by AlaskaRobotics is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "done.ogg",
+  "event": "done",
+  "group": "confirm",
+  "candidate": "correct",
+  "gain_db": -5.9,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+    "title": "correct",
+    "creator": "ertfelda",
+    "creator_url": "https://freesound.org/people/ertfelda",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/ertfelda/sounds/243701",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"correct\" by ertfelda is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "done_undone.ogg",
+  "event": "done",
+  "group": "confirm",
+  "candidate": "correct",
+  "gain_db": -5.9,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+    "title": "correct",
+    "creator": "ertfelda",
+    "creator_url": "https://freesound.org/people/ertfelda",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/ertfelda/sounds/243701",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"correct\" by ertfelda is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "chime.ogg",
+  "event": "chime",
+  "group": "confirm",
+  "candidate": "kalimbac3",
+  "gain_db": -6,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "3c05b7e2-61af-4309-bc86-c5b4e2332ea5",
+    "title": "Kalimba C3",
+    "creator": "dvdfu",
+    "creator_url": "https://freesound.org/people/dvdfu",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/dvdfu/sounds/536549",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Kalimba C3\" by dvdfu is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "low.ogg",
+  "event": "low",
+  "group": "confirm",
+  "candidate": "marimbalow",
+  "gain_db": -3.1,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "36c5f5db-2c73-4382-9b96-58b630b559fa",
+    "title": "Marimba Low Note",
+    "creator": "Aidansillygames",
+    "creator_url": "https://freesound.org/people/Aidansillygames",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Aidansillygames/sounds/628428",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Marimba Low Note\" by Aidansillygames is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "start.ogg",
+  "event": "start",
+  "group": "focus",
+  "candidate": "kalimbac2",
+  "gain_db": -3.4,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "fdb64d8e-208a-44e9-8aaa-d3c21ecdba32",
+    "title": "Kalimba C2",
+    "creator": "dvdfu",
+    "creator_url": "https://freesound.org/people/dvdfu",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/dvdfu/sounds/536550",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Kalimba C2\" by dvdfu is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "round.ogg",
+  "event": "round",
+  "group": "focus",
+  "candidate": "glockc7",
+  "gain_db": 23.3,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "0fd6d722-4b36-4b31-b2f1-5683c2be56db",
+    "title": "Glockenspiel - C7 (glock_medium_C7.wav)",
+    "creator": "sgossner",
+    "creator_url": "https://freesound.org/people/sgossner",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/sgossner/sounds/373366",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Glockenspiel - C7 (glock_medium_C7.wav)\" by sgossner is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "break.ogg",
+  "event": "break",
+  "group": "focus",
+  "candidate": "glocka",
+  "gain_db": -6.4,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "9dca035b-9a92-4244-a41b-6cc0fcd987b1",
+    "title": "glockenspiel A medium soft.wav",
+    "creator": "frubu",
+    "creator_url": "https://freesound.org/people/frubu",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/frubu/sounds/161546",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"glockenspiel A medium soft.wav\" by frubu is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "n_class.ogg",
+  "event": "n_class",
+  "group": "notif",
+  "candidate": "jofae",
+  "gain_db": -5.1,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "adb6e260-e493-43fd-a56e-8ceb4f477fe2",
+    "title": "Chime Notification",
+    "creator": "Jofae",
+    "creator_url": "https://freesound.org/people/Jofae",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Jofae/sounds/380482",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Chime Notification\" by Jofae is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "n_task.ogg",
+  "event": "n_task",
+  "group": "notif",
+  "candidate": "jofae",
+  "gain_db": -5.1,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "adb6e260-e493-43fd-a56e-8ceb4f477fe2",
+    "title": "Chime Notification",
+    "creator": "Jofae",
+    "creator_url": "https://freesound.org/people/Jofae",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Jofae/sounds/380482",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Chime Notification\" by Jofae is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "n_focus.ogg",
+  "event": "n_focus",
+  "group": "notif",
+  "candidate": "xyloring",
+  "gain_db": 9.8,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "d7522141-6300-4aa4-a59c-c821620ff6dd",
+    "title": "FX - Smartphone Ringtone (xylophone)",
+    "creator": "PITCHEDsenses",
+    "creator_url": "https://freesound.org/people/PITCHEDsenses",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/PITCHEDsenses/sounds/517368",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"FX - Smartphone Ringtone (xylophone)\" by PITCHEDsenses is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_musicbox.ogg",
+  "event": "alarm_musicbox",
+  "group": "alarm",
+  "candidate": "keychain",
+  "gain_db": -0.5,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "f2a1e027-731f-4dbe-a5a5-159fc40d9399",
+    "title": "Swan Lake, Tiny Keychain Music Box (Loopable).flac",
+    "creator": "Rolly-SFX",
+    "creator_url": "https://freesound.org/people/Rolly-SFX",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Rolly-SFX/sounds/485516",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Swan Lake, Tiny Keychain Music Box (Loopable).flac\" by Rolly-SFX is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_musicbox2.ogg",
+  "event": "alarm_musicbox2",
+  "group": "alarm",
+  "candidate": "ducks",
+  "gain_db": -3.8,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "021a64a9-2298-4854-bf4a-30ab1e9f5d50",
+    "title": "Dancing Ducks Music Box",
+    "creator": "f-r-a-g-i-l-e",
+    "creator_url": "https://freesound.org/people/f-r-a-g-i-l-e",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/f-r-a-g-i-l-e/sounds/613089",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Dancing Ducks Music Box\" by f-r-a-g-i-l-e is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_marimba.ogg",
+  "event": "alarm_marimba",
+  "group": "alarm",
+  "candidate": "loop3",
+  "gain_db": 2.1,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "7a95526f-4370-4e73-9dd9-a350e8d62178",
+    "title": "Marimba loop 3",
+    "creator": "BrickDeveloper171",
+    "creator_url": "https://freesound.org/people/BrickDeveloper171",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/BrickDeveloper171/sounds/522193",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Marimba loop 3\" by BrickDeveloper171 is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_kalimba.ogg",
+  "event": "alarm_kalimba",
+  "group": "alarm",
+  "candidate": "nemaavla",
+  "gain_db": -5.1,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "55043290-98ca-48cd-b1e8-c3faf12dcac4",
+    "title": "Kalimba E4.wav",
+    "creator": "nemaavla",
+    "creator_url": "https://freesound.org/people/nemaavla",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/nemaavla/sounds/441138",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Kalimba E4.wav\" by nemaavla is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "a7b4f57b-a03e-4bcf-bf54-49e4fb3b78ac",
+    "title": "Kalimba A4.wav",
+    "creator": "nemaavla",
+    "creator_url": "https://freesound.org/people/nemaavla",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/nemaavla/sounds/441135",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Kalimba A4.wav\" by nemaavla is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   },
+   {
+    "openverse_id": "a515723c-92c8-4bb3-b50a-c77f93063be3",
+    "title": "Kalimba D5.wav",
+    "creator": "nemaavla",
+    "creator_url": "https://freesound.org/people/nemaavla",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/nemaavla/sounds/441139",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Kalimba D5.wav\" by nemaavla is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_piano.ogg",
+  "event": "alarm_piano",
+  "group": "alarm",
+  "candidate": "orboram",
+  "gain_db": 16.2,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "3a1fe754-f2be-47ab-b9c6-9ea85fe8f3f4",
+    "title": "Soft Piano Loop 160BPM",
+    "creator": "Orboram",
+    "creator_url": "https://freesound.org/people/Orboram",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Orboram/sounds/663687",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Soft Piano Loop 160BPM\" by Orboram is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_piano2.ogg",
+  "event": "alarm_piano2",
+  "group": "alarm",
+  "candidate": "aes",
+  "gain_db": 6.6,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "42db235c-aaa3-4254-990f-a382dc1d4f46",
+    "title": "piano-loop in Aes major 1",
+    "creator": "Baz_Odink_NL",
+    "creator_url": "https://freesound.org/people/Baz_Odink_NL",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Baz_Odink_NL/sounds/442777",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"piano-loop in Aes major 1\" by Baz_Odink_NL is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_piano3.ogg",
+  "event": "alarm_piano3",
+  "group": "alarm",
+  "candidate": "danlucaz",
+  "gain_db": -4.6,
+  "peak_limited": true,
+  "sources": [
+   {
+    "openverse_id": "3255ecaa-e6b9-44a6-91ab-b4e62bf60528",
+    "title": "Piano Loop #1",
+    "creator": "danlucaz",
+    "creator_url": "https://freesound.org/people/danlucaz",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/danlucaz/sounds/515380",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Piano Loop #1\" by danlucaz is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_classic.ogg",
+  "event": "alarm_classic",
+  "group": "alarm",
+  "candidate": "dnab",
+  "gain_db": -9.3,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "808d69f2-3292-4758-a07a-1e47c345b104",
+    "title": "Alarm Clock Loop",
+    "creator": "Dnab55",
+    "creator_url": "https://freesound.org/people/Dnab55",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/Dnab55/sounds/128138",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Alarm Clock Loop\" by Dnab55 is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_classic2.ogg",
+  "event": "alarm_classic2",
+  "group": "alarm",
+  "candidate": "zyryt",
+  "gain_db": 8.9,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "2eb8d7b2-57eb-4f0f-a87f-408b43734b21",
+    "title": "alarm clock short.wav",
+    "creator": "ZyryTSounds",
+    "creator_url": "https://freesound.org/people/ZyryTSounds",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/ZyryTSounds/sounds/219244",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"alarm clock short.wav\" by ZyryTSounds is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ },
+ {
+  "file": "alarm_classic3.ogg",
+  "event": "alarm_classic3",
+  "group": "alarm",
+  "candidate": "dcloh",
+  "gain_db": 0.2,
+  "peak_limited": false,
+  "sources": [
+   {
+    "openverse_id": "74d0e478-292a-4bf6-8464-8a26b3892592",
+    "title": "Alarm Clock",
+    "creator": "dcloh",
+    "creator_url": "https://freesound.org/people/dcloh",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://freesound.org/people/dcloh/sounds/509684",
+    "provider": "freesound",
+    "credit_required": false,
+    "attribution": "\"Alarm Clock\" by dcloh is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/."
+   }
+  ]
+ }
+]

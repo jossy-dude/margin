@@ -1,0 +1,1305 @@
+{
+ "page/qubodup": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.582,
+    "peak": -10.2,
+    "rms": -29.4,
+    "rmsActive": -29.4,
+    "loud": -23.1,
+    "lufs": -28.5,
+    "onsetMs": 1,
+    "peakMs": 119,
+    "tailMs": 456,
+    "padEndMs": 3,
+    "centroid": 1283,
+    "phone": 88,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--qubodup.ogg",
+    "gainDb": -0.9,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -11.1,
+     "rms": -28.2,
+     "rmsActive": -28.1,
+     "loud": -24.1,
+     "lufs": null,
+     "onsetMs": 1,
+     "peakMs": 123,
+     "tailMs": 167,
+     "padEndMs": 5,
+     "centroid": 1231,
+     "phone": 89,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "page/spacejoe": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.476,
+    "peak": -1.7,
+    "rms": -29.6,
+    "rmsActive": -28.8,
+    "loud": -21.2,
+    "lufs": -26.8,
+    "onsetMs": 79,
+    "peakMs": 386,
+    "tailMs": 90,
+    "padEndMs": 0,
+    "centroid": 4314,
+    "phone": 71,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--spacejoe.ogg",
+    "gainDb": 7.5,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -7.2,
+     "rms": -30.7,
+     "rmsActive": -30.7,
+     "loud": -24.5,
+     "lufs": null,
+     "onsetMs": 1,
+     "peakMs": 41,
+     "tailMs": 257,
+     "padEndMs": 0,
+     "centroid": 7665,
+     "phone": 96,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "page/matrixxx": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.701,
+    "peak": -6.7,
+    "rms": -27.9,
+    "rmsActive": -27.7,
+    "loud": -25.4,
+    "lufs": -29.9,
+    "onsetMs": 4,
+    "peakMs": 272,
+    "tailMs": 403,
+    "padEndMs": 25,
+    "centroid": 884,
+    "phone": 42,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--matrixxx.ogg",
+    "gainDb": 6.1,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -7.6,
+     "rms": -27,
+     "rmsActive": -27,
+     "loud": -24.4,
+     "lufs": null,
+     "onsetMs": 1,
+     "peakMs": 270,
+     "tailMs": 27,
+     "padEndMs": 0,
+     "centroid": 2845,
+     "phone": 66,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "page/gynation": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.438,
+    "peak": -2.3,
+    "rms": -27.1,
+    "rmsActive": -26.7,
+    "loud": -20.2,
+    "lufs": -24.1,
+    "onsetMs": 11,
+    "peakMs": 293,
+    "tailMs": 117,
+    "padEndMs": 0,
+    "centroid": 3722,
+    "phone": 99,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--gynation.ogg",
+    "gainDb": -3.1,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -5.4,
+     "rms": -29.9,
+     "rmsActive": -29.7,
+     "loud": -24.2,
+     "lufs": null,
+     "onsetMs": 2,
+     "peakMs": 237,
+     "tailMs": 53,
+     "padEndMs": 5,
+     "centroid": 4015,
+     "phone": 99,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "page/gynation-soft": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 0.438,
+    "peak": -2.3,
+    "rms": -27.1,
+    "rmsActive": -26.7,
+    "loud": -20.2,
+    "lufs": -24.1,
+    "onsetMs": 11,
+    "peakMs": 293,
+    "tailMs": 117,
+    "padEndMs": 0,
+    "centroid": 3722,
+    "phone": 99,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--gynation-soft.ogg",
+    "gainDb": -3.3,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -5.7,
+     "rms": -31.5,
+     "rmsActive": -31.4,
+     "loud": -26,
+     "lufs": null,
+     "onsetMs": 2,
+     "peakMs": 235,
+     "tailMs": 55,
+     "padEndMs": 7,
+     "centroid": 2720,
+     "phone": 99,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "page/gynation-softer": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.438,
+    "peak": -2.3,
+    "rms": -27.1,
+    "rmsActive": -26.7,
+    "loud": -20.2,
+    "lufs": -24.1,
+    "onsetMs": 11,
+    "peakMs": 293,
+    "tailMs": 117,
+    "padEndMs": 0,
+    "centroid": 3722,
+    "phone": 99,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/page--gynation-softer.ogg",
+    "gainDb": -2.8,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.297,
+     "peak": -6.1,
+     "rms": -32.3,
+     "rmsActive": -32.2,
+     "loud": -27.1,
+     "lufs": null,
+     "onsetMs": 2,
+     "peakMs": 235,
+     "tailMs": 55,
+     "padEndMs": 7,
+     "centroid": 2178,
+     "phone": 99,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/graingiant": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 0.622,
+    "peak": -3.3,
+    "rms": -21.2,
+    "rmsActive": -18.8,
+    "loud": -14.8,
+    "lufs": -20.4,
+    "onsetMs": 0,
+    "peakMs": 5,
+    "tailMs": 350,
+    "padEndMs": 54,
+    "centroid": 1237,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--graingiant.ogg",
+    "gainDb": -5.2,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.437,
+     "peak": -8.1,
+     "rms": -24.9,
+     "rmsActive": -23.9,
+     "loud": -20,
+     "lufs": -24,
+     "onsetMs": 0,
+     "peakMs": 7,
+     "tailMs": 343,
+     "padEndMs": 52,
+     "centroid": 1228,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/beetlemuse": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.728,
+    "peak": -8.2,
+    "rms": -23.6,
+    "rmsActive": -21.8,
+    "loud": -18.6,
+    "lufs": -22.2,
+    "onsetMs": 60,
+    "peakMs": 276,
+    "tailMs": 269,
+    "padEndMs": 176,
+    "centroid": 1332,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--beetlemuse.ogg",
+    "gainDb": -1.4,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.447,
+     "peak": -9.8,
+     "rms": -23,
+     "rmsActive": -22.9,
+     "loud": -20,
+     "lufs": -21.9,
+     "onsetMs": 1,
+     "peakMs": 217,
+     "tailMs": 218,
+     "padEndMs": 9,
+     "centroid": 1351,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/unfa": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.271,
+    "peak": -25.8,
+    "rms": -47.1,
+    "rmsActive": -44.8,
+    "loud": -40.7,
+    "lufs": null,
+    "onsetMs": 0,
+    "peakMs": 63,
+    "tailMs": 97,
+    "padEndMs": 140,
+    "centroid": 9001,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--unfa.ogg",
+    "gainDb": 20.8,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.252,
+     "peak": -4.9,
+     "rms": -26.1,
+     "rmsActive": -24.1,
+     "loud": -20,
+     "lufs": null,
+     "onsetMs": 0,
+     "peakMs": 63,
+     "tailMs": 97,
+     "padEndMs": 57,
+     "centroid": 8969,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/samster": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.199,
+    "peak": -1.9,
+    "rms": -14.2,
+    "rmsActive": -14.2,
+    "loud": -12.6,
+    "lufs": null,
+    "onsetMs": 0,
+    "peakMs": 147,
+    "tailMs": 52,
+    "padEndMs": 0,
+    "centroid": 1484,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--samster.ogg",
+    "gainDb": -6.6,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.196,
+     "peak": -9.5,
+     "rms": -22.4,
+     "rmsActive": -22.2,
+     "loud": -20,
+     "lufs": null,
+     "onsetMs": 0,
+     "peakMs": 90,
+     "tailMs": 100,
+     "padEndMs": 3,
+     "centroid": 1475,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/mark205": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.55,
+    "peak": -3.3,
+    "rms": -27.8,
+    "rmsActive": -26.7,
+    "loud": -17.6,
+    "lufs": -25.8,
+    "onsetMs": 5,
+    "peakMs": 6,
+    "tailMs": 424,
+    "padEndMs": 49,
+    "centroid": 8039,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--mark205.ogg",
+    "gainDb": -2.4,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.447,
+     "peak": -5.8,
+     "rms": -29.3,
+     "rmsActive": -28.5,
+     "loud": -20,
+     "lufs": -25.6,
+     "onsetMs": 1,
+     "peakMs": 3,
+     "tailMs": 367,
+     "padEndMs": 43,
+     "centroid": 8242,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "mark/correct-short": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 0.319,
+    "peak": -2.6,
+    "rms": -16.5,
+    "rmsActive": -16.4,
+    "loud": -12.1,
+    "lufs": null,
+    "onsetMs": 9,
+    "peakMs": 75,
+    "tailMs": 244,
+    "padEndMs": 0,
+    "centroid": 1012,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/mark--correct-short.ogg",
+    "gainDb": -10.8,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 0.22,
+     "peak": -13.3,
+     "rms": -26,
+     "rmsActive": -25.1,
+     "loud": -22.9,
+     "lufs": null,
+     "onsetMs": 2,
+     "peakMs": 67,
+     "tailMs": 113,
+     "padEndMs": 36,
+     "centroid": 1011,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "round/glockc7": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 2.791,
+    "peak": -25.5,
+    "rms": -55.7,
+    "rmsActive": -51.5,
+    "loud": -39.3,
+    "lufs": -48.6,
+    "onsetMs": 5,
+    "peakMs": 9,
+    "tailMs": 1036,
+    "padEndMs": 2329,
+    "centroid": 5332,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/round--glockc7.ogg",
+    "gainDb": 23.3,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 1.21,
+     "peak": -2.3,
+     "rms": -28.8,
+     "rmsActive": -27.6,
+     "loud": -16,
+     "lufs": -25.4,
+     "onsetMs": 1,
+     "peakMs": 4,
+     "tailMs": 916,
+     "padEndMs": 214,
+     "centroid": 5328,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "round/glocke": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 4,
+    "peak": -7.1,
+    "rms": -25.8,
+    "rmsActive": -25.8,
+    "loud": -15.1,
+    "lufs": -21.7,
+    "onsetMs": 2,
+    "peakMs": 122,
+    "tailMs": 3878,
+    "padEndMs": 0,
+    "centroid": 1311,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/round--glocke.ogg",
+    "gainDb": -0.9,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 1.6,
+     "peak": -8.4,
+     "rms": -23,
+     "rmsActive": -22.7,
+     "loud": -16,
+     "lufs": -21.2,
+     "onsetMs": 2,
+     "peakMs": 122,
+     "tailMs": 1363,
+     "padEndMs": 79,
+     "centroid": 1318,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "round/glocknl": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 1.4,
+    "peak": -0.7,
+    "rms": -15.5,
+    "rmsActive": -14,
+    "loud": -10.2,
+    "lufs": -15.7,
+    "onsetMs": 243,
+    "peakMs": 338,
+    "tailMs": 893,
+    "padEndMs": 0,
+    "centroid": 208,
+    "phone": 9,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/round--glocknl.ogg",
+    "gainDb": -5.8,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 1.04,
+     "peak": -6.8,
+     "rms": -20.8,
+     "rmsActive": -20.1,
+     "loud": -16,
+     "lufs": -22,
+     "onsetMs": 2,
+     "peakMs": 97,
+     "tailMs": 783,
+     "padEndMs": 96,
+     "centroid": 213,
+     "phone": 9,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "round/kalimba-rise": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 3.669,
+    "peak": 2.7,
+    "rms": -18.7,
+    "rmsActive": -18.6,
+    "loud": -8.7,
+    "lufs": -17.7,
+    "onsetMs": 5,
+    "peakMs": 41,
+    "tailMs": 3569,
+    "padEndMs": 0,
+    "centroid": 494,
+    "phone": 99,
+    "clip": 21
+   },
+   {
+    "dur": 3.887,
+    "peak": 3,
+    "rms": -27.4,
+    "rmsActive": -25.9,
+    "loud": -14.1,
+    "lufs": -26.2,
+    "onsetMs": 0,
+    "peakMs": 34,
+    "tailMs": 2746,
+    "padEndMs": 0,
+    "centroid": 987,
+    "phone": 93,
+    "clip": 3
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/round--kalimba-rise.ogg",
+    "gainDb": -7.3,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 1.6,
+     "peak": -4.7,
+     "rms": -21.9,
+     "rmsActive": -21.6,
+     "loud": -15.9,
+     "lufs": -22.5,
+     "onsetMs": 11,
+     "peakMs": 33,
+     "tailMs": 1477,
+     "padEndMs": 49,
+     "centroid": 575,
+     "phone": 98,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "n_focus/glockc7": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 2.791,
+    "peak": -25.5,
+    "rms": -55.7,
+    "rmsActive": -51.5,
+    "loud": -39.3,
+    "lufs": -48.6,
+    "onsetMs": 5,
+    "peakMs": 9,
+    "tailMs": 1036,
+    "padEndMs": 2329,
+    "centroid": 5332,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/n_focus--glockc7.ogg",
+    "gainDb": 24,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 1.21,
+     "peak": -1.7,
+     "rms": -28.1,
+     "rmsActive": -26.9,
+     "loud": -15.2,
+     "lufs": -24.6,
+     "onsetMs": 1,
+     "peakMs": 4,
+     "tailMs": 916,
+     "padEndMs": 207,
+     "centroid": 5321,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "n_focus/xylochat": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 2.182,
+    "peak": 3.2,
+    "rms": -30.9,
+    "rmsActive": -29.8,
+    "loud": -18.2,
+    "lufs": -30,
+    "onsetMs": 0,
+    "peakMs": 0,
+    "tailMs": 1700,
+    "padEndMs": 0,
+    "centroid": 1753,
+    "phone": 100,
+    "clip": 9
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/n_focus--xylochat.ogg",
+    "gainDb": -0.4,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 1.8,
+     "peak": -1.7,
+     "rms": -31.6,
+     "rmsActive": -30.8,
+     "loud": -21.3,
+     "lufs": -30.8,
+     "onsetMs": 0,
+     "peakMs": 1,
+     "tailMs": 1524,
+     "padEndMs": 138,
+     "centroid": 1731,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "n_focus/xyloring": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 1.714,
+    "peak": -11.3,
+    "rms": -37.5,
+    "rmsActive": -32.8,
+    "loud": -26.7,
+    "lufs": -31.7,
+    "onsetMs": 1,
+    "peakMs": 2,
+    "tailMs": 573,
+    "padEndMs": 1082,
+    "centroid": 2750,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/n_focus--xyloring.ogg",
+    "gainDb": 9.8,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 0.652,
+     "peak": -1.6,
+     "rms": -23.5,
+     "rmsActive": -22.5,
+     "loud": -16.9,
+     "lufs": -20.8,
+     "onsetMs": 0,
+     "peakMs": 216,
+     "tailMs": 294,
+     "padEndMs": 81,
+     "centroid": 2697,
+     "phone": 100,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "n_focus/kalimba-rise": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 3.669,
+    "peak": 2.7,
+    "rms": -18.7,
+    "rmsActive": -18.6,
+    "loud": -8.7,
+    "lufs": -17.7,
+    "onsetMs": 5,
+    "peakMs": 41,
+    "tailMs": 3569,
+    "padEndMs": 0,
+    "centroid": 494,
+    "phone": 99,
+    "clip": 21
+   },
+   {
+    "dur": 3.887,
+    "peak": 3,
+    "rms": -27.4,
+    "rmsActive": -25.9,
+    "loud": -14.1,
+    "lufs": -26.2,
+    "onsetMs": 0,
+    "peakMs": 34,
+    "tailMs": 2746,
+    "padEndMs": 0,
+    "centroid": 987,
+    "phone": 93,
+    "clip": 3
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/n_focus--kalimba-rise.ogg",
+    "gainDb": -5.3,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 1.6,
+     "peak": -2.5,
+     "rms": -19.9,
+     "rmsActive": -19.6,
+     "loud": -13.9,
+     "lufs": -20.5,
+     "onsetMs": 2,
+     "peakMs": 33,
+     "tailMs": 1477,
+     "padEndMs": 41,
+     "centroid": 538,
+     "phone": 99,
+     "clip": 0
+    }
+   }
+  ]
+ },
+ "alarm_musicbox2/ducks": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 14.329,
+    "peak": 2.5,
+    "rms": -18.2,
+    "rmsActive": -18.2,
+    "loud": -8.4,
+    "lufs": -15.3,
+    "onsetMs": 0,
+    "peakMs": 42,
+    "tailMs": 14223,
+    "padEndMs": 46,
+    "centroid": 1906,
+    "phone": 100,
+    "clip": 180
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_musicbox2--ducks.ogg",
+    "gainDb": -3.8,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 13,
+     "peak": -1.4,
+     "rms": -22,
+     "rmsActive": -22,
+     "loud": -12.3,
+     "lufs": -19.2,
+     "onsetMs": 0,
+     "peakMs": 7050,
+     "tailMs": 5950,
+     "padEndMs": 0,
+     "centroid": 1901,
+     "phone": 100,
+     "clip": 0,
+     "seamDb": 0.6,
+     "seamJump": -35.4
+    }
+   }
+  ]
+ },
+ "alarm_musicbox2/flea": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 27.789,
+    "peak": 0.9,
+    "rms": -14,
+    "rmsActive": -13.9,
+    "loud": -6.8,
+    "lufs": -13.3,
+    "onsetMs": 24,
+    "peakMs": 8042,
+    "tailMs": 18883,
+    "padEndMs": 351,
+    "centroid": 1100,
+    "phone": 100,
+    "clip": 25
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_musicbox2--flea.ogg",
+    "gainDb": -3.1,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 20,
+     "peak": -2.4,
+     "rms": -16.3,
+     "rmsActive": -16.3,
+     "loud": -9.9,
+     "lufs": -16,
+     "onsetMs": 0,
+     "peakMs": 8042,
+     "tailMs": 11958,
+     "padEndMs": 0,
+     "centroid": 1095,
+     "phone": 100,
+     "clip": 0,
+     "seamDb": 2.4,
+     "seamJump": -31.5
+    }
+   }
+  ]
+ },
+ "alarm_musicbox2/twinkle": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 16.432,
+    "peak": -16.8,
+    "rms": -43.3,
+    "rmsActive": -43.1,
+    "loud": -31.6,
+    "lufs": -41,
+    "onsetMs": 13,
+    "peakMs": 364,
+    "tailMs": 15366,
+    "padEndMs": 747,
+    "centroid": 2089,
+    "phone": 99,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_musicbox2--twinkle.ogg",
+    "gainDb": 15.7,
+    "limited": true,
+    "fails": [
+     "loop seam jumps 3.1 dB"
+    ],
+    "m": {
+     "dur": 15,
+     "peak": -1.9,
+     "rms": -27.4,
+     "rmsActive": -27.4,
+     "loud": -16.2,
+     "lufs": -25.5,
+     "onsetMs": 0,
+     "peakMs": 999,
+     "tailMs": 14001,
+     "padEndMs": 0,
+     "centroid": 2008,
+     "phone": 99,
+     "clip": 0,
+     "seamDb": 3.1,
+     "seamJump": -58.9
+    }
+   }
+  ]
+ },
+ "alarm_musicbox2/vsokorelos": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 13.375,
+    "peak": -19.8,
+    "rms": -36.1,
+    "rmsActive": -36,
+    "loud": -24.6,
+    "lufs": -34.5,
+    "onsetMs": 0,
+    "peakMs": 4738,
+    "tailMs": 8372,
+    "padEndMs": 265,
+    "centroid": 1330,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_musicbox2--vsokorelos.ogg",
+    "gainDb": 18.3,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 12,
+     "peak": -1.6,
+     "rms": -17.7,
+     "rmsActive": -17.7,
+     "loud": -6.4,
+     "lufs": -16.2,
+     "onsetMs": 0,
+     "peakMs": 4738,
+     "tailMs": 7262,
+     "padEndMs": 0,
+     "centroid": 1334,
+     "phone": 100,
+     "clip": 0,
+     "seamDb": 0,
+     "seamJump": -48.8
+    }
+   }
+  ]
+ },
+ "alarm_musicbox2/springy": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 19.969,
+    "peak": -10.9,
+    "rms": -30.6,
+    "rmsActive": -30.6,
+    "loud": -19,
+    "lufs": -27.7,
+    "onsetMs": 0,
+    "peakMs": 16928,
+    "tailMs": 3041,
+    "padEndMs": 0,
+    "centroid": 1862,
+    "phone": 100,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_musicbox2--springy.ogg",
+    "gainDb": 9.3,
+    "limited": true,
+    "fails": [],
+    "m": {
+     "dur": 18,
+     "peak": -1.5,
+     "rms": -20.9,
+     "rmsActive": -20.9,
+     "loud": -9.7,
+     "lufs": -18.3,
+     "onsetMs": 0,
+     "peakMs": 13222,
+     "tailMs": 4778,
+     "padEndMs": 0,
+     "centroid": 1855,
+     "phone": 100,
+     "clip": 0,
+     "seamDb": 2.4,
+     "seamJump": -36.5
+    }
+   }
+  ]
+ },
+ "alarm_piano/orboram": {
+  "pick": true,
+  "raw": [
+   {
+    "dur": 12,
+    "peak": -17.2,
+    "rms": -34.5,
+    "rmsActive": -34.5,
+    "loud": -25,
+    "lufs": -35.1,
+    "onsetMs": 3,
+    "peakMs": 102,
+    "tailMs": 11898,
+    "padEndMs": 0,
+    "centroid": 356,
+    "phone": 62,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_piano--orboram.ogg",
+    "gainDb": 16.2,
+    "limited": true,
+    "fails": [
+     "loop seam jumps 10.4 dB"
+    ],
+    "m": {
+     "dur": 12,
+     "peak": -1.4,
+     "rms": -18.3,
+     "rmsActive": -18.3,
+     "loud": -8.8,
+     "lufs": -18.9,
+     "onsetMs": 3,
+     "peakMs": 104,
+     "tailMs": 11896,
+     "padEndMs": 0,
+     "centroid": 357,
+     "phone": 62,
+     "clip": 0,
+     "seamDb": 10.4,
+     "seamJump": -30.9
+    }
+   }
+  ]
+ },
+ "alarm_piano/erokia": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 8,
+    "peak": -4,
+    "rms": -16.8,
+    "rmsActive": -16.8,
+    "loud": -12.2,
+    "lufs": -17.4,
+    "onsetMs": 0,
+    "peakMs": 1821,
+    "tailMs": 6179,
+    "padEndMs": 0,
+    "centroid": 470,
+    "phone": 79,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_piano--erokia.ogg",
+    "gainDb": 1.4,
+    "limited": false,
+    "fails": [],
+    "m": {
+     "dur": 8,
+     "peak": -2.5,
+     "rms": -15.4,
+     "rmsActive": -15.4,
+     "loud": -10.7,
+     "lufs": -16,
+     "onsetMs": 0,
+     "peakMs": 1899,
+     "tailMs": 6101,
+     "padEndMs": 0,
+     "centroid": 473,
+     "phone": 80,
+     "clip": 0,
+     "seamDb": 0.5,
+     "seamJump": -41.1
+    }
+   }
+  ]
+ },
+ "alarm_piano/aes": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 16.001,
+    "peak": -5.7,
+    "rms": -21.6,
+    "rmsActive": -21.6,
+    "loud": -16.8,
+    "lufs": -22.4,
+    "onsetMs": 54,
+    "peakMs": 8023,
+    "tailMs": 7978,
+    "padEndMs": 0,
+    "centroid": 359,
+    "phone": 42,
+    "clip": 0
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_piano--aes.ogg",
+    "gainDb": 6.6,
+    "limited": false,
+    "fails": [
+     "loop seam jumps 16.9 dB"
+    ],
+    "m": {
+     "dur": 16,
+     "peak": -1.7,
+     "rms": -15.3,
+     "rmsActive": -15.3,
+     "loud": -10.5,
+     "lufs": -16,
+     "onsetMs": 0,
+     "peakMs": 5577,
+     "tailMs": 10423,
+     "padEndMs": 0,
+     "centroid": 371,
+     "phone": 44,
+     "clip": 0,
+     "seamDb": 16.9,
+     "seamJump": -43
+    }
+   }
+  ]
+ },
+ "alarm_piano/danlucaz": {
+  "pick": false,
+  "raw": [
+   {
+    "dur": 14.769,
+    "peak": 2.4,
+    "rms": -12.6,
+    "rmsActive": -12.6,
+    "loud": -5.8,
+    "lufs": -12.9,
+    "onsetMs": 0,
+    "peakMs": 1809,
+    "tailMs": 12960,
+    "padEndMs": 0,
+    "centroid": 610,
+    "phone": 89,
+    "clip": 1315
+   }
+  ],
+  "takes": [
+   {
+    "file": "sounds/alarm_piano--danlucaz.ogg",
+    "gainDb": -4.6,
+    "limited": true,
+    "fails": [
+     "loop seam jumps 16.3 dB"
+    ],
+    "m": {
+     "dur": 14.7,
+     "peak": -1.6,
+     "rms": -17.2,
+     "rmsActive": -17.2,
+     "loud": -10.4,
+     "lufs": -17.6,
+     "onsetMs": 0,
+     "peakMs": 6397,
+     "tailMs": 8303,
+     "padEndMs": 0,
+     "centroid": 608,
+     "phone": 89,
+     "clip": 0,
+     "seamDb": 16.3,
+     "seamJump": -69.6
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,142 @@
+<title>Margin sound picks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root { --bg: #f6f1e7; --card: #fffdf8; --ink: #2a2620; --mute: #7a7266; --line: #e3dccd; --pick: #2f6f4f; --pickbg: #e5f1ea; --bad: #a3402d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1c1a17; --card: #26231f; --ink: #eee7da; --mute: #a39a8b; --line: #3a352e; --pick: #7cc49c; --pickbg: #22352b; --bad: #e08a74; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #1c1a17; --card: #26231f; --ink: #eee7da; --mute: #a39a8b; --line: #3a352e; --pick: #7cc49c; --pickbg: #22352b; --bad: #e08a74; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 system-ui, sans-serif; padding-block: 16px 140px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 2px; }
+  .sub { color: var(--mute); font-size: 13px; margin: 0 0 10px; }
+  .ev { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 10px 0; }
+  .ev header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .ev header b { font-size: 15px; } .ev header span { color: var(--mute); font-size: 12px; text-align: right; }
+  .c { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 8px; border-radius: 10px; margin-top: 6px; border: 1px solid transparent; }
+  .c.on { background: var(--pickbg); border-color: var(--pick); }
+  .play { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 16px; cursor: pointer; }
+  .play.playing { background: var(--pick); color: var(--card); border-color: var(--pick); }
+  .meta { min-width: 0; } .meta .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta .d { color: var(--mute); font-size: 12px; } .meta .f { color: var(--bad); font-size: 12px; }
+  svg.w { display: block; width: 100%; height: 22px; margin-top: 3px; } svg.w path { fill: var(--mute); opacity: .55; }
+  .c.on svg.w path { fill: var(--pick); opacity: .8; }
+  .choose { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .c.on .choose { background: var(--pick); color: var(--card); border-color: var(--pick); }
+  .row { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+  .none { font-size: 13px; color: var(--mute); display: flex; gap: 6px; align-items: center; }
+  .note { flex: 1; min-width: 160px; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .bar button { font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--pick); background: var(--pick); color: var(--card); cursor: pointer; }
+  .bar button.sec { background: transparent; color: var(--pick); }
+  .bar .msg { width: 100%; text-align: center; font-size: 12px; color: var(--mute); }
+  label.loop { font-size: 13px; color: var(--mute); display: inline-flex; gap: 6px; align-items: center; }
+  a { color: inherit; }
+  textarea#out { width: 100%; min-height: 90px; font: 12px ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
+</style>
+<main>
+  <h1>Margin sounds</h1>
+  <p class="sub" id="intro"></p>
+  <p class="sub">Listen on the phone speaker at your normal volume. Tap ▶ to hear, <b>Use this</b> to pick. "None of these" means I look for more. Your picks save on this page; when you're done tap <b>Copy my choices</b> and paste them to me.</p>
+  <div id="list"></div>
+</main>
+<div class="bar">
+  <button id="copy">Copy my choices</button>
+  <button id="show" class="sec">Show as text</button>
+  <textarea id="out" hidden readonly></textarea>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+const DATA = /*@DATA@*/null;
+const KEY = 'margin-sound-choices-' + DATA.built;
+let state = { choices: {}, notes: {} };
+try { state = JSON.parse(localStorage.getItem(KEY)) || state; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const chosen = (e) => state.choices[e.key] ?? e.pick;
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
+
+function waveSvg(w) {
+  const n = w.length, pts = w.map((v, i) => `${(i / (n - 1)) * 100},${11 - (v / 100) * 11}`);
+  const back = w.map((v, i) => `${((n - 1 - i) / (n - 1)) * 100},${11 + (w[n - 1 - i] / 100) * 11}`);
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('class', 'w'); s.setAttribute('viewBox', '0 0 100 22'); s.setAttribute('preserveAspectRatio', 'none');
+  s.innerHTML = `<path d="M${pts.join(' L')} L${back.join(' L')} Z"/>`;
+  return s;
+}
+
+let current = null;
+function stop() { if (current) { current.a.pause(); current.btn.classList.remove('playing'); current.btn.textContent = '▶'; current = null; } }
+function play(btn, files, loops) {
+  if (current && current.btn === btn) { stop(); return; }
+  stop();
+  let i = 0, rounds = 0;
+  const a = new Audio();
+  current = { a, btn }; btn.classList.add('playing'); btn.textContent = '■';
+  const next = () => {
+    if (i >= files.length) { if (++rounds < loops) i = 0; else { stop(); return; } }
+    a.src = files[i++]; a.play().catch(stop);
+  };
+  a.onended = () => { if (current && current.a === a) next(); };
+  next();
+}
+
+const list = document.getElementById('list');
+const events = DATA.events.length, cands = DATA.events.reduce((n, e) => n + e.candidates.length, 0);
+document.getElementById('intro').textContent = `${events} sounds, ${cands} candidates, all CC0 (public domain) from Openverse. Built ${DATA.built}.`;
+let lastGroup = null;
+for (const e of DATA.events) {
+  const g = DATA.groups[e.group];
+  if (e.group !== lastGroup) { list.append(el('h2', { textContent: g.label }), el('p', { className: 'sub', textContent: g.hint })); lastGroup = e.group; }
+  const isAlarm = g.kind === 'alarm';
+  const card = el('section', { className: 'ev' });
+  card.append(el('header', {}, el('b', { textContent: e.label }), el('span', { textContent: e.where })));
+  let loops = isAlarm ? 3 : 1;
+  const rows = [];
+  for (const c of e.candidates) {
+    const t0 = c.takes[0], m = t0.m;
+    const fails = c.takes.flatMap((t) => t.fails);
+    const by = [...new Set(c.credit.map((s) => s.creator))].join(', ');
+    const src = c.credit[0]?.source;
+    const meta = el('div', { className: 'meta' },
+      el('div', { className: 't', textContent: c.title || c.credit[0]?.title }),
+      el('div', { className: 'd' }, `${m.dur}s · by ${by} · `, el('a', { href: src, target: '_blank', rel: 'noopener', textContent: 'source' }), c.takes.length > 1 ? ` · ${c.takes.length} variants` : ''),
+      waveSvg(m.wave));
+    if (fails.length) meta.append(el('div', { className: 'f', textContent: '⚠ ' + fails.join('; ') }));
+    const btn = el('button', { className: 'play', textContent: '▶', title: 'Play' });
+    btn.onclick = () => play(btn, c.takes.map((t) => t.file), loops);
+    const pick = el('button', { className: 'choose', textContent: 'Use this' });
+    const row = el('div', { className: 'c' }, btn, meta, pick);
+    pick.onclick = () => { state.choices[e.key] = c.id; save(); refresh(); };
+    rows.push([row, c.id]);
+    card.append(row);
+  }
+  const none = el('input', { type: 'checkbox' });
+  none.onchange = () => { if (none.checked) state.choices[e.key] = 'none'; else delete state.choices[e.key]; save(); refresh(); };
+  const note = el('input', { className: 'note', placeholder: 'note (optional): "too loud", "softer", …', value: state.notes[e.key] || '' });
+  note.oninput = () => { state.notes[e.key] = note.value; if (!note.value) delete state.notes[e.key]; save(); };
+  const extra = el('div', { className: 'row' }, el('label', { className: 'none' }, none, 'None of these'), note);
+  if (isAlarm) {
+    const lp = el('input', { type: 'checkbox', checked: true });
+    lp.onchange = () => { loops = lp.checked ? 3 : 1; };
+    extra.prepend(el('label', { className: 'loop' }, lp, 'play 3× (hear the loop seam)'));
+  }
+  card.append(extra);
+  function refresh() {
+    const ch = chosen(e);
+    none.checked = ch === 'none';
+    rows.forEach(([r, id]) => r.classList.toggle('on', id === ch));
+  }
+  card.refresh = refresh; refresh();
+  list.append(card);
+}
+
+const out = () => JSON.stringify({ built: DATA.built, choices: Object.fromEntries(DATA.events.map((e) => [e.key, chosen(e)])), notes: state.notes }, null, 1);
+const msg = (t) => { document.getElementById('msg').textContent = t; };
+document.getElementById('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(out()); msg('Copied. Paste it to Claude.'); }
+  catch (e) { const t = document.getElementById('out'); t.value = out(); t.hidden = false; t.select(); msg('Copy the selected text and paste it to Claude.'); }
+};
+document.getElementById('show').onclick = () => { const t = document.getElementById('out'); t.value = out(); t.hidden = !t.hidden; if (!t.hidden) t.select(); };
+const changed = Object.keys(state.choices).length;
+msg(changed ? `${changed} of ${events} changed from my first pick` : 'The highlighted row in each card is my first pick.');
+</script>

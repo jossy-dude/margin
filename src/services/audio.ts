@@ -1,17 +1,22 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import type { SoundGroup } from '../domain/types';
 
-/* Metro needs literal require() paths, so every asset is listed once here. Durations are the slot lengths in scripts/fetch-sounds.mjs (generated). */
+/* Metro needs literal require() paths, so every asset is listed once here. The files are built by
+   scripts/sounds/build.mjs from scripts/sounds/picks.json (v0.7 set, chosen by ear on the audition page; credits in
+   assets/sounds/CREDITS.md). The `_late`, `_sick`, `_undone`, `_tock`, `_off`, `_low` files are pitch variants of
+   their base sound, rendered by the build so playback needs no rate control. */
 const SRC = {
-  place: require('../../assets/sounds/place.wav'), shuffle: require('../../assets/sounds/shuffle.wav'), crumple: require('../../assets/sounds/crumple.wav'), thud: require('../../assets/sounds/thud.wav'), flutter: require('../../assets/sounds/flutter.wav'),
-  tick: require('../../assets/sounds/tick.wav'), tock: require('../../assets/sounds/tock.wav'),
-  'stamp-here': require('../../assets/sounds/stamp-here.wav'), 'stamp-late': require('../../assets/sounds/stamp-late.wav'), 'stamp-absent': require('../../assets/sounds/stamp-absent.wav'), 'stamp-sick': require('../../assets/sounds/stamp-sick.wav'), 'stamp-cancel': require('../../assets/sounds/stamp-cancel.wav'),
-  done: require('../../assets/sounds/done.wav'), notify: require('../../assets/sounds/notify.wav'), 'toggle-on': require('../../assets/sounds/toggle-on.wav'), 'toggle-off': require('../../assets/sounds/toggle-off.wav'),
-  'detent-1': require('../../assets/sounds/detent-1.wav'), 'detent-2': require('../../assets/sounds/detent-2.wav'), 'detent-3': require('../../assets/sounds/detent-3.wav'), 'detent-4': require('../../assets/sounds/detent-4.wav'),
-  bump: require('../../assets/sounds/bump.wav'), thunk: require('../../assets/sounds/thunk.wav'), clack: require('../../assets/sounds/clack.wav'), blip: require('../../assets/sounds/blip.wav'), 'round-done': require('../../assets/sounds/round-done.wav'),
-  'break-start': require('../../assets/sounds/break-start.wav'), 'tape-peel': require('../../assets/sounds/tape-peel.wav'),
-  /* Its own file, so muting the clock tick can never mute the off-track warning. Moved to assets/sounds/ when the candidate set is promoted. */
-  nudge: require('../../assets/sounds/nudge.wav'),
+  page: require('../../assets/sounds/page.ogg'), slide: require('../../assets/sounds/slide.ogg'), click: require('../../assets/sounds/click.ogg'),
+  pop: require('../../assets/sounds/pop.ogg'), pop_off: require('../../assets/sounds/pop_off.ogg'),
+  tick: require('../../assets/sounds/tick.ogg'), tick_tock: require('../../assets/sounds/tick_tock.ogg'),
+  detent_a: require('../../assets/sounds/detent_a.ogg'), detent_b: require('../../assets/sounds/detent_b.ogg'), detent_c: require('../../assets/sounds/detent_c.ogg'),
+  knock: require('../../assets/sounds/knock.ogg'), knock_low: require('../../assets/sounds/knock_low.ogg'),
+  mark: require('../../assets/sounds/mark.ogg'), mark_late: require('../../assets/sounds/mark_late.ogg'),
+  absent: require('../../assets/sounds/absent.ogg'), absent_sick: require('../../assets/sounds/absent_sick.ogg'),
+  cancel: require('../../assets/sounds/cancel.ogg'), crumple: require('../../assets/sounds/crumple.ogg'), peel: require('../../assets/sounds/peel.ogg'),
+  done: require('../../assets/sounds/done.ogg'), done_undone: require('../../assets/sounds/done_undone.ogg'),
+  chime: require('../../assets/sounds/chime.ogg'), low: require('../../assets/sounds/low.ogg'),
+  start: require('../../assets/sounds/start.ogg'), round: require('../../assets/sounds/round.ogg'), break: require('../../assets/sounds/break.ogg'),
 } as const;
 export type SoundName = keyof typeof SRC;
 /** Every sound this build can load. The Sound page's preview map is checked against it, so a sample
@@ -23,7 +28,7 @@ export const SOUND_NAMES = Object.keys(SRC) as SoundName[];
  * entry names a file that is bundled, and the file belongs to that group so the slider next to it is
  * the volume the preview actually uses. `audio-preview.test.ts` asserts all three.
  */
-export const SAMPLE: Record<SoundGroup, SoundName> = { paper: 'place', stamp: 'stamp-here', done: 'done', notify: 'notify', toggle: 'toggle-on', dial: 'detent-3', clock: 'tick', break: 'tape-peel' };
+export const SAMPLE: Record<SoundGroup, SoundName> = { taps: 'page', marks: 'mark', confirm: 'done', focus: 'round' };
 /**
  * Why a preview tap would be silent, or `null` when it can be heard.
  *
@@ -36,14 +41,21 @@ export function previewSilence(g: SoundGroup, label: string, s: { soundOn: boole
   if ((s.soundVol[g] ?? 0) <= 0) return `${label} is at 0% — raise its volume to hear it.`;
   return null;
 }
-/* Durations of the files actually loaded above. Regenerate from manifest.json when the set is promoted. */
-const SECONDS: Record<SoundName, number> = { place: 0.22, shuffle: 0.5, crumple: 0.62, thud: 0.32, flutter: 0.55, tick: 0.05, tock: 0.05, 'stamp-here': 0.22, 'stamp-late': 0.2, 'stamp-absent': 0.36, 'stamp-sick': 0.3, 'stamp-cancel': 0.25, done: 0.85, notify: 1.2, 'toggle-on': 0.06, 'toggle-off': 0.06, 'detent-1': 0.09, 'detent-2': 0.09, 'detent-3': 0.09, 'detent-4': 0.09, bump: 0.18, thunk: 0.24, clack: 0.12, blip: 0.2, 'round-done': 0.95, 'break-start': 0.9, 'tape-peel': 0.66, nudge: 0.2 };
+/* Durations of the built files (ffprobe, 2026-11-14). Rebuild → re-read them. */
+const SECONDS: Record<SoundName, number> = {
+  page: 0.3, slide: 0.35, click: 0.1, pop: 0.05, pop_off: 0.06, tick: 0.03, tick_tock: 0.04, detent_a: 0.09, detent_b: 0.09, detent_c: 0.09,
+  knock: 0.2, knock_low: 0.25, mark: 0.2, mark_late: 0.18, absent: 0.4, absent_sick: 0.44, cancel: 0.28, crumple: 0.5, peel: 0.31,
+  done: 0.31, done_undone: 0.37, chime: 0.66, low: 0.4, start: 0.9, round: 1.21, break: 1.5,
+};
+const MARKS: SoundName[] = ['mark', 'mark_late', 'absent', 'absent_sick', 'cancel', 'crumple', 'peel'];
+const CONFIRM: SoundName[] = ['done', 'done_undone', 'chime', 'low'];
+const FOCUS: SoundName[] = ['start', 'round', 'break'];
 /** Which volume slider governs a sound. Exported because the Sound page's preview must be shown to
  *  ride the row it sits on — `SAMPLE` maps a group to a sound, and this maps the sound back, so the
  *  two cannot drift apart silently. */
-export const groupOf = (n: SoundName): SoundGroup => n.startsWith('stamp') ? 'stamp' : n.startsWith('detent') || ['bump', 'thunk', 'clack', 'blip', 'round-done'].includes(n) ? 'dial' : n === 'tick' || n === 'tock' ? 'clock' : n.startsWith('toggle') ? 'toggle' : n === 'done' ? 'done' : n === 'notify' ? 'notify' : n === 'break-start' || n === 'tape-peel' ? 'break' : 'paper';
+export const groupOf = (n: SoundName): SoundGroup => MARKS.includes(n) ? 'marks' : CONFIRM.includes(n) ? 'confirm' : FOCUS.includes(n) ? 'focus' : 'taps';
 /** higher wins when the voice cap is reached; tiny ticks are the first to be dropped */
-const PRIO = (n: SoundName) => (n === 'tick' || n === 'tock' || n.startsWith('detent') ? 1 : n === 'notify' || n === 'round-done' || n === 'done' ? 4 : n.startsWith('toggle') ? 2 : 3);
+const PRIO = (n: SoundName) => (n.startsWith('tick') || n.startsWith('detent') ? 1 : n === 'round' || n === 'done' || n === 'chime' ? 4 : n.startsWith('pop') ? 2 : 3);
 
 /* A sweep of the dial retriggers far faster than a 75 ms file lasts. Handing out a player that is
    still sounding is what turned a fast drag into machine-gun clipping, so the drag-critical sounds
@@ -54,10 +66,10 @@ const PRIO = (n: SoundName) => (n === 'tick' || n === 'tock' || n.startsWith('de
    `started` — the same silent app `dumpsys audio` showed on v0.1.0. So: one player per sound, two for the
    drag sounds, and never more than `MAX_PLAYERS` alive at once (least recently used are released). */
 const POOL = 1, DRAG_POOL = 2, MAX_PLAYERS = 14;
-const isDrag = (n: SoundName) => n.startsWith('detent') || n === 'tick' || n === 'tock';
+const isDrag = (n: SoundName) => n.startsWith('detent') || n.startsWith('tick');
 /** A ratchet pawl cannot click faster than this; without it one layer retriggers several times
     inside a single file and the velocity mapping degrades into noise. */
-const GUARD = (n: SoundName) => (n.startsWith('detent') ? 26 : n === 'tick' || n === 'tock' ? 40 : 0);
+const GUARD = (n: SoundName) => (n.startsWith('detent') ? 26 : n.startsWith('tick') ? 40 : 0);
 
 const VOICES = 4;
 let ready = false, master = true, vols: Record<SoundGroup, number> | null = null;
@@ -110,12 +122,12 @@ function pool(n: SoundName): AudioPlayer[] {
 /**
  * What boot warms: the latency-critical dial and stamp sounds, plus every file the Sound page's Play
  * button can ask for. It is derived from `SAMPLE` instead of being a second hand-written list, because
- * that list is exactly how `done`, `notify` and `tape-peel` stayed cold — their rows allocated a player
+ * that list is exactly how three preview sounds once stayed cold — their rows allocated a player
  * and called `play()` before the asset was decoded, which on Android is a plausible silent first tap.
  * `audio-preview.test.ts` asserts the cover, so adding a preview cannot reintroduce it.
  */
 export const PRELOAD: SoundName[] = [...new Set<SoundName>([
-  'detent-1', 'detent-2', 'detent-3', 'detent-4', 'tick', 'tock', 'stamp-here', 'toggle-on', 'toggle-off', 'place',
+  'detent_a', 'detent_b', 'detent_c', 'tick', 'tick_tock', 'mark', 'pop', 'pop_off', 'page',
   ...Object.values(SAMPLE),
 ])];
 /** Warm those sounds so the first dial detent, and the first Play tap, are not late. */

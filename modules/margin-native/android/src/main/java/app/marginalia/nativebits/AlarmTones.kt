@@ -12,7 +12,8 @@ import org.json.JSONObject
 
 /**
  * v0.7 N6/R10 — choosing what an alarm sounds like, and hearing it safely. The phone's own alarm tones are listed
- * (RingtoneManager, no permission, nothing bundled); the owner's choice is stored as a URI and used by AlarmService.
+ * (RingtoneManager, no permission) after Margin's own tones (res/raw/alarm_*.ogg, built by scripts/sounds/build.mjs and
+ * chosen by ear; each loops cleanly). The owner's choice is stored as a URI and used by AlarmService.
  * A preview plays inside the app for at most 10 s with the same 15 % → 100 % ramp as the real alarm, and
  * `stopPreview` ends it at once (the page also stops it on a double tap, a volume key, or leaving).
  */
@@ -20,16 +21,27 @@ object AlarmTones {
   private const val KEY = "tone"
   private val main = Handler(Looper.getMainLooper())
   private var preview: MediaPlayer? = null
+  /** Margin's bundled tones, in picker order: res/raw name → title. */
+  private val BUNDLED = listOf(
+    "alarm_musicbox" to "Music box", "alarm_musicbox2" to "Music box, brighter", "alarm_marimba" to "Marimba box",
+    "alarm_kalimba" to "Kalimba rise", "alarm_piano" to "Soft piano", "alarm_piano2" to "Piano loop", "alarm_piano3" to "Piano loop 2",
+    "alarm_classic" to "Alarm clock (bell)", "alarm_classic2" to "Alarm clock (short ring)", "alarm_classic3" to "Alarm clock (beeps)",
+  )
 
   fun list(c: Context): String {
     val out = JSONArray()
-    out.put(JSONObject().put("id", "default").put("title", "Phone's default alarm"))
+    for ((name, title) in BUNDLED) {
+      // getIdentifier: a tone missing from this build (an older APK) is skipped instead of listed silent.
+      if (c.resources.getIdentifier(name, "raw", c.packageName) == 0) continue
+      out.put(JSONObject().put("id", "android.resource://${c.packageName}/raw/$name").put("title", title).put("kind", "margin"))
+    }
+    out.put(JSONObject().put("id", "default").put("title", "Phone's default alarm").put("kind", "phone"))
     try {
       val rm = RingtoneManager(c).apply { setType(RingtoneManager.TYPE_ALARM) }
       val cur = rm.cursor
-      while (cur.moveToNext() && out.length() < 40) {
+      while (cur.moveToNext() && out.length() < 50) {
         val uri = rm.getRingtoneUri(cur.position) ?: continue
-        out.put(JSONObject().put("id", uri.toString()).put("title", cur.getString(RingtoneManager.TITLE_COLUMN_INDEX) ?: "Tone"))
+        out.put(JSONObject().put("id", uri.toString()).put("title", cur.getString(RingtoneManager.TITLE_COLUMN_INDEX) ?: "Tone").put("kind", "phone"))
       }
     } catch (e: Exception) { }
     return out.toString()

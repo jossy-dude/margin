@@ -1,0 +1,1178 @@
+{
+ "format": {
+  "quality": {
+   "ui": 6,
+   "chime": 6,
+   "notif": 6,
+   "alarm": 5
+  }
+ },
+ "groups": {
+  "taps": {
+   "kind": "ui",
+   "loud": -24,
+   "label": "Taps",
+   "hint": "page turns, swipes, toggles, the focus dial"
+  },
+  "marks": {
+   "kind": "ui",
+   "loud": -20,
+   "label": "Marks",
+   "hint": "attendance marks, delete, stickers"
+  },
+  "confirm": {
+   "kind": "ui",
+   "loud": -18,
+   "label": "Confirmations",
+   "hint": "task done, in-app reminders, warnings"
+  },
+  "focus": {
+   "kind": "chime",
+   "loud": -16,
+   "label": "Focus",
+   "hint": "start, round done, break"
+  },
+  "notif": {
+   "kind": "notif",
+   "loud": -14,
+   "label": "Notification sounds",
+   "hint": "what Android plays for Margin notifications"
+  },
+  "alarm": {
+   "kind": "alarm",
+   "lufs": -16,
+   "label": "Alarm tones",
+   "hint": "loops; the app ramps them 15 → 100 % over 45 s"
+  }
+ },
+ "events": [
+  {
+   "key": "page",
+   "file": "page",
+   "group": "taps",
+   "label": "Page change",
+   "where": "switching pages (7 places)",
+   "shape": {
+    "max": 0.3,
+    "fadeOut": 0.06
+   },
+   "pick": "gynation",
+   "candidates": [
+    {
+     "id": "qubodup",
+     "ov": "1143d254-3c0e-42b7-8361-888cc6d2f475",
+     "title": "Page Turn"
+    },
+    {
+     "id": "spacejoe",
+     "ov": "3dcab29b-24f1-47fa-992f-dd012a7aae5c",
+     "title": "Quiet Page Turn - 8"
+    },
+    {
+     "id": "matrixxx",
+     "ov": "82f0a358-0106-49af-a2f5-0cac64efa811",
+     "title": "Page Turn 02"
+    },
+    {
+     "id": "gynation",
+     "ov": "9f6c8594-c8a1-4366-9ee4-7cf1ea801467",
+     "title": "paper flip 1"
+    },
+    {
+     "id": "gynation-soft",
+     "ov": "9f6c8594-c8a1-4366-9ee4-7cf1ea801467",
+     "title": "paper flip 1, softer (top cut at 5 kHz, −2 dB)",
+     "shape": {
+      "lp": 5000,
+      "level": -2
+     }
+    },
+    {
+     "id": "gynation-softer",
+     "ov": "9f6c8594-c8a1-4366-9ee4-7cf1ea801467",
+     "title": "paper flip 1, softest (top cut at 3.5 kHz, −3 dB)",
+     "shape": {
+      "lp": 3500,
+      "level": -3
+     }
+    }
+   ]
+  },
+  {
+   "key": "slide",
+   "file": "slide",
+   "group": "taps",
+   "label": "Swipe a task",
+   "where": "swiping a task away or to done",
+   "shape": {
+    "max": 0.35,
+    "fadeOut": 0.08
+   },
+   "pick": "envelope",
+   "candidates": [
+    {
+     "id": "kingofgamers",
+     "ov": "7092906e-188e-4593-88b8-882b7e1fd4a1",
+     "title": "Paper slide"
+    },
+    {
+     "id": "semccab",
+     "ov": "05745fd2-cbfe-4677-a67c-348712d7adc7",
+     "title": "paper slide"
+    },
+    {
+     "id": "envelope",
+     "ov": "224c60fe-feca-4d07-817f-62e68625953b",
+     "title": "Sliding Envelope"
+    },
+    {
+     "id": "whoosh",
+     "ov": "b7ae7822-8ec5-4a82-b6f8-d539b51caa61",
+     "title": "Swipe Whoosh"
+    }
+   ]
+  },
+  {
+   "key": "pop",
+   "file": "pop",
+   "group": "taps",
+   "label": "Toggle",
+   "where": "switches on/off (off = same sound, lower)",
+   "shape": {
+    "max": 0.12
+   },
+   "pick": "pop4",
+   "candidates": [
+    {
+     "id": "pop4",
+     "ov": "1650f4fb-4a33-41fe-b53b-01cd4e92bf84",
+     "title": "Pop 4"
+    },
+    {
+     "id": "pop7",
+     "ov": "09a3e2f4-e474-4ec3-8118-121a2880863f",
+     "title": "Pop 7"
+    },
+    {
+     "id": "bubble",
+     "ov": "54410e5a-ef30-4884-b74a-a500bbc22c77",
+     "title": "Bubble Pop"
+    },
+    {
+     "id": "popclick",
+     "ov": "8b182e58-6f84-466d-accd-8acdb8322598",
+     "title": "Pop Click"
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "off",
+     "rate": 0.8
+    }
+   ]
+  },
+  {
+   "key": "click",
+   "file": "click",
+   "group": "taps",
+   "label": "Button click",
+   "where": "focus controls (play, pause)",
+   "shape": {
+    "max": 0.12
+   },
+   "pick": "benzix",
+   "candidates": [
+    {
+     "id": "benzix",
+     "ov": "d3ab488b-dee1-4c40-89ab-67837664b616",
+     "title": "UI Button Click"
+    },
+    {
+     "id": "suntemple",
+     "ov": "ea9dc47e-7f07-45dd-8aa6-8c9e25609251",
+     "title": "SFX UI Button Click"
+    },
+    {
+     "id": "jummit",
+     "ov": "aa763a9d-65bd-4f53-b1ad-a38a4dc1e475",
+     "title": "Soft UI Button Click"
+    },
+    {
+     "id": "menu18",
+     "ov": "958ba23f-e98c-43da-b5b2-4603b1e6375c",
+     "title": "Videogame Menu Button Click 18"
+    }
+   ]
+  },
+  {
+   "key": "tick",
+   "file": "tick",
+   "group": "taps",
+   "label": "Focus clock tick",
+   "where": "the optional ticking clock in Focus (tock = same, lower)",
+   "shape": {
+    "max": 0.06,
+    "level": -6
+   },
+   "pick": "breviceps",
+   "candidates": [
+    {
+     "id": "breviceps",
+     "ov": "4a9a644a-fab0-44d8-91b1-5c50095a156f",
+     "title": "Tic Toc Click"
+    },
+    {
+     "id": "trullilulli",
+     "ov": "5cf38d44-253b-4932-855f-80270d11ecb5",
+     "title": "Clock Tick"
+    },
+    {
+     "id": "pbimal",
+     "ov": "14b2945e-2907-4d9d-9ca6-347700d457e8",
+     "title": "clock-tick-01"
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "tock",
+     "rate": 0.85
+    }
+   ]
+  },
+  {
+   "key": "detent",
+   "file": "detent",
+   "group": "taps",
+   "label": "Dial clicks",
+   "where": "turning the focus dial (three variants, rotated)",
+   "shape": {
+    "max": 0.09
+   },
+   "pick": "wind",
+   "candidates": [
+    {
+     "id": "wind",
+     "title": "SingleWind 1/2/3",
+     "set": [
+      {
+       "ov": "d4f6307e-bdd0-4bfb-80fc-d0adfe2e29f6",
+       "suffix": "a"
+      },
+      {
+       "ov": "8983c6df-7c53-4c6b-b3f0-21ea9075fdcf",
+       "suffix": "b"
+      },
+      {
+       "ov": "3175bc8d-b8d2-4964-8432-76b3185af40a",
+       "suffix": "c"
+      }
+     ]
+    },
+    {
+     "id": "clicks",
+     "title": "three UI clicks",
+     "set": [
+      {
+       "ov": "d3ab488b-dee1-4c40-89ab-67837664b616",
+       "suffix": "a"
+      },
+      {
+       "ov": "ea9dc47e-7f07-45dd-8aa6-8c9e25609251",
+       "suffix": "b"
+      },
+      {
+       "ov": "958ba23f-e98c-43da-b5b2-4603b1e6375c",
+       "suffix": "c"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "knock",
+   "file": "knock",
+   "group": "taps",
+   "label": "Dial end / nudge",
+   "where": "the dial hits its end, an off-track nudge",
+   "shape": {
+    "max": 0.2
+   },
+   "pick": "impact",
+   "candidates": [
+    {
+     "id": "raclure",
+     "ov": "4f353076-7daa-4fd5-93e5-8288d1842c66",
+     "title": "Wood knock"
+    },
+    {
+     "id": "mrguff",
+     "ov": "19380888-f422-44d9-aad1-d2b7d788871f",
+     "title": "Wood Knock"
+    },
+    {
+     "id": "impact",
+     "ov": "7f3dc6f7-0aca-436c-828c-11670ee8b47f",
+     "title": "Hit Impact"
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "low",
+     "rate": 0.8
+    }
+   ]
+  },
+  {
+   "key": "mark",
+   "file": "mark",
+   "group": "marks",
+   "label": "Present",
+   "where": "marking a class present (late = same, higher); should feel like ticking it off",
+   "shape": {
+    "max": 0.45,
+    "fadeOut": 0.12
+   },
+   "pick": "correct-short",
+   "candidates": [
+    {
+     "id": "graingiant",
+     "ov": "cd1a4552-5735-453e-b076-bb7b7e6d6e61",
+     "title": "Correct Selection Sound"
+    },
+    {
+     "id": "beetlemuse",
+     "ov": "59594111-13c9-44c0-b440-622f0a64300e",
+     "title": "Correct Answer / That's Right!"
+    },
+    {
+     "id": "unfa",
+     "ov": "05847812-dcad-452a-a4f3-de8069c98b68",
+     "title": "UI Confirm"
+    },
+    {
+     "id": "samster",
+     "ov": "d5e0479f-9dd8-4bbd-a7f9-5c387822f707",
+     "title": "Beep confirmation OK"
+    },
+    {
+     "id": "mark205",
+     "ov": "ce5c42c0-0dea-48ea-98e1-622cf4d2b369",
+     "title": "ding"
+    },
+    {
+     "id": "correct-short",
+     "ov": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+     "title": "\"correct\" (your done sound), shorter and quieter",
+     "shape": {
+      "max": 0.2,
+      "level": -3
+     }
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "late",
+     "rate": 1.12
+    }
+   ]
+  },
+  {
+   "key": "absent",
+   "file": "absent",
+   "group": "marks",
+   "label": "Absent",
+   "where": "marking a class absent (sick = same, lower)",
+   "shape": {
+    "max": 0.4,
+    "lp": 4000
+   },
+   "pick": "mpuffenbarger",
+   "candidates": [
+    {
+     "id": "mpuffenbarger",
+     "ov": "f65de1b6-13d5-4a1e-a99a-6f00ce0be2c7",
+     "title": "Thump"
+    },
+    {
+     "id": "samster",
+     "ov": "a09dc7fd-8387-4703-980d-4b5e2c81dc30",
+     "title": "Thump"
+    },
+    {
+     "id": "jwrowles",
+     "ov": "689d531f-f926-41fc-84b2-03a9b58191c7",
+     "title": "Thump 4"
+    },
+    {
+     "id": "carpet",
+     "ov": "02b3a82a-8291-4874-8c4d-d88b83c32f28",
+     "title": "thump (on carpet)"
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "sick",
+     "rate": 0.9
+    }
+   ]
+  },
+  {
+   "key": "cancel",
+   "file": "cancel",
+   "group": "marks",
+   "label": "Cancelled",
+   "where": "marking a class cancelled",
+   "shape": {
+    "max": 0.35
+   },
+   "pick": "docket",
+   "candidates": [
+    {
+     "id": "kermite",
+     "ov": "bb6f404c-d98b-4181-836e-cc216c845c53",
+     "title": "Stamp"
+    },
+    {
+     "id": "docket",
+     "ov": "7329914e-5953-45a0-854a-296dc69d2649",
+     "title": "STICKERRIPPER docket 01"
+    },
+    {
+     "id": "scribble",
+     "ov": "8c1db34a-9dc1-41f9-aa9f-a5d8d82b1132",
+     "title": "Scribble it Down"
+    }
+   ]
+  },
+  {
+   "key": "crumple",
+   "file": "crumple",
+   "group": "marks",
+   "label": "Delete",
+   "where": "deleting a task or class",
+   "shape": {
+    "max": 0.5
+   },
+   "pick": "j1987",
+   "candidates": [
+    {
+     "id": "sethroph3",
+     "ov": "dd092b24-673a-426a-8f6b-bec08ebaa89f",
+     "title": "Paper Crumple 3"
+    },
+    {
+     "id": "sethroph1",
+     "ov": "0859469f-e127-4583-9a67-70ffee339f18",
+     "title": "Paper Crumple 1"
+    },
+    {
+     "id": "j1987",
+     "ov": "ca3b8b54-2e53-4939-8ab2-843c1419dfa3",
+     "title": "crumple"
+    },
+    {
+     "id": "anthousai",
+     "ov": "91e0abbd-0278-49f4-97ca-e45025bed3b7",
+     "title": "paper - crumple 02"
+    }
+   ]
+  },
+  {
+   "key": "peel",
+   "file": "peel",
+   "group": "marks",
+   "label": "Sticker / break unlocked",
+   "where": "a break sticker peels off in Focus",
+   "shape": {
+    "max": 0.4
+   },
+   "pick": "tear",
+   "candidates": [
+    {
+     "id": "tear",
+     "ov": "a14b6385-de14-4425-951d-9cf6a5a72304",
+     "title": "duct tape tear rip"
+    },
+    {
+     "id": "natikatz",
+     "ov": "d4494950-fcc5-4584-9cc7-381922985e50",
+     "title": "Duct Tape 2"
+    },
+    {
+     "id": "unroll",
+     "ov": "b9d1507d-f216-4a27-bcf0-558ebe654406",
+     "title": "duct tape unroll 6"
+    },
+    {
+     "id": "stickit",
+     "ov": "d553e983-18be-46eb-ad9f-31cd65839af8",
+     "title": "STICKIT"
+    }
+   ]
+  },
+  {
+   "key": "done",
+   "file": "done",
+   "group": "confirm",
+   "label": "Task done",
+   "where": "checking off a task (undo = same, lower)",
+   "shape": {
+    "max": 0.6,
+    "fadeOut": 0.15
+   },
+   "pick": "correct",
+   "candidates": [
+    {
+     "id": "fhi1",
+     "ov": "516502ad-2f6b-4ae2-90c4-869996ceb6b8",
+     "title": "Marimba F-hi-1"
+    },
+    {
+     "id": "fhi2",
+     "ov": "d75607ce-a8d9-4418-9a7c-e4550e946708",
+     "title": "Marimba F-hi-2"
+    },
+    {
+     "id": "marimbahi",
+     "ov": "e779d215-36df-44f0-8fb2-3931dcaa2915",
+     "title": "Marimba High Note"
+    },
+    {
+     "id": "correct",
+     "ov": "bc148168-b7db-476f-9a79-47c39d2ba30c",
+     "title": "correct"
+    }
+   ],
+   "variants": [
+    {
+     "suffix": "undone",
+     "rate": 0.84
+    }
+   ]
+  },
+  {
+   "key": "chime",
+   "file": "chime",
+   "group": "confirm",
+   "label": "In-app reminder",
+   "where": "a reminder while the app is open",
+   "shape": {
+    "max": 0.8,
+    "fadeOut": 0.2
+   },
+   "pick": "kalimbac3",
+   "candidates": [
+    {
+     "id": "kalimbac3",
+     "ov": "3c05b7e2-61af-4309-bc86-c5b4e2332ea5",
+     "title": "Kalimba C3"
+    },
+    {
+     "id": "jofae",
+     "ov": "adb6e260-e493-43fd-a56e-8ceb4f477fe2",
+     "title": "Chime Notification"
+    },
+    {
+     "id": "dingdong",
+     "ov": "c66607e4-8323-4d81-afd6-c0dbf06686e3",
+     "title": "Soft Notifications - Bell - Ding-Dong"
+    },
+    {
+     "id": "ting",
+     "ov": "741bb1d4-6ec1-428a-adaf-81091a53b568",
+     "title": "bell ting"
+    }
+   ]
+  },
+  {
+   "key": "low",
+   "file": "low",
+   "group": "confirm",
+   "label": "Warning",
+   "where": "a soft warning (something did not work)",
+   "shape": {
+    "max": 0.4,
+    "fadeOut": 0.12
+   },
+   "pick": "marimbalow",
+   "candidates": [
+    {
+     "id": "lloyd",
+     "ov": "e5d7e646-18e7-440e-a7e9-d0a1ecbf17ee",
+     "title": "Marimba note struck"
+    },
+    {
+     "id": "flow2",
+     "ov": "54a53ca9-9be5-4d15-b628-8566115a5f4a",
+     "title": "Marimba F-low-2"
+    },
+    {
+     "id": "marimbalow",
+     "ov": "36c5f5db-2c73-4382-9b96-58b630b559fa",
+     "title": "Marimba Low Note"
+    }
+   ]
+  },
+  {
+   "key": "start",
+   "file": "start",
+   "group": "focus",
+   "label": "Focus starts",
+   "where": "pressing start on a focus round",
+   "shape": {
+    "max": 0.9,
+    "fadeOut": 0.4
+   },
+   "pick": "kalimbac2",
+   "candidates": [
+    {
+     "id": "kalimbac2",
+     "ov": "fdb64d8e-208a-44e9-8aaa-d3c21ecdba32",
+     "title": "Kalimba C2"
+    },
+    {
+     "id": "panpiper",
+     "ov": "9db64bd1-8aef-443a-8081-1dbd8b0102ab",
+     "title": "Kalimba"
+    },
+    {
+     "id": "ttptp",
+     "ov": "e8d55d8c-f106-4d4b-8530-e335fb55a72f",
+     "title": "Kalimba D (octave up)"
+    }
+   ]
+  },
+  {
+   "key": "round",
+   "file": "round",
+   "group": "focus",
+   "label": "Round done",
+   "where": "a focus round finishes (app open)",
+   "shape": {
+    "max": 1.6,
+    "fadeOut": 0.6
+   },
+   "pick": "glockc7",
+   "candidates": [
+    {
+     "id": "glockc7",
+     "ov": "0fd6d722-4b36-4b31-b2f1-5683c2be56db",
+     "title": "Glockenspiel C7"
+    },
+    {
+     "id": "glocke",
+     "ov": "295990a8-b747-400f-872b-b5503b0503c1",
+     "title": "glockenspiel E short"
+    },
+    {
+     "id": "glocknl",
+     "ov": "8a18c21b-79ea-49ac-80fd-becc21cad2f0",
+     "title": "Nl-glockenspiel"
+    },
+    {
+     "id": "kalimba-rise",
+     "title": "Kalimba rise, first 1.2 s",
+     "mix": [
+      {
+       "ov": "55043290-98ca-48cd-b1e8-c3faf12dcac4",
+       "at": 0
+      },
+      {
+       "ov": "a7b4f57b-a03e-4bcf-bf54-49e4fb3b78ac",
+       "at": 0.6
+      }
+     ],
+     "shape": {
+      "max": 1.6,
+      "fadeOut": 0.5
+     }
+    }
+   ]
+  },
+  {
+   "key": "break",
+   "file": "break",
+   "group": "focus",
+   "label": "Break starts",
+   "where": "the break begins",
+   "shape": {
+    "max": 1.5,
+    "fadeOut": 0.6
+   },
+   "pick": "glocka",
+   "candidates": [
+    {
+     "id": "glocka",
+     "ov": "9dca035b-9a92-4244-a41b-6cc0fcd987b1",
+     "title": "glockenspiel A medium soft"
+    },
+    {
+     "id": "bellding",
+     "ov": "252fc88e-d89d-4a19-99c7-e3e8bb5e7b6a",
+     "title": "bell ding 1"
+    },
+    {
+     "id": "xylo",
+     "ov": "d8125477-f00b-4f65-aa44-936c02b46075",
+     "title": "Child's Xylophone 2"
+    }
+   ]
+  },
+  {
+   "key": "n_class",
+   "file": "n_class",
+   "group": "notif",
+   "label": "Class notifications",
+   "where": "class starting soon / ended",
+   "shape": {
+    "max": 0.8,
+    "fadeOut": 0.2
+   },
+   "pick": "jofae",
+   "candidates": [
+    {
+     "id": "fhi1",
+     "ov": "516502ad-2f6b-4ae2-90c4-869996ceb6b8",
+     "title": "Marimba F-hi-1"
+    },
+    {
+     "id": "yfjesse",
+     "ov": "63ef9260-41de-44ee-822a-fe6e91af2fd5",
+     "title": "Notification Sound"
+    },
+    {
+     "id": "fupicat",
+     "ov": "4053fc1f-57d4-4aa0-a84f-32d67b559ac9",
+     "title": "Notification"
+    },
+    {
+     "id": "jofae",
+     "ov": "adb6e260-e493-43fd-a56e-8ceb4f477fe2",
+     "title": "Chime Notification (same as tasks)"
+    }
+   ]
+  },
+  {
+   "key": "n_task",
+   "file": "n_task",
+   "group": "notif",
+   "label": "Task & exam notifications",
+   "where": "tasks, exams, Obsidian tasks",
+   "shape": {
+    "max": 1,
+    "fadeOut": 0.25
+   },
+   "pick": "jofae",
+   "candidates": [
+    {
+     "id": "kalimbac3",
+     "ov": "3c05b7e2-61af-4309-bc86-c5b4e2332ea5",
+     "title": "Kalimba C3"
+    },
+    {
+     "id": "jofae",
+     "ov": "adb6e260-e493-43fd-a56e-8ceb4f477fe2",
+     "title": "Chime Notification"
+    },
+    {
+     "id": "dingdong",
+     "ov": "c66607e4-8323-4d81-afd6-c0dbf06686e3",
+     "title": "Soft Notifications - Bell - Ding-Dong"
+    }
+   ]
+  },
+  {
+   "key": "n_focus",
+   "file": "n_focus",
+   "group": "notif",
+   "label": "Focus finished notification",
+   "where": "focus round ends while the app is closed",
+   "shape": {
+    "max": 1.8,
+    "fadeOut": 0.6
+   },
+   "pick": "xyloring",
+   "candidates": [
+    {
+     "id": "glockc7",
+     "ov": "0fd6d722-4b36-4b31-b2f1-5683c2be56db",
+     "title": "Glockenspiel C7"
+    },
+    {
+     "id": "xylochat",
+     "ov": "d4339ab7-52bf-4d5e-88d7-d929dc3501d7",
+     "title": "Xylophone confirm"
+    },
+    {
+     "id": "xyloring",
+     "ov": "d7522141-6300-4aa4-a59c-c821620ff6dd",
+     "title": "Smartphone Ringtone (xylophone)"
+    },
+    {
+     "id": "kalimba-rise",
+     "title": "Kalimba rise, first 1.2 s",
+     "mix": [
+      {
+       "ov": "55043290-98ca-48cd-b1e8-c3faf12dcac4",
+       "at": 0
+      },
+      {
+       "ov": "a7b4f57b-a03e-4bcf-bf54-49e4fb3b78ac",
+       "at": 0.6
+      }
+     ],
+     "shape": {
+      "max": 1.6,
+      "fadeOut": 0.5
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_musicbox",
+   "file": "alarm_musicbox",
+   "group": "alarm",
+   "label": "Music box",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "keychain",
+   "candidates": [
+    {
+     "id": "drfx",
+     "ov": "138cc846-97bf-44aa-ae12-b68e55d6b425",
+     "title": "Music Box Melody 1",
+     "loop": {
+      "len": 15,
+      "mode": "xfade",
+      "xf": 1
+     }
+    },
+    {
+     "id": "keychain",
+     "ov": "f2a1e027-731f-4dbe-a5a5-159fc40d9399",
+     "title": "Swan Lake, Tiny Keychain Music Box (loopable)",
+     "loop": {
+      "len": 11.5,
+      "mode": "xfade",
+      "xf": 0.8
+     }
+    },
+    {
+     "id": "g60",
+     "ov": "c1ffaa51-dce8-43fd-bd95-cc00931b53e5",
+     "title": "Music Box (G, 4/4, 60 BPM)",
+     "loop": {
+      "len": 16,
+      "mode": "xfade",
+      "xf": 1
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_musicbox2",
+   "file": "alarm_musicbox2",
+   "group": "alarm",
+   "label": "Music box, brighter",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "ducks",
+   "candidates": [
+    {
+     "id": "ducks",
+     "ov": "021a64a9-2298-4854-bf4a-30ab1e9f5d50",
+     "title": "Dancing Ducks Music Box",
+     "loop": {
+      "len": 13,
+      "mode": "xfade",
+      "xf": 1
+     }
+    },
+    {
+     "id": "flea",
+     "ov": "e1bf95de-045e-46e8-afb3-ef1131669724",
+     "title": "Music Box - The Flea Waltz",
+     "loop": {
+      "len": 20,
+      "mode": "xfade",
+      "xf": 1.5
+     }
+    },
+    {
+     "id": "twinkle",
+     "ov": "720d8cfd-9f0a-4dcb-b8c9-1150c4bb391e",
+     "title": "twinkle",
+     "loop": {
+      "len": 15,
+      "mode": "xfade",
+      "xf": 1
+     }
+    },
+    {
+     "id": "vsokorelos",
+     "ov": "7f396a98-8df6-4837-9310-3fce9f51e6e5",
+     "title": "Music Box 2",
+     "loop": {
+      "len": 12,
+      "mode": "xfade",
+      "xf": 1
+     }
+    },
+    {
+     "id": "springy",
+     "ov": "5d8d1399-3036-4046-bf9f-8f3c3b86551d",
+     "title": "Musicbox",
+     "loop": {
+      "len": 18,
+      "mode": "xfade",
+      "xf": 1.5
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_marimba",
+   "file": "alarm_marimba",
+   "group": "alarm",
+   "label": "Marimba box",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "loop3",
+   "candidates": [
+    {
+     "id": "loop1",
+     "ov": "a435c53a-1601-4b6a-b0a7-5529ccd4ae6d",
+     "title": "Marimba loop",
+     "loop": {
+      "len": 8,
+      "mode": "wrap",
+      "xf": 0
+     }
+    },
+    {
+     "id": "loop2",
+     "ov": "8aec897e-eaa1-4ea7-b2ea-7e2a2497ea45",
+     "title": "Marimba loop 2",
+     "loop": {
+      "len": 8,
+      "mode": "wrap",
+      "xf": 0
+     }
+    },
+    {
+     "id": "loop3",
+     "ov": "7a95526f-4370-4e73-9dd9-a350e8d62178",
+     "title": "Marimba loop 3",
+     "loop": {
+      "len": 8,
+      "mode": "wrap",
+      "xf": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_kalimba",
+   "file": "alarm_kalimba",
+   "group": "alarm",
+   "label": "Kalimba rise",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "nemaavla",
+   "candidates": [
+    {
+     "id": "nemaavla",
+     "title": "Kalimba E4 → A4 → D5",
+     "mix": [
+      {
+       "ov": "55043290-98ca-48cd-b1e8-c3faf12dcac4",
+       "at": 0
+      },
+      {
+       "ov": "a7b4f57b-a03e-4bcf-bf54-49e4fb3b78ac",
+       "at": 0.6
+      },
+      {
+       "ov": "a515723c-92c8-4bb3-b50a-c77f93063be3",
+       "at": 1.2
+      }
+     ],
+     "loop": {
+      "len": 4,
+      "mode": "wrap",
+      "xf": 0
+     }
+    },
+    {
+     "id": "dvdfu",
+     "title": "Kalimba C1 → C2 → C3",
+     "mix": [
+      {
+       "ov": "b2bf7881-5070-4771-8fa8-5b436b100826",
+       "at": 0
+      },
+      {
+       "ov": "fdb64d8e-208a-44e9-8aaa-d3c21ecdba32",
+       "at": 0.5
+      },
+      {
+       "ov": "3c05b7e2-61af-4309-bc86-c5b4e2332ea5",
+       "at": 1
+      }
+     ],
+     "loop": {
+      "len": 4,
+      "mode": "wrap",
+      "xf": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_piano",
+   "file": "alarm_piano",
+   "group": "alarm",
+   "label": "Piano (soft)",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "orboram",
+   "candidates": [
+    {
+     "id": "orboram",
+     "ov": "3a1fe754-f2be-47ab-b9c6-9ea85fe8f3f4",
+     "title": "Soft Piano Loop 160 BPM",
+     "loop": {
+      "len": 12,
+      "mode": "wrap",
+      "xf": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_piano2",
+   "file": "alarm_piano2",
+   "group": "alarm",
+   "label": "Piano (A♭ loop)",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "aes",
+   "candidates": [
+    {
+     "id": "aes",
+     "ov": "42db235c-aaa3-4254-990f-a382dc1d4f46",
+     "title": "piano-loop in A-flat major",
+     "loop": {
+      "len": 16,
+      "mode": "wrap",
+      "xf": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_piano3",
+   "file": "alarm_piano3",
+   "group": "alarm",
+   "label": "Piano (loop)",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "danlucaz",
+   "candidates": [
+    {
+     "id": "danlucaz",
+     "ov": "3255ecaa-e6b9-44a6-91ab-b4e62bf60528",
+     "title": "Piano Loop #1",
+     "loop": {
+      "len": 14.7,
+      "mode": "wrap",
+      "xf": 0
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_classic",
+   "file": "alarm_classic",
+   "group": "alarm",
+   "label": "Alarm clock (bell)",
+   "where": "alarm picker (a real bell/beep clock)",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "dnab",
+   "candidates": [
+    {
+     "id": "dnab",
+     "ov": "808d69f2-3292-4758-a07a-1e47c345b104",
+     "title": "Alarm Clock Loop",
+     "loop": {
+      "len": 8,
+      "mode": "xfade",
+      "xf": 0.5
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_classic2",
+   "file": "alarm_classic2",
+   "group": "alarm",
+   "label": "Alarm clock (short ring)",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "zyryt",
+   "candidates": [
+    {
+     "id": "zyryt",
+     "ov": "2eb8d7b2-57eb-4f0f-a87f-408b43734b21",
+     "title": "alarm clock short",
+     "loop": {
+      "len": 8,
+      "mode": "xfade",
+      "xf": 0.5
+     }
+    }
+   ]
+  },
+  {
+   "key": "alarm_classic3",
+   "file": "alarm_classic3",
+   "group": "alarm",
+   "label": "Alarm clock (beeps)",
+   "where": "alarm picker",
+   "shape": {
+    "hp": 80
+   },
+   "pick": "dcloh",
+   "candidates": [
+    {
+     "id": "dcloh",
+     "ov": "74d0e478-292a-4bf6-8464-8a26b3892592",
+     "title": "Alarm Clock",
+     "loop": {
+      "len": 7.5,
+      "mode": "xfade",
+      "xf": 0.5
+     }
+    }
+   ]
+  }
+ ]
+}
