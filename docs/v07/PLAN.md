@@ -160,10 +160,10 @@ text for the top-bar tap. Handoff: `polish-pass/handoff/mascot/`.
 | R1 | 12 | Today | `src/screens/Today.tsx` (rewrite) | in class, between, before, after, none, two-at-once, picked day: shots light/dark; current class appears once | L |
 | R2 | 12 | Week + drag | `src/screens/Week.tsx` + `ui/DragCard.tsx` | drag to a new slot → "This week only / Every week" → saved; reduce-motion still works (tap → "Move…" sheet) | L |
 | R3 | 12, 7 | To-do + reorder | `src/screens/Tasks.tsx` | "My order" persists across restarts; swipe done/delete with Undo — **data side done** `85034e9`; the drag handle (D-23) is not built yet | M |
-| R4 | 5, 12 | Grades with components + split editor | `src/screens/Grades.tsx`, `sheets/CourseSheet.tsx`, `domain/grades.ts` (`courseGrade`, `courseNeeded`) | DB 70/30 example gives the hand-computed numbers; one-component courses unchanged | L |
-| R5 | 12 | Stats | `src/screens/Stats.tsx`, `domain/analytics.ts` per component | per-component attendance against its own goal | M |
-| R6 | 12 | Focus | `src/screens/Focus.tsx` | same engine tests pass | M |
-| R7 | 12 | Sheets (+, task, class, mark, attendance) | `src/sheets/forms.tsx`, `AddSheet.tsx` | component pickers; no steppers anywhere (grep test) | M |
+| R4 | 5, 12 | Grades with components + split editor | `src/screens/Grades.tsx`, `sheets/CourseSheet.tsx`, `domain/grades.ts` (`courseGrade`, `courseNeeded`) | DB 70/30 example gives the hand-computed numbers; one-component courses unchanged — **maths + card done** `7804533` `adcae7a`; split editor (draggable dividers) waits for Jossy | L |
+| R5 | 12 | Stats | `src/screens/Stats.tsx`, `domain/analytics.ts` per component | per-component attendance against its own goal — **done** `be4ccb8` | M |
+| R6 | 12 | Focus | `src/screens/Focus.tsx` | same engine tests pass — **waiting**: D-16 is a visual rebuild (sky, round bubbles) and swaps Break for +5; Jossy decides | M |
+| R7 | 12 | Sheets (+, task, class, mark, attendance) | `src/sheets/forms.tsx`, `AddSheet.tsx` | component pickers; no steppers anywhere (grep test) — **done** `9bb24ef` `da12cde`; + sheet tiles not rebuilt (visual) | M |
 | R8 | 13 | Settings v2 + search | `src/sheets/Settings.tsx` → `src/sheets/settings/*` + `settingsIndex.ts` | every v0.6 setting reachable; search finds "quiet" → Quiet hours | L |
 | R9 | 10 | Reminders page (rules + templates) | `src/sheets/Reminders.tsx`, `domain/reminders.ts` (anchors), `settings.reminders` | "1 h before first class" moves with the timetable; quiet hours respected | M |
 | R10 | 10 | Alarms + ringtone picker + stop | `src/sheets/Alarms.tsx`, native N6 | owner can stop every test sound three ways | S |

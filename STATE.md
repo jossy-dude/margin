@@ -54,6 +54,12 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
   handle to reorder (D-23), so "My order" is not offered in the sort button yet.
 - Number fields open Android's number keyboard (`73d4686`, `65654eb`).
 
+## Overnight 2026-11-14, part 2 (Agent M)
+- R7: no steppers left, a sweep test keeps them out (`9bb24ef`); Mark sheet asks which part (`da12cde`).
+- R4: Grades card uses the parts' shares, one row per part (`adcae7a`). Split editor waits for Jossy.
+- R5: Stats attendance per part against its own goal (`be4ccb8`).
+- R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
+
 ## Now
 - **Shipped:** v0.6.0 (versionCode 5), tag `v0.6`. Branch `v2-improvements` is now **0.7.0 / versionCode 6** (unreleased).
 - **v0.7 in progress** (`docs/v07/PLAN.md`, decisions B1–B9 there):
