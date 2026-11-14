@@ -8,6 +8,7 @@
 import { MemoryRepository } from '../data/memory';
 import { act, getState, hydrate, set, stopResync } from '../store/store';
 import type { Task } from '../domain/types';
+import { view } from '../domain/timer';
 
 const mockScheduleEnd = jest.fn(async (_at: number, _title: string, _body: string) => undefined);
 const mockCancelEnd = jest.fn(async () => undefined);
@@ -208,5 +209,23 @@ describe('timerFinish', () => {
     act.focusOpen('a'); act.timerToggle();
     act.timerSwap();
     expect(getState().timer.taskId).toBe('a');
+  });
+});
+
+/* phone test #17 (unconfirmed on the phone: "Pause may not pause", 24:58 then 24:44 in two screenshots). The clock the
+   Focus page draws is `view(timer, now)`; once Pause is pressed it must not move, however long the page waits. */
+describe('Pause holds the clock still', () => {
+  it('the time left after Pause is the same 14 s later, and Resume carries on from it', async () => {
+    await store();
+    act.timerToggle(); // start
+    at(2_000);
+    act.timerToggle(); // pause
+    const held = view(getState().timer, NOW + 2_000).leftMs;
+    expect(getState().timer.running).toBe(false);
+    at(16_000);
+    expect(view(getState().timer, NOW + 16_000).leftMs).toBe(held);
+    act.timerToggle(); // resume
+    at(20_000);
+    expect(view(getState().timer, NOW + 20_000).leftMs).toBe(held - 4_000);
   });
 });
