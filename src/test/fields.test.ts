@@ -98,6 +98,14 @@ describe('NumberField', () => {
     await type(r2, 'num-weight', '');
     expect(seen).toEqual([null]); // nothing more: an empty weight keeps 10
   });
+  /* like the time field (phone test #13): "numbers-and-punctuation" is iOS only, so on Android a decimal or signed
+     field opened the text keyboard. `numeric` has the digits, the point and the minus. */
+  it('a decimal or signed field opens a number keyboard Android has', async () => {
+    const r = await mount(React.createElement(NumberField, { label: 'score', value: 70, min: 0, max: 100, decimals: 1, onChange: () => {} }));
+    expect(input(r, 'num-score').props.keyboardType).toBe('numeric');
+    const r2 = await mount(React.createElement(NumberField, { label: 'shift', value: 0, min: -10, max: 10, onChange: () => {} }));
+    expect(input(r2, 'num-shift').props.keyboardType).toBe('numeric');
+  });
   it('keeps the decimals it is asked to, and reads a comma as the decimal mark', async () => {
     const seen: (number | null)[] = [];
     const r = await mount(React.createElement(NumberField, { label: 'score', value: 70, min: 0, max: 100, decimals: 1, onChange: (v: number | null) => seen.push(v) }));

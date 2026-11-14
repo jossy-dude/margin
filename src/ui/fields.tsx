@@ -75,7 +75,7 @@ export function NumberField({ value, onChange, min, max, decimals = 0, unit, emp
     <Box seed={label} focus={focus} width={width ?? (unit ? 112 : MIN_W)}>
       <TextInput
         value={d.text} onChangeText={d.edit} onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); commit(); }} onSubmitEditing={commit}
-        keyboardType={decimals > 0 || min < 0 ? 'numbers-and-punctuation' : 'number-pad'} returnKeyType="done" selectTextOnFocus
+        keyboardType={decimals > 0 || min < 0 ? 'numeric' : 'number-pad'} returnKeyType="done" selectTextOnFocus
         placeholder={emptyLabel} placeholderTextColor={c.mut} selectionColor={c.acc} maxLength={8}
         accessibilityLabel={`${label}${value === null ? (emptyLabel ? `, ${emptyLabel}` : '') : `, ${shown}${unit ? ` ${unit}` : ''}`}`} testID={`num-${tid(label)}`}
         maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, textAlign: 'right' }}
