@@ -47,6 +47,13 @@ onboarding, 20 dp on "saved"/"failed" snackbars, sleepy → happy on the alarm s
 absent / full week, a mark on or under its goal, a new task from Obsidian. Not yet: Today (R1 owns it), widgets (G1–G4).
 Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 
+## Overnight 2026-11-14 (Agent M)
+- R12 weekly backup: Settings → Your data → Automatic backup, folder picked once, newest four kept (`28af407`).
+- R11 "Bring my data back" on onboarding's data page → Import; a restored export gives equal counts (`678bcc0`).
+- R3 swipe to done has Undo; "My order" stored per task and kept across restarts (`85034e9`). Not built: the drag
+  handle to reorder (D-23), so "My order" is not offered in the sort button yet.
+- Number fields open Android's number keyboard (`73d4686`, `65654eb`).
+
 ## Now
 - **Shipped:** v0.6.0 (versionCode 5), tag `v0.6`. Branch `v2-improvements` is now **0.7.0 / versionCode 6** (unreleased).
 - **v0.7 in progress** (`docs/v07/PLAN.md`, decisions B1–B9 there):

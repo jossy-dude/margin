@@ -159,7 +159,7 @@ text for the top-bar tap. Handoff: `polish-pass/handoff/mascot/`.
 |---|---|---|---|---|---|
 | R1 | 12 | Today | `src/screens/Today.tsx` (rewrite) | in class, between, before, after, none, two-at-once, picked day: shots light/dark; current class appears once | L |
 | R2 | 12 | Week + drag | `src/screens/Week.tsx` + `ui/DragCard.tsx` | drag to a new slot → "This week only / Every week" → saved; reduce-motion still works (tap → "Move…" sheet) | L |
-| R3 | 12, 7 | To-do + reorder | `src/screens/Tasks.tsx` | "My order" persists across restarts; swipe done/delete with Undo | M |
+| R3 | 12, 7 | To-do + reorder | `src/screens/Tasks.tsx` | "My order" persists across restarts; swipe done/delete with Undo — **data side done** `85034e9`; the drag handle (D-23) is not built yet | M |
 | R4 | 5, 12 | Grades with components + split editor | `src/screens/Grades.tsx`, `sheets/CourseSheet.tsx`, `domain/grades.ts` (`courseGrade`, `courseNeeded`) | DB 70/30 example gives the hand-computed numbers; one-component courses unchanged | L |
 | R5 | 12 | Stats | `src/screens/Stats.tsx`, `domain/analytics.ts` per component | per-component attendance against its own goal | M |
 | R6 | 12 | Focus | `src/screens/Focus.tsx` | same engine tests pass | M |
@@ -167,8 +167,8 @@ text for the top-bar tap. Handoff: `polish-pass/handoff/mascot/`.
 | R8 | 13 | Settings v2 + search | `src/sheets/Settings.tsx` → `src/sheets/settings/*` + `settingsIndex.ts` | every v0.6 setting reachable; search finds "quiet" → Quiet hours | L |
 | R9 | 10 | Reminders page (rules + templates) | `src/sheets/Reminders.tsx`, `domain/reminders.ts` (anchors), `settings.reminders` | "1 h before first class" moves with the timetable; quiet hours respected | M |
 | R10 | 10 | Alarms + ringtone picker + stop | `src/sheets/Alarms.tsx`, native N6 | owner can stop every test sound three ways | S |
-| R11 | 8 | Onboarding with "Bring my data back" | `src/onboarding/Onboarding.tsx`, `services/backup.ts` | restore of the owner's export on an empty install shows equal counts | M |
-| R12 | 8 | Automatic weekly backup | `services/backup.ts`, Settings → Your data | four rolling files in the chosen folder | S |
+| R11 | 8 | Onboarding with "Bring my data back" | `src/onboarding/Onboarding.tsx`, `services/backup.ts` | restore of the owner's export on an empty install shows equal counts — **done** `678bcc0` (door + equal-count test; reading the backup folder first is not possible after a reinstall: the folder grant is gone) | M |
+| R12 | 8 | Automatic weekly backup | `services/backup.ts`, Settings → Your data | four rolling files in the chosen folder — **done** `28af407` | S |
 
 ---
 
