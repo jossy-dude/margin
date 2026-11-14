@@ -13,7 +13,7 @@ export type RouteName = 'Today' | 'Week' | 'Tasks' | 'Grades' | 'Stats' | 'Focus
 export type SheetSpec =
   | { t: 'add' } | { t: 'task'; id?: string; kind?: Task['kind']; courseId?: string | null } | { t: 'status'; mode: 'class' | 'day'; key: string; title: string; date: string }
   | { t: 'settings' } | { t: 'course'; id?: string } | { t: 'meeting'; courseId?: string; id?: string; weekday?: number } | { t: 'mark'; courseId: string; id?: string } | { t: 'notice'; id?: string };
-export interface Toast { id: number; text: string; undo?: () => void }
+export interface Toast { id: number; text: string; undo?: () => void; kind?: 'success' | 'error' }
 export interface Moved { title: string; at: number; was: number; why: string }
 export interface PlanInfo { count: number; deferred: number; shifted: number; next: Planned | null; at: number; moved: Moved[]; dropped: { id: string; why: string }[] }
 export interface State {

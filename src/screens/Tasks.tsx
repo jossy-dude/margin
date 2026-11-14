@@ -7,6 +7,7 @@ import { useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, TaskCard } from './common';
 import { addDays, startOfDay } from '../domain/time';
+import { emptyFace, pageFace } from '../ui/mascot/moments';
 import type { Task } from '../domain/types';
 
 /** How many task cards one "page" of the list draws. */
@@ -37,7 +38,13 @@ export function TasksScreen() {
     for (const t of list) { const i = t.status === 2 ? 6 : t.dueAt === null ? 5 : t.dueAt < now ? 0 : t.dueAt < addDays(t0, 1) ? 1 : t.dueAt < addDays(t0, 2) ? 2 : t.dueAt < addDays(t0, 7) ? 3 : 4; (g[i] as { items: Task[] }).items.push(t); }
     return taskSort === 'due' ? g.filter((x) => x.items.length) : [{ title: '', items: list }];
   }, [list, now, taskSort]);
-  const openN = st.tasks.filter((t) => t.status !== 2).length;
+  const openT = st.tasks.filter((t) => t.status !== 2), openN = openT.length;
+  /* the top bar's face (D-21): excited with work due today or a pile overdue, a cat when nothing is open. A
+     page-wide empty list has its own 64 dp face instead. */
+  const empty = list.length === 0 ? emptyFace(q ? 'tasksNoMatch' : 'tasksAllClear') : null;
+  const t1 = addDays(startOfDay(now), 1);
+  const face = empty ? null : pageFace('Tasks', { hour: new Date(now).getHours(), open: openN,
+    dueToday: openT.filter((t) => t.dueAt !== null && t.dueAt >= now && t.dueAt < t1).length, overdue: openT.filter((t) => t.dueAt !== null && t.dueAt < now).length });
   /* F8: the page draws at most `shown` cards, then a "Show more" row. Every card is a full swipeable
      paper slip, and drawing a thousand of them made the first visit (and every refocus, which rebuilds
      the page's layout) cost seconds on a mid-range phone. The cap resets when the question changes. */
@@ -48,7 +55,7 @@ export function TasksScreen() {
   const capped = groups.map((g) => { const items = g.items.slice(0, Math.max(0, budget)); budget -= items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
   const hidden = list.length - Math.min(list.length, shown);
   return (
-    <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />}>
+    <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />} face={face}>
       <Field placeholder="Search tasks" value={q} onChangeText={setQ} returnKeyType="search" />
       {/* BUGS #7: one quiet row, three controls with different shapes for different jobs. */}
       <Row style={{ flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
@@ -69,7 +76,7 @@ export function TasksScreen() {
           })}
         </View>
       ) : null}
-      {list.length === 0 ? <Empty icon="tasks" mood={q ? 'curious' : 'happy'} text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add one.'} /> : capped.map((g) => (
+      {list.length === 0 ? <Empty icon="tasks" face={empty} text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add one.'} /> : capped.map((g) => (
         <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.total}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</View>))}
       {hidden > 0 ? <Btn kind="ghost" testID="tasks-show-more" label={`Show ${Math.min(hidden, PAGE_ROWS)} more · ${hidden} not shown`} onPress={() => setMore({ key: askKey, n: shown + PAGE_ROWS })} /> : null}
       <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />

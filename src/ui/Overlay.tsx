@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,17 @@ import { AddSheet } from '../sheets/AddSheet';
 import { SettingsSheet } from '../sheets/Settings';
 import { fx } from '../services/fx';
 import { FAB_GAP, TOAST_CLEAR, navHeight, navInset, toastBottom } from './fit';
+import { Face } from './mascot/Face';
+import { MOMENTS, SNACK, useFaceMoment, type SnackKind } from './mascot/moments';
+
+/** An outcome snackbar's 20 dp face (D-21): happy with a bounce when it worked, sad with a droop when it did not.
+ *  The snackbar is an inverse surface, so the face is drawn in the other scheme's ink. */
+function ToastFace({ kind }: { kind: SnackKind }) {
+  const { dark } = useTheme();
+  const { face, play } = useFaceMoment(MOMENTS[SNACK[kind]].face);
+  useEffect(() => { play(SNACK[kind]); }, [kind, play]);
+  return <Face {...face} size={20} scheme={dark ? 'light' : 'dark'} decorative testID="toast-face" />;
+}
 
 /** The + button. A floating target with nothing under it to give, so it gets the deepest press in the
  *  app — 0.94, not the 0.97 a `Btn` gets — because a 62 dp cut square has no label to carry the press
@@ -95,6 +106,7 @@ export function Overlay() {
            enter, 180 against 220. */
         <Animated.View key={toast.id} entering={FadeInDown.duration(220).easing(EASE)} exiting={FadeOutDown.duration(180).easing(EASE)} style={{ position: 'absolute', left: 14, right: 14, bottom: sheet ? navInset(ins.bottom) + 10 : kbUp ? Math.max(ins.bottom, 8) + TOAST_CLEAR : toastBottom(ins.bottom), zIndex: 3000 }} accessibilityLiveRegion="polite">
           <HandBox seed="toast" fill={c.ink} stroke={c.ink} sw={2} amp={1.4} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 6, paddingVertical: 6, gap: 8, minHeight: 52 }}>
+            {toast.kind && !toast.undo ? <ToastFace kind={toast.kind} /> : null}
             <Txt f="bold" s={19} c="paper" style={{ flex: 1 }}>{toast.text}</Txt>
             {toast.undo ? <Btn small kind="primary" label="Undo" onPress={() => { toast.undo?.(); dismissToast(); fx.undone(); }} /> : <Pressable testID="toast-dismiss" accessibilityLabel="Dismiss" accessibilityRole="button" onPress={dismissToast} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={20} color={c.paper} /></Pressable>}
           </HandBox>

@@ -201,7 +201,7 @@ export function SettingsSheet() {
   const onNameChange = (v: string) => { draftRef.current = v; setNameDraft(v); if (nameTimer.current) clearTimeout(nameTimer.current); nameTimer.current = setTimeout(() => { nameTimer.current = null; commitName(draftRef.current); }, 400); };
   useEffect(() => () => { if (nameTimer.current) commitName(draftRef.current); }, []);
   const set = (p: Partial<Settings>) => act.setSettings(p), back = path.length ? act.settingsPop : null;
-  const doExport = async (f: ExportFormat, tg: ExportTarget) => { setBusy(`${f}${tg}`); try { await act.loadSemesters(); const r = await runExport(f, tg, snapshotOf(getState()), getState().semesters); toast(r.ok ? `Exported ${r.name}` : 'Sharing is not available on this device'); } catch (e) { const m = String((e as Error)?.message ?? e); if (!/cancel/i.test(m)) toast(`Export failed: ${m.slice(0, 70)}`); } setBusy(null); };
+  const doExport = async (f: ExportFormat, tg: ExportTarget) => { setBusy(`${f}${tg}`); try { await act.loadSemesters(); const r = await runExport(f, tg, snapshotOf(getState()), getState().semesters); toast(r.ok ? `Exported ${r.name}` : 'Sharing is not available on this device', undefined, r.ok ? 'success' : undefined); } catch (e) { const m = String((e as Error)?.message ?? e); if (!/cancel/i.test(m)) toast(`Export failed: ${m.slice(0, 70)}`, undefined, 'error'); } setBusy(null); };
   let body: React.ReactNode = null;
   if (page === 'root') body = (<>
     {/* `settings.name` is what Today greets the user with. It ships blank in domain/defaults.ts, so a

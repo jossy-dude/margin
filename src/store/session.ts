@@ -87,12 +87,12 @@ export async function importPlan(plan: ImportPlan): Promise<boolean> {
     applySnapshot(await R().load(), true);
     configureFx(getState().settings);
     const rows = Object.values(plan.counts).reduce((a, b) => a + b, 0);
-    toast(rows ? `Imported ${rows} row${rows === 1 ? '' : 's'}` : 'Semester saved');
+    toast(rows ? `Imported ${rows} row${rows === 1 ? '' : 's'}` : 'Semester saved', undefined, 'success');
     resync(0);
     return true;
   } catch (e) {
     recordCrash(e, 'save', 'Import');
-    toast(`Import failed: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    toast(`Import failed: ${String((e as Error)?.message ?? e).slice(0, 60)}`, undefined, 'error');
     return false;
   }
 }
@@ -181,7 +181,7 @@ export async function adoptDemo(keepSamples: boolean) {
     marks: s.marks.filter((m) => !m.demo && (!a || mk.has(m.id))), tasks: s.tasks.filter((t) => !t.demo && (!a || tk.has(t.id))), focus: s.focus.filter((f) => !f.demo && (!a || fk.has(f.id))),
     ...(a ? { attendance: a.attendance, adjusts: a.adjusts, alarms: a.alarms } : {}),
   }));
-  if (failed) toast(`Couldn't save what you made in the tour: ${String((failed as Error)?.message ?? failed).slice(0, 50)}`);
+  if (failed) toast(`Couldn't save what you made in the tour: ${String((failed as Error)?.message ?? failed).slice(0, 50)}`, undefined, 'error');
   else toast(keepSamples ? 'Your work is saved — the samples stay until the next session' : 'Your planner is empty — add your first class');
   resync(0);
 }

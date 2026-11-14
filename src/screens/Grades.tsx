@@ -15,6 +15,7 @@ import { semesterFirstDay, semesterLabel } from '../domain/semester';
 import type { Course } from '../domain/types';
 import { subjectTint } from '../ui/collage/tint';
 import { hexA } from '../tokens/theme';
+import { emptyFace, pageFace } from '../ui/mascot/moments';
 
 function AttendanceGrid({ course }: { course: Course }) {
   const locked = useStore((s) => s.settings.lockAttendance), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
@@ -77,9 +78,12 @@ export function GradesScreen() {
   const { c, tints, look } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
+  /* the top bar's face (D-21): smug when every course with a goal is on it, sad when most are under */
+  const goals = rows.filter((r) => r.course.goal && r.tot !== null);
+  const face = rows.length === 0 ? null : pageFace('Grades', { hour: new Date().getHours(), atGoal: goals.filter((r) => (r.tot as number) >= (r.course.goal as number)).length, belowGoal: goals.filter((r) => (r.tot as number) < (r.course.goal as number)).length });
   return (
-    <Page title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
-      {rows.length === 0 && <Empty icon="grad" mood="curious" text="No subjects yet. Add one to start." />}
+    <Page face={face} title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
+      {rows.length === 0 && <Empty icon="grad" face={emptyFace('gradesNoSubjects')} text="No subjects yet. Add one to start." />}
       {rows.map(({ course, marks, adj, tot, need }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
           {/* the subject's own paper, as a tab on the card — the colour it has on Week, the + desk and Focus */}

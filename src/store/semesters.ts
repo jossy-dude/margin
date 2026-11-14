@@ -160,11 +160,11 @@ export async function rollOverSemester(keepAttendance: boolean, range?: { start:
     applySnapshot(await R().load(), true);
     configureFx(getState().settings);
     set({ semesters: await R().listSemesters() });
-    toast(`${active.name} archived${keepAttendance ? ' — attendance kept' : ''}`);
+    toast(`${active.name} archived${keepAttendance ? ' — attendance kept' : ''}`, undefined, 'success');
     resync(0);
   } catch (e) {
     recordCrash(e, 'save', 'Semesters');
-    toast(`Couldn't start a new semester: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    toast(`Couldn't start a new semester: ${String((e as Error)?.message ?? e).slice(0, 60)}`, undefined, 'error');
     /* A roll-over that failed part-way may have archived, cleared or created some of its rows: the screen
        re-reads what the disk now holds instead of showing the term it started from. */
     try { applySnapshot(await R().load(), true); await loadSemesters(); } catch (e2) { recordCrash(e2, 'data', 'Semesters'); }

@@ -14,6 +14,7 @@ import { roomOf } from '../domain/rooms';
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
+import { pageFace } from '../ui/mascot/moments';
 
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
@@ -50,7 +51,7 @@ export function WeekScreen() {
   }, [off, reduce, turn, dir]);
   const turned = useAnimatedStyle(() => ({ transform: [{ translateX: dir.get() * 26 * turn.get() }] }));
   return (
-    <Page title="Week" sub={off === 0 ? `This week · ${label}` : off > 0 ? `${off} week${off > 1 ? 's' : ''} ahead` : `${-off} week${off < -1 ? 's' : ''} ago`}
+    <Page face={pageFace('Week', { hour: new Date(now).getHours() })} title="Week" sub={off === 0 ? `This week · ${label}` : off > 0 ? `${off} week${off > 1 ? 's' : ''} ahead` : `${-off} week${off < -1 ? 's' : ''} ago`}
       right={<Row style={{ gap: 4, flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="back" a11y="Previous week" onPress={() => { setOff(off - 1); fx.swipe(); }} />{off !== 0 ? <Btn small kind="ghost" label="Today" onPress={() => setOff(0)} /> : null}<Btn small kind="ghost" icon="chevron" a11y="Next week" onPress={() => { setOff(off + 1); fx.swipe(); }} /></Row>}>
       <Animated.View style={turned}>
       <HandBox seed="wk" style={{ padding: 0 }} sw={1.8}>

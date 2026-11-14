@@ -4,9 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { BEAT, EASE, HandBox, Icon, Txt } from '../ui/kit';
 import { PaperBg } from '../ui/PaperBg';
-import { Jot } from '../ui/mascot/Jot';
+import { Face } from '../ui/mascot/Face';
+import { FACES, type FaceName } from '../ui/mascot/faces';
+import { faceEvent, useFaceMoment } from '../ui/mascot/moments';
 import { useScreenLive } from '../ui/live';
-import type { ScrapMood } from '../ui/mascot/scrap-rig';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { addDays, fmtDur, fmtTime, startOfDay, doneLine } from '../domain/time';
@@ -18,7 +19,22 @@ import { fx } from '../services/fx';
 import { SwipeCard } from '../ui/Swipe';
 import { FS, pageBottomPad } from '../ui/fit';
 
-export function Page({ title, sub, children, right }: { title: string; sub?: string; children: React.ReactNode; right?: React.ReactNode }) {
+/** The top bar's 28 dp face (DESIGN.md D-21): it rests on the page's face and, while this page is the one on
+ *  screen, answers `faceEvent`s. Every route stays mounted, so a hidden page's face neither listens nor blinks. */
+function TopFace({ rest }: { rest: FaceName }) {
+  const live = useScreenLive();
+  const { face, play } = useFaceMoment(rest, live);
+  return (
+    <Pressable testID="top-face" accessibilityRole="button" accessibilityLabel={`Jot, ${FACES[face.name].label}`} onPress={() => play('tip')} hitSlop={10}
+      style={{ height: 46, justifyContent: 'center' }}>
+      <Face {...face} size={28} awake={live} decorative />
+    </Pressable>
+  );
+}
+
+/** `face`: the page's top-bar face (`pageFace(…)`), or null while the page shows a page-wide empty state, whose
+ *  own 64 dp face takes over (the one-face rule, `ui/mascot/moments.ts`). */
+export function Page({ title, sub, children, right, face }: { title: string; sub?: string; children: React.ReactNode; right?: React.ReactNode; face?: FaceName | null }) {
   const ins = useSafeAreaInsets();
   const { c } = useTheme(), reduce = useReduceMotion(), gp = useSharedValue(1);
   /* The gear was the one control in the app with no press state at all: no ripple, no dip, nothing —
@@ -34,6 +50,7 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
           {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
               word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
           <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
+          {face ? <TopFace rest={face} /> : null}
           {right}
           <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
             onPressIn={() => gp.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => gp.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
@@ -49,13 +66,13 @@ export function Page({ title, sub, children, right }: { title: string; sub?: str
 export const Section = ({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) => (
   <View style={{ gap: 8 }}><View style={{ flexDirection: 'row', alignItems: 'center' }}><Txt f="bold" s={24} style={{ flex: 1 }} accessibilityRole="header">{title}</Txt>{right}</View>{children}</View>
 );
-/** An empty state. In the collage Scrap stands in for the icon, with a mood that fits the news (nothing due
- *  is good news; no classes is a quiet day); the words are the same either way, and they carry the meaning. */
-export function Empty({ text, icon = 'note', mood }: { text: string; icon?: string; mood?: ScrapMood }) {
-  const { look } = useTheme(), live = useScreenLive();
-  if (look !== 'ink' && mood) return (
+/** An empty state. A page-wide one carries the page's face at 64 dp (`emptyFace(…)`); an empty card on a page with
+ *  other content gets none, since the top bar's face already speaks for the page. The words carry the meaning. */
+export function Empty({ text, icon = 'note', face }: { text: string; icon?: string; face?: FaceName | null }) {
+  const live = useScreenLive();
+  if (face) return (
     <HandBox seed={text} shadow={false} dashed fill="transparent" style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <Jot size={62} mood={mood} awake={live} />
+      <Face name={face} size={64} awake={live} decorative />
       <Txt f="serif" s={16.5} c="mut" style={{ flex: 1 }}>{text}</Txt>
     </HandBox>
   );
@@ -124,10 +141,12 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const box = useAnimatedStyle(() => ({ transform: [{ scale: check.get() }] }));
   const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), notif = useStore((s) => s.settings.notif), h12 = useStore((s) => s.settings.hour12);
   const open = () => act.open({ t: 'task', id: t.id });
+  /* finishing a task is news for the page's face (D-21); reopening one is not */
+  const finish = () => { const was = t.status === 2; act.toggleTask(t.id); if (!was) faceEvent('taskDone'); };
   const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && t.dueAt !== null && t.dueAt < now, soon = !done && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
   return (
-    <SwipeCard onComplete={() => act.toggleTask(t.id)} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
+    <SwipeCard onComplete={finish} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
       <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
         accessibilityRole="button" accessibilityLabel={`${t.title}, ${KIND_TAG[t.kind].label.toLowerCase()}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
@@ -136,7 +155,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
           {t.kind === 'project' && !done ? <HandBox seed={`${t.id}-under`} fill={tints.sage} style={{ position: 'absolute', left: 6, right: -3, top: 5, bottom: -5, transform: [{ rotate: '1.2deg' }] }} /> : null}
           <HandBox seed={t.id} fill={done ? c.paper : c.card} stroke={late ? c.bad : c.ink} style={{ paddingLeft: 52, paddingRight: 12, paddingVertical: 11, minHeight: 66, opacity: done ? 0.78 : 1 }}>
             <KindTag kind={t.kind} seed={t.id} />
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={`Mark ${t.title} ${done ? 'not done' : 'done'}`} onPress={() => act.toggleTask(t.id)} hitSlop={6} style={{ position: 'absolute', left: 4, top: 0, bottom: 0, width: 46, alignItems: 'center', justifyContent: 'center' }}
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={`Mark ${t.title} ${done ? 'not done' : 'done'}`} onPress={finish} hitSlop={6} style={{ position: 'absolute', left: 4, top: 0, bottom: 0, width: 46, alignItems: 'center', justifyContent: 'center' }}
               onPressIn={() => check.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => check.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
               {/* An exam's box is round, like the stamp it will get; everything else is a square box. */}
               <Animated.View style={[{ width: 28, height: 28, borderRadius: t.kind === 'exam' ? 14 : 7, borderWidth: 2, borderColor: c.ink, backgroundColor: done ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-3deg' }] }, box]}>{done && <Icon name="check" size={20} color={c.card} sw={2.6} />}</Animated.View>

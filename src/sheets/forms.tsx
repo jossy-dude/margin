@@ -91,7 +91,7 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
    *  second, unrecoverable one. */
   const save = () => submit(() => {
     const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : [] };
-    act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`); close();
+    act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`, undefined, 'success'); close();
   });
   return (
     <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93} closeRef={closeRef}
