@@ -8,7 +8,7 @@ import { act, getState, useStore } from '../store/store';
 import { attNews } from './faceNews';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
-import { total, needed, letter } from '../domain/grades';
+import { courseGrade, courseNeeded, letter, partGrades } from '../domain/grades';
 import { roomsLabel } from '../domain/rooms';
 import { effective, nextStatus, occKey, occurrencesBetween, attendanceRate } from '../domain/attendance';
 import { DW, atTime, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
@@ -74,10 +74,12 @@ function GoalBar({ total, goal }: { total: number; goal: number | null }) {
 }
 
 export function GradesScreen() {
-  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings);
+  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings), variants = useStore((s) => s.variants);
   const st = { courses, marks, adjusts };
   const { c, tints, look } = useTheme();
-  const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, tot = total(marks, adj); return { course, marks, adj, tot, need: course.goal ? needed(marks, course.goal, adj) : null }; });
+  const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, parts = (variants ?? []).filter((v) => v.subjectId === course.id).sort((a, b) => a.ord - b.ord), tot = courseGrade(marks, parts, adj);
+    /* R4: with shares set, the course % comes from its parts (D-14); without, the v0.6 pooled maths, unchanged */
+    return { course, marks, adj, tot, parts, rowsP: partGrades(marks, parts), need: course.goal ? courseNeeded(marks, parts, course.goal, adj) : null }; });
   const scored = rows.filter((r) => r.tot !== null), avg = scored.length ? scored.reduce((a, r) => a + (r.tot as number), 0) / scored.length : null;
   /* the top bar's face (D-21): smug when every course with a goal is on it, sad when most are under */
   const goals = rows.filter((r) => r.course.goal && r.tot !== null);
@@ -85,7 +87,7 @@ export function GradesScreen() {
   return (
     <Page face={face} title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
       {rows.length === 0 && <Empty icon="grad" face={emptyFace('gradesNoSubjects')} text="No subjects yet. Add one to start." />}
-      {rows.map(({ course, marks, adj, tot, need }) => (
+      {rows.map(({ course, marks, adj, tot, need, parts, rowsP }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
           {/* the subject's own paper, as a tab on the card — the colour it has on Week, the + desk and Focus */}
           {look !== 'plain' && <View pointerEvents="none" style={{ position: 'absolute', top: -9, left: 16, transform: [{ rotate: '-2deg' }] }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -100,6 +102,8 @@ export function GradesScreen() {
           </Pressable>
           {tot !== null ? <GoalBar total={tot} goal={course.goal} /> : null}
           {course.goal ? <Txt f="bold" s={17} c={need && !need.feasible ? 'bad' : need?.reached ? 'ok' : 'mut'}>{need === null ? `Goal ${course.goal}% ${tot !== null && tot >= course.goal ? 'reached' : '— everything is marked'}` : need.reached ? `Goal ${course.goal}% already safe` : need.feasible ? `For ${course.goal}%: average ${Math.ceil(need.need)}% on the remaining ${need.weightLeft}%` : `Goal ${course.goal}% is out of reach (${Math.round(need.need)}% needed)`}</Txt> : null}
+          {rowsP.length ? <View style={{ gap: 2 }}>{rowsP.map((p) => (
+            <Txt key={p.id} f="serif" s={15.5} c="mut">{`${parts.find((x) => x.id === p.id)?.name ?? 'Part'} · ${Math.round(p.share)} % · ${p.grade === null ? 'nothing marked' : `${Math.round(p.grade)} %`}`}</Txt>))}</View> : null}
           <View style={{ gap: 8 }}>
             {marks.map((m) => (
               <Pressable key={m.id} accessibilityRole="button" accessibilityLabel={`${m.name}, ${m.score === null ? 'not marked' : m.score + ' percent'}, weight ${m.weight}${m.on ? '' : ', not counted'}. Edit.`} onPress={() => act.open({ t: 'mark', courseId: course.id, id: m.id })} android_ripple={{ color: c.rule }}>

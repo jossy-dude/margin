@@ -135,3 +135,23 @@ describe('snackbars', () => {
     expect(getState().toast?.kind).toBeUndefined();
   });
 });
+
+/* v0.7 R4 (D-14): a course with parts shows its grade from the parts' shares and one row per part. */
+describe('Grades with components', () => {
+  it('Database 70/30: the card shows the share-weighted 60 and a row per part', async () => {
+    const repo = new MemoryRepository(() => NOW);
+    await repo.upsert('course', { id: 'db', name: 'Database Systems', rooms: [], teacher: '', goal: 85, sort: 0, demo: false });
+    await repo.upsert('variant', { id: 'db~base', subjectId: 'db', name: 'Lecture', room: '', teacher: '', note: '', ord: 0, isBase: true, weight: 70 });
+    await repo.upsert('variant', { id: 'v-lab', subjectId: 'db', name: 'Lab', room: '', teacher: '', note: '', ord: 1, weight: 30, scale: 20 });
+    const mk = (id: string, score: number | null, weight: number, variantId: string | null = null) => ({ id, courseId: 'db', name: id, score, weight, on: true, sort: 0, demo: false, variantId });
+    for (const m of [mk('mid', 70, 30), mk('final', null, 70), mk('lab1', 9, 5, 'v-lab'), mk('lab2', null, 5, 'v-lab')]) await repo.upsert('mark', m);
+    await hydrate(repo);
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => { r = TestRenderer.create(React.createElement(ScreenLive.Provider, { value: true }, React.createElement(GradesScreen))); });
+    const text = r.root.findAll((n) => String(n.type) === 'Text').map((n) => n.children.join('')).join(' | ');
+    expect(text).toContain('60'); // 59.58 → 60, not the pooled 70
+    expect(text).toMatch(/Lecture · 70 % · 70 %/);
+    expect(text).toMatch(/Lab · 30 % · 45 %/);
+    await act(async () => { r.unmount(); });
+  });
+});

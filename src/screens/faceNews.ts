@@ -4,8 +4,8 @@
  */
 import { effective, occurrencesBetween, parseOccKey } from '../domain/attendance';
 import { addDays, mondayOf, parseYmd } from '../domain/time';
-import { total } from '../domain/grades';
-import type { AttRecord, AttStatus, Course, DayMark, Mark, Meeting } from '../domain/types';
+import { courseGrade } from '../domain/grades';
+import type { AttRecord, AttStatus, Course, DayMark, Mark, Meeting, SubjectVariant } from '../domain/types';
 import type { FaceEvent } from '../ui/mascot/moments';
 
 /** Marking `key` as `s`: present bounces, absent droops, cancelled is no news. The present mark that leaves every
@@ -24,10 +24,10 @@ export function attNews(key: string, s: AttStatus, st: { meetings: Meeting[]; at
 
 /** Saving `m`: when its course has a goal, the course's total with this mark in it is on/over the goal (smug) or
  *  under it (sad). No goal, or no total yet, is no news. */
-export function markNews(m: Mark, st: { courses: Course[]; marks: Mark[]; adjusts: Record<string, number> }): FaceEvent | null {
+export function markNews(m: Mark, st: { courses: Course[]; marks: Mark[]; adjusts: Record<string, number>; variants?: SubjectVariant[] }): FaceEvent | null {
   const goal = st.courses.find((c) => c.id === m.courseId)?.goal;
   if (!goal || m.score === null) return null;
-  const t = total([...st.marks.filter((x) => x.courseId === m.courseId && x.id !== m.id), m], st.adjusts[m.courseId] ?? 0);
+  const t = courseGrade([...st.marks.filter((x) => x.courseId === m.courseId && x.id !== m.id), m], (st.variants ?? []).filter((v) => v.subjectId === m.courseId), st.adjusts[m.courseId] ?? 0);
   if (t === null) return null;
   return t >= goal ? 'gradeAtGoal' : 'gradeBelowGoal';
 }

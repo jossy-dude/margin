@@ -1,5 +1,5 @@
 /** v0.7 R4 — course grades from components with editable shares (DATA_MODEL.md "The maths"). */
-import { courseGrade, courseNeeded, needed, splitOf, total, type GradePart } from '../domain/grades';
+import { courseGrade, courseNeeded, needed, partGrades, splitOf, total, type GradePart } from '../domain/grades';
 import type { Mark } from '../domain/types';
 
 const mk = (id: string, score: number | null, weight: number, variantId: string | null = null): Mark => ({ id, courseId: 'db', name: id, score, weight, on: true, sort: 0, demo: false, variantId });
@@ -35,5 +35,17 @@ describe('course components (Database 70/30, the lab marked out of 20)', () => {
   });
   it('the curve still applies to the course %', () => {
     expect(courseGrade(marks, parts, 5)).toBeCloseTo(64.5833, 3);
+  });
+});
+
+describe('the component rows on the Grades card (R4, D-14)', () => {
+  it('each part: its share of the course and its own % so far (lab out of 20 shown as %)', () => {
+    const rows = partGrades(marks, parts);
+    expect(rows.map((r) => r.id)).toEqual(['db~base', 'v-lab']);
+    expect(rows[0]!.share).toBeCloseTo(70); expect(rows[0]!.grade).toBeCloseTo(70);
+    expect(rows[1]!.share).toBeCloseTo(30); expect(rows[1]!.grade).toBeCloseTo(45);
+  });
+  it('no shares set: no rows, the card stays as it was', () => {
+    expect(partGrades(marks, [{ id: 'db~base', isBase: true }])).toEqual([]);
   });
 });

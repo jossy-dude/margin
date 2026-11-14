@@ -53,6 +53,18 @@ export function courseNeeded(marks: Mark[], parts: readonly GradePart[], goal: n
   const need = ((goal - adj) * all - a) / u;
   return { need, feasible: need <= 100, reached: need <= 0, weightLeft: u * 100 };
 }
+/** The Grades card's component rows (D-14): each part's share (normalised %) and its own grade so far (marks on its
+ *  own scale, as %; null with nothing marked). Empty when no shares are set, so a pooled course shows no rows. */
+export function partGrades(marks: Mark[], parts: readonly GradePart[]): { id: string; share: number; grade: number | null }[] {
+  if (!sharesSet(parts)) return [];
+  const base = parts.find((p) => p.isBase) ?? null, { pct } = splitOf(parts);
+  return parts.map((p) => {
+    const scale = p.scale && p.scale > 0 ? p.scale : 100;
+    const mine = marks.filter((m) => m.on && m.weight > 0 && m.score !== null && ((m.variantId ?? null) === p.id || (!m.variantId && base?.id === p.id)));
+    const W = mine.reduce((a, m) => a + m.weight, 0);
+    return { id: p.id, share: pct[p.id] ?? 0, grade: W ? mine.reduce((a, m) => a + (m.score as number) / scale * 100 * m.weight, 0) / W : null };
+  });
+}
 /** The split as the editor shows it: each share's percentage after normalising, and the raw sum. */
 export function splitOf(parts: readonly GradePart[]): { sum: number; pct: Record<string, number> } {
   const sum = parts.reduce((a, p) => a + Math.max(0, p.weight ?? 0), 0);
