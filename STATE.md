@@ -1,6 +1,6 @@
 # STATE: Margin
 
-_Updated 2026-11-12. Keep this file to where things stand now; move finished history to `docs/archive/`._
+_Updated 2026-11-14. Keep this file to where things stand now; move finished history to `docs/archive/`._
 History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-history-2026-11.md`.
 
 ## Morning report (2026-11-13, overnight build)
@@ -35,6 +35,13 @@ History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-
    systemctl --user enable --now bone-syncd`, then `node ~/Documents/Projects/vault-sync/daemon/bone-syncd.mjs pair`
    and paste the text into the dev app (Settings → Obsidian). My sandbox refused to add a service.
 4. Release-key secrets (N2) and the data move stay yours, as agreed.
+
+## Mascot faces (2026-11-14, U7)
+Jot is gone; the twelve faces are in (commits above in PLAN U7). One face per page: a 28 dp top-bar face on To-do,
+Grades, Week and Stats (tap it: a wink), a 64 dp face in page-wide empty states, 72 dp on Focus and About, 160 dp in
+onboarding, 20 dp on "saved"/"failed" snackbars, sleepy → happy on the alarm screen. Reactions: task done, present /
+absent / full week, a mark on or under its goal, a new task from Obsidian. Not yet: Today (R1 owns it), widgets (G1–G4).
+Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 
 ## Now
 - **Shipped:** v0.6.0 (versionCode 5), tag `v0.6`. Branch `v2-improvements` is now **0.7.0 / versionCode 6** (unreleased).

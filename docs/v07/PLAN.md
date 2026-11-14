@@ -147,6 +147,10 @@ Mascot replacement, every place Jot appears today:
 | `src/sheets/Settings.tsx:225, 428` | "Five pages with Jot" | unchanged copy |
 | new: top bar of every tab, snackbars, alarm page, widgets | – | DESIGN.md D-21 |
 
+**U7 status (2026-11-14): integrated** (`e4c3fa5` faces, `82eeac4` one face per page, `8a1a334` reactions, `3e45272` Jot
+removed, `7f14e36` alarm). Open: Today's top-bar face and Today's reactions (with R1), widget faces (with G1–G4), a tip
+text for the top-bar tap. Handoff: `polish-pass/handoff/mascot/`.
+
 ---
 
 ## Phase 5 · Screens (DESIGN.md §5)
