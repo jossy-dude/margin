@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, w
 import { SvgXml } from 'react-native-svg';
 import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, Slider, TimeField } from '../ui/fields';
+import { SettingsSearch } from './settings/SettingsSearch';
 import { Label, Sheet } from '../ui/Sheet';
 import { Empty, Section } from '../screens/common';
 import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
@@ -224,6 +225,7 @@ export function SettingsSheet() {
   const doExport = async (f: ExportFormat, tg: ExportTarget) => { setBusy(`${f}${tg}`); try { await act.loadSemesters(); const r = await runExport(f, tg, snapshotOf(getState()), getState().semesters); toast(r.ok ? `Exported ${r.name}` : 'Sharing is not available on this device', undefined, r.ok ? 'success' : undefined); } catch (e) { const m = String((e as Error)?.message ?? e); if (!/cancel/i.test(m)) toast(`Export failed: ${m.slice(0, 70)}`, undefined, 'error'); } setBusy(null); };
   let body: React.ReactNode = null;
   if (page === 'root') body = (<>
+    <SettingsSearch />
     {/* `settings.name` is what Today greets the user with. It ships blank in domain/defaults.ts, so a
         new install gets the bare greeting until this field supplies a name. Blank stays allowed: Today
         drops the name and just says "Good morning". */}
