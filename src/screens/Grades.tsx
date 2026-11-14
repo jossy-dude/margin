@@ -55,9 +55,9 @@ function AttendanceGrid({ course }: { course: Course }) {
           <Txt f="bold" s={16}>Teacher&apos;s count</Txt>
           <Txt f="serif" s={13.5} c="mut">{teacher === undefined ? `Not set · marked here: ${rate.absent}` : `${teacher} absent · marked here: ${rate.absent}`}</Txt>
         </View>
-        <Btn small kind="ghost" label="−" a11y={`One fewer absence on the teacher's count for ${course.name}`} testID="teacher-absent-less" onPress={() => setTeacher((teacher ?? rate.absent) - 1)} />
-        <Txt f="marker" s={22} c={teacher !== undefined && teacher !== rate.absent ? 'bad' : 'ink'} style={{ minWidth: 28, textAlign: 'center' }} testID="teacher-absent">{teacher ?? '–'}</Txt>
-        <Btn small kind="ghost" label="+" a11y={`One more absence on the teacher's count for ${course.name}`} testID="teacher-absent-more" onPress={() => setTeacher((teacher ?? rate.absent) + 1)} />
+        {/* typed, not stepped (C8, R7): empty = not set, so the rate marked here is used */}
+        <NumberField label={`Teacher's absence count for ${course.name}`} value={teacher ?? null} min={0} max={99} emptyLabel="–" width={88}
+          onChange={(v) => { if (v === null) { act.setSettings({ teacherAbsent: Object.fromEntries(Object.entries(settings.teacherAbsent ?? {}).filter(([k]) => k !== course.id)) }); } else setTeacher(v); }} />
       </Row>
     </View>
   );
