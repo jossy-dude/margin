@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -20,7 +20,9 @@ export function skyFor(mode: 'live' | 'still' | 'off', scheme: Scheme, minutes: 
 
 function Gradient({ scheme, k }: { scheme: Scheme; k: SkyKey }) {
   const [top, bottom] = SKY[scheme][k];
-  const id = `sky-${scheme}-${k}`;
+  /* per instance: Today and Week both draw a sky and every page stays mounted, so a shared id made the web build
+     resolve `url(#…)` to the hidden page's gradient and draw nothing */
+  const id = `sky-${scheme}-${k}-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <Svg width="100%" height="100%" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
       <Defs><LinearGradient id={id} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={top} /><Stop offset="1" stopColor={bottom} /></LinearGradient></Defs>

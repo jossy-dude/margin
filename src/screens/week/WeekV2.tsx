@@ -12,7 +12,7 @@ import { Icon } from '../../ui/kit';
 import { Face } from '../../ui/mascot/Face';
 import { FACES } from '../../ui/mascot/faces';
 import { MOMENTS, emptyFace, pageFace, useFaceMoment } from '../../ui/mascot/moments';
-import { pageBottomPad } from '../../ui/fit';
+import { FAB, FAB_GAP, navHeight, pageBottomPad } from '../../ui/fit';
 import { useScreenLive } from '../../ui/live';
 import { useNow, useReduceMotion } from '../../ui/theme-context';
 import { act, useStore } from '../../store/store';
@@ -29,6 +29,8 @@ import { SNAP, dropSlot, hhmm, slotId, slotOf, weekView, type WeekDay, type Week
 const PX = 0.9, GUTTER = 34;
 const minOf = (ms: number) => { const d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); };
 const durOf = (x: ClassItem) => Math.max(SNAP, Math.round((x.end - x.start) / 60_000));
+/** A grid card's name (D-12: the first word): whole when it fits a 46 dp column at 12 sp, else its first four letters. */
+export const gridName = (name: string) => { const w = name.split(' ')[0] ?? name; return w.length <= 6 ? w : w.slice(0, 4); };
 
 export const WEEK_TIPS = [
   'Hold a class in the grid and drag it to move it.',
@@ -134,7 +136,7 @@ function Grid({ vm, now, reduce, ghost, tintFor, onOpen, onHold, onSlot, onDrop,
                   <View style={{ flex: 1, flexDirection: 'row', borderRadius: RADIUS.chip, overflow: 'hidden', backgroundColor: t.glassStrong, borderWidth: StyleSheet.hairlineWidth, borderColor: x.live ? t.now : t.ring }}>
                     <View style={{ width: 3, backgroundColor: tintFor(x.courseId) }} />
                     <View style={{ flex: 1, paddingHorizontal: 3, paddingTop: 2 }}>
-                      <T k="label" c={x.cancelled ? 'ink3' : 'ink'} numberOfLines={dur * PX > 44 ? 3 : 1} style={[{ fontSize: 12, lineHeight: 15, fontWeight: '600' }, x.cancelled ? { textDecorationLine: 'line-through' } : null]}>{x.name.split(' ')[0]}</T>
+                      <T k="label" c={x.cancelled ? 'ink3' : 'ink'} numberOfLines={1} ellipsizeMode="clip" style={[{ fontSize: 12, lineHeight: 15, fontWeight: '600' }, x.cancelled ? { textDecorationLine: 'line-through' } : null]}>{gridName(x.name)}</T>
                       {dur * PX > 40 && x.room ? <T k="label" c="ink2" numberOfLines={1} style={{ fontSize: 11, lineHeight: 14 }}>{x.room}</T> : null}
                     </View>
                   </View>
@@ -171,7 +173,9 @@ function MovePanel({ d, vm, hour12, onChange, onClose }: { d: Draft; vm: WeekVM;
   return (
     <View style={StyleSheet.absoluteFill} testID="week-move">
       <Pressable accessibilityRole="button" accessibilityLabel="Cancel the move" onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
-      <View accessibilityViewIsModal style={[glassStyle(scheme, true), { position: 'absolute', left: 0, right: 0, bottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, paddingBottom: ins.bottom + SPACE.s4, gap: SPACE.s3 }]}>
+      {/* above the old nav bar and its + button, which this page cannot cover (they belong to the navigator), and
+          opaque: nothing under the panel shows through its words */}
+      <View accessibilityViewIsModal style={[glassStyle(scheme, true), { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: t.flat, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, paddingBottom: navHeight(ins.bottom) + FAB + FAB_GAP + SPACE.s2, gap: SPACE.s3 }]}>
         <T k="title" accessibilityRole="header">{`Move ${d.item.name}${d.pick ? '' : ` to ${to.dw} ${start}`}?`}</T>
         <T k="bodyS" c="ink2">{`Now ${d.from.label}, ${d.item.range}. ${here ? 'Pick a new day or time.' : `New: ${to.label}, ${start}–${end}.`}`}</T>
         {d.pick ? (<>

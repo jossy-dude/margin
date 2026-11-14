@@ -10,6 +10,7 @@ import type { Course, Meeting, Task } from '../domain/types';
 import { Face } from '../ui/mascot/Face';
 import { WeekPage } from '../screens/week/WeekPage';
 import { dropSlot, hhmm, slotId, slotOf, weekView, type WeekInput } from '../screens/week/model';
+import { gridName } from '../screens/week/WeekV2';
 import { getState, hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -97,6 +98,7 @@ describe('the drag lands on a 5-minute slot inside the grid', () => {
     expect(dropSlot(3, 540, 50, 0, -9999, 40, 0.9, 480, 960)).toEqual({ day: 3, start: 480 });
     expect(slotOf(slotId({ day: 5, start: 845 }))).toEqual({ day: 5, start: 845 });
     expect(hhmm(845)).toBe('14:05');
+    expect(['Computer Programming', 'Intro to Economics', 'Data'].map(gridName)).toEqual(['Comp', 'Intro', 'Data']);
   });
 });
 
