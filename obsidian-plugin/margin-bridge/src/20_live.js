@@ -4,7 +4,10 @@
  *   · connect on `visible`, ping first and reconnect if no pong within 2 s (sockets are half-dead after resume);
  *   · close 5 s after `hidden` (Margin then writes the vault itself); no timers at all while hidden;
  *   · edits leave 1.5 s after the last keystroke per file, as one `put` with the base both sides agreed on;
- *   · what arrives is written through the vault API (`vault.process`), so the open editor updates cleanly.
+ *   · what arrives is written through the vault API (`vault.process`), so the open editor updates cleanly;
+ *   · the link is sealed (seal 2) even on loopback, and the 6-digit code is swapped for a random key on first
+ *     contact (`rekey`), so another app on the phone can neither read the stream nor guess the key;
+ *   · the cursor moves only after a change is on disk, so a change cut off by closing Obsidian comes again.
  * Per-device state (the key, the device id, the per-file base hashes) is in local storage, never in data.json:
  * data.json travels with the vault.
  */
@@ -23,6 +26,8 @@ class LiveSync {
     this.applying = new Set();  // paths being written from the wire (their modify events are ours)
     this.files = this.load(LS.files, {});  // path → { h, base }
     this.ignore = BoneSyncCore.compileIgnore();
+    this.asm = new BoneSyncCore.Assembler();
+    this.inflight = new Map();   // frame id (or transfer id) → what we sent, until Margin/the hub acks it
     this.state = 'off';
   }
   ls(k, v) { if (v === undefined) return this.app.loadLocalStorage(k); this.app.saveLocalStorage(k, v); }
@@ -90,18 +95,49 @@ class LiveSync {
   // ── incoming ──
   async onFrame(m) {
     if (m.t === 'pong') { clearTimeout(this.pongTimer); return; }
-    if (m.t === 'bye' && m.reason === 'bad-proof') { this.ls(LS.on, 'false'); this.setState('off', 'Margin did not accept the code; get a new one in Margin.'); return; }
-    if (m.seq) this.ls(LS.cursor, String(Math.max(Number(this.ls(LS.cursor) || 0), m.seq)));
-    if (m.t === 'manifest') return this.reconcile(m);
-    if (m.t === 'put') return this.applyPut(m);
-    if (m.t === 'del') return this.applyDel(m);
-    if (m.t === 'mv') return this.applyMv(m);
+    // anyone listening on Margin's port can say "bad-proof" before proving anything, so sync stays on: it says
+    // so and tries again the next time Obsidian comes to the front
+    if (m.t === 'bye' && m.reason === 'bad-proof') { this.setState('waiting', 'Margin did not accept this key. If you paired Margin again, get a new code in Margin.'); return; }
+    if (m.t === 'bye' && m.reason === 'busy') { this.setState('waiting', 'Margin is busy; trying again soon.'); return; }
+    if (m.t === 'rekey') return this.onRekey(m);
+    if (m.t === 'hold') return this.onHold(m);
+    if (m.t === 'restore') { for (const p of m.paths) if (!this.skip(p)) await this.send(p, null); return; }
+    if (m.t === 'manifest') { await this.reconcile(m); return this.bump(m.head); }
+    if (m.t === 'put' && m.xfer) {
+      let bytes; try { bytes = this.asm.add(m); } catch { return this.want(m.p); }
+      if (!bytes) return;
+      m = { ...m, id: m.xfer, bytes };
+    }
+    if (m.t === 'put') { if (await this.applyPut(m)) this.bump(m.seq); return; }
+    if (m.t === 'del') { await this.applyDel(m); return this.bump(m.seq); }
+    if (m.t === 'mv') { if (await this.applyMv(m)) this.bump(m.seq); return; }
     if (m.t === 'ack') return this.onAck(m);
     if (m.t === 'conflict') { new obsidian.Notice(`Merged edits in ${m.p.split('/').pop()} (phone + desktop)`); return; }
     if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.state); }
     if (m.t === 'timer') { this.p.timerLink?.receive(m); return; }
     // Margin wrote a file in `.obsidian/` that this app cannot watch (a plugin's data.json): let it reload
     if (m.t === 'changed') return reloadPluginData(this.app, m.p);
+  }
+  bump(seq) { if (seq) this.ls(LS.cursor, String(Math.max(Number(this.ls(LS.cursor) || 0), seq))); }
+  want(p) { this.link?.send(this.link.frame('want', { paths: [p] })); return false; }
+  onRekey(m) {
+    if (!/^[0-9a-f]{64}$/.test(m.key)) return;
+    this.ls(LS.key, m.key);
+    this.link?.send(this.link.frame('ack', { ref: m.id, ok: true }));
+  }
+  /** The hub stopped a big delete: ask here too (the owner can answer on the desktop or the phone). */
+  onHold(m) {
+    if (m.op === 'done') { this.holdModal?.close(); this.holdModal = null; if (m.result) new obsidian.Notice(m.result === 'apply' ? 'Sync: the deletes went through.' : 'Sync: the deleted files are coming back.'); return; }
+    if (m.op !== 'held' || !obsidian.Modal) return;
+    this.holdModal?.close();
+    const md = new obsidian.Modal(this.app); this.holdModal = md;
+    const answer = (op) => { this.link?.send(this.link.frame('hold', { op, holdId: m.holdId })); md.close(); };
+    md.titleEl?.setText?.(`Sync stopped: ${m.count} files deleted on the ${m.from}`);
+    md.contentEl.createEl('p', { text: `Do you want to sync the deletes? For example: ${(m.sample || []).join(', ')}` });
+    const row = md.contentEl.createDiv();
+    row.createEl('button', { text: 'Delete them here too', cls: 'mod-warning' }).onclick = () => answer('apply');
+    row.createEl('button', { text: 'Keep the files' }).onclick = () => answer('cancel');
+    md.open();
   }
   skip(p) { return this.ignore(p) || p.startsWith('.obsidian/'); }
   async hashOf(path) {
@@ -136,23 +172,34 @@ class LiveSync {
       }
     } finally { setTimeout(() => this.applying.delete(path), 1500); }
   }
+  /** true when the file on disk is now the incoming one (the cursor may move past it). */
   async applyPut(m) {
-    if (this.skip(m.p)) return;
+    if (this.skip(m.p)) return true;
     let data, isText = m.enc !== 'bin';
-    if (m.enc === 'patch') {
+    if (m.bytes) data = m.bytes.buffer.slice(m.bytes.byteOffset, m.bytes.byteOffset + m.bytes.byteLength);
+    else if (m.enc === 'patch') {
       const rec = this.files[m.p];
       const cur = await this.hashOf(m.p);
-      if (!rec || cur !== m.base) { this.link?.send(this.link.frame('want', { paths: [m.p] })); return; }
-      data = BoneSyncCore.applyPatch(await this.app.vault.adapter.read(m.p), m.patch);
+      if (!rec || cur !== m.base) return this.want(m.p);
+      try { data = BoneSyncCore.applyPatch(await this.app.vault.adapter.read(m.p), m.patch); } catch { return this.want(m.p); }
     } else data = m.enc === 'bin' ? unb64(m.body) : m.body;
     const h = await BoneSyncCore.hashOf(isText ? data : new Uint8Array(data));
-    if (h !== m.h) { this.link?.send(this.link.frame('want', { paths: [m.p] })); return; }
-    // an unsent local edit to the same file: send it with its base first; the hub merges and sends the result
+    if (h !== m.h) return this.want(m.p);
+    // a local version the hub has not seen (an unsent edit, or the same new note made here at the same time, e.g.
+    // the daily note at midnight): send ours with its base first; the hub merges both and sends the result back.
+    // Before, a note made on both sides lost the phone's text (report #3).
     const rec = this.files[m.p], cur = await this.hashOf(m.p);
-    if (rec && cur && cur !== rec.base && cur !== h) { this.send(m.p, rec.base); return; }
+    if (cur && cur !== h && (!rec || cur !== rec.base)) {
+      clearTimeout(this.pending.get(m.p)); this.pending.delete(m.p);
+      await this.send(m.p, rec?.base ?? null);
+      return false;
+    }
     await this.write(m.p, data, isText);
+    // confirm it landed before saying so (report #5)
+    if ((await this.hashOf(m.p)) !== h) { this.link?.send(this.link.frame('ack', { ref: m.id, ok: false, err: 'write-failed', seq: m.seq })); return this.want(m.p); }
     this.files[m.p] = { h, base: h }; this.saveFiles();
-    this.link?.send(this.link.frame('ack', { ref: m.id, ok: true, seq: m.seq, h }));
+    this.link?.send(this.link.frame('ack', { ref: m.id, ok: true, seq: m.seq, h, p: m.p }));
+    return true;
   }
   async applyDel(m) {
     const f = this.app.vault.getAbstractFileByPath(m.p);
@@ -166,19 +213,31 @@ class LiveSync {
   }
   async applyMv(m) {
     const f = this.app.vault.getAbstractFileByPath(m.from);
-    if (!(f instanceof obsidian.TFile)) { this.link?.send(this.link.frame('want', { paths: [m.to] })); return; }
+    if (!(f instanceof obsidian.TFile)) return this.want(m.to);
     this.applying.add(m.from); this.applying.add(m.to);
     await this.app.fileManager.renameFile(f, m.to);
     if (this.files[m.from]) { this.files[m.to] = this.files[m.from]; delete this.files[m.from]; this.saveFiles(); }
+    return true;
   }
   onAck(m) {
-    const sent = this.inflight?.get(m.ref);
+    const sent = this.inflight.get(m.ref);
     if (!sent) return;
     this.inflight.delete(m.ref);
+    if (sent.kind === 'mv') {
+      // the hub never had the old name (a new note renamed before it was sent, report P2): send it as new
+      if (!m.ok && (m.err === 'missing' || m.err === 'edited')) this.send(sent.to, null);
+      return;
+    }
     if (m.ok) {
+      if (sent.kind !== 'put') return;
       const p = m.renamed ?? sent.p;
-      this.files[p] = { h: m.h, base: m.h }; this.saveFiles();
-    } else if (m.err === 'need-full') this.send(sent.p, sent.base, true);
+      // merged: the hub now holds what we sent, so that is our base; the merged text follows as a put and lands
+      // on it cleanly (taking the merged hash as base here made the phone resend its own copy over the merge)
+      const h = m.merged ? sent.h : m.h;
+      this.files[p] = { h, base: h }; this.saveFiles();
+    } else if (m.err === 'need-full' || m.err === 'hash-mismatch' || m.err === 'write-failed') {
+      if ((sent.tries ?? 0) < 3) this.send(sent.p, sent.base, sent.tries + 1);
+    }
   }
 
   // ── outgoing ──
@@ -190,7 +249,7 @@ class LiveSync {
     this.pending.set(path, setTimeout(() => { this.pending.delete(path); this.send(path, this.files[path]?.base ?? null); }, 1500));
   }
   flushAll() { for (const [p, t] of this.pending) { clearTimeout(t); this.send(p, this.files[p]?.base ?? null); } this.pending.clear(); }
-  async send(path, base, full = false) {
+  async send(path, base, tries = 0) {
     if (!this.link?.ready) return;
     const ad = this.app.vault.adapter;
     if (!(await ad.exists(path))) return;
@@ -200,16 +259,22 @@ class LiveSync {
     if (h === base) return;
     const stat = await ad.stat(path);
     const f = { p: path, h, base, s: stat?.size ?? 0, m: stat?.mtime ?? Date.now() };
-    if (!isText) Object.assign(f, { enc: 'bin', body: b64(data) });
-    else Object.assign(f, { enc: 'text', body: data });
-    void full;
-    const fr = this.link.frame('put', f);
-    (this.inflight ??= new Map()).set(fr.id, { p: path, base });
     this.files[path] = { h, base }; this.saveFiles();
+    if (!isText && BoneSyncCore.needsParts(data.byteLength)) {
+      // a big binary goes in 1 MB parts; the hub acks the transfer id
+      let xfer = null;
+      for (const part of BoneSyncCore.partsOf(f, new Uint8Array(data))) { xfer = part.xfer; await this.link?.send(this.link.frame('put', part)); }
+      if (xfer) this.inflight.set(xfer, { kind: 'put', p: path, h, base, tries });
+      return;
+    }
+    Object.assign(f, isText ? { enc: 'text', body: data } : { enc: 'bin', body: b64(data) });
+    const fr = this.link.frame('put', f);
+    this.inflight.set(fr.id, { kind: 'put', p: path, h, base, tries });
     this.link.send(fr);
   }
   localDelete(path) {
     if (!this.link || this.applying.has(path) || this.skip(path)) return;
+    clearTimeout(this.pending.get(path)); this.pending.delete(path);
     const rec = this.files[path];
     this.link.send(this.link.frame('del', { p: path, base: rec?.base ?? null }));
     delete this.files[path]; this.saveFiles();
@@ -217,7 +282,11 @@ class LiveSync {
   localRename(from, to) {
     if (!this.link || this.applying.has(to) || this.skip(to)) return;
     const rec = this.files[from];
-    this.link.send(this.link.frame('mv', { from, to, h: rec?.h ?? null }));
-    if (rec) { this.files[to] = rec; delete this.files[from]; this.saveFiles(); }
+    // never sent yet (still in its 1.5 s wait, or new): it is simply a new file under the new name
+    if (this.pending.has(from) || !rec) { clearTimeout(this.pending.get(from)); this.pending.delete(from); this.local(to); return; }
+    const fr = this.link.frame('mv', { from, to, h: rec.h ?? null });
+    this.inflight.set(fr.id, { kind: 'mv', from, to });
+    this.link.send(fr);
+    this.files[to] = rec; delete this.files[from]; this.saveFiles();
   }
 }

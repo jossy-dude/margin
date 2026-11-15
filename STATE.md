@@ -61,9 +61,12 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
 
 ## Now
-- **Unreleased:** 0.7.1 / versionCode 7 on `v2-improvements`: lab/tutorial parts editable in the subject sheet (own
-  teacher, room, group no., grade share, attendance goal; `domain/parts.ts`). A `v0.71` release/tag was made and
-  deleted on 2026-11-15: no release until the sync rebuild (another agent) is done. Last shipped: v0.6.0 (vc 5).
+- **v0.7.1** (versionCode 7, tag `v0.7.1`, 2026-11-15): lab/tutorial parts editable in the subject sheet, plus the
+  sync hardening from the 2026-11-15 stress test: seal 2 on every link (loopback too), O's 6-digit key swapped for a
+  random one (`rekey`), desktop priority in merges, same-new-note keeps both, cursors move only after files land,
+  big files in 1 MB parts with OkHttp back-pressure, big deletes held with a question (Settings → Sync card,
+  notification, phone Obsidian dialog), deletes go to `.trash/`, ignore list enforced. Needs vault-sync `a45d550`
+  or later on the desktop (older hubs get refused: no seal 2). Kotlin compiled only in CI.
 - **Next candidates:** one "Manage" page for every subject, test and less-used setting (asked 2026-11-15).
 - **v0.7 in progress** (`docs/v07/PLAN.md`, decisions B1–B9 there):
   - done: BUGS #11 reconnect (`f63f727`), #7 To-do filter, item 8 export counts; N1 version, N4/N5 sync module + manifest

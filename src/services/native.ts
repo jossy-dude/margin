@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
+import type { SyncHold } from '../domain/syncHold';
 
 /**
  * Margin's own Android module (`modules/margin-native`), seen from JS.
@@ -37,6 +38,7 @@ interface MarginNative {
   syncTimer(json: string): boolean;
   syncNow(): boolean;
   syncClearErrors(): boolean;
+  syncHold(op: string): boolean;
   syncInbox(): string;
   syncObsidianCode(): string;
   syncNetworks(): string;
@@ -107,8 +109,11 @@ export interface SyncStatus {
   /** hub clock − phone clock, ms (timer maths) */
   offset?: number; hubOnline?: boolean;
   scanAt?: number; scanMs?: number; scanFiles?: number; pushedAt?: number; sending?: number;
+  /** v0.7.1: a big delete stopped sync until the owner chooses (here, on the desktop, or in phone Obsidian) */
+  hold?: SyncHold | null;
   stats: { day: string; liveMs: number; connects: number; catchups: number; rx: number; tx: number; err: number; lastErr: string | null }[];
 }
+export type { SyncHold };
 const parse = <T,>(s: string | null): T | null => { if (!s) return null; try { return JSON.parse(s) as T; } catch { return null; } };
 /** Pair with the desktop from the hub's QR text. `null` on success, else a sentence; "" when there is no native half. */
 export const syncPair = (text: string): string | null => { const r = safe<string | null>((m) => m.syncPair(text), 'This build cannot sync.'); return r === '' ? null : r; };
@@ -127,6 +132,8 @@ export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus', fn: (json: str
 }
 export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
+/** Answer the big-delete question: apply = delete everywhere, cancel = keep the files. */
+export const syncHold = (op: 'apply' | 'cancel') => safe((m) => m.syncHold(op), false);
 /** Rows the service received while JS was not running; each is returned once. */
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
 export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);

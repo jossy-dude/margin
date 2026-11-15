@@ -13,6 +13,7 @@ import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
@@ -22,7 +23,8 @@ import java.util.concurrent.TimeUnit
 /**
  * Margin as the phone's sync hub (SYNC_ANDROID.md, SYNC_PROTOCOL.md "M"):
  *   · client of the desktop hub H (OkHttp WebSocket, sealed with the pair key);
- *   · server for phone Obsidian O on 127.0.0.1:7429 (Java-WebSocket, plain on loopback), relaying O ⇄ H;
+ *   · server for phone Obsidian O on 127.0.0.1:7429 (Java-WebSocket, sealed even on loopback so another app on
+ *     the phone can neither read nor inject frames), relaying O ⇄ H;
  *   · server on the hotspot address while the hotspot is on: the desktop dials in and H sends the challenge,
  *     so on that socket Margin plays the client;
  *   · writer of the phone vault (SyncVault) for changes that arrive while O is not connected.
@@ -40,7 +42,11 @@ object SyncEngine {
   private val sched = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "margin-sync-timer").apply { isDaemon = true } }
   private const val SCAN_EVERY_S = 30L
   private const val MAX_PUSH_PER_SCAN = 200
-  private const val MAX_FILE_BYTES = 20L * 1024 * 1024
+  private const val MAX_FILE_BYTES = 20L * 1024 * 1024        // phone → desktop (read into memory to send)
+  private const val MAX_IN_BYTES = 100L * 1024 * 1024          // desktop → phone (arrives in parts, streamed to disk)
+  private const val PART_BYTES = 1024 * 1024                   // chunk.js PART_BYTES
+  private const val QUEUE_MAX = 4L * 1024 * 1024               // OkHttp drops a link past 16 MiB queued: stay well under
+  private const val DEL_LIMIT = 25
   private const val MAX_TRIES = 3
   private lateinit var app: Context
   private val http by lazy { OkHttpClient.Builder().pingInterval(30, TimeUnit.SECONDS).connectTimeout(3, TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build() }
@@ -104,7 +110,19 @@ object SyncEngine {
   // ── the desktop link ──────────────────────────────────────────────────────────────────────────
   private class Link(val send: (String) -> Unit, val close: () -> Unit, val loopback: Boolean) {
     var nonce: String? = null; var serverNonce: String? = null
-    var sealKey: ByteArray? = null; var ready = false; var mode: String? = null; var offset = 0L
+    var sealOut: Seal.Sealer? = null; var sealIn: Seal.Sealer? = null; var ready = false; var mode: String? = null; var offset = 0L
+    /** Phrase pairing: what the first challenge claimed, kept here until the welcome proves it. */
+    var pendVault: String? = null; var pendHub: String? = null; var pendKey: ByteArray? = null
+    /** Bytes the transport still holds (OkHttp's queue); 0 where it can't tell. */
+    var queued: () -> Long = { 0L }
+    /** Frames waiting for the transport to drain, sealed only when sent so the seal numbers stay in order. */
+    val outQ = java.util.ArrayDeque<() -> String?>()
+    var pumping = false
+  }
+  /** A link that has not finished the handshake in this time is closed, so a stranger can't hold the slot. */
+  private const val HANDSHAKE_MS = 8_000L
+  private fun handshakeDeadline(l: Link) {
+    sched.schedule(Runnable { exec.execute { if (hub === l && !l.ready) { Log.w(TAG, "handshake timed out"); l.close(); dropHub("handshake timeout") } } }, HANDSHAKE_MS, TimeUnit.MILLISECONDS)
   }
   private var hub: Link? = null
   private var hubWs: WebSocket? = null
@@ -145,7 +163,7 @@ object SyncEngine {
       override fun onOpen(webSocket: WebSocket, response: Response) {
         exec.execute {
           dialing = false
-          hub = Link({ webSocket.send(it) }, { webSocket.close(1000, null) }, false)
+          hub = Link({ webSocket.send(it) }, { webSocket.close(1000, null) }, false).also { it.queued = { webSocket.queueSize() }; handshakeDeadline(it) }
           if (fp != null) { val h = JSONObject(prefs.getString("hints", "{}")!!); h.put(fp, addr); prefs.edit().putString("hints", h.toString()).apply() }
         }
       }
@@ -162,7 +180,7 @@ object SyncEngine {
     if (hub == null && !dialing) return
     val wasReady = hub?.ready == true
     hub = null; hubWs = null; dialing = false
-    stopScans(); inflight.clear(); inflightPath.clear()
+    stopScans(); inflight.clear(); inflightPath.clear(); pendingWant.clear(); manifestHead = 0; landedSeq = 0; dropParts()
     Log.i(TAG, "hub link down: $why")
     if (wasReady) store.count("err", 1, "link lost: $why")
     status("hub link down")
@@ -189,39 +207,76 @@ object SyncEngine {
     .put("vault", vaultId).put("from", deviceId)
   private fun ulid(): String = java.lang.Long.toString(System.currentTimeMillis(), 32).uppercase().padStart(10, '0') + Seal.newId().substring(0, 16)
 
-  private fun sendHub(m: JSONObject) {
+  private fun sendHub(m: JSONObject) { val text = m.toString(); sendHubLazy { text } }
+  /** Frames go out in order; while OkHttp holds more than QUEUE_MAX the rest wait here (a 20 MB file is 20 parts
+   *  that would otherwise all queue at once and get the link dropped, report #6). `make` builds the frame only
+   *  when it is sent, so a big file's parts are encoded one at a time. */
+  private fun sendHubLazy(make: () -> String?) {
     val l = hub ?: return
-    val text = m.toString()
-    store.count("tx", text.length.toLong())
-    l.send(l.sealKey?.let { Seal.seal(it, text) } ?: text)
+    l.outQ.add(make)
+    pump(l)
+  }
+  private fun pump(l: Link) {
+    if (hub !== l) { l.outQ.clear(); return }
+    while (l.outQ.isNotEmpty()) {
+      if (l.queued() > QUEUE_MAX) {
+        if (!l.pumping) { l.pumping = true; sched.schedule(Runnable { exec.execute { l.pumping = false; pump(l) } }, 50, TimeUnit.MILLISECONDS) }
+        return
+      }
+      val text = l.outQ.poll()?.invoke() ?: continue
+      store.count("tx", text.length.toLong())
+      l.send(l.sealOut?.seal(text) ?: text)
+    }
   }
 
-  private fun onHubFrame(l: Link, raw: String) {
-    store.count("rx", raw.length.toLong())
-    val text = try { l.sealKey?.let { Seal.unseal(it, raw) } ?: raw } catch (e: Exception) { Log.w(TAG, "bad seal"); l.close(); return }
-    val m = try { JSONObject(text) } catch (e: Exception) { return }
-    if (m.optString("v") != V) return
-    // phrase pairing: the first challenge names the vault; the key is HKDF(code, vaultId), as on the desktop
-    if (m.optString("t") == "challenge" && vaultId == null) {
-      val code = KeyVault.get(app, "hub-code") ?: return
-      val v = m.optString("vault"); val h = m.optString("hub")
-      if (v.isEmpty() || h.isEmpty()) return
-      KeyVault.put(app, "hub", Seal.keyFromCode(code, v)); KeyVault.remove(app, "hub-code")
-      prefs.edit().putString("vaultId", v).putString("hubId", h).apply()
-    }
-    val key = hubKey ?: return
+  /** Before the hub proves it holds the pair key, only challenge, welcome and bye are looked at. Nothing is
+   *  saved, written or forwarded on the word of a peer that has not proven itself (test report 2026-11-15, #1). */
+  private fun onHandshake(l: Link, m: JSONObject) {
     when (m.optString("t")) {
       "challenge" -> {
-        if (hubId != null && m.optString("hub", hubId!!) != hubId) { l.close(); return }
-        l.serverNonce = m.getString("nonce"); l.nonce = Seal.nonce()
-        val hello = frame("hello", JSONObject().put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.1")
-          .put("proof", Seal.proof(key, l.serverNonce!!, deviceId, vaultId!!)).put("nonce", l.nonce).put("cursor", store.cursor).put("clientTime", System.currentTimeMillis()))
+        if (l.nonce != null) return
+        var key = hubKey; var vault = vaultId; val hubIdNow = hubId
+        if (vault == null) {
+          // phrase pairing: the first challenge names the vault; the key is HKDF(code, vaultId), as on the desktop.
+          // Kept on the link only: a fake hub's challenge must not overwrite what pairing stored.
+          val code = KeyVault.get(app, "hub-code") ?: return
+          val v = m.optString("vault"); val h = m.optString("hub")
+          if (v.isEmpty() || h.isEmpty()) { l.close(); return }
+          key = Seal.keyFromCode(code, v); vault = v
+          l.pendVault = v; l.pendHub = h; l.pendKey = key
+        } else if (hubIdNow != null && m.optString("hub", hubIdNow) != hubIdNow) { l.close(); return }
+        val k = key ?: return
+        val vlt = vault ?: return
+        val sn = m.optString("nonce").takeIf { it.length == 32 } ?: run { l.close(); return }
+        l.serverNonce = sn; l.nonce = Seal.nonce()
+        val hello = JSONObject().put("v", V).put("t", "hello").put("id", ulid()).put("vault", vlt).put("from", deviceId)
+          .put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.1")
+          .put("proof", Seal.proof(k, sn, deviceId, vlt)).put("nonce", l.nonce).put("cursor", store.cursor)
+          .put("seal", Seal.SEAL_VERSION).put("clientTime", System.currentTimeMillis())
         l.send(hello.toString())
       }
       "welcome" -> {
-        val want = Seal.proof(key, l.nonce ?: return, m.optString("hub"), vaultId!!)
-        if (!Seal.sameHex(m.optString("proof"), want) || m.optString("hub") != hubId) { Log.w(TAG, "hub failed its proof"); store.count("err", 1, "hub failed its proof"); l.close(); return }
-        if (m.optBoolean("sealed")) l.sealKey = Seal.sessionKey(key, l.serverNonce!!, l.nonce!!)
+        val nonce = l.nonce ?: run { l.close(); return }
+        val key = l.pendKey ?: hubKey ?: return
+        val vault = l.pendVault ?: vaultId ?: return
+        val wantHub = l.pendHub ?: hubId
+        val want = Seal.proof(key, nonce, m.optString("hub"), vault)
+        if (!Seal.sameHex(m.optString("proof"), want) || m.optString("hub") != wantHub) {
+          Log.w(TAG, "hub failed its proof"); store.count("err", 1, "hub failed its proof"); l.close(); dropHub("hub failed its proof"); return
+        }
+        // The phone-to-desktop link always crosses the network, so it must be sealed: an unsealed welcome is a downgrade.
+        if (!m.optBoolean("sealed") || m.optInt("seal") != Seal.SEAL_VERSION) {
+          fail("The desktop's bone-syncd is older than this Margin (no seal 2). Update vault-sync on the desktop.")
+          l.close(); dropHub("unsealed"); return
+        }
+        if (l.pendKey != null) {
+          KeyVault.put(app, "hub", key); KeyVault.remove(app, "hub-code")
+          prefs.edit().putString("vaultId", l.pendVault).putString("hubId", l.pendHub).apply()
+          l.pendKey = null; l.pendVault = null; l.pendHub = null
+        }
+        val sn = l.serverNonce ?: run { l.close(); return }
+        val (c2h, h2c) = Seal.sessionKeys(key, sn, nonce)
+        l.sealOut = Seal.Sealer(c2h); l.sealIn = Seal.Sealer(h2c)
         l.ready = true; l.mode = m.optString("mode"); l.offset = m.optLong("serverTime") - System.currentTimeMillis()
         prefs.edit().putLong("lastOk", System.currentTimeMillis()).apply()
         retryMs = 0; lastError = null
@@ -229,6 +284,33 @@ object SyncEngine {
         flushOutbox()
         startScans()
       }
+      "bye" -> onBye(l, m, preauth = true)
+      else -> Log.w(TAG, "dropped ${m.optString("t")} before the hub proved itself")
+    }
+  }
+  /** `preauth`: the peer has not proven it is the hub, so anyone could have said it. Then the error shows and
+   *  Margin keeps trying (back-off up to 2 min) instead of switching sync off for good. */
+  private fun onBye(l: Link, m: JSONObject, preauth: Boolean = false) {
+    val r = m.optString("reason")
+    fail(when (r) {
+      "bad-proof" -> "The desktop does not know this phone any more. Pair again (Settings → Obsidian)."
+      "other-vault" -> "This phone is paired with a different vault than the desktop's."
+      "version" -> "The desktop's bone-syncd speaks a different version. Update both."
+      else -> "The desktop closed the link ($r)."
+    })
+    if (!preauth && (r == "bad-proof" || r == "other-vault")) wantLive = false
+    l.close()
+  }
+
+  private fun onHubFrame(l: Link, raw: String) {
+    if (hub !== l) return
+    store.count("rx", raw.length.toLong())
+    val text = try { l.sealIn?.unseal(raw) ?: raw } catch (e: Exception) { Log.w(TAG, "bad sealed frame: ${e.message}"); store.count("err", 1, "bad sealed frame"); l.close(); dropHub("bad seal"); return }
+    val m = try { JSONObject(text) } catch (e: Exception) { return }
+    if (m.optString("v") != V) return
+    if (!l.ready) { onHandshake(l, m); return }
+    when (m.optString("t")) {
+      "challenge", "welcome" -> return
       "manifest" -> onManifest(m)
       "put" -> onPut(m)
       "del" -> onDel(m)
@@ -238,18 +320,10 @@ object SyncEngine {
       "timer" -> { store.inbox("timer", text); onTimer?.invoke(text); toObsidian(m) }
       "presence" -> { prefs.edit().putString("presence", m.optJSONArray("peers")?.toString() ?: "[]").apply(); toObsidian(m); status("presence") }
       "conflict" -> toObsidian(m)
+      "hold" -> onHold(m)
+      "restore" -> onRestore(m)
       "pong" -> l.offset = m.optLong("serverTime") - System.currentTimeMillis()
-      "bye" -> {
-        val r = m.optString("reason")
-        fail(when (r) {
-          "bad-proof" -> "The desktop does not know this phone any more. Pair again (Settings → Obsidian)."
-          "other-vault" -> "This phone is paired with a different vault than the desktop's."
-          "version" -> "The desktop's bone-syncd speaks a different version. Update both."
-          else -> "The desktop closed the link ($r)."
-        })
-        if (r == "bad-proof" || r == "other-vault") wantLive = false
-        l.close()
-      }
+      "bye" -> onBye(l, m)
     }
   }
 
@@ -259,6 +333,9 @@ object SyncEngine {
   private fun mine(p: String) = obsidian == null || p.startsWith(".obsidian/")
   /** Tell phone Obsidian a file it cannot watch changed under it, so the plugin reloads its data. */
   private fun changed(p: String) { if (obsidian != null && p.startsWith(".obsidian/")) toObsidian(JSONObject().put("v", V).put("t", "changed").put("id", ulid()).put("p", p)) }
+  /** The vault's ignore rules, refreshed with every scan; nothing ignored is written, whoever sends it. */
+  private var ignore = SyncIgnore()
+  private fun ignored(p: String) = p != ".bone-sync-ignore" && ignore.matches(p)
   private fun isText(p: String) = Regex("\\.(md|canvas|base|txt|css|js|mjs|py|csv|json)$", RegexOption.IGNORE_CASE).containsMatchIn(p)
 
   /** The hub's manifest. Read-only hub (rollout step 1): answer with ours so it can log the differences.
@@ -288,6 +365,7 @@ object SyncEngine {
       val row = store.file(p)
       when {
         // deleted on the desktop: follow it unless the phone edited the file (an edit beats a delete; pushed below)
+        ignored(p) -> {}
         h == null -> if (row != null && (row.h == row.base || row.h == null)) { v.delete(p); store.dropFile(p); changed(p) }
         row == null || row.h == null && row.base == null -> { want.put(p); wanted.add(p) }
         row.h == h -> store.putFile(row.copy(base = h, seq = f.optLong("seq")))
@@ -297,8 +375,20 @@ object SyncEngine {
       }
     }
     if (want.length() > 0) sendHub(frame("want", JSONObject().put("paths", want)))
-    store.cursor = maxOf(store.cursor, m.optLong("head"))
+    // the cursor moves to the manifest's head only once every file it asked for has landed (report #5): a link
+    // lost halfway asks again from the old cursor
+    pendingWant.addAll(wanted); manifestHead = maxOf(manifestHead, m.optLong("head"))
+    advance(0)
     if (scanned) pushChanged(v, wanted)
+  }
+  private val pendingWant = HashSet<String>()
+  private var manifestHead = 0L
+  private var landedSeq = 0L
+  /** A change is on the phone's disk (or needs nothing): move the cursor when nothing asked for is missing. */
+  private fun advance(seq: Long, p: String? = null) {
+    if (p != null) pendingWant.remove(p)
+    landedSeq = maxOf(landedSeq, seq)
+    if (pendingWant.isEmpty()) store.cursor = maxOf(store.cursor, manifestHead, landedSeq)
   }
 
 
@@ -323,6 +413,7 @@ object SyncEngine {
     val t0 = System.currentTimeMillis()
     return try {
       val ig = SyncIgnore(v.read(".bone-sync-ignore")?.let { String(it) } ?: SyncIgnore.DEFAULT)
+      ignore = ig
       val entries = v.walk(ig)
       val known = store.files()
       if (entries.isEmpty() && known.count { it.h != null } > 20) throw IllegalStateException("the vault folder looks empty; is it still there and still allowed?")
@@ -348,10 +439,14 @@ object SyncEngine {
   /** Send every file the phone changed, added or deleted since the hub last agreed with it. */
   private fun pushChanged(v: SyncVault, skip: Set<String>) {
     val rows = store.files()
-    val dels = rows.count { it.h == null && it.base != null }
-    // a mass delete is far more likely a broken folder permission than the owner's intent (Remotely Save does the same)
-    val delOk = dels <= maxOf(25, rows.size / 20)
-    if (!delOk) fail("$dels files look deleted on the phone, so Margin did not delete them on the desktop. If you really deleted them, delete them on the desktop too.")
+    val gone = rows.filter { it.h == null && it.base != null && mine(it.path) }
+    // a mass delete is far more likely a broken folder permission than the owner's intent: stop and ask
+    // (Settings → Sync and a notification: "Sync stopped: N files deleted on the phone. Sync them?")
+    val delOk = gone.size <= DEL_LIMIT || allowDeletes
+    if (!delOk) holdLocal(gone.map { it.path })
+    if (delOk && allowDeletes && gone.isNotEmpty()) allowDeletes = false
+    // the files came back by hand: the question is moot
+    if (gone.size <= DEL_LIMIT && localHeld.isNotEmpty()) { localHeld = emptyList(); if (JSONObject(prefs.getString("hold", "{}")!!).optBoolean("local")) { prefs.edit().remove("hold").apply(); cancelHoldNote() } }
     var sent = 0
     for (r in rows) {
       if (sent >= MAX_PUSH_PER_SCAN) break
@@ -367,10 +462,22 @@ object SyncEngine {
     if (sent > 0) { prefs.edit().putLong("pushedAt", System.currentTimeMillis()).apply(); status("sent $sent") }
   }
   private fun pushLocal(v: SyncVault, p: String, row: SyncStore.FileRow): Boolean {
+    if (ignored(p)) return false
     if (row.size > MAX_FILE_BYTES) { if (tries[p] == null) { tries[p] = MAX_TRIES; fail("$p is over 20 MB, too big to sync from the phone.") }; return false }
     val bytes = v.read(p) ?: return false
     val h = Seal.hash(bytes)
     val f = JSONObject().put("p", p).put("h", h).put("base", row.base ?: JSONObject.NULL).put("s", bytes.size).put("m", row.mtime)
+    if (!isText(p) && bytes.size > PART_BYTES) {
+      // a big binary goes in 1 MB parts, each encoded only when the queue has room; the hub acks the transfer id
+      val xfer = ulid(); val parts = (bytes.size + PART_BYTES - 1) / PART_BYTES
+      track(xfer, Inflight(p, h, "put", tries[p] ?: 0))
+      for (i in 0 until parts) sendHubLazy {
+        val off = i * PART_BYTES
+        frame("put", JSONObject(f.toString()).put("enc", "bin").put("xfer", xfer).put("part", i).put("parts", parts)
+          .put("body", Base64.encodeToString(bytes, off, minOf(PART_BYTES, bytes.size - off), Base64.NO_WRAP))).toString()
+      }
+      return true
+    }
     if (isText(p)) f.put("enc", "text").put("body", String(bytes)) else f.put("enc", "bin").put("body", Base64.encodeToString(bytes, Base64.NO_WRAP))
     val fr = frame("put", f)
     track(fr.getString("id"), Inflight(p, h, "put", tries[p] ?: 0))
@@ -384,59 +491,124 @@ object SyncEngine {
   }
   private fun track(id: String, i: Inflight) { inflight[id] = i; inflightPath[i.path] = id }
 
-  private fun onPut(m: JSONObject) {
-    store.cursor = maxOf(store.cursor, m.optLong("seq"))
-    if (!mine(m.optString("p"))) { toObsidian(m); return }
-    val v = vault() ?: return
-    val p = m.getString("p")
-    val bytes: ByteArray = when (m.optString("enc")) {
-      "bin" -> Base64.decode(m.optString("body"), Base64.NO_WRAP)
-      "text" -> m.optString("body").toByteArray()
-      else -> { // a patch: we keep no text bodies yet, so ask for the whole file (SYNC_PROTOCOL §5: patch only when the receiver has base)
-        sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return
-      }
+  // ── big files from the desktop, in parts (chunk.js): kept in the cache until the whole file checks out ──
+  private class InPart(val file: File, val p: String, val h: String, val parts: Int, var next: Int = 0, var size: Long = 0)
+  private val inParts = HashMap<String, InPart>()
+  private fun partsDir() = File(app.cacheDir, "sync-in").apply { mkdirs() }
+  private fun dropParts() { inParts.values.forEach { it.file.delete() }; inParts.clear() }
+  /** One part; returns the finished file after the last one, else null. */
+  private fun onPart(m: JSONObject): File? {
+    val xfer = m.optString("xfer"); val part = m.optInt("part", -1); val parts = m.optInt("parts", 0); val p = m.optString("p")
+    var x = inParts[xfer]
+    if (part == 0 && x == null) {
+      if (inParts.size >= 4) inParts.remove(inParts.keys.first())?.file?.delete()
+      x = InPart(File(partsDir(), xfer.replace(Regex("[^A-Za-z0-9]"), "_")), p, m.optString("h"), parts).also { it.file.writeBytes(ByteArray(0)); inParts[xfer] = it }
     }
+    if (x == null || part != x.next || p != x.p || parts != x.parts || m.optString("h") != x.h) {
+      x?.let { it.file.delete(); inParts.remove(xfer) }
+      sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return null
+    }
+    val chunk = Base64.decode(m.optString("body"), Base64.NO_WRAP)
+    x.size += chunk.size
+    if (x.size > MAX_IN_BYTES) { x.file.delete(); inParts.remove(xfer); fail("$p is over 100 MB, too big to sync."); return null }
+    x.file.appendBytes(chunk); x.next++
+    if (x.next < x.parts) return null
+    inParts.remove(xfer)
+    return x.file
+  }
+  private fun fileHash(f: File): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    f.inputStream().use { s -> val buf = ByteArray(256 * 1024); while (true) { val n = s.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+    return Seal.hex(md.digest()).substring(0, 32)
+  }
+
+  /** Puts relayed to phone Obsidian, by frame (or transfer) id, until it acks: then Margin's file table learns
+   *  what O wrote, so Margin never pushes from a stale base later (report #5, the stale-base duplicates). */
+  private val toO = HashMap<String, Pair<String, String>>()
+
+  private fun onPut(m: JSONObject) {
+    val p = m.getString("p")
+    if (ignored(p)) return
+    if (!mine(p)) {
+      if (m.has("xfer")) { if (m.optInt("part") == m.optInt("parts") - 1) toO[m.optString("xfer")] = p to m.optString("h") }
+      else toO[m.optString("id")] = p to m.optString("h")
+      toObsidian(m); return
+    }
+    val v = vault() ?: return
     val h = m.optString("h")
-    if (Seal.hash(bytes) != h) { fail("A file arrived damaged ($p); asking again."); sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return }
-    // the phone changed this file since the last agreement: send ours with its base instead, the hub merges
-    // both and sends the result back (before v0.7.1 the incoming copy overwrote the phone's edit)
+    val ref = if (m.has("xfer")) m.optString("xfer") else m.optString("id")
+    var bytes: ByteArray? = null; var file: File? = null
+    when {
+      m.has("xfer") -> {
+        file = onPart(m) ?: return
+        if (fileHash(file) != h) { file.delete(); fail("A file arrived damaged ($p); asking again."); sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return }
+      }
+      m.optString("enc") == "bin" -> bytes = Base64.decode(m.optString("body"), Base64.NO_WRAP)
+      m.optString("enc") == "text" -> bytes = m.optString("body").toByteArray()
+      // a patch: we keep no text bodies yet, so ask for the whole file (SYNC_PROTOCOL §5: patch only when the receiver has base)
+      else -> { sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return }
+    }
+    if (bytes != null && Seal.hash(bytes) != h) { fail("A file arrived damaged ($p); asking again."); sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p)))); return }
+    // the phone changed this file since the last agreement (or made the same new note): send ours with its base
+    // instead; the hub merges both and sends the result back (before v0.7.1 the incoming copy overwrote it)
     val row = store.file(p); val st = v.stat(p)
     if (st != null) {
-      val localH = if (row?.h != null && row.size == st.size && row.mtime == st.mtime) row.h else v.read(p)?.let { Seal.hash(it) }
-      if (localH == h) { store.putFile(SyncStore.FileRow(p, h, h, st.size, st.mtime, m.optLong("seq"))); return }
+      val localH = if (row?.h != null && row.size == st.size && row.mtime == st.mtime) row.h else v.hashOf(p)
+      if (localH == h) { file?.delete(); store.putFile(SyncStore.FileRow(p, h, h, st.size, st.mtime, m.optLong("seq"))); ackPut(ref, m, h); advance(m.optLong("seq"), p); return }
       // mid-send: the hub merges our copy with this one and sends the result; keep the phone's for now
-      if (localH != row?.base && inflightPath.containsKey(p)) return
+      if (localH != row?.base && inflightPath.containsKey(p)) { file?.delete(); return }
       if (localH != null && localH != row?.base) {
+        file?.delete()
         val mine = SyncStore.FileRow(p, localH, row?.base, st.size, st.mtime, row?.seq ?: 0)
         store.putFile(mine); pushLocal(v, p, mine); return
       }
     }
-    try { v.write(p, bytes) } catch (e: Exception) { fail("Couldn't write $p on the phone: ${e.message}"); return }
+    try { if (file != null) v.writeFile(p, file) else v.write(p, bytes!!) } catch (e: Exception) { file?.delete(); fail("Couldn't write $p on the phone: ${e.message}"); return }
+    file?.delete()
+    // check it really landed before saying so (report #5)
+    if (v.hashOf(p) != h) {
+      val n = (tries[p] ?: 0) + 1; tries[p] = n
+      fail("$p did not save correctly on the phone${if (n < MAX_TRIES) "; asking again" else ""}.")
+      sendHub(frame("ack", JSONObject().put("ref", ref).put("ok", false).put("err", "write-failed")))
+      if (n < MAX_TRIES) sendHub(frame("want", JSONObject().put("paths", JSONArray().put(p))))
+      return
+    }
     val now = v.stat(p)
-    store.putFile(SyncStore.FileRow(p, h, h, now?.size ?: bytes.size.toLong(), now?.mtime ?: System.currentTimeMillis(), m.optLong("seq")))
+    store.putFile(SyncStore.FileRow(p, h, h, now?.size ?: bytes?.size?.toLong() ?: 0L, now?.mtime ?: System.currentTimeMillis(), m.optLong("seq")))
     changed(p)
-    sendHub(frame("ack", JSONObject().put("ref", m.optString("id")).put("ok", true).put("seq", m.optLong("seq")).put("h", h)))
+    ackPut(ref, m, h)
+    advance(m.optLong("seq"), p)
   }
+  private fun ackPut(ref: String, m: JSONObject, h: String) = sendHub(frame("ack", JSONObject().put("ref", ref).put("ok", true).put("seq", m.optLong("seq")).put("h", h)))
   private fun onDel(m: JSONObject) {
-    store.cursor = maxOf(store.cursor, m.optLong("seq"))
-    if (!mine(m.optString("p"))) { toObsidian(m); return }
+    val p = m.getString("p")
+    if (ignored(p)) return
+    if (!mine(p)) { toObsidian(m); return }
     val v = vault() ?: return
-    val p = m.getString("p"); val row = store.file(p)
-    if (row != null && row.h != row.base) return  // edited here: an edit beats a delete; it is pushed on the next manifest
+    val row = store.file(p)
+    if (row != null && row.h != row.base) { advance(m.optLong("seq"), p); return }  // edited here: an edit beats a delete; pushed on the next manifest
     v.delete(p); store.dropFile(p); changed(p)
+    advance(m.optLong("seq"), p)
   }
   private fun onMv(m: JSONObject) {
-    store.cursor = maxOf(store.cursor, m.optLong("seq"))
-    if (!mine(m.optString("from")) && !mine(m.optString("to"))) { toObsidian(m); return }
-    val v = vault() ?: return
     val from = m.getString("from"); val to = m.getString("to")
+    if (ignored(from) || ignored(to)) return
+    if (!mine(from) && !mine(to)) {
+      // phone Obsidian moves it; Margin's table follows so a later scan is not a delete plus a new file
+      store.file(from)?.let { store.dropFile(from); store.putFile(it.copy(path = to)) }
+      toObsidian(m); return
+    }
+    val v = vault() ?: return
     val bytes = v.read(from) ?: run { sendHub(frame("want", JSONObject().put("paths", JSONArray().put(to)))); return }
-    v.write(to, bytes); v.delete(from)
+    try { v.write(to, bytes) } catch (e: Exception) { fail("Couldn't move $from to $to: ${e.message}"); return }
+    if (v.hashOf(to) != Seal.hash(bytes)) { fail("Moving $from to $to did not save; asking again."); sendHub(frame("want", JSONObject().put("paths", JSONArray().put(to)))); return }
+    v.delete(from)
     store.file(from)?.let { store.dropFile(from); store.putFile(it.copy(path = to)) }
+    advance(m.optLong("seq"), to)
   }
   private fun onAck(m: JSONObject) {
     val ref = m.optString("ref")
-    if (fromObsidian.remove(ref)) { toObsidian(m); return }
+    fromObsidian.remove(ref)?.let { sent -> obsidianAcked(sent, m); toObsidian(m); return }
     val inf = inflight.remove(ref)?.also { inflightPath.remove(it.path) }
     if (m.optBoolean("ok")) {
       store.acked(ref)
@@ -456,6 +628,8 @@ object SyncEngine {
     when (err) {
       "read-only" -> fail("The desktop hub is in read-only mode, so phone changes wait. Set \"mode\": \"live\" in ~/.config/bone-sync/config.json.")
       "edited" -> {}                                         // a delete lost to a desktop edit; the file comes back
+      "held" -> {}                                           // a big delete waits for the owner (onHold)
+      "ignored" -> tries[inf.path] = MAX_TRIES               // the desktop never takes this path
       "need-full", "hash-mismatch" -> retry(inf, err)       // the file changed while sending: read it again
       else -> retry(inf, err)
     }
@@ -467,6 +641,82 @@ object SyncEngine {
     val row = store.file(inf.path) ?: return
     if (inf.kind == "put" && row.h != null) pushLocal(v, inf.path, row) else if (inf.kind == "del" && row.base != null) sendDel(inf.path, row.base)
   }
+  // ── big deletes (§9) ─────────────────────────────────────────────────────────────────────────────
+  /** One-shot: the owner said "delete them on the desktop too" for the phone's own big delete. */
+  private var allowDeletes = false
+  private var localHeld: List<String> = emptyList()
+  /** The phone lost more files than DEL_LIMIT at once: hold them and ask, here and in a notification. */
+  private fun holdLocal(paths: List<String>) {
+    val first = localHeld.isEmpty()
+    localHeld = paths
+    val o = JSONObject().put("holdId", "local").put("from", "phone").put("src", "phone").put("count", paths.size)
+      .put("sample", JSONArray(paths.take(5))).put("local", true).put("at", System.currentTimeMillis())
+    prefs.edit().putString("hold", o.toString()).apply()
+    if (first) holdNote(paths.size, "on this phone")
+    status("hold")
+  }
+  /** The hub held a big delete (from the desktop, or from phone Obsidian): show the question here too. */
+  private fun onHold(m: JSONObject) {
+    toObsidian(m)
+    when (m.optString("op")) {
+      "held" -> {
+        val first = JSONObject(prefs.getString("hold", "{}")!!).optString("holdId") != m.optString("holdId")
+        prefs.edit().putString("hold", m.toString()).apply()
+        if (first) holdNote(m.optInt("count"), if (m.optString("src") == "desktop") "on the desktop" else "on the phone")
+        status("hold")
+      }
+      "done" -> {
+        if (JSONObject(prefs.getString("hold", "{}")!!).optString("holdId") == m.optString("holdId")) prefs.edit().remove("hold").apply()
+        cancelHoldNote(); status("hold done")
+      }
+    }
+  }
+  /** The owner's answer from Settings → Sync (or the notification): "apply" deletes everywhere, "cancel" keeps. */
+  fun answerHold(op: String) = exec.execute {
+    val h = try { JSONObject(prefs.getString("hold", "{}")!!) } catch (e: Exception) { JSONObject() }
+    prefs.edit().remove("hold").apply(); cancelHoldNote()
+    if (h.optBoolean("local")) {
+      val paths = localHeld; localHeld = emptyList()
+      if (op == "apply") { allowDeletes = true; scanAndPush() }
+      else {
+        // keep: fetch the files back from the desktop
+        for (p in paths) store.dropFile(p)
+        if (paths.isNotEmpty() && hub?.ready == true) sendHub(frame("want", JSONObject().put("paths", JSONArray(paths))))
+      }
+    } else if (h.has("holdId") && hub?.ready == true) sendHub(frame("hold", JSONObject().put("op", op).put("holdId", h.optString("holdId"))))
+    status("hold answered")
+  }
+  private const val HOLD_CHANNEL = "sync_alerts"
+  private const val HOLD_NOTE = 7429
+  private fun holdNote(count: Int, where: String) {
+    try {
+      val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      if (android.os.Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(HOLD_CHANNEL) == null)
+        nm.createNotificationChannel(android.app.NotificationChannel(HOLD_CHANNEL, "Sync questions", android.app.NotificationManager.IMPORTANCE_HIGH))
+      val open = app.packageManager.getLaunchIntentForPackage(app.packageName)?.let { android.app.PendingIntent.getActivity(app, HOLD_NOTE, it, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT) }
+      val b = if (android.os.Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(app, HOLD_CHANNEL) else android.app.Notification.Builder(app)
+      b.setSmallIcon(android.R.drawable.stat_notify_sync).setContentTitle("Sync stopped: $count files deleted $where")
+        .setContentText("Do you want to sync the deletes? Open Margin → Settings → Sync to choose.").setAutoCancel(true)
+      open?.let { b.setContentIntent(it) }
+      nm.notify(HOLD_NOTE, b.build())
+    } catch (e: Exception) { Log.w(TAG, "hold notification: ${e.message}") }
+  }
+  private fun cancelHoldNote() { try { (app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(HOLD_NOTE) } catch (e: Exception) { } }
+  /** The hub lost these files (a cancelled big delete on the desktop): push the phone's copies back. */
+  private fun onRestore(m: JSONObject) {
+    val paths = m.optJSONArray("paths") ?: return
+    val v = vault()
+    val forO = JSONArray()
+    for (i in 0 until paths.length()) {
+      val p = paths.optString(i)
+      if (ignored(p)) continue
+      if (!mine(p)) { forO.put(p); continue }
+      val row = store.file(p) ?: continue
+      if (v != null && row.h != null) { val r = row.copy(base = null); store.putFile(r); pushLocal(v, p, r) }
+    }
+    if (forO.length() > 0) toObsidian(JSONObject(m.toString()).put("paths", forO))
+  }
+
   /** Queued frames: bridge rows, timer ops and phone Obsidian's edits. Margin's own file frames from older
    *  builds are dropped: the scan resends those files from the disk. */
   private fun flushOutbox() {
@@ -507,11 +757,20 @@ object SyncEngine {
   private var server: WebSocketServer? = null
   private var hotspot: WebSocketServer? = null
   private var obsidian: JWebSocket? = null
-  private var oPending: String? = null     // challenge nonce sent to O
-  private val fromObsidian = HashSet<String>()
-  private var oFails = 0; private var oBanUntil = 0L
+  /** One loopback connection: Margin plays the hub. Sealed both ways after the welcome. */
+  private class OConn(val nonce: String) { var sealIn: Seal.Sealer? = null; var sealOut: Seal.Sealer? = null }
+  /** O's frames relayed to the hub, by id (or transfer id): kind, path, hash. */
+  private data class OSent(val kind: String, val p: String, val h: String?, val to: String? = null)
+  private val fromObsidian = HashMap<String, OSent>()
+  private var oFails = 0; private var oLastFail = 0L
+  /** Margin's cursor when O connected: when O goes away, Margin catches up from here itself, so nothing O was
+   *  sent but never wrote is lost (report #4). */
+  private var oSince = -1L
+  private var rekeyId: String? = null
 
-  /** The 6-digit code phone Obsidian types once; its key is HKDF(code, "bone-sync/1 obsidian"), kept 10 min. */
+  /** The 6-digit code phone Obsidian types once; its key is HKDF(code, "bone-sync/1 obsidian"), kept 10 min.
+   *  A 6-digit key could be guessed from one recorded handshake, so on first contact Margin swaps it for a random
+   *  256-bit key over the sealed link (`rekey`). */
   fun obsidianCode(): String {
     val n = (java.security.SecureRandom().nextInt(900000) + 100000).toString()
     KeyVault.put(app, "obsidian-pending", Seal.hkdf(n.toByteArray(), "bone-sync/1 local".toByteArray(), "bone-sync/1 obsidian".toByteArray()))
@@ -524,15 +783,14 @@ object SyncEngine {
     server = object : WebSocketServer(InetSocketAddress(InetAddress.getByName("127.0.0.1"), PORT_PHONE)) {
       override fun onOpen(conn: JWebSocket, handshake: ClientHandshake) {
         exec.execute {
-          if (System.currentTimeMillis() < oBanUntil) { conn.close(4003); return@execute }
-          oPending = Seal.nonce()
+          val oc = OConn(Seal.nonce())
+          conn.setAttachment(oc)
           conn.send(JSONObject().put("v", V).put("t", "challenge").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
-            .put("nonce", oPending).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0)).put("hub", deviceId).toString())
-          conn.setAttachment(oPending)
+            .put("nonce", oc.nonce).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0)).put("hub", deviceId).toString())
         }
       }
       override fun onMessage(conn: JWebSocket, message: String) { exec.execute { onObsidianFrame(conn, message) } }
-      override fun onClose(conn: JWebSocket, code: Int, reason: String?, remote: Boolean) { exec.execute { if (obsidian === conn) { obsidian = null; status("obsidian closed") } } }
+      override fun onClose(conn: JWebSocket, code: Int, reason: String?, remote: Boolean) { exec.execute { if (obsidian === conn) obsidianGone() } }
       override fun onError(conn: JWebSocket?, ex: Exception) { Log.w(TAG, "loopback: ${ex.message}") }
       override fun onStart() { Log.i(TAG, "loopback server on 127.0.0.1:$PORT_PHONE") }
     }.apply { isReuseAddr = true; connectionLostTimeout = 0; start() }
@@ -542,49 +800,111 @@ object SyncEngine {
     try { hotspot?.stop(500) } catch (e: Exception) { }
     server = null; hotspot = null; obsidian = null
   }
+  /** O closed: Margin writes the vault itself again, starting from where O came in (it may have missed some). */
+  private fun obsidianGone() {
+    obsidian = null; toO.clear()
+    if (oSince >= 0) { store.cursor = minOf(store.cursor, oSince); oSince = -1 }
+    if (hub?.ready == true) sendHub(frame("manifest", JSONObject().put("files", JSONArray()).put("since", store.cursor)))
+    status("obsidian closed")
+  }
+  private fun oKeys(): List<Pair<String, ByteArray>> = listOfNotNull(
+    KeyVault.get(app, "obsidian")?.let { "current" to it },
+    KeyVault.get(app, "obsidian-next")?.let { "next" to it },
+    if (System.currentTimeMillis() < prefs.getLong("oCodeUntil", 0)) KeyVault.get(app, "obsidian-pending")?.let { "code" to it } else null)
 
-  private fun onObsidianFrame(conn: JWebSocket, text: String) {
+  private fun onObsidianFrame(conn: JWebSocket, raw: String) {
+    val oc = conn.getAttachment<OConn>() ?: return
+    val text = try { oc.sealIn?.unseal(raw) ?: raw } catch (e: Exception) { Log.w(TAG, "bad sealed frame from Obsidian: ${e.message}"); conn.close(4003); if (obsidian === conn) obsidianGone(); return }
     val m = try { JSONObject(text) } catch (e: Exception) { return }
     if (m.optString("v") != V) return
-    if (obsidian !== conn) {
+    if (oc.sealIn == null) {
       if (m.optString("t") != "hello") { conn.close(4001); return }
-      val nonce = conn.getAttachment<String>() ?: return
+      // no ban (a stranger's failures must not lock phone Obsidian out): after a wrong proof, hellos are turned
+      // away as "busy" for a few seconds, which makes guessing a 6-digit code take weeks
+      val now = System.currentTimeMillis()
+      if (oFails > 0 && now - oLastFail < minOf(oFails, 30) * 1000L) { sendO(conn, JSONObject().put("v", V).put("t", "bye").put("id", ulid()).put("reason", "busy")); conn.close(4029); return }
       val dev = m.optString("deviceId")
-      val keys = listOfNotNull(KeyVault.get(app, "obsidian"),
-        if (System.currentTimeMillis() < prefs.getLong("oCodeUntil", 0)) KeyVault.get(app, "obsidian-pending") else null)
-      val hit = keys.firstOrNull { Seal.sameHex(m.optString("proof"), Seal.proof(it, nonce, dev, vaultId ?: "")) }
-      if (hit == null) {
-        if (++oFails >= 5) { oBanUntil = System.currentTimeMillis() + 10 * 60_000; oFails = 0 }
-        conn.send(JSONObject().put("v", V).put("t", "bye").put("id", ulid()).put("reason", "bad-proof").toString()); conn.close(4003); return
+      val hit = oKeys().firstOrNull { Seal.sameHex(m.optString("proof"), Seal.proof(it.second, oc.nonce, dev, vaultId ?: "")) }
+      if (hit == null || m.optInt("seal") != Seal.SEAL_VERSION) {
+        if (hit == null) { oFails++; oLastFail = now }
+        sendO(conn, JSONObject().put("v", V).put("t", "bye").put("id", ulid()).put("reason", if (hit == null) "bad-proof" else "version")); conn.close(4003); return
       }
       oFails = 0
-      if (KeyVault.get(app, "obsidian") == null || !hit.contentEquals(KeyVault.get(app, "obsidian")!!)) { KeyVault.put(app, "obsidian", hit); KeyVault.remove(app, "obsidian-pending") }
+      val key = hit.second
+      if (hit.first == "next") { KeyVault.put(app, "obsidian", key); KeyVault.remove(app, "obsidian-next") }
+      if (hit.first == "code") KeyVault.remove(app, "obsidian-pending")
+      obsidian?.let { if (it !== conn) try { it.close(4009) } catch (e: Exception) { } }
       obsidian = conn
       conn.send(JSONObject().put("v", V).put("t", "welcome").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
         .put("sessionId", ulid()).put("head", store.cursor).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0))
-        .put("hub", deviceId).put("proof", Seal.proof(hit, m.optString("nonce"), deviceId, vaultId ?: "")).put("sealed", false)
+        .put("hub", deviceId).put("proof", Seal.proof(key, m.optString("nonce"), deviceId, vaultId ?: "")).put("sealed", true).put("seal", Seal.SEAL_VERSION)
         .put("mode", hub?.mode ?: "offline").put("hubOnline", hub?.ready == true).toString())
+      val (c2h, h2c) = Seal.sessionKeys(key, oc.nonce, m.optString("nonce"))
+      oc.sealIn = Seal.Sealer(c2h); oc.sealOut = Seal.Sealer(h2c)
+      if (oSince < 0) oSince = store.cursor
+      // a key that came from the 6-digit code is replaced by a random one now that the link is sealed
+      if (hit.first == "code" || prefs.getBoolean("oKeyWeak", true)) {
+        val next = Seal.random(32); KeyVault.put(app, "obsidian-next", next)
+        if (hit.first == "code") KeyVault.put(app, "obsidian", key)
+        val r = JSONObject().put("v", V).put("t", "rekey").put("id", ulid()).put("vault", vaultId).put("from", deviceId).put("key", Seal.hex(next))
+        rekeyId = r.getString("id"); sendO(conn, r)
+      }
       status("obsidian connected")
-      // O reconciles from the hub's view: ask H for a manifest since O's cursor by re-sending hello is not
-      // possible on a live link, so relay a want-everything-changed request as a manifest compare.
+      // O reconciles from the hub's view: ask H for what changed since O's own cursor
       if (hub?.ready == true) sendHub(frame("manifest", JSONObject().put("files", JSONArray()).put("since", m.optLong("cursor"))))
       return
     }
+    if (obsidian !== conn) { conn.close(4009); return }
     when (m.optString("t")) {
-      "ping" -> conn.send(JSONObject().put("v", V).put("t", "pong").put("id", ulid()).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0)).toString())
-      "put", "del", "mv", "want", "manifest", "timer", "bridge", "ack" -> {
-        if (m.optString("t") in setOf("put", "del", "mv")) fromObsidian.add(m.optString("id"))
-        if (m.optString("t") == "bridge") m.optJSONObject("rows")?.let { store.inbox("bridge", it.toString()); onBridgeRows?.invoke(it.toString()) }
-        if (m.optString("t") == "timer") { store.inbox("timer", text); onTimer?.invoke(text) }
-        if (m.optString("t") == "put" && m.optString("enc") != "patch") store.file(m.optString("p")).let { r ->
-          val h = m.optString("h"); store.putFile(SyncStore.FileRow(m.optString("p"), h, r?.base, m.optLong("s"), m.optLong("m"), r?.seq ?: 0))
+      "ping" -> sendO(conn, JSONObject().put("v", V).put("t", "pong").put("id", ulid()).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0)))
+      "ack" -> {
+        val ref = m.optString("ref")
+        if (ref == rekeyId && m.optBoolean("ok")) {
+          // O saved the new key: it is the only one from now on
+          KeyVault.get(app, "obsidian-next")?.let { KeyVault.put(app, "obsidian", it); KeyVault.remove(app, "obsidian-next") }
+          prefs.edit().putBoolean("oKeyWeak", false).apply(); rekeyId = null; return
         }
-        if (hub?.ready == true) sendHub(m) else if (m.optString("t") != "ack" && m.optString("t") != "want") store.enqueue(m.optString("id"), m.toString())
+        toO.remove(ref)?.let { (p, h) -> if (m.optBoolean("ok") && m.optString("h", h) == h) vault()?.stat(p)?.let { st -> store.putFile(SyncStore.FileRow(p, h, h, st.size, st.mtime, m.optLong("seq"))) } }
+        if (hub?.ready == true) sendHub(m)
+      }
+      "hold" -> if (hub?.ready == true) sendHub(m)
+      "put", "del", "mv", "want", "manifest", "timer", "bridge" -> {
+        val t = m.optString("t")
+        if (t == "put" && ignored(m.optString("p"))) return
+        when (t) {
+          "put" -> {
+            val ref = if (m.has("xfer")) m.optString("xfer") else m.optString("id")
+            if (!m.has("xfer") || m.optInt("part") == 0) fromObsidian[ref] = OSent("put", m.optString("p"), m.optString("h"))
+            if (m.optString("enc") != "patch" && (!m.has("xfer") || m.optInt("part") == 0)) store.file(m.optString("p")).let { r ->
+              store.putFile(SyncStore.FileRow(m.optString("p"), m.optString("h"), r?.base, m.optLong("s"), m.optLong("m"), r?.seq ?: 0))
+            }
+          }
+          "del" -> fromObsidian[m.optString("id")] = OSent("del", m.optString("p"), null)
+          "mv" -> fromObsidian[m.optString("id")] = OSent("mv", m.optString("from"), m.optString("h"), m.optString("to"))
+          "bridge" -> m.optJSONObject("rows")?.let { store.inbox("bridge", it.toString()); onBridgeRows?.invoke(it.toString()) }
+          "timer" -> { store.inbox("timer", text); onTimer?.invoke(text) }
+        }
+        if (hub?.ready == true) sendHub(m) else if (t != "want" && !m.has("xfer")) store.enqueue(m.optString("id"), m.toString())
       }
       "bye" -> conn.close()
     }
   }
-  private fun toObsidian(m: JSONObject) { try { obsidian?.send(m.toString()) } catch (e: Exception) { } }
+  /** The hub accepted (or refused) a change O made: Margin's file table follows, so it never pushes O's notes
+   *  later from a base that is out of date. */
+  private fun obsidianAcked(sent: OSent, m: JSONObject) {
+    if (!m.optBoolean("ok")) return
+    when (sent.kind) {
+      "put" -> { val p = m.optString("renamed").ifEmpty { sent.p }; store.file(sent.p)?.let { r -> if (r.h == sent.h) { store.dropFile(sent.p); store.putFile(r.copy(path = p, base = sent.h)) } } }
+      "del" -> store.file(sent.p)?.let { if (it.h == null || it.h == it.base) store.dropFile(sent.p) }
+      "mv" -> store.file(sent.p)?.let { store.dropFile(sent.p); store.putFile(it.copy(path = sent.to ?: return)) }
+    }
+  }
+  private fun sendO(conn: JWebSocket, m: JSONObject) {
+    val oc = conn.getAttachment<OConn>()
+    val text = m.toString()
+    try { conn.send(oc?.sealOut?.seal(text) ?: text) } catch (e: Exception) { }
+  }
+  private fun toObsidian(m: JSONObject) { obsidian?.let { sendO(it, m) } }
 
   /** The hotspot is on: listen on its address; the desktop dials ws://<gateway>:7429 and sends the challenge. */
   fun hotspotOn(addr: InetAddress) = exec.execute {
@@ -593,7 +913,7 @@ object SyncEngine {
       override fun onOpen(conn: JWebSocket, handshake: ClientHandshake) {
         exec.execute {
           if (hub != null) { conn.close(4009); return@execute }
-          hub = Link({ conn.send(it) }, { conn.close() }, false)
+          hub = Link({ conn.send(it) }, { conn.close() }, false).also { handshakeDeadline(it) }
           conn.setAttachment(hub)
         }
       }
@@ -623,4 +943,5 @@ object SyncEngine {
     .put("offset", hub?.offset ?: 0L).put("hubOnline", hub?.ready == true)
     .put("scanAt", prefs.getLong("scanAt", 0)).put("scanMs", prefs.getLong("scanMs", 0)).put("scanFiles", prefs.getInt("scanFiles", 0))
     .put("pushedAt", prefs.getLong("pushedAt", 0)).put("sending", inflight.size)
+    .put("hold", prefs.getString("hold", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } } ?: JSONObject.NULL)
 }

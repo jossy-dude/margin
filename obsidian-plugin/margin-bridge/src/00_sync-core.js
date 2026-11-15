@@ -2298,6 +2298,22 @@ function edits(base, other) {
 }
 
 const same = (x, y) => x.length === y.length && x.every((v, k) => v === y[k]);
+/** Where a run of `small` sits inside `big`, or -1. */
+const runAt = (big, small) => { for (let i = 0; i + small.length <= big.length; i++) if (small.every((v, k) => v === big[i + k])) return i; return -1; };
+/** Two sides inserted lines at the same point. One side often already holds the other's lines: a device that
+ *  merged from a stale base sends `L2` while the hub has `L2 L3` (test report 2026-11-15, M1). Keep each line
+ *  once: the longer run when it contains the shorter, one copy of an overlap, else ours then theirs. */
+function joinInserts(a, b) {
+  if (!a.length) return b;
+  if (!b.length) return a;
+  if (runAt(b, a) >= 0) return b;
+  if (runAt(a, b) >= 0) return a;
+  for (let k = Math.min(a.length, b.length) - 1; k > 0; k--) {
+    if (same(a.slice(-k), b.slice(0, k))) return [...a, ...b.slice(k)];
+    if (same(b.slice(-k), a.slice(0, k))) return [...b, ...a.slice(k)];
+  }
+  return [...a, ...b];
+}
 
 /** Generic diff3 over token arrays. Returns {out: token[] | null, regions: [{base, ours, theirs}] , clean}.
  *  `onConflict(baseToks, oursToks, theirsToks)` returns tokens to use, or null to give up. */
@@ -2318,7 +2334,7 @@ function diff3(base, ours, theirs, onConflict, keepBothInserts = false) {
     const bo = build(os), bt = build(ts);
     if (same(bo, bt)) { out.push(...bo); continue; }
     // both only inserted at the same point (two Log lines appended at once): keep both, ours first
-    if (keepBothInserts && g.every((x) => x.s === x.e && x.s === gs)) { out.push(...os.flatMap((x) => x.ins), ...ts.flatMap((x) => x.ins)); continue; }
+    if (keepBothInserts && g.every((x) => x.s === x.e && x.s === gs)) { out.push(...joinInserts(os.flatMap((x) => x.ins), ts.flatMap((x) => x.ins))); continue; }
     const r = onConflict(base.slice(gs, ge), bo, bt);
     if (r === null) { clean = false; out.push(...bo); continue; }
     if (r.conflict) clean = false;
@@ -2485,15 +2501,39 @@ const DEFAULT_IGNORE = `# bone-sync: paths that never sync (gitignore syntax). R
 .obsidian/plugins/bone-yt/cache.json
 .obsidian/plugins/bone-chess/cache/
 .obsidian/plugins/harper/
+.obsidian/plugins/*/node_modules/
+.obsidian/plugins/remotely-save/data.json
+.obsidian/plugins/obsidian-livesync/data.json
 .smart-env/
 .claudian/
 .autoresearch/
+node_modules/
+.stfolder/
+.stversions/
+.Trash-*/
+$RECYCLE.BIN/
+.thumbnails/
 conflict-files-obsidian-git.md
 *.tmp
 .*.tmp
+*.swp
+*.swo
+*~
+.~lock.*#
+*.crdownload
+*.part
 ~$*
 .DS_Store
 Thumbs.db
+desktop.ini
+.directory
+.nomedia
+`;
+/** Never sync, whatever `.bone-sync-ignore` says (a `!` line cannot undo these): git's folder holds hooks that
+ *  run as code on the desktop, and the temp files are half-written. */
+const HARD_IGNORE = `.git/
+*.sync.tmp
+.bone-sync-in/
 `;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
@@ -2525,7 +2565,9 @@ function compileIgnore(text = DEFAULT_IGNORE) {
     const re = new RegExp(`${anchored ? '^' : '(^|/)'}${body}${dir ? '(/.*)?$' : '(/.*)?$'}`);
     rules.push({ neg, re, dir });
   }
+  const hard = text === HARD_IGNORE ? null : compileIgnore(HARD_IGNORE);
   return (path) => {
+    if (hard?.(path)) return true;
     let hit = false;
     for (const r of rules) if (r.re.test(path)) hit = !r.neg;
     return hit;
@@ -2556,13 +2598,17 @@ function copyName(path, who, at = new Date()) {
   return `${m[1]} (${who} ${stamp})${m[2] ?? ''}`;
 }
 
-return { DEFAULT_IGNORE, MAX_FILE_BYTES, compileIgnore, caseSafePath, kindOf, copyName };
+return { DEFAULT_IGNORE, HARD_IGNORE, MAX_FILE_BYTES, compileIgnore, caseSafePath, kindOf, copyName };
 })();
 var __seal = (function () {
 // Pairing proof and frame sealing (SYNC_PROTOCOL §3). WebCrypto only: Node, Electron and the WebView.
 // proof   = HMAC-SHA256(pairKey, nonce ‖ deviceId ‖ vaultId), hex
-// session = HKDF-SHA256(pairKey, salt = serverNonce ‖ clientNonce, info = "bone-sync/1 seal") → AES-256-GCM key
-// sealed  = 12-byte IV ‖ ciphertext+tag, base64 in a text frame {"t":"sealed","d":"..."}.
+// session = two AES-256-GCM keys, one per direction (seal 2):
+//           HKDF-SHA256(pairKey, salt = serverNonce ‖ clientNonce, info = "bone-sync/1 seal c2h" | "… h2c")
+//           A frame sent one way can't be bounced back as if it came from the other side.
+// sealed  = {"t":"sealed","n":<counter>,"d": base64(12-byte IV ‖ ciphertext+tag)}, AAD = "n". Each side numbers
+//           its frames 1, 2, 3… and the receiver takes only the next number, so a recorded frame can't be replayed,
+//           dropped or reordered without the link closing.
 const { enc, dec, hex, toBytes, randomBytes } = __hash;
 const subtle = () => globalThis.crypto.subtle;
 const b64 = (u8) => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s); };
@@ -2580,22 +2626,36 @@ function sameHex(a, b) {
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-async function sessionKey(pairKey, serverNonce, clientNonce) {
+const SEAL_VERSION = 2;
+async function hkdfKey(pairKey, salt, info) {
   const base = await subtle().importKey('raw', pairKey, 'HKDF', false, ['deriveKey']);
-  return subtle().deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: cat(unhex(serverNonce), unhex(clientNonce)), info: enc.encode('bone-sync/1 seal') },
-    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  return subtle().deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: enc.encode(info) }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-async function seal(key, text) {
-  const iv = randomBytes(12);
-  const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv }, key, toBytes(text)));
-  return JSON.stringify({ t: 'sealed', d: b64(cat(iv, ct)) });
+/** { c2h, h2c }: client→hub and hub→client keys for one session. */
+async function sessionKeys(pairKey, serverNonce, clientNonce) {
+  const salt = cat(unhex(serverNonce), unhex(clientNonce));
+  return { c2h: await hkdfKey(pairKey, salt, 'bone-sync/1 seal c2h'), h2c: await hkdfKey(pairKey, salt, 'bone-sync/1 seal h2c') };
 }
-async function unseal(key, frame) {
-  const o = typeof frame === 'string' ? JSON.parse(frame) : frame;
-  if (o?.t !== 'sealed') throw new Error('not a sealed frame');
-  const raw = unb64(o.d);
-  const pt = await subtle().decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12) }, key, raw.slice(12));
-  return dec.decode(pt);
+/** One direction of a sealed link: `seal` numbers outgoing frames, `unseal` accepts only the next number.
+ *  Callers must seal and unseal in send/receive order (every caller runs one queue per link). */
+function sealer(key) {
+  let sent = 0, got = 0;
+  return {
+    async seal(text) {
+      const n = ++sent, iv = randomBytes(12);
+      const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(String(n)) }, key, toBytes(text)));
+      return JSON.stringify({ t: 'sealed', n, d: b64(cat(iv, ct)) });
+    },
+    async unseal(frame) {
+      const o = typeof frame === 'string' ? JSON.parse(frame) : frame;
+      if (o?.t !== 'sealed' || typeof o.d !== 'string') throw new Error('not a sealed frame');
+      if (o.n !== got + 1) throw new Error(`sealed frame ${o.n}, expected ${got + 1}`);
+      const raw = unb64(o.d);
+      const pt = await subtle().decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12), additionalData: enc.encode(String(o.n)) }, key, raw.slice(12));
+      got = o.n;
+      return dec.decode(pt);
+    },
+  };
 }
 const newNonce = () => hex(randomBytes(16));
 const newPairKey = () => randomBytes(32);
@@ -2617,12 +2677,69 @@ const WORDS = ('acid aunt bake bank barn bead bell bird boat bone book boot bowl
 const codeToWords = (bytes8) => [...bytes8].map((b) => WORDS[b]).join(' ');
 const wordsToCode = (s) => Uint8Array.from(s.trim().toLowerCase().split(/\s+/), (w) => { const i = WORDS.indexOf(w); if (i < 0) throw new Error(`unknown word: ${w}`); return i; });
 
-return { b64, unb64, unhex, proofOf, sameHex, sessionKey, seal, unseal, newNonce, newPairKey, WORDS, codeToWords, wordsToCode };
+return { b64, unb64, unhex, proofOf, sameHex, SEAL_VERSION, sessionKeys, sealer, newNonce, newPairKey, WORDS, codeToWords, wordsToCode };
+})();
+var __chunk = (function () {
+// Big binary files travel in parts (SYNC_PROTOCOL §5, test report 2026-11-15 #6). One 30 MB video as one frame
+// cost the hub ~280 MB (base64, JSON, seal, socket buffer: five copies) and OkHttp drops a link whose send
+// queue passes 16 MiB. A part is an ordinary `put` with `enc: "bin"` and
+//   xfer  = one id for every part of this file
+//   part  = 0, 1, … parts−1, sent in order
+//   parts = how many
+// `h`, `s`, `base`, `seq` are the whole file's on every part. The receiver keeps the parts (on disk where it can),
+// checks the whole file's hash after the last one, and only then treats it as one `put`.
+const { b64, unb64 } = __seal;
+const { ulid } = __hash;
+const PART_BYTES = 1024 * 1024;   // raw bytes per part; ~1.4 MB on the wire after base64 and sealing
+const MAX_PARTS = 128;            // 128 MB: above MAX_FILE_BYTES
+
+/** Does a file this size go in parts? */
+const needsParts = (size) => size > PART_BYTES;
+
+/** The part frames' fields for `bytes` (Uint8Array), lazily: one part in memory at a time. */
+const partsOf = function* (fields, bytes, size = PART_BYTES) {
+  const parts = Math.max(1, Math.ceil(bytes.length / size)), xfer = ulid();
+  for (let part = 0; part < parts; part++) yield { ...fields, enc: 'bin', xfer, part, parts, body: b64(bytes.subarray(part * size, (part + 1) * size)) };
+}
+
+/** A part frame's own fields are sane (`check` calls this). */
+function partError(m) {
+  if (m.parts === undefined && m.part === undefined && m.xfer === undefined) return null;
+  if (m.enc !== 'bin' || typeof m.xfer !== 'string' || m.xfer.length > 64) return 'bad-part';
+  if (!Number.isInteger(m.parts) || !Number.isInteger(m.part) || m.parts < 1 || m.parts > MAX_PARTS || m.part < 0 || m.part >= m.parts) return 'bad-part';
+  return null;
+}
+
+/** In-memory assembly (phone Obsidian; the hub assembles on disk). add(m) → the whole file's bytes after the
+ *  last part, else null. Throws on a part out of order; the caller asks for the file again. */
+class Assembler {
+  constructor({ maxOpen = 4 } = {}) { this.open = new Map(); this.maxOpen = maxOpen; }
+  add(m) {
+    let x = this.open.get(m.xfer);
+    if (!x) {
+      if (m.part !== 0) throw new Error(`part ${m.part} of ${m.p} without its start`);
+      if (this.open.size >= this.maxOpen) this.open.delete(this.open.keys().next().value);
+      x = { p: m.p, h: m.h, parts: m.parts, next: 0, chunks: [], size: 0 };
+      this.open.set(m.xfer, x);
+    }
+    if (m.part !== x.next || m.p !== x.p || m.h !== x.h || m.parts !== x.parts) { this.open.delete(m.xfer); throw new Error(`part ${m.part} of ${m.p} out of order`); }
+    const c = unb64(m.body ?? ''); x.chunks.push(c); x.size += c.length; x.next++;
+    if (x.next < x.parts) return null;
+    this.open.delete(m.xfer);
+    const all = new Uint8Array(x.size); let o = 0;
+    for (const c2 of x.chunks) { all.set(c2, o); o += c2.length; }
+    return all;
+  }
+  drop() { this.open.clear(); }
+}
+
+return { PART_BYTES, MAX_PARTS, needsParts, partsOf, partError, Assembler };
 })();
 var __proto = (function () {
 // bone-sync/1 messages (SYNC_PROTOCOL §5). One JSON object per text frame. `frame()` fills the common fields;
 // `check()` rejects anything a peer must never act on (wrong version, wrong vault, missing fields).
 const { ulid } = __hash;
+const { partError } = __chunk;
 const V = 'bone-sync/1';
 const ROLES = ['phone-hub', 'phone-obsidian', 'desktop-obsidian', 'hub'];
 const PORT_HUB = 7428;      // bone-syncd on the desktop
@@ -2644,6 +2761,9 @@ const REQ = {
   presence: ['peers'],
   ping: [], pong: [],
   bye: ['reason'],
+  hold: ['op'],          // big-delete guard: held | apply | cancel | done (§9)
+  restore: ['paths'],    // hub → client: push these files back, the hub lost them
+  rekey: ['key'],        // Margin → phone Obsidian, on a sealed link: the strong key that replaces the 6-digit code
 };
 const TYPES = Object.keys(REQ);
 const TIMER_OPS = ['start', 'pause', 'resume', 'extend', 'stop', 'done'];
@@ -2664,6 +2784,9 @@ function check(m, vault) {
   for (const k of REQ[m.t]) if (m[k] === undefined) return `missing-${k}`;
   if (m.t === 'timer' && !TIMER_OPS.includes(m.op)) return 'bad-timer-op';
   if ((m.t === 'put' || m.t === 'del') && !safePath(m.p)) return 'bad-path';
+  if (m.t === 'put') { const e = partError(m); if (e) return e; }
+  if ((m.t === 'want' || m.t === 'restore') && (!Array.isArray(m.paths) || !m.paths.every(safePath))) return 'bad-path';
+  if (m.t === 'hold' && !['held', 'apply', 'cancel', 'done'].includes(m.op)) return 'bad-hold-op';
   if (m.t === 'mv' && (!safePath(m.from) || !safePath(m.to))) return 'bad-path';
   return null;
 }
@@ -2692,22 +2815,21 @@ return { V, ROLES, PORT_HUB, PORT_PHONE, TYPES, TIMER_OPS, frame, check, safePat
 })();
 var __client = (function () {
 // A bone-sync/1 client session over any WebSocket-like object (browser/WebView WebSocket, Node's global
-// WebSocket). Handles challenge → hello → welcome (and checks the hub's proof back), sealing on non-loopback
-// links, ping/pong with clock offset, and hands every other frame to `onFrame`. Used by the desktop plugin,
+// WebSocket). Handles challenge → hello → welcome (and checks the hub's proof back), sealing (every link, loopback
+// too: another app on the same machine must not read or write the stream), ping/pong with clock offset, and hands every other frame to `onFrame`. Used by the desktop plugin,
 // margin-bridge and the daemon tests; Margin's Kotlin client follows the same steps.
 const { V, frame } = __proto;
-const { proofOf, sameHex, sessionKey, seal, unseal, newNonce, unhex } = __seal;
+const { proofOf, sameHex, sessionKeys, sealer, newNonce, unhex, SEAL_VERSION } = __seal;
 function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, role, app = '0.7.0', key /* hex */, vault, hubId = null,
   cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {} }) {
   const ws = new WebSocketImpl(url);
-  const st = { ws, ready: false, sealKey: null, offset: 0, hubId, mode: null, closed: false };
+  const st = { ws, ready: false, sealOut: null, sealIn: null, offset: 0, hubId, mode: null, closed: false };
   let nonce = null, q = Promise.resolve(), out = Promise.resolve();
   const ids = { vault, from: deviceId };
   const rawSend = (text) => { if (ws.readyState === 1) ws.send(text); };
   st.send = (m) => {
     const text = JSON.stringify(m.v ? m : frame(m.t, m, ids));
-    const k = st.sealKey;
-    out = out.then(async () => rawSend(k ? await seal(k, text) : text)).catch((e) => log(`send: ${e.message}`));
+    out = out.then(async () => { const k = st.sealOut; rawSend(k ? await k.seal(text) : text); }).catch((e) => log(`send: ${e.message}`));
     return out;
   };
   st.frame = (t, fields) => frame(t, fields, ids);
@@ -2715,27 +2837,39 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
   st.ping = () => { st.pingAt = Date.now(); return st.send(frame('ping', {}, ids)); };
 
   const handle = async (data) => {
+    if (st.closed) return;
     let text = typeof data === 'string' ? data : new TextDecoder().decode(data);
-    if (st.sealKey) text = await unseal(st.sealKey, text);
-    const m = JSON.parse(text);
+    if (st.sealIn) {
+      try { text = await st.sealIn.unseal(text); } catch (e) { log(`bad sealed frame (${e.message}); closing`); st.close(); return; }
+    }
+    let m; try { m = JSON.parse(text); } catch { return; }
     if (m.v !== V) return;
-    if (m.t === 'challenge') {
-      if (hubId && m.hub && m.hub !== hubId) { log('challenge from another hub'); st.close(); return; }
-      nonce = newNonce();
-      if (!vault && m.vault) { vault = m.vault; ids.vault = vault; }
-      const proof = await proofOf(unhex(key), m.nonce, deviceId, vault);
-      rawSend(JSON.stringify(frame('hello', { ...hello, deviceId, name, role, app, proof, nonce, cursor, clientTime: Date.now() }, ids)));
-      st.serverNonce = m.nonce;
+    if (!st.ready) {
+      // Nothing but the handshake is acted on until the hub has proven it holds the pair key.
+      if (m.t === 'challenge' && !nonce) {
+        if (hubId && m.hub && m.hub !== hubId) { log('challenge from another hub'); st.close(); return; }
+        nonce = newNonce();
+        if (!vault && m.vault) { vault = m.vault; ids.vault = vault; }
+        const proof = await proofOf(unhex(key), m.nonce, deviceId, vault);
+        rawSend(JSON.stringify(frame('hello', { ...hello, deviceId, name, role, app, proof, nonce, cursor, seal: SEAL_VERSION, clientTime: Date.now() }, ids)));
+        st.serverNonce = m.nonce;
+        return;
+      }
+      if (m.t === 'welcome' && nonce) {
+        const want = await proofOf(unhex(key), nonce, m.hub, vault);
+        if (!sameHex(m.proof, want) || (hubId && m.hub !== hubId)) { log('the hub failed its proof; closing'); st.close(); return; }
+        if (!(m.sealed && m.seal === SEAL_VERSION)) { log('the hub offered an unsealed link; closing'); st.close(); return; }
+        st.hubId = m.hub; st.mode = m.mode; st.offset = m.serverTime - Date.now(); st.head = m.head;
+        const k = await sessionKeys(unhex(key), st.serverNonce, nonce); st.sealOut = sealer(k.c2h); st.sealIn = sealer(k.h2c);
+        st.ready = true; onState('ready', st);
+        return;
+      }
+      // unproven: anyone can say "bad-proof", so the app must not give up pairing on it (it is told `preauth`)
+      if (m.t === 'bye') { log(`bye before proof: ${m.reason}`); onFrame({ ...m, preauth: true }, st); st.close(); return; }
+      log(`dropped ${m.t} before the hub proved itself`);
       return;
     }
-    if (m.t === 'welcome') {
-      const want = await proofOf(unhex(key), nonce, m.hub, vault);
-      if (!sameHex(m.proof, want) || (hubId && m.hub !== hubId)) { log('the hub failed its proof; closing'); st.close(); return; }
-      st.hubId = m.hub; st.mode = m.mode; st.offset = m.serverTime - Date.now(); st.head = m.head;
-      if (m.sealed) st.sealKey = await sessionKey(unhex(key), st.serverNonce, nonce);
-      st.ready = true; onState('ready', st);
-      return;
-    }
+    if (m.t === 'challenge' || m.t === 'welcome') return;
     if (m.t === 'pong') { if (st.pingAt) { const rtt = Date.now() - st.pingAt; st.offset = m.serverTime + rtt / 2 - Date.now(); st.rtt = rtt; } }
     if (m.t === 'bye') log(`bye: ${m.reason}`);
     onFrame(m, st);
@@ -2749,5 +2883,5 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
 
 return { connect };
 })();
-return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, sessionKey: __seal.sessionKey, seal: __seal.seal, unseal: __seal.unseal, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, TIMER_OPS: __proto.TIMER_OPS, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
+return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, TIMER_OPS: __proto.TIMER_OPS, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
 })();

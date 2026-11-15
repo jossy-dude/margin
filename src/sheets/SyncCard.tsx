@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Field, HandBox, Txt } from '../ui/kit';
 import { useTheme } from '../ui/theme-context';
-import { syncClearErrors, syncForget, syncNow, syncObsidianCode, syncPair, syncStatus, nativeAvailable, type SyncStatus } from '../services/native';
+import { syncClearErrors, syncForget, syncHold, syncNow, syncObsidianCode, syncPair, syncStatus, nativeAvailable, type SyncStatus } from '../services/native';
 import { fmtTime } from '../domain/time';
+import { holdQuestion } from '../domain/syncHold';
 import { useStore } from '../store/store';
 
 /** The words a person reads for the service's state (SYNC_ANDROID.md §4). */
@@ -39,6 +40,18 @@ export function SyncCard() {
         </>
       )}
       {msg ? <Txt f="serif" s={14.5} c="mut">{msg}</Txt> : null}
+      {st?.hold ? (() => {
+        const q = holdQuestion(st.hold);
+        const answer = (op: 'apply' | 'cancel') => { syncHold(op); setTimeout(() => setSt(syncStatus()), 500); };
+        return (
+          <View style={{ gap: 6 }} testID="sync-hold">
+            <Txt f="bold" s={17} c="bad">{q.title}</Txt>
+            <Txt f="serif" s={14.5} c="mut">{q.body}</Txt>
+            <Btn small kind="ink" icon="trash" label={q.yes} testID="sync-hold-apply" onPress={() => answer('apply')} />
+            <Btn small kind="ghost" icon="check" label={q.no} testID="sync-hold-cancel" onPress={() => answer('cancel')} />
+          </View>
+        );
+      })() : null}
       {st?.paired ? (
         <View style={{ gap: 8 }}>
           <Btn small kind="ghost" icon="note" label="Connect phone Obsidian" testID="sync-obsidian-code" onPress={() => setCode(syncObsidianCode())} />

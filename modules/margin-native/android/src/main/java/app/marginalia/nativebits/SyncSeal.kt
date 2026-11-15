@@ -18,8 +18,10 @@ import javax.crypto.spec.SecretKeySpec
  * bone-sync/1 crypto, byte-for-byte the same as `vault-sync/core/src/seal.js` and `hash.js`
  * (SYNC_PROTOCOL.md §3, §6):
  *   proof   = hex(HMAC-SHA256(pairKey, "nonce|deviceId|vaultId"))
- *   session = HKDF-SHA256(pairKey, salt = serverNonce ‖ clientNonce, info = "bone-sync/1 seal") → AES-256-GCM
- *   sealed  = {"t":"sealed","d": base64(iv12 ‖ ciphertext ‖ tag16)}
+ *   session = seal 2: one AES-256-GCM key per direction,
+ *             HKDF-SHA256(pairKey, salt = serverNonce ‖ clientNonce, info = "bone-sync/1 seal c2h" | "… h2c")
+ *   sealed  = {"t":"sealed","n":<counter>,"d": base64(iv12 ‖ ciphertext ‖ tag16)}, AAD = "n"; the receiver takes
+ *             only the next n, so a frame can't be replayed, dropped, reordered or bounced back
  *   hash    = first 128 bits of SHA-256, hex
  */
 object Seal {
@@ -51,22 +53,36 @@ object Seal {
     while (out.size() < len) { t = hmac(prk, t + info + byteArrayOf(i.toByte())); out.write(t); i++ }
     return out.toByteArray().copyOf(len)
   }
-  fun sessionKey(pairKey: ByteArray, serverNonce: String, clientNonce: String) =
-    hkdf(pairKey, unhex(serverNonce) + unhex(clientNonce), "bone-sync/1 seal".toByteArray())
+  const val SEAL_VERSION = 2
+  /** client→hub and hub→client keys of one session. */
+  fun sessionKeys(pairKey: ByteArray, serverNonce: String, clientNonce: String): Pair<ByteArray, ByteArray> {
+    val salt = unhex(serverNonce) + unhex(clientNonce)
+    return hkdf(pairKey, salt, "bone-sync/1 seal c2h".toByteArray()) to hkdf(pairKey, salt, "bone-sync/1 seal h2c".toByteArray())
+  }
   /** The key a typed 8-word phrase stands for (vault-sync/daemon/keys.js `keyFromCode`). */
   fun keyFromCode(code: ByteArray, vaultId: String) = hkdf(code, vaultId.toByteArray(), "bone-sync/1 pair".toByteArray())
 
-  fun seal(key: ByteArray, text: String): String {
-    val iv = random(12)
-    val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv)) }
-    val ct = c.doFinal(text.toByteArray())
-    return "{\"t\":\"sealed\",\"d\":\"${Base64.encodeToString(iv + ct, Base64.NO_WRAP)}\"}"
-  }
-  fun unseal(key: ByteArray, frame: String): String {
-    val d = org.json.JSONObject(frame).getString("d")
-    val raw = Base64.decode(d, Base64.NO_WRAP)
-    val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, raw, 0, 12)) }
-    return String(c.doFinal(raw, 12, raw.size - 12))
+  /** One direction of a sealed link (seal.js `sealer`). Use it from one thread, in send / receive order. */
+  class Sealer(private val key: ByteArray) {
+    private var sent = 0L; private var got = 0L
+    fun seal(text: String): String {
+      val n = ++sent; val iv = Seal.random(12)
+      val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv)); updateAAD(n.toString().toByteArray()) }
+      val ct = c.doFinal(text.toByteArray())
+      return "{\"t\":\"sealed\",\"n\":$n,\"d\":\"${Base64.encodeToString(iv + ct, Base64.NO_WRAP)}\"}"
+    }
+    /** Throws on a frame that is not sealed, not the next number, or tampered with. */
+    fun unseal(frame: String): String {
+      val o = org.json.JSONObject(frame)
+      if (o.optString("t") != "sealed") throw IllegalStateException("not a sealed frame")
+      val n = o.getLong("n")
+      if (n != got + 1) throw IllegalStateException("sealed frame $n, expected ${got + 1}")
+      val raw = Base64.decode(o.getString("d"), Base64.NO_WRAP)
+      val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, raw, 0, 12)); updateAAD(n.toString().toByteArray()) }
+      val pt = String(c.doFinal(raw, 12, raw.size - 12))
+      got = n
+      return pt
+    }
   }
 
   /** The 256-word list of seal.js, in order (the 8-word phrase is 8 indexes). */

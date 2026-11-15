@@ -48,6 +48,7 @@ class MarginNativeModule : Module() {
     /** Send the phone's changes now (and connect first if needed); v0.7.1. */
     Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncEngine.scanNow(); true }
     Function("syncClearErrors") { SyncEngine.init(context); SyncEngine.clearErrors(); true }
+    Function("syncHold") { op: String -> SyncEngine.init(context); SyncEngine.answerHold(if (op == "apply") "apply" else "cancel"); true }
     /** Rows that arrived while JS was not running: [{kind, json}], removed once read. */
     Function("syncInbox") {
       SyncEngine.init(context)
