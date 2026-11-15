@@ -61,6 +61,10 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
 
 ## Now
+- **v0.7.2** (versionCode 8, tag `v0.7.2`, 2026-11-15): one Focus timer shared by Margin, phone and desktop
+  Obsidian (offline actions queued and sent on reconnect, ends on every device at once); SyncEngine guards a socket
+  closed mid-reply; margin.json writes read back and redone, readers repair trailing junk (`domain/jsonRepair.ts`).
+  Needs vault-sync `0b50dc9` or later. Phone checklist: `tools/vault-sync/docs/v07/BATCH-2026-11-15.md`.
 - **v0.7.1** (versionCode 7, tag `v0.7.1`, 2026-11-15): lab/tutorial parts editable in the subject sheet, plus the
   sync hardening from the 2026-11-15 stress test: seal 2 on every link (loopback too), O's 6-digit key swapped for a
   random one (`rekey`), desktop priority in merges, same-new-note keeps both, cursors move only after files land,
