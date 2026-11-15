@@ -45,12 +45,31 @@ export async function readVaultFile(vault: string, name: string): Promise<string
   return file ? s.readAsStringAsync(file) : null;
 }
 
+/**
+ * Writes `text` so the file holds exactly that. SAF opens a document with mode "w", which Android's external
+ * storage provider does not truncate: a shorter write left the old tail after the new JSON and corrupted
+ * `.margin/margin.json` (2026-11-15). So the write is read back; if it is not exactly `text`, the document is
+ * deleted, made again and written fresh (and checked once more). If the app dies between the delete and the new
+ * write, the file is simply missing, which every reader treats as "not written yet" and the next sync rewrites.
+ */
+async function writeExact(dir: string, name: string, file: string | null, text: string, mime: string): Promise<void> {
+  const s = saf();
+  if (!s) throw new Error('No folder access on this device');
+  const make = () => s.createFileAsync(dir, name.replace(/\.json$/, ''), mime);
+  let uri = file ?? await make();
+  await s.writeAsStringAsync(uri, text);
+  if ((await s.readAsStringAsync(uri).catch(() => null)) === text) return;
+  await s.deleteAsync(uri, { idempotent: true });
+  uri = await make();
+  await s.writeAsStringAsync(uri, text);
+  if ((await s.readAsStringAsync(uri).catch(() => null)) !== text) throw new Error(`${name} did not save cleanly`);
+}
+
 export async function writeVaultFile(vault: string, name: string, text: string): Promise<void> {
   const s = saf();
   if (!s) return;
   const dir = (await child(vault, DIR)) ?? await s.makeDirectoryAsync(vault, DIR);
-  const file = (await child(dir, name)) ?? await s.createFileAsync(dir, name.replace(/\.json$/, ''), 'application/json');
-  await s.writeAsStringAsync(file, text);
+  await writeExact(dir, name, await child(dir, name), text, 'application/json');
 }
 
 /* ── any picked folder (v0.7 R12/R11: the backup folder) ── */
@@ -66,8 +85,7 @@ export async function listFolder(dir: string): Promise<{ name: string; uri: stri
 export async function writeFolderFile(dir: string, name: string, text: string, mime = 'application/json'): Promise<void> {
   const s = saf();
   if (!s) throw new Error('No folder access on this device');
-  const file = (await child(dir, name)) ?? await s.createFileAsync(dir, name.replace(/\.json$/, ''), mime);
-  await s.writeAsStringAsync(file, text);
+  await writeExact(dir, name, await child(dir, name), text, mime);
 }
 export async function deleteDocument(uri: string): Promise<void> {
   const s = saf();

@@ -7,11 +7,18 @@ import { toast } from '../toast';
 import { addSession } from './entities';
 import { go } from './nav';
 import type { TimerState } from '../../domain/timer';
-import { fromHub, opFor, parseHubTimer } from '../../domain/sharedTimer';
+import { fromHub, newerHub, opFor, parseHubTimer, stampOp, type TimerOp } from '../../domain/sharedTimer';
 import { syncStatus, syncTimer } from '../../services/native';
 
 /* ── the shared timer (domain/sharedTimer.ts): one timer across Margin, phone and desktop Obsidian ── */
 let sharedId: string | null = null, sharedOwner: string | null = null, applying = false;
+/** The last hub state applied (rev + epoch): older frames are dropped, and ops say which state they were made on. */
+let lastHub: { rev: number; epoch?: string } | null = null;
+/** Shared timers whose session Margin already saved: a second end (the hub's "done" after our own) saves nothing. */
+const savedShared = new Set<string>();
+/** Every op goes out stamped with when it happened on the hub clock and the rev it was made on. Offline, the sync
+ *  service keeps it in its outbox and sends it on reconnect; the hub places it by these stamps. */
+function send(op: TimerOp) { syncTimer(stampOp(op, Date.now(), syncStatus()?.offset ?? 0, lastHub)); }
 /** A joined timer belongs to the device that started it: that device saves the session (exactly once). */
 const joined = () => !!sharedId && !!sharedOwner && sharedOwner !== (syncStatus()?.deviceId ?? '');
 /** Tell the hub what Margin's own change means (a no-op when not paired or offline: the hub decides). */
@@ -20,7 +27,7 @@ function announce(before: TimerState, after: TimerState) {
   const r = opFor(before, after, sharedId, Date.now());
   if (r.op?.op === 'start') sharedOwner = syncStatus()?.deviceId ?? null;
   sharedId = r.sharedId; if (!sharedId) sharedOwner = null;
-  if (r.op) syncTimer(r.op);
+  if (r.op) send(r.op);
 }
 
 function applyEvents(ev: string[]) {
@@ -60,6 +67,8 @@ export const timerActions = {
   timerFinish(save = true, quiet = false) {
     // a timer joined from another device is saved there (its owner), never twice
     if (save && !applying && joined()) { save = false; if (!quiet) toast('Saved on the device that started it'); quiet = true; }
+    if (save && sharedId && savedShared.has(sharedId)) save = false;
+    if (save && sharedId) savedShared.add(sharedId);
     const now = Date.now(), sum = save ? finish(getState().timer, now) : null; void notifs.cancelFocusEnd();
     /* `finish` refuses a session with less than a minute of focus, and the refusal is the whole point: the
        row would say a study session happened when nothing did, and it would land in the export and the
@@ -84,6 +93,8 @@ export const timerActions = {
   /** The hub's timer state arrived (a frame from the sync service, or one queued while JS slept). */
   timerFromHub(json: string) {
     const h = parseHubTimer(json); if (!h) return;
+    if (!newerHub(lastHub, h)) return;   // a late frame (relayed, or replayed from the inbox) never rolls Margin back
+    lastHub = { rev: h.rev, epoch: h.epoch };
     const st = getState(), s = st.settings, now = Date.now(), status = syncStatus();
     const r = fromHub(st.timer, h, { sharedId, me: status?.deviceId ?? '', now, offset: status?.offset ?? 0, flow: s.focusFlow, breakMs: s.breakMin * 60_000, breaksAllowed: s.breaksPerRound,
       knownTask: (id) => { const t = st.tasks.find((x) => x.id === id); return t ? { courseId: t.courseId } : null; } });
@@ -102,7 +113,7 @@ export const timerActions = {
   timerRejoin() {
     const t = getState().timer;
     if (!t.running || t.phase !== 'focus' || !sharedId || applying) return;
-    syncTimer({ op: 'start', timerId: sharedId, durationMs: Math.max(1000, t.focusLeftMs), label: t.title || 'Focus', task: t.taskId ? { marginId: t.taskId } : null, flow: t.flow });
+    send({ op: 'start', timerId: sharedId, durationMs: Math.max(1000, t.focusLeftMs), label: t.title || 'Focus', task: t.taskId ? { marginId: t.taskId } : null, flow: t.flow });
   },
   /** swap the task shown on the Focus page (only while the dial is still being set) */
   timerSwap() {

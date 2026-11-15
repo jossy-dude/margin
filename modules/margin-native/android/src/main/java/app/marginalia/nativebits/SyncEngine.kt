@@ -37,7 +37,20 @@ object SyncEngine {
   private const val V = "bone-sync/1"
   private const val PREFS = "margin_sync"
 
-  val exec = Executors.newSingleThreadExecutor { r -> Thread(r, "margin-sync").apply { isDaemon = true } }
+  private val pool = Executors.newSingleThreadExecutor { r -> Thread(r, "margin-sync").apply { isDaemon = true } }
+  /** Every sync task runs here, one at a time. A task that throws is logged and noted, never rethrown: on Android
+   *  an uncaught exception on ANY thread kills the whole app, and a sync hiccup (a socket that closed under a send,
+   *  crash 2026-11-15) must never take Margin down. The next task runs as usual. */
+  val exec: java.util.concurrent.Executor = java.util.concurrent.Executor { r ->
+    try {
+      pool.execute {
+        try { r.run() } catch (t: Throwable) {
+          Log.e(TAG, "sync task failed", t)
+          if (t !is org.java_websocket.exceptions.WebsocketNotConnectedException) try { fail("Sync hiccup (${t.javaClass.simpleName}); carrying on") } catch (e2: Throwable) { }
+        }
+      }
+    } catch (e: java.util.concurrent.RejectedExecutionException) { Log.w(TAG, "sync executor is shut down") }
+  }
   /** Timers only (reconnect back-off, the phone-vault scan); each one hands its work to `exec`. */
   private val sched = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "margin-sync-timer").apply { isDaemon = true } }
   private const val SCAN_EVERY_S = 30L
@@ -111,6 +124,8 @@ object SyncEngine {
   private class Link(val send: (String) -> Unit, val close: () -> Unit, val loopback: Boolean) {
     var nonce: String? = null; var serverNonce: String? = null
     var sealOut: Seal.Sealer? = null; var sealIn: Seal.Sealer? = null; var ready = false; var mode: String? = null; var offset = 0L
+    /** The hub keeps cut-off transfers and answers a `resumable` part 0 with where to go on from (hub 0.7.2). */
+    var resume = false
     /** Phrase pairing: what the first challenge claimed, kept here until the welcome proves it. */
     var pendVault: String? = null; var pendHub: String? = null; var pendKey: ByteArray? = null
     /** Bytes the transport still holds (OkHttp's queue); 0 where it can't tell. */
@@ -250,7 +265,7 @@ object SyncEngine {
         val sn = m.optString("nonce").takeIf { it.length == 32 } ?: run { l.close(); return }
         l.serverNonce = sn; l.nonce = Seal.nonce()
         val hello = JSONObject().put("v", V).put("t", "hello").put("id", ulid()).put("vault", vlt).put("from", deviceId)
-          .put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.1")
+          .put("deviceId", deviceId).put("name", "Margin").put("role", "phone-hub").put("app", "0.7.2")
           .put("proof", Seal.proof(k, sn, deviceId, vlt)).put("nonce", l.nonce).put("cursor", store.cursor)
           .put("seal", Seal.SEAL_VERSION).put("clientTime", System.currentTimeMillis())
         l.send(hello.toString())
@@ -277,7 +292,7 @@ object SyncEngine {
         val sn = l.serverNonce ?: run { l.close(); return }
         val (c2h, h2c) = Seal.sessionKeys(key, sn, nonce)
         l.sealOut = Seal.Sealer(c2h); l.sealIn = Seal.Sealer(h2c)
-        l.ready = true; l.mode = m.optString("mode"); l.offset = m.optLong("serverTime") - System.currentTimeMillis()
+        l.ready = true; l.mode = m.optString("mode"); l.offset = m.optLong("serverTime") - System.currentTimeMillis(); l.resume = m.optBoolean("resume")
         prefs.edit().putLong("lastOk", System.currentTimeMillis()).apply()
         retryMs = 0; lastError = null
         status("live")
@@ -317,7 +332,11 @@ object SyncEngine {
       "mv" -> onMv(m)
       "ack" -> onAck(m)
       "bridge" -> { val rows = m.optJSONObject("rows")?.toString() ?: return; store.inbox("bridge", rows); onBridgeRows?.invoke(rows); toObsidian(m) }
-      "timer" -> { store.inbox("timer", text); onTimer?.invoke(text); toObsidian(m) }
+      "timer" -> {
+        // the answer to a queued op (ours or phone Obsidian's): it was heard, so it leaves the outbox
+        m.optString("ref").takeIf { it.isNotEmpty() }?.let { store.acked(it) }
+        store.inbox("timer", text); onTimer?.invoke(text); toObsidian(m)
+      }
       "presence" -> { prefs.edit().putString("presence", m.optJSONArray("peers")?.toString() ?: "[]").apply(); toObsidian(m); status("presence") }
       "conflict" -> toObsidian(m)
       "hold" -> onHold(m)
@@ -467,14 +486,26 @@ object SyncEngine {
     val bytes = v.read(p) ?: return false
     val h = Seal.hash(bytes)
     val f = JSONObject().put("p", p).put("h", h).put("base", row.base ?: JSONObject.NULL).put("s", bytes.size).put("m", row.mtime)
+    // a move or copy of media (a new file with the bytes of one deleted in this scan): the hub places it from the copy
+    // it already holds, by hash, so nothing is uploaded again. On `need-full` the retry (tries ≥ 1) sends it whole.
+    if (!isText(p) && row.base == null && bytes.size > 64 * 1024 && (tries[p] ?: 0) == 0 && hub?.resume == true && store.files().any { it.h == null && it.base == h }) {
+      val fr = frame("put", JSONObject(f.toString()).put("enc", "have"))
+      track(fr.getString("id"), Inflight(p, h, "put", 0))
+      sendHub(fr)
+      return true
+    }
     if (!isText(p) && bytes.size > PART_BYTES) {
       // a big binary goes in 1 MB parts, each encoded only when the queue has room; the hub acks the transfer id
       val xfer = ulid(); val parts = (bytes.size + PART_BYTES - 1) / PART_BYTES
       track(xfer, Inflight(p, h, "put", tries[p] ?: 0))
-      for (i in 0 until parts) sendHubLazy {
+      // resumable: part 0 alone; the hub answers `resume {have}` and the rest follows from there (resumeParts), so a
+      // video cut off by a network switch goes on instead of starting over
+      val resumable = hub?.resume == true
+      for (i in 0 until (if (resumable) 1 else parts)) sendHubLazy {
         val off = i * PART_BYTES
         frame("put", JSONObject(f.toString()).put("enc", "bin").put("xfer", xfer).put("part", i).put("parts", parts)
-          .put("body", Base64.encodeToString(bytes, off, minOf(PART_BYTES, bytes.size - off), Base64.NO_WRAP))).toString()
+          .put("body", Base64.encodeToString(bytes, off, minOf(PART_BYTES, bytes.size - off), Base64.NO_WRAP))
+          .apply { if (resumable) put("resumable", true) }).toString()
       }
       return true
     }
@@ -483,6 +514,21 @@ object SyncEngine {
     track(fr.getString("id"), Inflight(p, h, "put", tries[p] ?: 0))
     sendHub(fr)
     return true
+  }
+  /** The rest of a resumable transfer, from part `from`. The file is read again; if it changed since part 0, this
+   *  transfer is dropped and the next scan sends the new bytes. */
+  private fun resumeParts(xfer: String, inf: Inflight, from: Int) {
+    val v = vault() ?: return
+    val bytes = v.read(inf.path) ?: run { inflight.remove(xfer); return }
+    if (Seal.hash(bytes) != inf.h) { inflight.remove(xfer); inflightPath.remove(inf.path); return }
+    val row = store.file(inf.path)
+    val f = JSONObject().put("p", inf.path).put("h", inf.h).put("base", row?.base ?: JSONObject.NULL).put("s", bytes.size).put("m", row?.mtime ?: 0L)
+    val parts = (bytes.size + PART_BYTES - 1) / PART_BYTES
+    for (i in maxOf(1, from) until parts) sendHubLazy {
+      val off = i * PART_BYTES
+      frame("put", JSONObject(f.toString()).put("enc", "bin").put("xfer", xfer).put("part", i).put("parts", parts)
+        .put("body", Base64.encodeToString(bytes, off, minOf(PART_BYTES, bytes.size - off), Base64.NO_WRAP))).toString()
+    }
   }
   private fun sendDel(p: String, base: String) {
     val fr = frame("del", JSONObject().put("p", p).put("base", base))
@@ -608,6 +654,12 @@ object SyncEngine {
   }
   private fun onAck(m: JSONObject) {
     val ref = m.optString("ref")
+    if (m.optString("err") == "resume") {
+      // phone Obsidian's transfer: it sends the rest itself (keep its entry for the final ack); ours: go on here
+      if (fromObsidian.containsKey(ref)) { toObsidian(m); return }
+      inflight[ref]?.let { resumeParts(ref, it, m.optInt("have", 1)) }
+      return
+    }
     fromObsidian.remove(ref)?.let { sent -> obsidianAcked(sent, m); toObsidian(m); return }
     val inf = inflight.remove(ref)?.also { inflightPath.remove(it.path) }
     if (m.optBoolean("ok")) {
@@ -749,7 +801,9 @@ object SyncEngine {
   }
   fun timer(json: String) = exec.execute {
     val fr = try { frame("timer", JSONObject(json)) } catch (e: Exception) { fail("Bad timer message from the app"); return@execute }
-    if (hub?.ready == true) sendHub(fr) else status("timer offline")   // the hub decides; an old op must not replay later
+    // offline: kept in the outbox and sent on reconnect. Safe since hub 0.7.2: every op carries `at` and `baseRev`,
+    // and the hub places a late op by them (SYNC_PROTOCOL §8) instead of applying it as if it were new
+    if (hub?.ready == true) sendHub(fr) else { store.enqueue(fr.getString("id"), fr.toString()); status("timer queued") }
     toObsidian(fr)
   }
 
@@ -783,9 +837,11 @@ object SyncEngine {
     server = object : WebSocketServer(InetSocketAddress(InetAddress.getByName("127.0.0.1"), PORT_PHONE)) {
       override fun onOpen(conn: JWebSocket, handshake: ClientHandshake) {
         exec.execute {
+          // phone Obsidian may already have gone by the time this runs (it closes 5 s after hiding)
+          if (!conn.isOpen) return@execute
           val oc = OConn(Seal.nonce())
           conn.setAttachment(oc)
-          conn.send(JSONObject().put("v", V).put("t", "challenge").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
+          sendSafe(conn, JSONObject().put("v", V).put("t", "challenge").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
             .put("nonce", oc.nonce).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0)).put("hub", deviceId).toString())
         }
       }
@@ -835,10 +891,10 @@ object SyncEngine {
       if (hit.first == "code") KeyVault.remove(app, "obsidian-pending")
       obsidian?.let { if (it !== conn) try { it.close(4009) } catch (e: Exception) { } }
       obsidian = conn
-      conn.send(JSONObject().put("v", V).put("t", "welcome").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
+      sendSafe(conn, JSONObject().put("v", V).put("t", "welcome").put("id", ulid()).put("vault", vaultId).put("from", deviceId)
         .put("sessionId", ulid()).put("head", store.cursor).put("serverTime", System.currentTimeMillis() + (hub?.offset ?: 0))
         .put("hub", deviceId).put("proof", Seal.proof(key, m.optString("nonce"), deviceId, vaultId ?: "")).put("sealed", true).put("seal", Seal.SEAL_VERSION)
-        .put("mode", hub?.mode ?: "offline").put("hubOnline", hub?.ready == true).toString())
+        .put("mode", hub?.mode ?: "offline").put("hubOnline", hub?.ready == true).put("resume", true).toString())
       val (c2h, h2c) = Seal.sessionKeys(key, oc.nonce, m.optString("nonce"))
       oc.sealIn = Seal.Sealer(c2h); oc.sealOut = Seal.Sealer(h2c)
       if (oSince < 0) oSince = store.cursor
@@ -902,7 +958,12 @@ object SyncEngine {
   private fun sendO(conn: JWebSocket, m: JSONObject) {
     val oc = conn.getAttachment<OConn>()
     val text = m.toString()
-    try { conn.send(oc?.sealOut?.seal(text) ?: text) } catch (e: Exception) { }
+    sendSafe(conn, oc?.sealOut?.seal(text) ?: text)
+  }
+  /** The only place a Java-WebSocket socket is written: a socket that closed meanwhile is skipped, never thrown. */
+  private fun sendSafe(conn: JWebSocket, text: String): Boolean {
+    if (!conn.isOpen) return false
+    return try { conn.send(text); true } catch (e: Exception) { Log.w(TAG, "send on a closed socket: ${e.message}"); false }
   }
   private fun toObsidian(m: JSONObject) { obsidian?.let { sendO(it, m) } }
 
@@ -913,7 +974,7 @@ object SyncEngine {
       override fun onOpen(conn: JWebSocket, handshake: ClientHandshake) {
         exec.execute {
           if (hub != null) { conn.close(4009); return@execute }
-          hub = Link({ conn.send(it) }, { conn.close() }, false).also { handshakeDeadline(it) }
+          hub = Link({ sendSafe(conn, it) }, { try { conn.close() } catch (e: Exception) { } }, false).also { handshakeDeadline(it) }
           conn.setAttachment(hub)
         }
       }

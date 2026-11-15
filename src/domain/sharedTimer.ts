@@ -10,19 +10,40 @@
  *    one (`conflict: "running"`) and Margin joins it;
  *  · the session is recorded once, by the timer's OWNER (the device that started it), however it ends: a stop
  *    pressed on another device makes the owner save it; a joined timer finished here is not saved here;
- *  · Margin's break is a pause to everyone else; a break that ends by itself resumes the shared timer.
+ *  · Margin's break is a `break` op (phase "break" on the hub, a pause with the right time left to old clients);
+ *    the hub resumes focus at the break's end by itself, and a break started elsewhere puts Margin on it too;
+ *  · every op is stamped with `at` (hub clock) and `baseRev` (the state it was made on), and frames older than
+ *    the one applied are dropped (`newerHub`): same rules as vault-sync core/src/timer.js (SYNC_PROTOCOL §8);
+ *  · `done` early on another device (skipped there, or finished while Margin sat paused) ends it here too.
  */
-import { initTimer, advance, type TimerState } from './timer';
+import { initTimer, advance, nudgeStep, type TimerState } from './timer';
 
 export interface HubTimer {
   timerId: string; status: 'running' | 'paused' | 'stopped' | 'done'; durationMs: number; startedAt: number; endsAt: number;
   remainingMs: number | null; label: string | null; task: { marginId?: string; path?: string; blockId?: string } | null;
   flow?: boolean; rev: number; by: string; conflict?: string;
+  /** hub v0.7.2: focus | break (a break inside a round is status paused + breakEndsAt), the hub's state epoch,
+   *  when it ended, and the op frame this answers */
+  phase?: 'focus' | 'break'; breakEndsAt?: number | null; epoch?: string; endedAt?: number | null; ref?: string;
   /** the device that started it (hub v0.7.1); older hubs: `by` of the start */
   owner?: string;
 }
 export type TimerOp = { op: 'start'; timerId: string; durationMs: number; label: string; task: { marginId: string } | null; flow: boolean }
-  | { op: 'pause' | 'resume' | 'stop'; timerId: string };
+  | { op: 'pause' | 'resume' | 'stop'; timerId: string }
+  | { op: 'break'; timerId: string; durationMs: number };
+export type Stamped = TimerOp & { at: number; baseRev: number };
+
+/** When it happened on the hub's clock, and which hub state it was made on: the hub orders two devices' ops
+ *  (and replays offline ones) by these. */
+export function stampOp(op: TimerOp, now: number, offset: number, last: { rev: number; epoch?: string } | null): Stamped {
+  return { ...op, at: now + offset, baseRev: last?.rev ?? 0 };
+}
+/** Is `inc` newer than (or the same as) the hub state already applied? A late frame must never roll Margin back. */
+export function newerHub(last: { rev: number; epoch?: string } | null, inc: HubTimer): boolean {
+  if (!last) return true;
+  if ((inc.epoch ?? null) !== (last.epoch ?? null)) return true;
+  return (inc.rev ?? 0) >= (last.rev ?? 0);
+}
 
 /** Read a frame from the sync service. Raw ops relayed from phone Obsidian have no `status`: they are not state. */
 export function parseHubTimer(json: string): HubTimer | null {
@@ -47,7 +68,8 @@ export function opFor(before: TimerState, after: TimerState, sharedId: string | 
   // a new session, or the next round after a finished one (a fresh countdown)
   if (after.running && after.phase === 'focus' && (before.phase === 'set' || (before.focusLeftMs === 0 && after.focusLeftMs > 0))) return startOp();
   const runningFocus = (t: TimerState) => t.running && t.phase === 'focus';
-  if (runningFocus(before) && !runningFocus(after)) return { op: sharedId ? { op: 'pause', timerId: sharedId } : null, sharedId };   // pause or break
+  if (runningFocus(before) && after.phase === 'break') return { op: sharedId ? { op: 'break', timerId: sharedId, durationMs: Math.max(1000, after.breakLeftMs) } : null, sharedId };
+  if (runningFocus(before) && !runningFocus(after)) return { op: sharedId ? { op: 'pause', timerId: sharedId } : null, sharedId };
   if (!runningFocus(before) && runningFocus(after)) return sharedId ? { op: { op: 'resume', timerId: sharedId }, sharedId } : startOp();
   return { op: null, sharedId };
 }
@@ -74,7 +96,14 @@ export function fromHub(local0: TimerState, h: HubTimer, c: Ctx): FromHub {
     // ended on another device: cleared here, and saved here only when Margin started it
     return same && local.phase !== 'set' && h.by !== c.me ? { action: 'end', save: (h.owner ?? '') === c.me, sharedId: null, owner: null } : { action: 'none', sharedId: same ? null : c.sharedId };
   }
-  if (h.status === 'done') return { action: 'none', sharedId: c.sharedId };   // the round's end: each device shows its own (flow keeps counting)
+  if (h.status === 'done') {
+    // the round's end: each device shows its own (flow keeps counting) — unless it ended EARLY elsewhere (skipped,
+    // or resumed and finished there while Margin sat paused): then it ends here too, saved only by its owner
+    const early = same && local.phase !== 'set' && local.focusLeftMs > 3000 && !(local.running && local.focusLeftMs === 0);
+    return early ? { action: 'end', save: (h.owner ?? h.by) === c.me, sharedId: null, owner: null } : { action: 'none', sharedId: c.sharedId };
+  }
+  const hubBreak = h.status === 'paused' && h.phase === 'break' && !!h.breakEndsAt;
+  const breakLeft = hubBreak ? Math.max(0, (h.breakEndsAt as number) - (c.now + c.offset)) : 0;
 
   // running or paused
   if (!same || local.phase === 'set') {
@@ -84,6 +113,12 @@ export function fromHub(local0: TimerState, h: HubTimer, c: Ctx): FromHub {
     // our own session is running on its own: keep its minutes, then join (the hub chose the other one)
     const saveFirst = local.phase !== 'set' && local.focusElapsedMs >= 60_000 && h.conflict !== 'running';
     return { action: 'set', state, saveFirst, sharedId: h.timerId, owner: h.owner ?? h.by };
+  }
+  if (hubBreak) {
+    // on a break started elsewhere (or our own echo): the same break, ending at the same moment
+    if (local.phase === 'break' && Math.abs(local.breakLeftMs - breakLeft) <= 3000) return { action: 'none', sharedId: h.timerId };
+    const total = Math.max(breakLeft, local.phase === 'break' ? local.breakTotalMs : breakLeft), done = Math.max(0, total - breakLeft), step = nudgeStep(total);
+    return { action: 'set', state: { ...local, phase: 'break', running: true, checkpoint: c.now, focusLeftMs: left, breakLeftMs: breakLeft, breakTotalMs: total, breakElapsedMs: done, nextNudgeMs: (Math.floor(done / step) + 1) * step, breaksUsed: local.phase === 'break' ? local.breaksUsed : local.breaksUsed + 1 }, sharedId: h.timerId };
   }
   if (local.phase === 'break') {
     // resumed elsewhere: the break is over here too

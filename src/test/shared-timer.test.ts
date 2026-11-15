@@ -1,4 +1,4 @@
-import { fromHub, opFor, parseHubTimer, type Ctx, type HubTimer } from '../domain/sharedTimer';
+import { fromHub, newerHub, opFor, parseHubTimer, stampOp, type Ctx, type HubTimer } from '../domain/sharedTimer';
 import { initTimer, toggle, startBreak, type TimerState } from '../domain/timer';
 
 const T0 = 1_800_000_000_000;
@@ -56,7 +56,25 @@ describe('shared timer: hub → Margin', () => {
     expect(fromHub(local, hub({ timerId: 'OTHER', status: 'stopped' }), ctx({ sharedId: 'P1' })).action).toBe('none');
   });
   test('the round ending (done) leaves each device to its own end, so flow keeps counting', () => {
-    expect(fromHub(running(), hub({ timerId: 'P1', status: 'done' }), ctx({ sharedId: 'P1' })).action).toBe('none');
+    const flowing = running(1, T0 - 2 * 60_000);
+    expect(fromHub(flowing, hub({ timerId: 'P1', status: 'done' }), ctx({ sharedId: 'P1' })).action).toBe('none');
+    // reached its own end at the same moment (within 3 s): Margin's own round-done screen stays
+    const atEnd = running(25, T0 - 25 * 60_000 + 2000);
+    expect(fromHub(atEnd, hub({ timerId: 'P1', status: 'done' }), ctx({ sharedId: 'P1' })).action).toBe('none');
+  });
+  test('done early on another device (skipped there, or resumed and finished while Margin was paused) ends it here', () => {
+    const paused = toggle(running(25, T0 - 10 * 60_000), T0 - 5 * 60_000).state;
+    expect(fromHub(paused, hub({ timerId: 'P1', status: 'done', by: 'DESKTOP', owner: 'PHONE' }), ctx({ sharedId: 'P1' }))).toMatchObject({ action: 'end', save: true });
+    expect(fromHub(running(25, T0 - 60_000), hub({ timerId: 'P1', status: 'done', by: 'DESKTOP', owner: 'DESKTOP' }), ctx({ sharedId: 'P1' }))).toMatchObject({ action: 'end', save: false });
+    expect(fromHub(paused, hub({ timerId: 'OTHER', status: 'done' }), ctx({ sharedId: 'P1' })).action).toBe('none');
+  });
+  test('a break on another device puts Margin on the same break, ending at the same moment', () => {
+    const local = running(25, T0 - 10 * 60_000);
+    const r = fromHub(local, hub({ timerId: 'P1', status: 'paused', phase: 'break', remainingMs: 15 * 60_000, breakEndsAt: T0 + 4 * 60_000 }), ctx({ sharedId: 'P1', offset: 0 }));
+    expect(r.action).toBe('set');
+    expect(r.state).toMatchObject({ phase: 'break', running: true, focusLeftMs: 15 * 60_000, breakLeftMs: 4 * 60_000 });
+    // already on that break: nothing to do
+    expect(fromHub(r.state!, hub({ timerId: 'P1', status: 'paused', phase: 'break', remainingMs: 15 * 60_000, breakEndsAt: T0 + 4 * 60_000 }), ctx({ sharedId: 'P1' })).action).toBe('none');
   });
   test('starting while the desktop already runs one joins it, without saving the 1-second start', () => {
     const local = running(25, T0 - 1000);
@@ -89,10 +107,20 @@ describe('shared timer: Margin → hub', () => {
     expect(opFor(off, toggle(off, T0 + 120_000).state, id, T0).op).toEqual({ op: 'resume', timerId: id });
     expect(opFor(on, initTimer(), id, T0)).toEqual({ op: { op: 'stop', timerId: id }, sharedId: null });
   });
-  test('a break is a pause to everyone else', () => {
+  test('a break is a break to everyone else (old clients read it as a pause), with its length', () => {
     const on = running(25, T0 - 10 * 60_000);
     const br = startBreak(on, T0);
-    expect(opFor(on, br, 'X', T0).op).toEqual({ op: 'pause', timerId: 'X' });
+    expect(opFor(on, br, 'X', T0).op).toEqual({ op: 'break', timerId: 'X', durationMs: br.breakLeftMs });
+  });
+  test('every op is stamped with when it happened (hub clock) and the rev it was made on', () => {
+    expect(stampOp({ op: 'pause', timerId: 'X' }, T0, 4000, { rev: 7, epoch: 'E' })).toEqual({ op: 'pause', timerId: 'X', at: T0 + 4000, baseRev: 7 });
+    expect(stampOp({ op: 'pause', timerId: 'X' }, T0, 0, null)).toMatchObject({ baseRev: 0 });
+  });
+  test('a frame older than the one already applied is dropped; a new hub epoch wins', () => {
+    expect(newerHub({ rev: 5, epoch: 'E' }, hub({ rev: 4, epoch: 'E' }))).toBe(false);
+    expect(newerHub({ rev: 5, epoch: 'E' }, hub({ rev: 5, epoch: 'E' }))).toBe(true);
+    expect(newerHub({ rev: 5, epoch: 'E' }, hub({ rev: 1, epoch: 'F' }))).toBe(true);
+    expect(newerHub(null, hub({ rev: 1 }))).toBe(true);
   });
   test('resuming with no shared id (started offline) announces a new timer', () => {
     const off = toggle(running(25, T0 - 60_000), T0).state;

@@ -62,7 +62,8 @@ const dataOf = (p) => ({ title: p.title, done: p.done, doneOn: p.doneOn, due: p.
 
 function parseEnvelope(text) {
   try {
-    const e = JSON.parse(text);
+    // tolerant: a margin.json written without truncation has the old tail after it; its start is the newest file
+    const e = BoneSyncCore.parseLenient(text)?.value;
     if (!e || e.format !== FORMAT || !Array.isArray(e.tasks)) return null;
     return { ...e, events: Array.isArray(e.events) ? e.events : [], sessions: Array.isArray(e.sessions) ? e.sessions : [] };
   } catch (err) { return null; }

@@ -24,6 +24,9 @@ class LiveSync {
     this.link = null; this.hideTimer = null; this.pongTimer = null;
     this.pending = new Map();   // path → timeout (debounced edits)
     this.applying = new Set();  // paths being written from the wire (their modify events are ours)
+    // paths deleted or moved from the wire: their delete/rename events are ours. Separate from `applying`, and
+    // cleared after the op: an incoming write must never swallow a real delete made right after it (2026-11-15)
+    this.removing = new Set();
     this.files = this.load(LS.files, {});  // path → { h, base }
     this.ignore = BoneSyncCore.compileIgnore();
     this.asm = new BoneSyncCore.Assembler();
@@ -79,12 +82,15 @@ class LiveSync {
     if (!this.enabled || this.link) return;
     this.setState('connecting');
     const cursor = Number(this.ls(LS.cursor) || 0);
-    this.link = BoneSyncCore.connect({
+    const link = this.link = BoneSyncCore.connect({
       url: liveUrl(), deviceId: this.deviceId, name: 'Obsidian (phone)', role: 'phone-obsidian', app: this.p.manifest.version,
       key: this.ls(LS.key), vault: null, cursor,
       onFrame: (m) => this.onFrame(m).catch((e) => console.error('Margin live sync', e)),
       onState: (s) => {
-        if (s === 'ready') this.setState('live');
+        // only the current link speaks: after close() + open(), the old socket's late close event used to set
+        // `this.link = null` under the new one, so the state said "live" while every edit was dropped (2026-11-15)
+        if (this.link !== link) return;
+        if (s === 'ready') { this.setState('live'); this.p.timerLink?.linkReady(link); }
         if (s === 'closed' || s === 'error') { this.link = null; this.setState(this.enabled ? 'waiting' : 'off', s === 'error' ? 'Margin is not reachable' : undefined); }
       },
       log: (s) => console.log('Margin live sync:', s),
@@ -206,22 +212,24 @@ class LiveSync {
     const rec = this.files[m.p];
     if (f instanceof obsidian.TFile) {
       if (rec && (await this.hashOf(m.p)) !== rec.base) return; // edited here: an edit beats a delete
-      this.applying.add(m.p);
-      await this.app.vault.delete(f).catch(() => {});
+      this.removing.add(m.p);
+      try { await this.app.vault.delete(f).catch(() => {}); } finally { setTimeout(() => this.removing.delete(m.p), 1500); }
     }
     delete this.files[m.p]; this.saveFiles();
   }
   async applyMv(m) {
     const f = this.app.vault.getAbstractFileByPath(m.from);
     if (!(f instanceof obsidian.TFile)) return this.want(m.to);
-    this.applying.add(m.from); this.applying.add(m.to);
-    await this.app.fileManager.renameFile(f, m.to);
+    this.removing.add(m.from); this.removing.add(m.to);
+    try { await this.app.fileManager.renameFile(f, m.to); } finally { setTimeout(() => { this.removing.delete(m.from); this.removing.delete(m.to); }, 1500); }
     if (this.files[m.from]) { this.files[m.to] = this.files[m.from]; delete this.files[m.from]; this.saveFiles(); }
     return true;
   }
   onAck(m) {
     const sent = this.inflight.get(m.ref);
     if (!sent) return;
+    // a resumable transfer: the hub holds parts 0…have−1; send the rest under the same transfer id
+    if (m.err === 'resume' && sent.f) { this.sendRest(m.ref, sent, Number(m.have) || 1).catch((e) => console.error('Margin live sync: resume', e)); return; }
     this.inflight.delete(m.ref);
     if (sent.kind === 'mv') {
       // the hub never had the old name (a new note renamed before it was sent, report P2): send it as new
@@ -261,6 +269,14 @@ class LiveSync {
     const f = { p: path, h, base, s: stat?.size ?? 0, m: stat?.mtime ?? Date.now() };
     this.files[path] = { h, base }; this.saveFiles();
     if (!isText && BoneSyncCore.needsParts(data.byteLength)) {
+      // resumable (when Margin and the hub say so): part 0 first, then the rest from where the answer says, so a
+      // transfer cut off by a closed app or a network switch goes on instead of starting over (2026-11-15)
+      if (this.link.resume) {
+        const first = BoneSyncCore.partsOf(f, new Uint8Array(data)).next().value;
+        this.inflight.set(first.xfer, { kind: 'put', p: path, h, base, tries, f });
+        await this.link.send(this.link.frame('put', { ...first, resumable: true }));
+        return;
+      }
       // a big binary goes in 1 MB parts; the hub acks the transfer id
       let xfer = null;
       for (const part of BoneSyncCore.partsOf(f, new Uint8Array(data))) { xfer = part.xfer; await this.link?.send(this.link.frame('put', part)); }
@@ -272,15 +288,21 @@ class LiveSync {
     this.inflight.set(fr.id, { kind: 'put', p: path, h, base, tries });
     this.link.send(fr);
   }
+  async sendRest(xfer, sent, from) {
+    const bytes = new Uint8Array(await this.app.vault.adapter.readBinary(sent.p));
+    // changed since part 0 went out: drop this transfer, the change is sent as a new one
+    if ((await BoneSyncCore.hashOf(bytes)) !== sent.h) { this.inflight.delete(xfer); this.local(sent.p); return; }
+    for (const part of BoneSyncCore.partsOf(sent.f, bytes, BoneSyncCore.PART_BYTES, { xfer, from })) await this.link?.send(this.link.frame('put', part));
+  }
   localDelete(path) {
-    if (!this.link || this.applying.has(path) || this.skip(path)) return;
+    if (!this.link || this.removing.has(path) || this.skip(path)) return;
     clearTimeout(this.pending.get(path)); this.pending.delete(path);
     const rec = this.files[path];
     this.link.send(this.link.frame('del', { p: path, base: rec?.base ?? null }));
     delete this.files[path]; this.saveFiles();
   }
   localRename(from, to) {
-    if (!this.link || this.applying.has(to) || this.skip(to)) return;
+    if (!this.link || this.removing.has(to) || this.skip(to)) return;
     const rec = this.files[from];
     // never sent yet (still in its 1.5 s wait, or new): it is simply a new file under the new name
     if (this.pending.has(from) || !rec) { clearTimeout(this.pending.get(from)); this.pending.delete(from); this.local(to); return; }

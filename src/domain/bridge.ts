@@ -10,6 +10,7 @@
  * so the Obsidian side writes and reads its markdown unchanged, and `taskLine` / `parseTaskLine` below are
  * the same grammar Bone Tasks parses (`.obsidian/plugins/bone-tasks/main.js`, `parseTask`).
  */
+import { parseJsonLenient } from './jsonRepair';
 import type { Course, FocusSession, Meeting, Notice, Task, TaskKind } from './types';
 import { addDays, atTime, pad, startOfDay, ymd } from './time';
 import { occEnd, occurrencesBetween } from './attendance';
@@ -119,7 +120,10 @@ export interface ParsedEnvelope { envelope: BridgeEnvelope | null; problems: str
 /** Read the other app's file. Never throws; a row it cannot read is named and skipped, the rest still land. */
 export function parseEnvelope(text: string): ParsedEnvelope {
   let raw: unknown;
-  try { raw = JSON.parse(text); } catch { return { envelope: null, problems: ['The bridge file is not valid JSON.'] }; }
+  // a file with an old tail after it (a write that did not truncate) still reads: its start is the whole newest file
+  const lenient = parseJsonLenient(text);
+  if (!lenient) return { envelope: null, problems: ['The bridge file is not valid JSON.'] };
+  raw = lenient.value;
   if (!isRec(raw) || raw.format !== BRIDGE_FORMAT) return { envelope: null, problems: [`Not a ${BRIDGE_FORMAT} file.`] };
   const problems: string[] = [];
   const items = <T>(k: string, read: (d: Record<string, unknown>) => T | null): BridgeItem<T>[] => {

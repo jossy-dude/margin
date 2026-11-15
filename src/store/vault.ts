@@ -11,6 +11,7 @@ import { getState, subscribe } from './core';
 import { bridgeIn, bridgeOut } from './bridge';
 import { leafOf, readVaultFile, writeVaultFile } from '../services/vaultFiles';
 import type { BridgeEnvelope } from '../domain/bridge';
+import { parseJsonLenient } from '../domain/jsonRepair';
 import { connection } from '../data/sqlite';
 import { faceEvent } from '../ui/mascot/moments';
 import { onSyncEvent, syncConfigure, syncInbox, syncPushBridge, syncStart } from '../services/native';
@@ -46,7 +47,9 @@ export async function vaultSync(): Promise<VaultStatus> {
     if (env) {
       if (written === null) {
         const mine = await readVaultFile(uri, 'margin.json');
-        try { written = mine ? envelopeBody(JSON.parse(mine) as BridgeEnvelope) : ''; } catch { written = ''; }
+        // a repaired file (old tail after the JSON) counts as not written, so it is rewritten clean right away
+        const p = mine ? parseJsonLenient(mine) : null;
+        try { written = p && !p.repaired ? envelopeBody(p.value as BridgeEnvelope) : ''; } catch { written = ''; }
       }
       const body = envelopeBody(env);
       if (body !== written) {

@@ -2487,7 +2487,25 @@ function json3Text(baseText, oursText, theirsText) {
   return { text: dumpLike(r, oursText || '{\n  \n}\n'), conflicts };
 }
 
-return { MISSING, merge, dumpLike, json3Text };
+/** JSON with junk after it (a write that did not truncate left the old file's tail behind: Margin's margin.json,
+ *  2026-11-15) → the first complete value, `repaired: true`. A file cut short is not guessed at: null.
+ *  Margin has the same function in TS (src/domain/jsonRepair.ts). */
+function parseLenient(text) {
+  try { return { value: JSON.parse(text), repaired: false }; } catch { /* look for the first complete value */ }
+  const start = text.search(/[{[]/);
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') { if (--depth === 0) { try { return { value: JSON.parse(text.slice(start, i + 1)), repaired: true }; } catch { return null; } } }
+  }
+  return null;
+}
+
+return { MISSING, merge, dumpLike, json3Text, parseLenient };
 })();
 var __ignore = (function () {
 // What never syncs (SYNC_PROTOCOL §10). The list lives in `.bone-sync-ignore` at the vault root (gitignore
@@ -2698,10 +2716,11 @@ const MAX_PARTS = 128;            // 128 MB: above MAX_FILE_BYTES
 /** Does a file this size go in parts? */
 const needsParts = (size) => size > PART_BYTES;
 
-/** The part frames' fields for `bytes` (Uint8Array), lazily: one part in memory at a time. */
-const partsOf = function* (fields, bytes, size = PART_BYTES) {
-  const parts = Math.max(1, Math.ceil(bytes.length / size)), xfer = ulid();
-  for (let part = 0; part < parts; part++) yield { ...fields, enc: 'bin', xfer, part, parts, body: b64(bytes.subarray(part * size, (part + 1) * size)) };
+/** The part frames' fields for `bytes` (Uint8Array), lazily: one part in memory at a time. `from`/`xfer`: go on with
+ *  a transfer the receiver answered `ack {err:"resume", have}` (SYNC_PROTOCOL §5, resumable parts). */
+const partsOf = function* (fields, bytes, size = PART_BYTES, { xfer = ulid(), from = 0 } = {}) {
+  const parts = Math.max(1, Math.ceil(bytes.length / size));
+  for (let part = from; part < parts; part++) yield { ...fields, enc: 'bin', xfer, part, parts, body: b64(bytes.subarray(part * size, (part + 1) * size)) };
 }
 
 /** A part frame's own fields are sane (`check` calls this). */
@@ -2737,11 +2756,161 @@ class Assembler {
 
 return { PART_BYTES, MAX_PARTS, needsParts, partsOf, partError, Assembler };
 })();
+var __timer = (function () {
+// The shared focus timer (SYNC_PROTOCOL §8): ONE state machine for every node. The hub runs `applyTimer` and
+// `tickTimer` and is the authority; clients run the same functions on a copy to show the right thing between
+// frames (a timer that ended while nobody was looking, an action taken offline), and `newerTimer` to drop a
+// frame that is older than what they already have.
+//
+// State (all times on the HUB's clock, ms):
+//   { timerId, status: running|paused|stopped|done, phase: focus|break, durationMs, startedAt, endsAt,
+//     remainingMs, breakEndsAt, label, task, flow, owner, by, rev, epoch, changedAt, endedAt }
+//   · running → endsAt is the truth; paused/stopped → remainingMs is the truth (focus time left).
+//   · break, two kinds: a break INSIDE a focus round (Margin) = status "paused" + phase "break" + breakEndsAt (old
+//     clients just see a pause with the right focus time left; when it runs out focus resumes by itself); a break
+//     ROUND after a finished one (Bone Tasks' "Start break") = a timer started with phase "break": it runs and ends
+//     like any timer, but nobody records it as focus.
+//   · rev    = one counter on the hub across timers (never goes back); epoch changes only if the hub lost its state.
+//   · endedAt = the moment it ended: endsAt for a timer that ran out, so every screen agrees on the second.
+//
+// Ops: start pause resume extend stop done skip reset break. An op may carry `at` (when it happened, hub clock:
+// the sender's clock + its offset) and `baseRev` (the rev the sender was looking at). Conflict rule, so two
+// devices acting at once (or one acting offline) end the same everywhere:
+//   · causal first: an op made on the latest state (baseRev ≥ rev) always applies;
+//   · otherwise it is concurrent with the last change: the LATER action wins on the hub clock (`at` vs
+//     `changedAt`); ties go to the hub's arrival order. A stale op is refused with conflict "stale".
+//   · `at` is clamped to [changedAt, now]: a fast clock can't push an action into the future.
+const TIMER_OPS = ['start', 'pause', 'resume', 'extend', 'stop', 'done', 'skip', 'reset', 'break'];
+const DEFAULT_FOCUS_MS = 25 * 60_000;
+const DEFAULT_BREAK_MS = 5 * 60_000;
+const LIVE = new Set(['running', 'paused']);
+
+const timerLive = (t) => !!t && LIVE.has(t.status);
+
+/** Run the clock forward to `now`: a running timer past its end is done (at its endsAt, not at `now`); a break
+ *  past its end resumes focus from the moment the break ended. Returns a new object only when something changed. */
+function tickTimer(t, now) {
+  if (!t) return t;
+  let x = t;
+  for (let guard = 0; guard < 4; guard++) {
+    if (x.status === 'paused' && x.phase === 'break' && x.breakEndsAt && now >= x.breakEndsAt) {
+      const at = x.breakEndsAt;
+      x = { ...x, status: 'running', phase: 'focus', endsAt: at + (x.remainingMs ?? 0), remainingMs: null, breakEndsAt: null, rev: x.rev + 1, by: 'hub', changedAt: at };
+      continue;
+    }
+    if (x.status === 'running' && now >= x.endsAt) {
+      x = { ...x, status: 'done', remainingMs: 0, endedAt: x.endsAt, rev: x.rev + 1, by: 'hub', changedAt: x.endsAt };
+      continue;
+    }
+    break;
+  }
+  return x;
+}
+
+/** When the next tick can change something (for a setTimeout), or null. */
+function nextTimerEvent(t) {
+  if (!t) return null;
+  if (t.status === 'running') return t.endsAt;
+  if (t.status === 'paused' && t.phase === 'break' && t.breakEndsAt) return t.breakEndsAt;
+  return null;
+}
+
+/** Focus time left at `now` (hub clock). */
+function timerLeft(t, now) {
+  if (!t) return 0;
+  if (t.status === 'running') return Math.max(0, t.endsAt - now);
+  if (t.status === 'done') return 0;
+  return Math.max(0, t.remainingMs ?? 0);
+}
+
+/**
+ * Apply one op. `t` = current state (already ticked to `now`), `m` = the op frame, `who` = the device acting.
+ * Returns { t: next state, conflict: null | reason }. On a conflict `t` is unchanged and the caller sends the
+ * live state back to the sender only. Pure: never mutates `t`.
+ */
+function applyTimer(t, m, now, { who = m.from ?? null, epoch = t?.epoch ?? null } = {}) {
+  const refuse = (conflict) => ({ t, conflict });
+  const rev = t?.rev ?? 0;
+  const raw = Number.isFinite(m.at) ? Math.min(m.at, now) : now;
+  const concurrent = t && Number.isFinite(m.baseRev) && m.baseRev < rev;
+  if (m.op === 'start') {
+    if (t && t.timerId === m.timerId) return refuse('duplicate');     // a replayed start, or an ended timer's id
+    if (timerLive(t) && !m.replace) return refuse('running');
+    if (concurrent && raw < (t.changedAt ?? 0)) return refuse('stale');
+    const dur = Number(m.durationMs) > 0 ? Number(m.durationMs) : DEFAULT_FOCUS_MS;
+    // an offline start keeps the end it was given: started at `at`, not when the frame arrived
+    const at = Math.max(raw, now - dur);
+    return { t: { timerId: m.timerId, status: 'running', phase: m.phase === 'break' ? 'break' : 'focus', durationMs: dur, startedAt: at, endsAt: at + dur, remainingMs: null, breakEndsAt: null, label: m.label ?? null, task: m.task ?? null, flow: !!m.flow, owner: who, by: who, rev: rev + 1, epoch, changedAt: at, endedAt: null }, conflict: null };
+  }
+  if (!t) return refuse('no-timer');
+  if (t.timerId !== m.timerId) return refuse('other-timer');
+  let x = t;
+  // An action taken offline BEFORE the hub ran the timer out (the device paused at 24:00 of 25, then reconnected
+  // at 40:00): the device was right, so the timer is put back as it was at that moment, then the op applies.
+  // Running out is not an action, so it never makes the op stale.
+  if (t.status === 'done' && t.by === 'hub' && t.endedAt && raw < t.endedAt && m.op !== 'done') x = { ...t, status: 'running', endsAt: t.endedAt, remainingMs: null, endedAt: null };
+  else if (concurrent && raw < (t.changedAt ?? 0)) return refuse('stale');
+  const at = x === t ? Math.max(raw, t.changedAt ?? 0) : raw;
+  const left = timerLeft(x, at);
+  const isBreak = x.status === 'paused' && x.phase === 'break';
+  let n = null;
+  switch (m.op) {
+    case 'pause':
+      if (x.status === 'running') n = { status: 'paused', remainingMs: left };
+      break;
+    case 'resume':
+      if (x.status === 'paused' || (x.status === 'stopped' && (x.remainingMs ?? 0) > 0)) n = { status: 'running', phase: 'focus', endsAt: at + (x.remainingMs ?? 0), remainingMs: null, breakEndsAt: null };
+      break;
+    case 'extend': {
+      const add = Number(m.durationMs) || DEFAULT_BREAK_MS;
+      if (!timerLive(x) && x.status !== 'stopped') break;
+      n = { durationMs: Math.max(60_000, x.durationMs + add) };
+      if (x.status === 'running') n.endsAt = Math.max(at + 1000, x.endsAt + add); else n.remainingMs = Math.max(1000, (x.remainingMs ?? 0) + add);
+      break;
+    }
+    case 'stop':
+      if (timerLive(x)) n = { status: 'stopped', phase: isBreak ? 'focus' : x.phase, remainingMs: left, breakEndsAt: null, endedAt: at };
+      break;
+    case 'done':
+      if (timerLive(x)) n = { status: 'done', phase: isBreak ? 'focus' : x.phase, remainingMs: 0, breakEndsAt: null, endedAt: x.status === 'running' ? Math.min(at, x.endsAt) : at };
+      break;
+    case 'skip':
+      // skip the break → focus goes on; skip focus → this round is done now
+      if (isBreak) n = { status: 'running', phase: 'focus', endsAt: at + (x.remainingMs ?? 0), remainingMs: null, breakEndsAt: null };
+      else if (timerLive(x)) n = { status: 'done', remainingMs: 0, endedAt: at };
+      break;
+    case 'reset':
+      // back to the full length of this round, keeping running or paused
+      if (x.status === 'running') n = { endsAt: at + x.durationMs };
+      else if (x.status === 'paused') n = { remainingMs: x.durationMs, phase: 'focus', breakEndsAt: null, status: 'paused' };
+      break;
+    case 'break':
+      if ((x.status === 'running' && x.phase !== 'break') || (x.status === 'paused' && x.phase !== 'break')) n = { status: 'paused', phase: 'break', remainingMs: left, breakEndsAt: at + (Number(m.durationMs) > 0 ? Number(m.durationMs) : DEFAULT_BREAK_MS) };
+      break;
+    default: break;
+  }
+  if (!n) return refuse('no-op');
+  return { t: { ...x, ...n, rev: rev + 1, by: who, changedAt: at }, conflict: null };
+}
+
+/** Client side: is `inc` newer than (or the same as) the state we hold? Older frames are dropped, so a frame that
+ *  arrives late (relayed through Margin, or replayed) never rolls a screen back. A new epoch (the hub lost its
+ *  state) always wins. */
+function newerTimer(last, inc) {
+  if (!inc) return false;
+  if (!last) return true;
+  if ((inc.epoch ?? null) !== (last.epoch ?? null)) return true;
+  return (inc.rev ?? 0) >= (last.rev ?? 0);
+}
+
+return { TIMER_OPS, DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS, timerLive, tickTimer, nextTimerEvent, timerLeft, applyTimer, newerTimer };
+})();
 var __proto = (function () {
 // bone-sync/1 messages (SYNC_PROTOCOL §5). One JSON object per text frame. `frame()` fills the common fields;
 // `check()` rejects anything a peer must never act on (wrong version, wrong vault, missing fields).
 const { ulid } = __hash;
 const { partError } = __chunk;
+const { TIMER_OPS } = __timer;
 const V = 'bone-sync/1';
 const ROLES = ['phone-hub', 'phone-obsidian', 'desktop-obsidian', 'hub'];
 const PORT_HUB = 7428;      // bone-syncd on the desktop
@@ -2768,7 +2937,6 @@ const REQ = {
   rekey: ['key'],        // Margin → phone Obsidian, on a sealed link: the strong key that replaces the 6-digit code
 };
 const TYPES = Object.keys(REQ);
-const TIMER_OPS = ['start', 'pause', 'resume', 'extend', 'stop', 'done'];
 
 function frame(t, fields = {}, { vault, from } = {}) {
   // the common fields go last: a payload field named t, v or vault must never change what the frame is.
@@ -2813,7 +2981,7 @@ function allowedPeer(ip, { tailscale = false } = {}) {
   return false;
 }
 
-return { V, ROLES, PORT_HUB, PORT_PHONE, TYPES, TIMER_OPS, frame, check, safePath, allowedPeer };
+return { V, ROLES, PORT_HUB, PORT_PHONE, TYPES, frame, check, safePath, allowedPeer };
 })();
 var __client = (function () {
 // A bone-sync/1 client session over any WebSocket-like object (browser/WebView WebSocket, Node's global
@@ -2861,7 +3029,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
         const want = await proofOf(unhex(key), nonce, m.hub, vault);
         if (!sameHex(m.proof, want) || (hubId && m.hub !== hubId)) { log('the hub failed its proof; closing'); st.close(); return; }
         if (!(m.sealed && m.seal === SEAL_VERSION)) { log('the hub offered an unsealed link; closing'); st.close(); return; }
-        st.hubId = m.hub; st.mode = m.mode; st.offset = m.serverTime - Date.now(); st.head = m.head;
+        st.hubId = m.hub; st.mode = m.mode; st.resume = m.resume === true; st.offset = m.serverTime - Date.now(); st.head = m.head;
         const k = await sessionKeys(unhex(key), st.serverNonce, nonce); st.sealOut = sealer(k.c2h); st.sealIn = sealer(k.h2c);
         st.ready = true; onState('ready', st);
         return;
@@ -2885,7 +3053,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
 
 return { connect };
 })();
-return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, TIMER_OPS: __proto.TIMER_OPS, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
+return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, parseLenient: __json3.parseLenient, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, TIMER_OPS: __timer.TIMER_OPS, DEFAULT_FOCUS_MS: __timer.DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS: __timer.DEFAULT_BREAK_MS, timerLive: __timer.timerLive, tickTimer: __timer.tickTimer, nextTimerEvent: __timer.nextTimerEvent, timerLeft: __timer.timerLeft, applyTimer: __timer.applyTimer, newerTimer: __timer.newerTimer, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
 })();
 
 /* ── 10_bridge.js ── */
@@ -2953,7 +3121,8 @@ const dataOf = (p) => ({ title: p.title, done: p.done, doneOn: p.doneOn, due: p.
 
 function parseEnvelope(text) {
   try {
-    const e = JSON.parse(text);
+    // tolerant: a margin.json written without truncation has the old tail after it; its start is the newest file
+    const e = BoneSyncCore.parseLenient(text)?.value;
     if (!e || e.format !== FORMAT || !Array.isArray(e.tasks)) return null;
     return { ...e, events: Array.isArray(e.events) ? e.events : [], sessions: Array.isArray(e.sessions) ? e.sessions : [] };
   } catch (err) { return null; }
@@ -3237,6 +3406,9 @@ class LiveSync {
     this.link = null; this.hideTimer = null; this.pongTimer = null;
     this.pending = new Map();   // path → timeout (debounced edits)
     this.applying = new Set();  // paths being written from the wire (their modify events are ours)
+    // paths deleted or moved from the wire: their delete/rename events are ours. Separate from `applying`, and
+    // cleared after the op: an incoming write must never swallow a real delete made right after it (2026-11-15)
+    this.removing = new Set();
     this.files = this.load(LS.files, {});  // path → { h, base }
     this.ignore = BoneSyncCore.compileIgnore();
     this.asm = new BoneSyncCore.Assembler();
@@ -3292,12 +3464,15 @@ class LiveSync {
     if (!this.enabled || this.link) return;
     this.setState('connecting');
     const cursor = Number(this.ls(LS.cursor) || 0);
-    this.link = BoneSyncCore.connect({
+    const link = this.link = BoneSyncCore.connect({
       url: liveUrl(), deviceId: this.deviceId, name: 'Obsidian (phone)', role: 'phone-obsidian', app: this.p.manifest.version,
       key: this.ls(LS.key), vault: null, cursor,
       onFrame: (m) => this.onFrame(m).catch((e) => console.error('Margin live sync', e)),
       onState: (s) => {
-        if (s === 'ready') this.setState('live');
+        // only the current link speaks: after close() + open(), the old socket's late close event used to set
+        // `this.link = null` under the new one, so the state said "live" while every edit was dropped (2026-11-15)
+        if (this.link !== link) return;
+        if (s === 'ready') { this.setState('live'); this.p.timerLink?.linkReady(link); }
         if (s === 'closed' || s === 'error') { this.link = null; this.setState(this.enabled ? 'waiting' : 'off', s === 'error' ? 'Margin is not reachable' : undefined); }
       },
       log: (s) => console.log('Margin live sync:', s),
@@ -3419,22 +3594,24 @@ class LiveSync {
     const rec = this.files[m.p];
     if (f instanceof obsidian.TFile) {
       if (rec && (await this.hashOf(m.p)) !== rec.base) return; // edited here: an edit beats a delete
-      this.applying.add(m.p);
-      await this.app.vault.delete(f).catch(() => {});
+      this.removing.add(m.p);
+      try { await this.app.vault.delete(f).catch(() => {}); } finally { setTimeout(() => this.removing.delete(m.p), 1500); }
     }
     delete this.files[m.p]; this.saveFiles();
   }
   async applyMv(m) {
     const f = this.app.vault.getAbstractFileByPath(m.from);
     if (!(f instanceof obsidian.TFile)) return this.want(m.to);
-    this.applying.add(m.from); this.applying.add(m.to);
-    await this.app.fileManager.renameFile(f, m.to);
+    this.removing.add(m.from); this.removing.add(m.to);
+    try { await this.app.fileManager.renameFile(f, m.to); } finally { setTimeout(() => { this.removing.delete(m.from); this.removing.delete(m.to); }, 1500); }
     if (this.files[m.from]) { this.files[m.to] = this.files[m.from]; delete this.files[m.from]; this.saveFiles(); }
     return true;
   }
   onAck(m) {
     const sent = this.inflight.get(m.ref);
     if (!sent) return;
+    // a resumable transfer: the hub holds parts 0…have−1; send the rest under the same transfer id
+    if (m.err === 'resume' && sent.f) { this.sendRest(m.ref, sent, Number(m.have) || 1).catch((e) => console.error('Margin live sync: resume', e)); return; }
     this.inflight.delete(m.ref);
     if (sent.kind === 'mv') {
       // the hub never had the old name (a new note renamed before it was sent, report P2): send it as new
@@ -3474,6 +3651,14 @@ class LiveSync {
     const f = { p: path, h, base, s: stat?.size ?? 0, m: stat?.mtime ?? Date.now() };
     this.files[path] = { h, base }; this.saveFiles();
     if (!isText && BoneSyncCore.needsParts(data.byteLength)) {
+      // resumable (when Margin and the hub say so): part 0 first, then the rest from where the answer says, so a
+      // transfer cut off by a closed app or a network switch goes on instead of starting over (2026-11-15)
+      if (this.link.resume) {
+        const first = BoneSyncCore.partsOf(f, new Uint8Array(data)).next().value;
+        this.inflight.set(first.xfer, { kind: 'put', p: path, h, base, tries, f });
+        await this.link.send(this.link.frame('put', { ...first, resumable: true }));
+        return;
+      }
       // a big binary goes in 1 MB parts; the hub acks the transfer id
       let xfer = null;
       for (const part of BoneSyncCore.partsOf(f, new Uint8Array(data))) { xfer = part.xfer; await this.link?.send(this.link.frame('put', part)); }
@@ -3485,15 +3670,21 @@ class LiveSync {
     this.inflight.set(fr.id, { kind: 'put', p: path, h, base, tries });
     this.link.send(fr);
   }
+  async sendRest(xfer, sent, from) {
+    const bytes = new Uint8Array(await this.app.vault.adapter.readBinary(sent.p));
+    // changed since part 0 went out: drop this transfer, the change is sent as a new one
+    if ((await BoneSyncCore.hashOf(bytes)) !== sent.h) { this.inflight.delete(xfer); this.local(sent.p); return; }
+    for (const part of BoneSyncCore.partsOf(sent.f, bytes, BoneSyncCore.PART_BYTES, { xfer, from })) await this.link?.send(this.link.frame('put', part));
+  }
   localDelete(path) {
-    if (!this.link || this.applying.has(path) || this.skip(path)) return;
+    if (!this.link || this.removing.has(path) || this.skip(path)) return;
     clearTimeout(this.pending.get(path)); this.pending.delete(path);
     const rec = this.files[path];
     this.link.send(this.link.frame('del', { p: path, base: rec?.base ?? null }));
     delete this.files[path]; this.saveFiles();
   }
   localRename(from, to) {
-    if (!this.link || this.applying.has(to) || this.skip(to)) return;
+    if (!this.link || this.removing.has(to) || this.skip(to)) return;
     const rec = this.files[from];
     // never sent yet (still in its 1.5 s wait, or new): it is simply a new file under the new name
     if (this.pending.has(from) || !rec) { clearTimeout(this.pending.get(from)); this.pending.delete(from); this.local(to); return; }
@@ -3513,29 +3704,74 @@ class LiveSync {
  *     (~/.config/bone-sync/keys.json). The hub already watches the desktop's files, so this link asks for
  *     no file traffic (`files: false`): only the timer and who is online.
  * Other plugins use `app.plugins.plugins['margin-bridge'].timerLink`:
- *   send(op) → start / pause / resume / extend / stop / done; false when no hub is reachable (run locally)
- *   on(fn)   → the hub's timer state whenever it changes (with `offset` = hub clock − this clock); returns off()
+ *   send(op) → start / pause / resume / extend / stop / done / skip / reset / break. Every op is stamped with
+ *              `at` (when it happened, hub clock) and `baseRev` (the state it was made on), so the hub can order
+ *              ops from two devices and replay offline ones correctly (sync-core timer.js). Returns false when no
+ *              hub is reachable: the op is then queued (kept across restarts) and sent on the next connect.
+ *   on(fn)   → the hub's timer state whenever it changes (with `offset` = hub clock − this clock); returns off().
+ *              Frames older than the one already shown (by rev/epoch) are dropped, never shown.
  *   me       → this device's id, to compare with the timer's `owner` (the device that records the session)
  *   online   → is a hub reachable right now
  */
-const DESK = { dev: 'margin-bridge-desk-device', off: 'margin-bridge-desk-off' };
+const DESK = { dev: 'margin-bridge-desk-device', off: 'margin-bridge-desk-off', queue: 'margin-bridge-timer-queue', last: 'margin-bridge-timer-last' };
+const QUEUE_MAX = 20, QUEUE_AGE_MS = 12 * 3600_000, HOLD_MS = 4000;
 class TimerLink {
-  constructor(plugin) { this.p = plugin; this.app = plugin.app; this.subs = new Set(); this.last = null; this.desk = null; this.retry = null; this.wait = 15000; this.stopped = false; }
+  constructor(plugin) {
+    this.p = plugin; this.app = plugin.app; this.subs = new Set(); this.desk = null; this.retry = null; this.wait = 15000; this.stopped = false;
+    // the last hub state shown (kept across restarts so an old frame can't roll the screen back after one)
+    this.last = this.loadJson(DESK.last, null);
+    this.queue = this.loadJson(DESK.queue, []);     // ops made while no hub was reachable
+    this.held = null;                                 // after replaying the queue: { ids, timer, latest } until answered
+  }
+  loadJson(k, d) { try { const v = this.app.loadLocalStorage(k); return v ? JSON.parse(v) : d; } catch { return d; } }
+  saveJson(k, v) { try { this.app.saveLocalStorage(k, v == null ? null : JSON.stringify(v)); } catch { /* */ } }
+  /** hub clock − this clock: the live link's (re-measured on every pong), else the last frame's. */
+  get offset() { const l = this.phoneLink || this.deskLink; return Number.isFinite(l?.offset) ? l.offset : (this.last?.offset ?? 0); }
   get deskId() { let d = this.app.loadLocalStorage(DESK.dev); if (!d) { d = BoneSyncCore.newId(); this.app.saveLocalStorage(DESK.dev, d); } return d; }
   get phoneLink() { const l = this.p.live?.link; return l?.ready ? l : null; }
   get deskLink() { return this.desk?.ready ? this.desk : null; }
   get online() { return !!(this.phoneLink || this.deskLink); }
   get me() { return this.phoneLink ? this.p.live.deviceId : this.deskLink ? this.deskId : (obsidian.Platform.isMobile ? this.p.live?.deviceId : this.deskId); }
   send(op) {
+    const fields = { ...op, at: Number.isFinite(op.at) ? op.at : Date.now() + this.offset, baseRev: Number.isFinite(op.baseRev) ? op.baseRev : (this.last?.rev ?? 0) };
     const l = this.phoneLink || this.deskLink;
-    if (!l) return false;
-    try { l.send(l.frame('timer', { ...op })); return true; } catch (e) { console.error('Margin timer: send', e); return false; }
+    if (l) {
+      try { l.send(l.frame('timer', fields)); return true; } catch (e) { console.error('Margin timer: send', e); }
+    }
+    // no hub right now: keep it, in order, and send it on the next connect (the hub decides by `at`/`baseRev`)
+    this.queue = [...this.queue, { ...fields, queuedAt: Date.now() }].slice(-QUEUE_MAX);
+    this.saveJson(DESK.queue, this.queue);
+    return false;
   }
+  /** A link came up: replay the queued ops, and hold the screen still until the hub has answered them (or 4 s),
+   *  so the state from before the replay never flashes up (a timer that "ended" and then comes back paused). */
+  linkReady(l) {
+    if (!l || !this.queue.length) return;
+    const fresh = this.queue.filter((o) => Date.now() - (o.queuedAt || 0) < QUEUE_AGE_MS);
+    this.queue = []; this.saveJson(DESK.queue, []);
+    if (!fresh.length) return;
+    const ids = new Set();
+    for (const o of fresh) { const { queuedAt, ...op } = o; const fr = l.frame('timer', op); ids.add(fr.id); try { l.send(fr); } catch (e) { console.error('Margin timer: replay', e); } }
+    clearTimeout(this.held?.timer);
+    this.held = { ids, latest: null, timer: setTimeout(() => this.release(), HOLD_MS) };
+  }
+  release() { const h = this.held; this.held = null; if (h) clearTimeout(h.timer); if (h?.latest) this.deliver(h.latest); }
   on(fn) { this.subs.add(fn); if (this.last) { try { fn(this.last); } catch (e) { console.error(e); } } return () => this.subs.delete(fn); }
-  /** A frame from either link. Raw ops relayed from another client carry no `status`: not state, skipped. */
+  /** A frame from either link. Raw ops relayed from another client carry no `status`: not state, skipped (but an
+   *  answer to one of our replayed ops still counts as heard). Older frames than the one shown are dropped. */
   receive(m) {
-    if (!m || !m.status || !m.timerId) return;
-    this.last = { ...m, offset: (Number(m.serverTime) || Date.now()) - Date.now() };
+    if (!m) return;
+    if (this.held && m.ref && this.held.ids.delete(m.ref) && !this.held.ids.size) { if (m.status && m.timerId) this.held.latest = this.pick(this.held.latest, m); this.release(); return; }
+    if (!m.status || !m.timerId) return;
+    if (this.held) { this.held.latest = this.pick(this.held.latest, m); return; }
+    this.deliver(m);
+  }
+  pick(a, b) { return !a || BoneSyncCore.newerTimer(a, b) ? b : a; }
+  deliver(m) {
+    if (!BoneSyncCore.newerTimer(this.last, m)) return;
+    const l = this.phoneLink || this.deskLink;
+    this.last = { ...m, offset: Number.isFinite(l?.offset) ? l.offset : (Number(m.serverTime) || Date.now()) - Date.now() };
+    this.saveJson(DESK.last, this.last);
     for (const f of this.subs) { try { f(this.last); } catch (e) { console.error('Margin timer: listener', e); } }
   }
 
@@ -3559,7 +3795,7 @@ class TimerLink {
           else if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.p.liveState); }
         },
         onState: (s) => {
-          if (s === 'ready') { this.wait = 15000; this.p.liveChanged?.(this.p.liveState); }
+          if (s === 'ready') { this.wait = 15000; this.linkReady(this.desk); this.p.liveChanged?.(this.p.liveState); }
           if (s === 'closed' || s === 'error') {
             this.desk = null;
             if (this.stopped) return;
@@ -3573,7 +3809,7 @@ class TimerLink {
     };
     open();
   }
-  stop() { this.stopped = true; clearTimeout(this.retry); if (this.desk) { try { this.desk.close(); } catch { /* */ } this.desk = null; } }
+  stop() { this.stopped = true; clearTimeout(this.retry); clearTimeout(this.held?.timer); if (this.desk) { try { this.desk.close(); } catch { /* */ } this.desk = null; } }
 }
 
 /** A file of a plugin changed under it through sync (phone: Margin wrote it, and Obsidian reports no events for its
