@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+  <!-- Android 12+ always shows the system splash first. Give it the paper and the same Margin card that
+       MainActivity then draws on the window (v0.8 §2.2: one look from tap to Today), instead of the launcher
+       icon on the system's grey. splashscreen_logo is a 288 dp canvas with the card inside the 192 dp circle. -->
+  <style name="Theme.App.SplashScreen" parent="AppTheme">
+    <item name="android:windowBackground">@drawable/splashscreen</item>
+    <item name="android:windowSplashScreenBackground">@color/splashscreen_background</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>
+  </style>
+</resources>
