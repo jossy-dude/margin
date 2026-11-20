@@ -315,3 +315,19 @@ describe('the margin-native module', () => {
 
 });
 
+
+/** Kotlin only compiles in CI, so catch the two lexer traps here: Kotlin nests block comments, so a `/*` inside a
+ * comment (a glob like `plugins/STAR/x`) swallows the rest of the file; and an import listed twice is ambiguous. */
+describe('Kotlin sources lex', () => {
+  const { readdirSync } = require('node:fs') as typeof import('node:fs');
+  const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.kt') ? [join(d, e.name)] : []);
+  const files = [...walk(join(ROOT, 'modules', 'margin-native', 'android', 'src')), ...walk(join(ANDROID, 'app', 'src'))];
+  it.each(files.map((f) => [f.slice(ROOT.length + 1), f]))('%s', (_, f) => {
+    const src = readFileSync(f, 'utf8');
+    const strip = src.replace(/"(?:\\.|[^"\\\n])*"/g, '""').replace(/(^|[^:])\/\/[^\n]*/gm, '$1');
+    for (const c of strip.match(/\/\*[\s\S]*?\*\//g) ?? []) expect(c.slice(2).includes('/*')).toBe(false);
+    const imports = src.match(/^import \S+/gm) ?? [];
+    expect(imports.length).toBe(new Set(imports).size);
+  });
+});

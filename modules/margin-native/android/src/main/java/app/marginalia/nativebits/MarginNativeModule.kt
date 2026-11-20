@@ -8,16 +8,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import expo.modules.kotlin.Promise
-import expo.modules.kotlin.modules.Module
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanningDefinition
+import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
  * Margin's own Android bits. Everything here is a thin, total wrapper over a platform API: no call throws

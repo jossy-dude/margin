@@ -6,7 +6,7 @@ package app.marginalia.nativebits
  *
  *   note    *.md / *.canvas / *.base outside .obsidian/   both ways; the hub merges, a clash goes to Conflicts/
  *   plugin  plugin code and assets, snippets, themes      desktop → phone only: never sent from the phone
- *   shared  allow-listed plugin data, .obsidian/*.json      both ways (json3 on the hub)
+ *   shared  allow-listed plugin data, .obsidian/<name>.json   both ways (json3 on the hub)
  *   local   workspace, *.local.json, other plugin data     never synced
  *   single  one writer (Margin's notes, *.phone.json)      the writer's version wins
  *   file    everything else                                both ways
