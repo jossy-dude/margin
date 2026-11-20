@@ -127,6 +127,22 @@ describe('the vault through the store', () => {
     expect(vault.get('Margin/Tasks.md')).toContain('- [ ] Lab report #school #lab 📅 2026-11-22 ⏰ 09:00 ➕ 2026-11-20 ^tk9');
     expect(getState().tasks.find((x) => x.id === 'tk9')).toMatchObject({ extId: 'tk9', extPath: 'Margin/Tasks.md' });
   });
+  /* Rationale (v0.7.4 phone pass): every class in the snapshot carried `updatedAt: now`, so .margin/margin.json was
+     rewritten (and synced to the desktop) on every change in Margin, even when nothing in it had changed. */
+  it("Margin's notes and the snapshot are not rewritten when nothing in them changed", async () => {
+    await fresh();
+    act.saveCourse({ id: 'db', name: 'Database Systems', rooms: ['LR601'], teacher: '', goal: null, sort: 0, demo: false });
+    act.saveMeeting({ id: 'm1', courseId: 'db', weekday: 0, start: '09:45', end: '11:15', demo: false });
+    await settle();
+    await obsidianNow();
+    const snap = vault.get('.margin/margin.json');
+    expect(snap).toContain('"kind": "class"');
+    await new Promise((r) => setTimeout(r, 15));
+    act.saveTask({ id: 'tk2', title: 'Unrelated', courseId: null, kind: 'other', dueAt: null, startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false, tags: [] });
+    await settle();
+    await obsidianNow();
+    expect(vault.get('.margin/margin.json')).toBe(snap);
+  });
   it('a line deleted in Obsidian removes its task', async () => {
     await fresh();
     vault.set('N.md', '- [ ] A #school ^a1\n');

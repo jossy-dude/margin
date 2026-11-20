@@ -284,7 +284,8 @@ async function writeGenerated() {
   const cls = env.events.filter((e) => e.data?.kind === 'class' && !e.data.cancelled).map((e) => e.data!);
   const nowClass = cls.find((e) => e.at <= now && (e.end ?? e.at) > now) ?? null, nextClass = cls.find((e) => e.at > now) ?? null;
   const snapshot = {
-    ...env, writtenAt: 0, format: 'margin-snapshot/2', readOnly: true,
+    // no clock in it (`writtenAt`, each class's `updatedAt`): the file changes only when what it says changes
+    ...env, writtenAt: 0, events: env.events.map((e) => ({ ...e, updatedAt: 0 })), format: 'margin-snapshot/2', readOnly: true,
     // for Bone Tasks' School switch and subject picker, and Bone Home's "Now" line (§3.4)
     trackedTags: trackedTags(s.courses).slice(0, (s.settings.trackedTags?.length || 1)),
     subjects: s.courses.filter((x) => !x.demo && !x.archived).map((x) => ({ id: x.id, name: x.name, tag: subjectTag(x), color: x.color ?? null })),
