@@ -1,6 +1,6 @@
 # STATE: Margin
 
-_Updated 2026-11-14. Keep this file to where things stand now; move finished history to `docs/archive/`._
+_Updated 2026-11-20. Keep this file to where things stand now; move finished history to `docs/archive/`._
 History before v0.7 (task log, v0.3–v0.6 status, audits): `docs/archive/STATE-history-2026-11.md`.
 
 ## Morning report (2026-11-13, overnight build)
@@ -61,9 +61,11 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
 
 ## Now
-- **v0.8 overhaul built, all four phases, uncommitted and untested on the phone** (2026-11-20): what is done and
-  what is not is in `docs/v08/PROGRESS.md`; the phone pass is `docs/DEVICE_CHECKLIST.md` §V08. Kotlin has not been
-  compiled (CI only). vault-sync (hub, core) and margin-bridge 0.8 changed too; neither is installed yet.
+- **v0.7.4** (versionCode 10, tag `v0.7.4`, 2026-11-20): the v0.8 overhaul (all four phases, `docs/v08/PROGRESS.md`)
+  plus a dead-code sweep (ui/charts.tsx, the never-wired Do Not Disturb calls, unused native wrappers, SyncStore's
+  ext_reminder accessors). The `v0.7.5` tag (versionCode 9) points at a commit whose Kotlin did not compile; it has
+  no release and 0.7.4 replaces it (owner's pick). Phone pass: `docs/DEVICE_CHECKLIST.md` §V08. Needs vault-sync's
+  v0.8 hub and margin-bridge 0.8 in the vault.
 - **v0.8 overhaul spec** (2026-11-19): `docs/v08/SPEC.md`: 4 phases (1 sync rebuild, 2 speed/clean code/one UI
   with skins, 3 Add/tags/Subjects/Notices/Obsidian tasks, 4 full-page Settings, sync page, widget).
   Phone state after the test: vault folder re-picked (it had been lost, S9); alarm verified stoppable.
