@@ -32,7 +32,10 @@ import { taskFromLine } from '../domain/vaultMap';
 import type { Course, Task } from '../domain/types';
 
 
-const K = { known: 'vault.known', ids: 'vault.ids', lines: 'vault.lines', out: 'vault.outAt', retry: 'vault.retry', gen: 'vault.gen' };
+const K = { known: 'vault.known', ids: 'vault.ids', lines: 'vault.lines', out: 'vault.outAt', retry: 'vault.retry', gen: 'vault.gen', reread: 'vault.reread' };
+/** Bumped when every note must be read once more from scratch. 1 (v0.7.5): brings back the Obsidian tasks that
+ *  v0.7.4's first read dropped (see `refreshVault`). */
+const REREAD = '1';
 interface Cache { known: Record<string, string>; ids: Record<string, string[]>; lines: Record<string, { p: string; raw: string }>; gen: Record<string, string> }
 let cache: Cache | null = null;
 const loadJson = async <T,>(k: string, d: T): Promise<T> => { try { const v = await R().getKv(k); return v ? (JSON.parse(v) as T) : d; } catch { return d; } };
@@ -74,11 +77,22 @@ const serial = (f: () => Promise<void>) => { busy = busy.then(f).catch((e) => { 
 export const refreshVault = (only: string[] = []) => serial(async () => {
   if (db.demo) return;
   const c = await load();
+  /* The first read (after the upgrade to v0.8, or the first vault ever) only links tasks to their lines: before
+     it nothing is known about the notes, so Margin's history must not go out as if it were new. v0.7.4 did that:
+     the old Obsidian tasks were appended to Margin/Tasks.md as copies, and then dropped. After the first read the
+     out cursor starts at the present. */
+  const first = !(await R().getKv(K.out));
+  // Margin's own changes go out first (they are newer than what the notes say), and before the notes are read,
+  // so the read sees what Margin just wrote and not the text from before it
+  if (!first) await pushOut();
+  const full = only.length === 0;
+  if (full && (await R().getKv(K.reread)) !== REREAD) c.known = {};
   const res = await vaultFiles(c.known, only);
   if (!res) return;
   if (res.error) { report({ ok: false, note: res.error === 'no vault' ? 'Choose the vault folder' : res.error }); return; }
-  await pushOut();   // Margin's own changes first: they are newer than what the notes say
-  const n = await ingest(res.files, res.gone, only.length === 0);
+  const n = await ingest(res.files, res.gone, full);
+  if (first) { await startOut(); await catchUp(); }
+  if (full) await R().setKv(K.reread, REREAD);
   await save();
   report({ ok: true, note: n.added || n.changed || n.removed ? `${n.added} new · ${n.changed} changed · ${n.removed} removed` : 'Up to date', tasks: Object.keys(c.lines).length });
   if (n.added) faceEvent('taskArrived');
@@ -119,11 +133,13 @@ async function ingest(files: VaultFile[], gone: string[], full: boolean): Promis
   const live = new Set(Object.values(c.ids).flat());
   const drop: string[] = [];
   const touched = new Set([...files.filter((f) => f.text !== undefined).map((f) => f.p), ...gone]);
+  const wrote = new Set(writes.map((t) => t.id));
   for (const [bid, l] of Object.entries(c.lines)) {
     if (live.has(bid) || (!full && !touched.has(l.p))) continue;
     delete c.lines[bid];
     const t = byExt.get(bid) ?? byOwn.get(bid);
-    if (t && !pending.has(t.id)) { drop.push(t.id); removed++; }
+    // a task this read just wrote has its line in a note (it moved): it stays
+    if (t && !pending.has(t.id) && !wrote.has(t.id)) { drop.push(t.id); removed++; }
   }
   for (const t of writes) await R().upsert('task', t);
   if (drop.length) await R().removeMany(drop.map((id) => ({ entity: 'task' as const, id })));
@@ -182,8 +198,42 @@ async function editNote(p: string, change: (text: string) => string | null): Pro
   return false;
 }
 
+/** After the first read: everything Margin had is either in a note already or caught up by `catchUp`. */
+async function startOut() {
+  const ch = await R().changes('task', 0);
+  await R().setKv(K.out, String(ch.length ? Math.max(...ch.map((x) => x.updatedAt)) : 0));
+}
+/** A school task made in Margin that is in no note: one line in Margin/Tasks.md. False = try again later. */
+async function appendToTasksNote(t: Task, stamp: Task[]): Promise<boolean> {
+  const c = await load(), s = getState();
+  const course = s.courses.find((x) => x.id === t.courseId);
+  const w = wanted(t, true);
+  const tags = [...new Set([...(t.tags ?? []).map(norm), ...(course ? [subjectTag(course).replace(/^#/, '')] : [])])];
+  const ln = newLine({ title: t.title, tags, due: w.due ?? null, time: w.time ?? null, prio: w.prio ?? 0, estimateMin: t.estimateMin, created: ymdOf(t.createdAt), blockId: blockIdOf(t.id), done: t.status === 2, doneOn: t.completedAt ? ymdOf(t.completedAt) : null });
+  const ok = await editNote(TASKS_NOTE, (txt) => (txt.includes(`^${blockIdOf(t.id)}`) ? null : appendLine(txt || TASKS_NOTE_HEAD, ln)));
+  if (!ok) return false;
+  c.lines[blockIdOf(t.id)] = { p: TASKS_NOTE, raw: ln };
+  c.ids[TASKS_NOTE] = [...new Set([...(c.ids[TASKS_NOTE] ?? []), blockIdOf(t.id)])];
+  stamp.push({ ...t, extId: blockIdOf(t.id), extPath: TASKS_NOTE });
+  return true;
+}
+/** Only Margin's own tasks are ever appended: one that came from a note, or has been in one, waits for its line. */
+const mayAppend = (t: Task, own: readonly string[]) => !t.origin && !t.extId && goesOut(t, own);
+/** The first read's catch-up: Margin's own school tasks that no note has yet (made before any vault was read). */
+async function catchUp(): Promise<void> {
+  const c = await load(), s = getState();
+  const own = s.settings.trackedTags?.length ? s.settings.trackedTags : DEFAULT_TRACKED;
+  const stamp: Task[] = [], failed: string[] = [];
+  for (const t of s.tasks) if (mayAppend(t, own) && !c.lines[blockIdOf(t.id)] && !(await appendToTasksNote(t, stamp))) failed.push(t.id);
+  for (const t of stamp) await R().upsert('task', t);
+  if (stamp.length) { applySnapshot(await R().load(), true); await bumpOut(); }
+  if (failed.length) { await R().setKv(K.retry, JSON.stringify(failed)); scheduleRetry(); }
+}
+
 async function pushOut(): Promise<void> {
   if (db.demo) return;
+  // nothing goes out before the first read of the vault (`refreshVault`): no line is known yet
+  if (!(await R().getKv(K.out))) return;
   const c = await load(), s = getState();
   const own = s.settings.trackedTags?.length ? s.settings.trackedTags : DEFAULT_TRACKED;
   const since = Number(await R().getKv(K.out)) || 0;
@@ -208,17 +258,9 @@ async function pushOut(): Promise<void> {
       if (!(await editNote(line.p, (txt) => { const i = txt.split('\n').findIndex((l) => l.endsWith(`^${bid}`)); if (i < 0) return null; return replaceLine(txt, bid, patchLine(txt.split('\n')[i]!, d)); }))) failed.push(id);
       continue;
     }
-    if (!goesOut(t, own)) continue;
     // a new school task: one line in Margin/Tasks.md, with the subject's tag and its kind tags
-    const course = s.courses.find((x) => x.id === t.courseId);
-    const w = wanted(t, true);
-    const tags = [...new Set([...(t.tags ?? []).map(norm), ...(course ? [subjectTag(course).replace(/^#/, '')] : [])])];
-    const ln = newLine({ title: t.title, tags, due: w.due ?? null, time: w.time ?? null, prio: w.prio ?? 0, estimateMin: t.estimateMin, created: ymdOf(t.createdAt), blockId: blockIdOf(t.id), done: t.status === 2, doneOn: t.completedAt ? ymdOf(t.completedAt) : null });
-    const ok = await editNote(TASKS_NOTE, (txt) => (txt.includes(`^${blockIdOf(t.id)}`) ? null : appendLine(txt || TASKS_NOTE_HEAD, ln)));
-    if (!ok) { failed.push(id); continue; }
-    c.lines[blockIdOf(t.id)] = { p: TASKS_NOTE, raw: ln };
-    c.ids[TASKS_NOTE] = [...new Set([...(c.ids[TASKS_NOTE] ?? []), blockIdOf(t.id)])];
-    stamp.push({ ...t, extId: blockIdOf(t.id), extPath: TASKS_NOTE });
+    if (!mayAppend(t, own)) continue;
+    if (!(await appendToTasksNote(t, stamp))) failed.push(id);
   }
   for (const t of stamp) await R().upsert('task', t);
   if (stamp.length) applySnapshot(await R().load(), true);

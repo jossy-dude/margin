@@ -6,6 +6,7 @@
 import { MemoryRepository } from '../data/memory';
 import { act, getState, hydrate } from '../store/store';
 import { refreshVault, resetObsidianCache, obsidianNow } from '../store/obsidian';
+import { applySnapshot } from '../store/core';
 
 const mockVault = new Map<string, string>();
 const vault = mockVault;
@@ -68,6 +69,63 @@ describe('the vault through the store', () => {
     await obsidianNow();
     expect(vault.get('Margin/Tasks.md')).toContain(`- [ ] Lab report #school #lab${c ? ' #Database-Systems' : ''} 📅 2026-11-22 ⏰ 09:00 ➕ 2026-11-20 ^tk1`);
     expect(getState().tasks.find((x) => x.id === 'tk1')).toMatchObject({ extId: 'tk1', extPath: 'Margin/Tasks.md' });
+  });
+  /* Rationale (v0.7.4 phone pass, 2026-11-20): the first read after the upgrade from 0.7.2 ran pushOut with no out
+     cursor and no known lines, so every Obsidian task looked like a new Margin task: it was appended to
+     Margin/Tasks.md as `^ob-<id>`, re-pointed there, and ingest (reading the notes as they were before that write)
+     then deleted it. Six of the owner's tasks vanished from To-do and Tasks.md got six copies. */
+  it('the first read after the upgrade links every old task to its line and writes nothing new', async () => {
+    await fresh();
+    const base = { courseId: null, kind: 'other' as const, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status: 0 as const, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false };
+    // what 0.7.2 left: an Obsidian task (the old bridge's `ob-` row) and Margin's own task, both already in the notes
+    act.saveTask({ ...base, id: 'ob-a1', title: 'Finish the CP exercises', dueAt: new Date(2026, 10, 10, 23, 59).getTime(), origin: 'obsidian', extId: 'a1', extPath: 'Daily/Nov 13.md', tags: ['school'] });
+    act.saveTask({ ...base, id: 'tk1', title: 'Hh', dueAt: new Date(2026, 10, 15, 16, 30).getTime(), tags: ['reading', 'school'] });
+    await settle();
+    const daily = '# Log\n- [ ] Finish the CP exercises #school 📅 2026-11-10 ^a1\n';
+    const tasksNote = '---\ncreated: 2026-11-12\n---\n- [ ] Hh #school #reading 📅 2026-11-15 ⏰ 16:30 ^tk1\n';
+    vault.set('Daily/Nov 13.md', daily);
+    vault.set('Margin/Tasks.md', tasksNote);
+    await obsidianNow();
+    expect(vault.get('Margin/Tasks.md')).toBe(tasksNote);   // no `^ob-a1` copy appended
+    expect(vault.get('Daily/Nov 13.md')).toBe(daily);
+    const a = getState().tasks.find((x) => x.id === 'ob-a1');
+    expect(a).toMatchObject({ title: 'Finish the CP exercises', extId: 'a1', extPath: 'Daily/Nov 13.md' });
+    expect(getState().tasks.find((x) => x.id === 'tk1')).toBeDefined();
+    expect(getState().tasks).toHaveLength(2);
+    // and from then on Margin's edits go out as usual: a tick reaches the daily note's line
+    act.saveTask({ ...a!, status: 2, completedAt: NOW });
+    await settle();
+    await obsidianNow();
+    expect(vault.get('Daily/Nov 13.md')).toBe('# Log\n- [x] Finish the CP exercises #school 📅 2026-11-10 ✅ 2026-11-20 ^a1\n');
+    expect(vault.get('Margin/Tasks.md')).toBe(tasksNote);
+  });
+  it('a phone that ran v0.7.4 gets the dropped tasks back on its next full read, and only that once', async () => {
+    const repo = await fresh();
+    const daily = '- [ ] Finish the CP exercises #school 📅 2026-11-10 ^a1\n';
+    vault.set('Daily/Nov 13.md', daily);
+    await refreshVault();
+    // what v0.7.4 left: the row deleted, the out cursor past that delete, the note known, no re-read done yet
+    await repo.removeMany([{ entity: 'task', id: 'ob-a1' }]);
+    const ch = await repo.changes('task', 0);
+    await repo.setKv('vault.outAt', String(Math.max(...ch.map((x) => x.updatedAt))));
+    await repo.setKv('vault.reread', '');
+    applySnapshot(await repo.load(), true);
+    resetObsidianCache();   // the app restarts on the new build
+    expect(getState().tasks.some((x) => x.extId === 'a1')).toBe(false);
+    await refreshVault(['Daily/Nov 13.md']);   // a single-note event is not the full read
+    expect(getState().tasks.some((x) => x.extId === 'a1')).toBe(false);
+    await refreshVault();
+    expect(getState().tasks.find((x) => x.extId === 'a1')).toMatchObject({ id: 'ob-a1', title: 'Finish the CP exercises', status: 0 });
+    expect(vault.get('Daily/Nov 13.md')).toBe(daily);
+    expect(await repo.getKv('vault.reread')).toBe('1');
+  });
+  it('a school task made in Margin before any vault was read still goes to Margin/Tasks.md on the first read', async () => {
+    await fresh();
+    act.saveTask({ id: 'tk9', title: 'Lab report', courseId: null, kind: 'lab', dueAt: new Date(2026, 10, 22, 9).getTime(), startAt: null, estimateMin: null, priority: 0, notes: '', status: 0, createdAt: NOW, completedAt: null, reminders: [], subtasks: [], demo: false, tags: ['school', 'lab'] });
+    await settle();
+    await obsidianNow();
+    expect(vault.get('Margin/Tasks.md')).toContain('- [ ] Lab report #school #lab 📅 2026-11-22 ⏰ 09:00 ➕ 2026-11-20 ^tk9');
+    expect(getState().tasks.find((x) => x.id === 'tk9')).toMatchObject({ extId: 'tk9', extPath: 'Margin/Tasks.md' });
   });
   it('a line deleted in Obsidian removes its task', async () => {
     await fresh();
