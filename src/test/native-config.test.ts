@@ -251,12 +251,12 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
-  it('ships as 0.7.4, version code 10', () => {
-    // 0.7.4 is named by the owner and comes after the withdrawn 0.7.5 build (version code 9), so its code is 10.
-    expect(appJson.expo.version).toBe('0.7.4');
-    expect(gradle).toMatch(/versionCode 10\b/);
-    expect(gradle).toContain('versionName "0.7.4"');
-    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.4</string>');
+  it('ships as 0.7.5, version code 11', () => {
+    // 0.7.5 fixes 0.7.4 (version code 10), which came after the withdrawn 0.7.5 build (version code 9).
+    expect(appJson.expo.version).toBe('0.7.5');
+    expect(gradle).toMatch(/versionCode 11\b/);
+    expect(gradle).toContain('versionName "0.7.5"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.5</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {
