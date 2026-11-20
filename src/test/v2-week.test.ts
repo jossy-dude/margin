@@ -1,17 +1,15 @@
 /**
- * v0.7 R2 — Week v2: the view-model (Monday first, the picked day, the grid's span, due by day, a moved class where it
- * went), the drag's landing maths, and the page drawn for real: a held class opens the move panel; "This week only"
- * writes a one-off move, "Every week" moves the timetable; a clash cannot be saved; the v0.6 Week is a tap away.
+ * v0.7 R2, v0.8 §2.1 — the view-model (Monday first, the picked day, the grid's span, due by day, a moved class where
+ * it went), the drag's landing maths, and the ONE Week drawn for real in every skin: a held class opens the move
+ * panel; "This week only" writes a one-off move, "Every week" moves the timetable; a clash cannot be saved.
  */
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
 import type { Course, Meeting, Task } from '../domain/types';
-import { Face } from '../ui/mascot/Face';
-import { WeekPage } from '../screens/week/WeekPage';
+import { WeekScreen } from '../screens/Week';
 import { dropSlot, hhmm, slotId, slotOf, weekView, type WeekInput } from '../screens/week/model';
-import { gridName } from '../screens/week/WeekV2';
-import { getState, hydrate, stopResync, act as act2 } from '../store/store';
+import { getState, hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
 jest.mock('expo-keep-awake', () => ({ activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} }));
@@ -53,7 +51,7 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withDecay: () => 0, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeOutDown', 'FadeInRight', 'FadeOutRight', 'FadeInLeft', 'FadeOutLeft'].map((k) => { const b: Record<string, () => unknown> = {}; b.duration = b.easing = b.delay = () => b; return [k, b]; })),
   };
   return { ...api, default: api };
 });
@@ -98,19 +96,18 @@ describe('the drag lands on a 5-minute slot inside the grid', () => {
     expect(dropSlot(3, 540, 50, 0, -9999, 40, 0.9, 480, 960)).toEqual({ day: 3, start: 480 });
     expect(slotOf(slotId({ day: 5, start: 845 }))).toEqual({ day: 5, start: 845 });
     expect(hhmm(845)).toBe('14:05');
-    expect(['Computer Programming', 'Intro to Economics', 'Data'].map(gridName)).toEqual(['Comp', 'Intro', 'Data']);
   });
 });
 
 let live: TestRenderer.ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => { live?.unmount(); }); live = undefined; stopResync(); jest.useRealTimers(); });
-async function page() {
+async function page(palette: 'daylight' | 'collage' | 'plain' | 'refined' = 'daylight') {
   jest.useFakeTimers({ now: THU });
   const repo = new MemoryRepository(() => THU);
-  await repo.seed({ courses: COURSES, meetings: MEETINGS, attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9, palette: 'daylight', lookV: 2 } });
+  await repo.seed({ courses: COURSES, meetings: MEETINGS, attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], settings: { onboarded: 9, palette, lookV: 2 } });
   await hydrate(repo);
   let r!: TestRenderer.ReactTestRenderer;
-  await act(async () => { r = TestRenderer.create(React.createElement(WeekPage)); });
+  await act(async () => { r = TestRenderer.create(React.createElement(WeekScreen)); });
   live = r;
   return r;
 }
@@ -119,24 +116,24 @@ const call = async (r: TestRenderer.ReactTestRenderer, id: string, prop = 'onPre
 const has = (r: TestRenderer.ReactTestRenderer, id: string) => r.root.findAll((n) => n.props.testID === id).length > 0;
 const disabled = (r: TestRenderer.ReactTestRenderer, id: string) => r.root.findAll((n) => n.props.testID === id && n.props.accessibilityState)[0]?.props.accessibilityState.disabled;
 
-describe('Week route (R2)', () => {
-  it('Daylight shows the v0.7 Week with one face; every other Style shows the v0.6 one', async () => {
-    const r = await page();
-    expect(has(r, 'week-v2')).toBe(true);
-    expect(r.root.findAllByType(Face)).toHaveLength(1);
-    expect(r.root.findAllByType(Face)[0]!.props).toMatchObject({ size: 28, decorative: true });
-    expect(has(r, 'week-classic')).toBe(false);
-    for (const palette of ['collage', 'plain', 'refined'] as const) {
-      await act(async () => { act2.setSettings({ palette }); });
-      expect(has(r, 'week-v2')).toBe(false);
+const hold = async (r: TestRenderer.ReactTestRenderer, key: string) => {
+  const n = r.root.findAll((x) => x.props.testID === `week-cell-${key}` && typeof x.props.onAccessibilityAction === 'function')[0];
+  expect(n).toBeDefined();
+  await act(async () => { n!.props.onAccessibilityAction({ nativeEvent: { actionName: 'longpress' } }); });
+};
+
+describe('Week route (R2, one Week in every skin)', () => {
+  it('every Style draws the same Week, its classes ready to drag', async () => {
+    for (const palette of ['daylight', 'collage', 'plain', 'refined'] as const) {
+      const r = await page(palette);
+      expect(has(r, 'week-cell-2026-11-12|09:00|B')).toBe(true);
+      await act(async () => { r.unmount(); }); live = undefined;
     }
-    await act(async () => { act2.setSettings({ palette: 'daylight' }); });
-    expect(has(r, 'week-v2')).toBe(true);
   });
 
   it('hold a class, pick Tuesday: "This week only" writes a one-off move and the class shows on Tuesday', async () => {
     const r = await page();
-    await call(r, 'week-class-2026-11-12|13:15|E', 'onLongPress');
+    await hold(r, '2026-11-12|13:15|E');
     expect(has(r, 'week-move')).toBe(true);
     expect(disabled(r, 'move-week')).toBe(true); // nothing changed yet
     await call(r, 'move-day-1');
@@ -145,13 +142,12 @@ describe('Week route (R2)', () => {
     expect(has(r, 'week-move')).toBe(false);
     expect(getState().settings.moves).toEqual([expect.objectContaining({ meetingId: 'm2', date: '2026-11-12', to: '2026-11-10', start: '13:15', end: '14:05' })]);
     expect(getState().meetings.find((m) => m.id === 'm2')).toMatchObject({ weekday: 3, start: '13:15' }); // the timetable is untouched
-    await call(r, 'day-1');
-    expect(has(r, 'week-class-2026-11-10|13:15|E')).toBe(true);
+    expect(has(r, 'week-cell-2026-11-10|13:15|E')).toBe(true);
   });
 
   it('"Every week" moves the class in the timetable itself', async () => {
     const r = await page();
-    await call(r, 'week-class-2026-11-12|09:00|B', 'onLongPress');
+    await hold(r, '2026-11-12|09:00|B');
     await call(r, 'move-day-1');
     await call(r, 'move-every');
     expect(getState().meetings.find((m) => m.id === 'm1')).toMatchObject({ weekday: 1, start: '09:00', end: '09:50' });
@@ -160,7 +156,7 @@ describe('Week route (R2)', () => {
 
   it('a slot where the same class already starts cannot be saved', async () => {
     const r = await page();
-    await call(r, 'week-class-2026-11-12|13:15|E', 'onLongPress');
+    await hold(r, '2026-11-12|13:15|E');
     await call(r, 'move-day-0'); // Monday: Economics is there at 08:30, not 13:15, so it can go
     expect(disabled(r, 'move-week')).toBe(false);
     await call(r, 'move-day-4'); // Friday: Economics already starts at 13:15

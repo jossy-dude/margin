@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status-bar mark: Margin's M, one colour (white) as the system requires; Android tints it. It fills the 24 dp
+     box the way the system's own icons do, so it never reads as a small mark in a blank square. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+  <path android:pathData="M4.5,19.5V5.5L12,15L19.5,5.5V19.5" android:strokeColor="#FFFFFFFF" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+</vector>

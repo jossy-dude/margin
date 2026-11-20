@@ -1,0 +1,9 @@
+{
+ "name": "both append at the end: both kept, head first",
+ "base": "# Log\n- one\n",
+ "head": "# Log\n- one\n- desk\n",
+ "incoming": "# Log\n- one\n- phone\n",
+ "expect": "# Log\n- one\n- desk\n- phone\n",
+ "clean": true,
+ "conflicts": 0
+}

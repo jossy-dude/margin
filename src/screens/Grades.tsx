@@ -85,7 +85,7 @@ export function GradesScreen() {
   const goals = rows.filter((r) => r.course.goal && r.tot !== null);
   const face = rows.length === 0 ? null : pageFace('Grades', { hour: new Date().getHours(), atGoal: goals.filter((r) => (r.tot as number) >= (r.course.goal as number)).length, belowGoal: goals.filter((r) => (r.tot as number) < (r.course.goal as number)).length });
   return (
-    <Page face={face} title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} />}>
+    <Page face={face} title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Row style={{ flexWrap: 'nowrap', gap: 4 }}><Btn small kind="ghost" label="Subjects" testID="open-subjects" a11y="Open the subjects pages" onPress={() => act.openPage({ t: 'subjects' })} /><Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>}>
       {rows.length === 0 && <Empty icon="grad" face={emptyFace('gradesNoSubjects')} text="No subjects yet. Add one to start." />}
       {rows.map(({ course, marks, adj, tot, need, parts, rowsP }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>

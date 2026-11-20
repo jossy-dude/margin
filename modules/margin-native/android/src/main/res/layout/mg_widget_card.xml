@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.8 §4.3: the one card. Colours are set from the app's skin at draw time (Look.kt); these are the defaults. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="@drawable/mg_widget_card"
+  android:paddingStart="14dp" android:paddingEnd="14dp" android:paddingTop="10dp" android:paddingBottom="10dp">
+  <LinearLayout android:id="@+id/mg_w_class" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+      <TextView android:id="@+id/mg_w_state" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Now" android:textColor="@color/mg_mut" android:textSize="12sp" android:fontFamily="sans-serif-medium" android:maxLines="1"/>
+      <TextView android:id="@+id/mg_w_title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp"
+        android:text="Database Systems" android:textColor="@color/mg_ink" android:textSize="16sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end"/>
+      <Chronometer android:id="@+id/mg_w_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp"
+        android:textColor="@color/mg_ink" android:textSize="16sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum"/>
+      <TextView android:id="@+id/mg_w_when" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:visibility="gone"
+        android:text="09:00" android:textColor="@color/mg_ink" android:textSize="16sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum"/>
+    </LinearLayout>
+    <ProgressBar android:id="@+id/mg_w_bar" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="5dp"
+      android:layout_marginTop="5dp" android:max="50" android:progress="18"/>
+    <TextView android:id="@+id/mg_w_sub" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp"
+      android:text="LR601 · 23 min left · then Economics 10:55" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+  </LinearLayout>
+  <LinearLayout android:id="@+id/mg_w_tasks" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="6dp"/>
+  <TextView android:id="@+id/mg_w_more" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:text="+3 more" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1"/>
+  <TextView android:id="@+id/mg_w_tomorrow" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp"
+    android:text="Tomorrow 08:30 · Computer Programming" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+</LinearLayout>

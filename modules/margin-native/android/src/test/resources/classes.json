@@ -1,0 +1,163 @@
+{
+ "extra": "",
+ "cases": [
+  {
+   "p": "Daily_Notes/Nov 19, 2026.md",
+   "cls": "note"
+  },
+  {
+   "p": "Projects/a.canvas",
+   "cls": "note"
+  },
+  {
+   "p": "x.base",
+   "cls": "note"
+  },
+  {
+   "p": "Drawings/d.excalidraw.md",
+   "cls": "note"
+  },
+  {
+   "p": "Margin/Tasks.md",
+   "cls": "note"
+  },
+  {
+   "p": "Margin/Timetable.md",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
+   "p": "Margin/Subjects.md",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
+   "p": "Margin/Notices.md",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
+   "p": ".margin/margin.json",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
+   "p": ".margin/obsidian.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/main.js",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/build.py",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/src/50_view.js",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/styles.css",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/manifest.json",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/snippets/bone-base.css",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/themes/Minimal/theme.css",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/margin-bridge/main.js",
+   "cls": "plugin"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/data.json",
+   "cls": "shared"
+  },
+  {
+   "p": ".obsidian/plugins/bone-chess/studies.json",
+   "cls": "shared"
+  },
+  {
+   "p": ".obsidian/plugins/bone-yt/history.json",
+   "cls": "shared"
+  },
+  {
+   "p": ".obsidian/plugins/bone-home/data.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/plugins/margin-bridge/data.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/plugins/obsidian-git/data.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/plugins/bone-home/frec.phone.json",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
+   "p": ".obsidian/plugins/bone-home/frec.desktop.json",
+   "cls": "single",
+   "writer": "desktop"
+  },
+  {
+   "p": ".obsidian/plugins/margin-bridge/link.local.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/workspace.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/workspace-mobile.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/app.json",
+   "cls": "local"
+  },
+  {
+   "p": ".obsidian/appearance.json",
+   "cls": "shared"
+  },
+  {
+   "p": ".obsidian/community-plugins.json",
+   "cls": "shared"
+  },
+  {
+   "p": ".obsidian/hotkeys.json",
+   "cls": "shared"
+  },
+  {
+   "p": "Attachments/photo.png",
+   "cls": "file"
+  },
+  {
+   "p": "Books/x.pdf",
+   "cls": "file"
+  },
+  {
+   "p": "data/list.csv",
+   "cls": "file"
+  },
+  {
+   "p": "notes.txt",
+   "cls": "file"
+  },
+  {
+   "p": "Conflicts/2026-11-19.md",
+   "cls": "note"
+  }
+ ]
+}

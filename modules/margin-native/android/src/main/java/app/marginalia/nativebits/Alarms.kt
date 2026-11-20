@@ -28,7 +28,13 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
+import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import android.widget.TextView
 import java.util.Calendar
@@ -150,6 +156,8 @@ class AlarmService : Service() {
   private var snoozeMin = 10
   private var vibrate = true
   private val giveUp = Runnable { missed() }
+  /** When this ring started, so a silenced alarm still gives up at the ring limit (v0.8 §4.4). */
+  private var ringStart = 0L
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -166,7 +174,13 @@ class AlarmService : Service() {
       ACTION_DISMISS -> { quiet(); finish() }
       // N6: the volume keys, a double tap or "Silence" stop the sound and the buzz; the alarm still waits for
       // Snooze or Dismiss (its screen and notification stay). A test ring has nothing to wait for: it ends.
-      ACTION_SILENCE -> { quiet(); if (id == "preview") finish() }
+      // v0.8 §4.4: `quiet()` clears every pending callback, which used to include the give-up timer, so a silenced
+      // alarm waited for an answer forever. It now still gives up at the normal limit and leaves "Missed alarm".
+      ACTION_SILENCE -> {
+        quiet()
+        if (id == "preview") finish()
+        else handler.postDelayed(giveUp, maxOf(1_000L, RING_MS - (System.currentTimeMillis() - ringStart)))
+      }
       else -> { if (player == null) finish() }
     }
     return START_NOT_STICKY
@@ -223,6 +237,7 @@ class AlarmService : Service() {
       } catch (e: Exception) { }
     }
     handler.removeCallbacks(giveUp)
+    ringStart = System.currentTimeMillis()
     handler.postDelayed(giveUp, RING_MS)
   }
 
@@ -394,7 +409,7 @@ class AlarmActivity : Activity() {
   /** Set by Dismiss: the screen stays 400 ms to show the happy face, so the service's "done" must not close it first. */
   private var leaving = false
   private val done = object : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) { if (!leaving) finish() }
+    override fun onReceive(context: Context, intent: Intent) { if (!leaving) { leaving = true; leave() } }
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -409,6 +424,17 @@ class AlarmActivity : Activity() {
     }
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     setContentView(R.layout.mg_alarm)
+    fullScreen()
+    // v0.8 §4.4: the alarm page wears the app's skin (its paper, inks and accent), light or dark as the app is
+    try {
+      val look = Look.read(this)
+      val root = (findViewById<View>(android.R.id.content) as android.view.ViewGroup).getChildAt(0)
+      root.setBackgroundColor(look.paper)
+      for (v in intArrayOf(R.id.mg_al_time, R.id.mg_al_label)) findViewById<TextView>(v).setTextColor(look.ink)
+      for (v in intArrayOf(R.id.mg_al_date, R.id.mg_al_hint)) findViewById<TextView>(v).setTextColor(look.mut)
+      findViewById<TextView>(R.id.mg_al_snooze).apply { setTextColor(look.ink); background?.mutate()?.setTint(look.card) }
+      findViewById<TextView>(R.id.mg_al_dismiss).apply { setTextColor(look.card); background?.mutate()?.setTint(look.acc) }
+    } catch (e: Exception) { }
     val label = intent.getStringExtra("label") ?: ""
     val snooze = intent.getIntExtra("snooze", 10)
     val a = Agenda.read(this)
@@ -427,6 +453,7 @@ class AlarmActivity : Activity() {
     snoozeBtn.text = "Snooze $snooze min"
     snoozeBtn.setOnClickListener { answer(AlarmService.ACTION_SNOOZE) }
     findViewById<TextView>(R.id.mg_al_dismiss).setOnClickListener { dismissHappy() }
+    enter()
     val filter = IntentFilter(AlarmService.ACTION_DONE)
     if (Build.VERSION.SDK_INT >= 33) {
       registerReceiver(done, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -435,18 +462,72 @@ class AlarmActivity : Activity() {
     }
   }
 
-  /** v0.7 U7: the sleepy face wakes up happy, then the screen goes (the alarm itself stops at once). */
+  /** v0.8 (owner's ask): the alarm owns the whole screen. The status and navigation bars are hidden (a swipe shows
+   *  them for a moment), the page is drawn under the camera cut-out, and the text keeps clear of it by its inset. */
+  private fun fullScreen() {
+    try {
+      if (Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+      if (Build.VERSION.SDK_INT >= 30) {
+        window.setDecorFitsSystemWindows(false)
+        window.insetsController?.let {
+          it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+          it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+      } else {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+      }
+      val root = findViewById<View>(R.id.mg_al_root)
+      val top0 = root.paddingTop
+      root.setOnApplyWindowInsetsListener { v, ins ->
+        val cut = if (Build.VERSION.SDK_INT >= 28) ins.displayCutout?.safeInsetTop ?: 0 else 0
+        v.setPadding(v.paddingLeft, top0 + cut, v.paddingRight, v.paddingBottom); ins
+      }
+    } catch (e: Exception) { }
+  }
+
+  private val motion get() = ValueAnimator.areAnimatorsEnabled()
+  private var breathe: ObjectAnimator? = null
+  /** The page rises in, and the sleepy face breathes while the alarm rings. */
+  private fun enter() {
+    val root = findViewById<View>(R.id.mg_al_root)
+    if (!motion) return
+    root.alpha = 0f; root.translationY = 40f
+    root.animate().alpha(1f).translationY(0f).setDuration(320).setInterpolator(DecelerateInterpolator()).start()
+    val face = findViewById<ImageView>(R.id.mg_al_face)
+    breathe = ObjectAnimator.ofPropertyValuesHolder(face, PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.07f), PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.07f),
+      PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, -8f)).apply { duration = 1400; repeatCount = ValueAnimator.INFINITE; repeatMode = ValueAnimator.REVERSE; start() }
+  }
+  /** Every way out (Dismiss, Snooze, the alarm giving up) fades the page away instead of cutting it (owner's ask). */
+  private fun leave(after: Long = 0L) {
+    breathe?.cancel()
+    val root = findViewById<View>(R.id.mg_al_root)
+    findViewById<View>(R.id.mg_al_snooze).isEnabled = false; findViewById<View>(R.id.mg_al_dismiss).isEnabled = false
+    if (!motion) { finish(); return }
+    root.animate().setStartDelay(after).alpha(0f).translationY(60f).setDuration(300).setInterpolator(DecelerateInterpolator())
+      .withEndAction { if (!isFinishing) { finish(); @Suppress("DEPRECATION") overridePendingTransition(0, android.R.anim.fade_out) } }.start()
+  }
+
+  /** v0.7 U7: the sleepy face wakes up happy, then the page fades (the alarm itself stops at once). */
   private fun dismissHappy() {
     if (leaving) return
     leaving = true
     findViewById<ImageView>(R.id.mg_al_face).setImageResource(R.drawable.mg_face_happy)
     try { startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_DISMISS)) } catch (e: Exception) { }
-    Handler(Looper.getMainLooper()).postDelayed({ if (!isFinishing) finish() }, 400)
+    leave(350)
   }
 
+  /** Snooze: the face stays sleepy, the label says until when, and the page fades away. */
   private fun answer(action: String) {
+    if (leaving) return
+    leaving = true
     try { startService(Intent(this, AlarmService::class.java).setAction(action)) } catch (e: Exception) { }
-    finish()
+    if (action == AlarmService.ACTION_SNOOZE) {
+      val snooze = intent.getIntExtra("snooze", 10)
+      findViewById<TextView>(R.id.mg_al_label).text = "Snoozed until ${Fmt.time(System.currentTimeMillis() + snooze * 60_000L, Agenda.read(this).hour12)}"
+      leave(450)
+    } else leave()
   }
 
   override fun onDestroy() {

@@ -5,7 +5,8 @@ import { SvgXml } from 'react-native-svg';
 import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, Slider, TimeField } from '../ui/fields';
 import { SettingsSearch } from './settings/SettingsSearch';
-import { Label, Sheet } from '../ui/Sheet';
+import { Label } from '../ui/Sheet';
+import { FullPage } from '../ui/FullPage';
 import { Empty, Section } from '../screens/common';
 import { BAR_KINDS, DayBar, type BarKind } from '../ui/DayBar';
 import { isBarKind } from '../ui/instruments/legacyKinds';
@@ -41,7 +42,7 @@ import type { Settings } from '../domain/types';
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian & sync', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -72,10 +73,12 @@ function PageSwap({ depth, children }: { depth: number; children: React.ReactNod
   return <Animated.View style={[{ gap: 12 }, st]}>{children}</Animated.View>;
 }
 
-const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: string; to: string }) => {
+const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: string; to: string }) => <SettingsLink label={label} hint={hint} icon={icon} onPress={() => act.settingsPush(to)} />;
+/** A Settings row that opens something other than a Settings page (v0.8: the Subjects pages, the Notice board). */
+const SettingsLink = ({ label, hint, icon, onPress }: { label: string; hint?: string; icon: string; onPress: () => void }) => {
   const { c } = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}. ${hint ?? ''}`} onPress={() => act.settingsPush(to)} android_ripple={{ color: c.rule }} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: c.rule }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}. ${hint ?? ''}`} onPress={onPress} android_ripple={{ color: c.rule }} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: c.rule }}>
       <Icon name={icon} size={24} color={c.acc} /><View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} numberOfLines={2}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" numberOfLines={2}>{hint}</Txt> : null}</View><Icon name="chevron" size={20} color={c.mut} />
     </Pressable>
   );
@@ -226,28 +229,35 @@ export function SettingsSheet() {
   let body: React.ReactNode = null;
   if (page === 'root') body = (<>
     <SettingsSearch />
-    {/* `settings.name` is what Today greets the user with. It ships blank in domain/defaults.ts, so a
-        new install gets the bare greeting until this field supplies a name. Blank stays allowed: Today
-        drops the name and just says "Good morning". */}
+    {/* v0.8 §4.1: grouped sections, each sub-page pushed as a full page with system Back */}
+    <Label>You</Label>
+    {/* `settings.name` is what Today greets the user with; blank is allowed (Today then says only "Good morning"). */}
     <Field label="What should the app call you?" placeholder="Your name" value={nameDraft} onChangeText={onNameChange} autoCapitalize="words" maxLength={24} returnKeyType="done" />
+    <Label>Look & feel</Label>
     <Nav icon="palette" label="Look & feel" hint={`${s.theme} · ${s.palette}`} to="appearance" />
-    <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
-    <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · set time or before class` : 'Set time or before class'} to="alarms" />
-    <Nav icon="today" label="Widgets" hint="Next class, today, what is due" to="widgets" />
-    <Nav icon="note" label="Obsidian" hint="Tasks and classes in your vault" to="obsidian" />
     <Nav icon="sound" label="Sound & haptics" hint={`${s.soundOn ? 'Sound on' : 'Sound off'} · ${s.hapticsOn ? 'haptics on' : 'haptics off'}`} to="sound" />
+    <Label>Classes & semester</Label>
+    <SettingsLink icon="grad" label="Subjects" hint={`${courses.length} · grades, attendance, Obsidian tags`} onPress={() => act.openPage({ t: 'subjects' })} />
     <Nav icon="week" label="Attendance & semester" hint={`Semester ${semesterLabel(s)} · ${s.lockAttendance ? 'locked' : 'unlocked'}`} to="attendance" />
     <Nav icon="week" label="Semesters" hint="Active term and past terms" to="semesters" />
     <Nav icon="timer" label="Focus & breaks" hint={`${s.breakMin} min break · ${s.breaksPerRound} per round`} to="focus" />
+    <Label>Reminders & alarms</Label>
+    <Nav icon="bell" label="Reminders" hint={`${n.enabled ? `${n.classLeadMin} min before class · quiet ${n.quietEnabled ? fmtHM(n.quietFrom, s.hour12) + '–' + fmtHM(n.quietTo, s.hour12) : 'off'}` : 'Off'}${noModule ? ` · ${NO_MODULE_HINT}` : ''}`} to="notifications" />
+    <Nav icon="clock" label="Alarms" hint={(s.alarms ?? []).filter((a) => a.on).length ? `${(s.alarms ?? []).filter((a) => a.on).length} on · set time or before class` : 'Set time or before class'} to="alarms" />
+    <SettingsLink icon="note" label="Notice board" hint="Pinned notices and exam dates" onPress={() => act.openPage({ t: 'notices' })} />
+    <Label>Widgets</Label>
+    <Nav icon="today" label="Widgets" hint="Now and next class, what is due" to="widgets" />
+    <Label>Obsidian & sync</Label>
+    <Nav icon="note" label="Obsidian" hint="Your vault, the desktop, task tags" to="obsidian" />
+    <Label>Your data</Label>
     <Nav icon="export" label="Data & export" hint="XLSX, CSV, JSON" to="data" />
-    {/* Directly under the page it duplicates on purpose: the export exists behind Data & export, this is
-        the one-tap version for the moment somebody is about to uninstall. */}
+    {/* the one-tap export, for the moment somebody is about to uninstall */}
     <ExportRow disabled={!!busy} onPress={() => void doExport('json', 'share')} />
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
-    <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five pages with Jot' : 'Not seen yet'}`} to="tour" />
+    <Label>About</Label>
+    <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five short pages' : 'Not seen yet'}`} to="tour" />
     <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />
-    {/* Reset stays last: it is the only row on this page that destroys something, so it must never be
-        the row a thumb lands on while reaching for the row above it. */}
+    {/* Reset stays last: the only row here that destroys something, never where a thumb lands reaching above it */}
     <Nav icon="trash" label="Reset" hint="Erase everything" to="reset" />
   </>);
   if (page === 'appearance') body = (<>
@@ -450,7 +460,7 @@ export function SettingsSheet() {
   if (page === 'semesters') body = <SemestersPage />;
   if (page === 'diagnostics') body = <DiagnosticsPage />;
   if (page === 'tour') body = (<>
-    <Txt f="serif" s={16} c="mut">Five pages with Jot. Your data stays unless you import.</Txt>
+    <Txt f="serif" s={16} c="mut">Five short pages. Your data stays unless you import.</Txt>
     <Btn kind="ghost" icon="play" label="Show it now" onPress={() => { replay(0); act.close(); }} />
     <Txt f="serif" s={14} c="mut">{toured(onboarded) ? `You have seen build ${TOUR_VERSION} of it.` : 'Not seen yet. It opens next launch.'}</Txt>
   </>);
@@ -464,7 +474,9 @@ export function SettingsSheet() {
     <Txt f="serif" s={14} c="mut">A safety copy is kept before each update.</Txt>
   </>);
   if (page === 'about') body = <AboutPage />;
-  return <Sheet title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onClose={() => { act.settingsPop(); act.close(); clearSettingsPath(); }} back={back} maxH={0.62} peek scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></Sheet>;
+  /* v0.8 §4.1 (U1): a full page with its own header, not a half-height sheet; Back walks one page out, then closes */
+  const closeAll = () => { act.close(); clearSettingsPath(); };
+  return <FullPage title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onBack={back ?? closeAll} testID="settings"><PageSwap depth={path.length}>{body}</PageSwap></FullPage>;
 
   /** The one irreversible action, guarded by the same double tap the boot-failure screen uses: the first tap
    *  arms it and the second one, within the window, does it. The timer is owned by an effect so closing the

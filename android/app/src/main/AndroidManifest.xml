@@ -42,6 +42,10 @@
          runtime version by string resource so it can also be overridden per build.
          `src/test/native-config.test.ts` fails if any of this drifts from `app.json` again — the first
          version of this file said ENABLED=false with no URL, which is an updater that can never update. -->
+    <!-- v0.8: every reminder from expo-notifications uses Margin's own status-bar M (white, tinted), not the full-colour
+         launcher icon, which Android draws as a white blob -->
+    <meta-data android:name="expo.modules.notifications.default_notification_icon" android:resource="@drawable/notification_icon"/>
+    <meta-data android:name="expo.modules.notifications.default_notification_color" android:resource="@color/notification_icon_color"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>

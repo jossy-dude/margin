@@ -49,10 +49,11 @@ the product's own.
   need to reach that goal.
 - Focus uses a pomodoro dial with 25/45/50/90-minute presets, optional flow mode that
   lets a round overrun, and breaks unlocked after a set amount of focus time.
-- Everything is local: SQLite on the device, local notifications, no account, no
-  cloud. The only network use is checking Expo's update server (`u.expo.dev`) for app
-  updates; no account, no personal data. Export exists as a deliberate escape hatch
-  (xlsx, csv, json).
+- No cloud: SQLite on the device, local notifications, no account. Since v0.8 Margin
+  syncs the owner's Obsidian vault with his own desktop (bone-syncd) over his Wi-Fi, the
+  phone's hotspot or Tailscale, end to end sealed, never through a server. The other
+  network use is checking Expo's update server (`u.expo.dev`) once a day; no personal
+  data. Export exists as a deliberate escape hatch (xlsx, csv, json).
 
 ## Capabilities and Constraints
 
@@ -73,8 +74,8 @@ SVG charts (rings, heatmaps, histograms, horizontal bars, hand-inked lines).
 
 **Confirmed constraints:**
 - The phone is the product. Every surface is designed for a phone held in one hand.
-- Local-only stays a product truth: no account, no cloud, no telemetry. The update
-  check is the one network call, and it carries no personal data.
+- No cloud stays a product truth: no account, no server, no telemetry. Sync goes only
+  between the owner's own devices; the update check carries no personal data.
 
 **Out of scope (v0.5):**
 - The desktop surface: a laptop-browser layout of the same data. Earlier versions of
@@ -113,8 +114,8 @@ SVG charts (rings, heatmaps, histograms, horizontal bars, hand-inked lines).
    as a scaled-down desktop page.
 2. **Show the mechanism, don't describe it.** The instrument bar, the escapement
    bezel, the real grade maths. The app demonstrates rather than claims.
-3. **Local-only is a feature.** Everything works on a plane. Export is the escape
-   hatch, never a subscription.
+3. **No cloud is a feature.** Everything works on a plane; sync waits for the owner's
+   own desktop. Export is the escape hatch, never a subscription.
 4. **Density is earned, not defaulted.** More on screen at once only where it
    actually helps — analytics and week planning. Capture stays thumb-shaped.
 5. **Every hand-cut edge is a decision with a reason.** Extending the world means

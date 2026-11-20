@@ -17,8 +17,7 @@ import { fx } from '../services/fx';
  * Subject first. Almost everything a student adds belongs to a subject, so the sheet opens by asking which
  * one — preselected to the class you are sitting in, if any — and every slip below files itself there.
  *
- * Then the things you can pick up, each its own kind of paper: an assignment slip, an exam card, a reading
- * list, a project sheet, a timetable index card, a mark slip, a sticky note and a blank for a new subject.
+ * Then the things you can pick up, each its own kind of paper (v0.8: Task, Class, Mark, Notice, Subject).
  * They are dealt onto the sheet when it opens and lift when touched. A slip that needs a subject when none
  * exists stays on the desk, dimmed and saying why; touching it shakes it and offers "New subject" instead
  * of opening a form that cannot be saved.
@@ -26,14 +25,13 @@ import { fx } from '../services/fx';
 
 type Tint = 'sky' | 'blush' | 'sand' | 'sage' | 'cream' | 'hl' | 'denim';
 interface Slip { id: string; label: string; line: string; icon: string; tint: Tint; needs?: boolean; to: (cid: string | null) => SheetSpec; tape?: boolean }
+/* v0.8 §3.1 (D6): five entries. Assignment, Reading, Project, Lab and Deadline are tags on a task (chips in the Task
+   form); an exam is a notice with a date. */
 const SLIPS: Slip[] = [
-  { id: 'assignment', label: 'Assignment', line: 'Due date and reminders', icon: 'tasks', tint: 'sky', to: (cid) => ({ t: 'task', kind: 'assignment', courseId: cid }), tape: true },
-  { id: 'exam', label: 'Exam', line: 'A date to revise for', icon: 'exam', tint: 'blush', needs: true, to: (cid) => ({ t: 'task', kind: 'exam', courseId: cid }) },
-  { id: 'reading', label: 'Reading', line: 'Pages, chapters, a book', icon: 'book', tint: 'sand', to: (cid) => ({ t: 'task', kind: 'reading', courseId: cid }) },
-  { id: 'project', label: 'Project', line: 'Bigger, with steps', icon: 'flag', tint: 'sage', to: (cid) => ({ t: 'task', kind: 'project', courseId: cid }), tape: true },
+  { id: 'task', label: 'Task', line: 'Due date, tags, reminders', icon: 'tasks', tint: 'sky', to: (cid) => ({ t: 'task', courseId: cid }), tape: true },
   { id: 'class', label: 'Class', line: 'A weekly timetable slot', icon: 'week', tint: 'cream', needs: true, to: (cid) => ({ t: 'meeting', courseId: cid ?? undefined }), tape: true },
   { id: 'mark', label: 'Mark', line: 'A score and its weight', icon: 'grades', tint: 'sand', needs: true, to: (cid) => ({ t: 'mark', courseId: cid ?? '' }) },
-  { id: 'note', label: 'Note', line: 'A sticky for later', icon: 'note', tint: 'hl', to: () => ({ t: 'notice' }) },
+  { id: 'notice', label: 'Notice', line: 'Pinned: an exam date, a heads-up', icon: 'note', tint: 'hl', to: (cid) => ({ t: 'notice', courseId: cid }) },
   { id: 'subject', label: 'Subject', line: 'Start here: name, rooms, goal', icon: 'grad', tint: 'denim', to: () => ({ t: 'course' }) },
 ];
 
@@ -64,7 +62,7 @@ export function AddSheet() {
         {none ? (
           <HandBox seed="add-none" fill={hexA(c.acc, 0.1)} stroke={c.acc} sw={1.6} style={{ padding: 12, gap: 4 }}>
             <Txt f="bold" s={17}>No subjects yet</Txt>
-            <Txt f="serif" s={14.5} c="mut">Classes, marks and exams need a subject.</Txt>
+            <Txt f="serif" s={14.5} c="mut">Classes and marks need a subject.</Txt>
           </HandBox>
         ) : (
           <HStrip gap={7}>
@@ -78,7 +76,7 @@ export function AddSheet() {
 
       {why && (
         <HandBox seed="add-why" fill={c.card} stroke={c.bad} sw={1.6} style={{ padding: 12, gap: 8 }} >
-          <Txt f="bold" s={17} accessibilityLiveRegion="polite">{why === 'Class' ? 'A class' : why === 'Mark' ? 'A mark' : 'An exam'} needs a subject first</Txt>
+          <Txt f="bold" s={17} accessibilityLiveRegion="polite">{why === 'Class' ? 'A class' : 'A mark'} needs a subject first</Txt>
           <Txt f="serif" s={14.5} c="mut">Make the subject, then tap + again.</Txt>
           <Pressable accessibilityRole="button" accessibilityLabel="New subject" onPress={() => { fx.page(); close(() => act.open({ t: 'course' })); }} style={{ alignSelf: 'flex-start' }}>
             <HandBox seed="add-why-go" fill={c.deck} cut="cut" style={{ minHeight: 40, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="plus" size={16} color={c.deckInk} /><Txt f="bold" s={17} c="deckInk">New subject</Txt></HandBox>

@@ -34,7 +34,7 @@ const EDIT_SHEETS: [string, string][] = [
   ['CourseSheet', 'Delete subject'],
   ['MeetingSheet', 'Delete class'],
   ['MarkSheet', 'Delete mark'],
-  ['NoticeSheet', 'Delete note'],
+  ['NoticeSheet', 'Delete notice'],
 ];
 
 describe('every edit sheet footer delete is labelled, not icon-only', () => {

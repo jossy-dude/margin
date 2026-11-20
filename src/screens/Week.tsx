@@ -15,10 +15,14 @@ import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
 import { pageFace } from '../ui/mascot/moments';
-import { shownDays } from './week/model';
+import { shownDays, SNAP } from './week/model';
+import { DragCard } from '../ui/DragCard';
+import { MoveSheet, type MoveDraft } from './week/MoveSheet';
 
 export function WeekScreen() {
   const meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), hour12 = useStore((s) => s.settings.hour12);
+  const moves = useStore((s) => s.settings.moves);
+  const [draft, setDraft] = useState<MoveDraft | null>(null);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks };
   /* In the collage each class is a slip of its subject's own paper (the colour it has everywhere else). */
   const { c, look, tints } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
@@ -26,7 +30,7 @@ export function WeekScreen() {
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
   const due = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= mon && t.dueAt < mon + 7 * 86_400_000);
   /* An empty weekend is not drawn: seven columns left a clash two ~25 dp slivers with the room cut to "L…". */
-  const cols = shownDays(DW.map((_, i) => { const d = addDays(mon, i); return occurrencesOn(new Date(d), st.meetings).length > 0 || due.some((t) => startOfDay(t.dueAt as number) === d); }));
+  const cols = shownDays(DW.map((_, i) => { const d = addDays(mon, i); return occurrencesOn(new Date(d), st.meetings, moves).length > 0 || due.some((t) => startOfDay(t.dueAt as number) === d); }));
   const gw = width - 32, tw = 30, cw = (gw - tw) / cols.length, hours = Array.from({ length: (end - start) / 60 + 1 }, (_, i) => start / 60 + i);
   const nowY = ((now - startOfDay(now)) / 60_000 - start) * PX;
   /* The tour's attendance step rings the first block of the week — Monday's first class — which is the
@@ -54,6 +58,7 @@ export function WeekScreen() {
   }, [off, reduce, turn, dir]);
   const turned = useAnimatedStyle(() => ({ transform: [{ translateX: dir.get() * 26 * turn.get() }] }));
   return (
+    <View style={{ flex: 1 }}>
     <Page face={pageFace('Week', { hour: new Date(now).getHours() })} title="Week" sub={off === 0 ? `This week · ${label}` : off > 0 ? `${off} week${off > 1 ? 's' : ''} ahead` : `${-off} week${off < -1 ? 's' : ''} ago`}
       right={<Row style={{ gap: 4, flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="back" a11y="Previous week" onPress={() => { setOff(off - 1); fx.swipe(); }} />{off !== 0 ? <Btn small kind="ghost" label="Today" onPress={() => setOff(0)} /> : null}<Btn small kind="ghost" icon="chevron" a11y="Next week" onPress={() => { setOff(off + 1); fx.swipe(); }} /></Row>}>
       <Animated.View style={turned}>
@@ -76,7 +81,7 @@ export function WeekScreen() {
             {hours.map((h, i) => <Txt key={h} f="serif" s={11.5} c="mut" style={{ position: 'absolute', top: hourTop(i, H, PX), right: 4 }}>{hour12 ? String(h % 12 === 0 ? 12 : h % 12) + (h < 12 ? 'a' : 'p') : h}</Txt>)}
           </View>
           {cols.map((i) => {
-            const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings);
+            const day = addDays(mon, i), occ = occurrencesOn(new Date(day), st.meetings, moves), j = cols.indexOf(i), nc = cols.length, colsAt = cols, s0 = start, s1 = end;
             /* S2: classes that overlap share the column side by side instead of stacking on one spot. */
             const lay = lanes(occ.map(({ meeting: m }) => { const a = hm(m.start), b = hm(m.end); return { start: a, end: b > a ? b : b + 24 * 60 }; }));
             return (
@@ -86,14 +91,30 @@ export function WeekScreen() {
               // the height of the remainder of that first day. Without this it collapses to a 20dp stub at
               // the top of the column — see `periodsOn`, which applies the same rule to a `Period`.
               const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), top = (hm(meeting.start) - start) * PX, mins = hm(meeting.end) - hm(meeting.start), h = (mins > 0 ? mins : mins + 24 * 60) * PX, key = occKey(ymd(date), meeting), x = isCancelled(e);
+                  const dur = mins > 0 ? mins : mins + 24 * 60, start0 = hm(meeting.start);
+                  /* v0.8 (Daylight's Week, now every skin): hold a class and drag it to another day or time; letting go
+                     asks "This week only" or "Every week" (MoveSheet). The drop maths runs on the UI thread. */
+                  const slotOfDrag = (dx: number, dy: number) => {
+                    'worklet';
+                    const col = Math.min(nc - 1, Math.max(0, j + Math.round(dx / Math.max(1, cw))));
+                    const snapped = Math.round((start0 + dy / PX) / SNAP) * SNAP;
+                    return (colsAt[col] ?? i) * 10_000 + Math.min(Math.max(s0, snapped), Math.max(s0, s1 - dur));
+                  };
+                  const draftAt = (to: number, st0: number, pick: boolean): MoveDraft => ({ meetingId: meeting.id, name: course?.name ?? 'Class', mon, from: i, fromStart: start0, to, start: st0, dur, pick });
                   return (
-                    <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}
+                    <DragCard key={key} reduce={reduce} slotOf={slotOfDrag} testID={`week-cell-${key}`}
+                      label={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`}
+                      hint="Tap to mark. Hold and drag to move it."
+                      actions={[{ name: 'edit', label: 'Edit class' }]} onAction={(n) => { if (n === 'edit') act.open({ t: 'meeting', id: meeting.id }); }}
+                      onTap={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })}
+                      onHold={() => setDraft(draftAt(i, start0, true))} onSlot={() => {}}
+                      onDrop={(slot) => { const to = Math.floor(slot / 10_000), st1 = slot % 10_000; setDraft(draftAt(to, st1, to === i && st1 === start0)); }}
                       style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
                       <HandBox seed={key} fill={x ? c.paper : look !== 'ink' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={x ? c.mut : look !== 'ink' ? undefined : c.acc} shadow={look !== 'ink' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
                         {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{roomOf(meeting, course, st.variants)}</Txt>}
-</HandBox>
-                    </Pressable>);
+                      </HandBox>
+                    </DragCard>);
                 })}
                 {due.filter((t) => t.dueAt !== null && startOfDay(t.dueAt) === day).map((t) => <View key={t.id} accessible accessibilityLabel={`Due: ${t.title}`} style={{ position: 'absolute', right: 2, top: Math.max(0, Math.min(H - 12, (new Date(t.dueAt as number).getHours() * 60 + new Date(t.dueAt as number).getMinutes() - start) * PX)) }}><Icon name="flag" size={12} color={c.bad} sw={2.4} /></View>)}
               </View>);
@@ -101,10 +122,13 @@ export function WeekScreen() {
         </View>
       </HandBox>
       </Animated.View>
-      <Row style={{ justifyContent: 'space-between' }}><Txt f="serif" s={15} c="mut">Tap to mark · long-press to edit</Txt><Btn small kind="ghost" icon="plus" label="Class" onPress={() => act.open({ t: 'meeting' })} /></Row>
+      <Row style={{ justifyContent: 'space-between' }}><Txt f="serif" s={15} c="mut">Tap to mark · hold and drag to move</Txt><Btn small kind="ghost" icon="plus" label="Class" onPress={() => act.open({ t: 'meeting' })} /></Row>
       <Section title="Due this week">
         {due.length === 0 ? <Txt f="serif" s={17} c="mut">Nothing due this week.</Txt> : [...due].sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).map((t) => <Pressable key={t.id} testID={`week-due-${t.id}`} accessibilityRole="button" accessibilityLabel={`${t.title}, due ${DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} ${fmtTime(t.dueAt as number, hour12)}`} accessibilityHint="Opens the task" onPress={() => act.open({ t: 'task', id: t.id })}>{/* The floating `+` button (`fab-add`) occupies x 332–394, y 763–825 at 412×915 and covers the right end of every row in that band, so the due time's tail sat under it in both clocks. This inset stops the time at ~328 px, clear of the FAB's left edge 332; the taps it removes are the ones the FAB already eats. */}<Row style={{ flexWrap: 'nowrap', paddingRight: 68 }}><Icon name="flag" size={16} color={c.bad} /><Txt f="bold" s={19} style={{ flex: 1 }} numberOfLines={1}>{t.title}</Txt><Txt f="serif" s={15} c="mut">{DW[(new Date(t.dueAt as number).getDay() + 6) % 7]} {fmtTime(t.dueAt as number, hour12)}</Txt></Row></Pressable>)}
       </Section>
     </Page>
+    {/* outside the page's scroll, so the panel covers the screen rather than the scrolled content */}
+    {draft ? <MoveSheet d={draft} hour12={hour12} onChange={setDraft} onClose={() => setDraft(null)} /> : null}
+    </View>
   );
 }

@@ -3,7 +3,7 @@
  * app with one; this is the whole vocabulary. Pure, and total: anything it does not know is `null`, and the
  * app simply opens where it was.
  */
-export type LinkTarget = { t: 'route'; route: 'Today' | 'Tasks' | 'Week' | 'Grades' | 'Stats' } | { t: 'add-task' } | { t: 'alarms' };
+export type LinkTarget = { t: 'route'; route: 'Today' | 'Tasks' | 'Week' | 'Grades' | 'Stats' | 'Focus' } | { t: 'add-task' } | { t: 'alarms' };
 
 export function linkTarget(url: string | null | undefined): LinkTarget | null {
   if (!url) return null;
@@ -16,6 +16,7 @@ export function linkTarget(url: string | null | undefined): LinkTarget | null {
     case 'week': return { t: 'route', route: 'Week' };
     case 'grades': return { t: 'route', route: 'Grades' };
     case 'stats': return { t: 'route', route: 'Stats' };
+    case 'focus': return { t: 'route', route: 'Focus' };
     case 'add/task': return { t: 'add-task' };
     case 'alarms': return { t: 'alarms' };
     default: return null;

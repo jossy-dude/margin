@@ -1,0 +1,9 @@
+{
+ "name": "a tick on one side, a new line on the other",
+ "base": "- [ ] a ^t1\n- [ ] b\n",
+ "head": "- [x] a ✅ 2026-11-19 ^t1\n- [ ] b\n",
+ "incoming": "- [ ] a ^t1\n- [ ] b\n- [ ] c\n",
+ "expect": "- [x] a ✅ 2026-11-19 ^t1\n- [ ] b\n- [ ] c\n",
+ "clean": true,
+ "conflicts": 0
+}

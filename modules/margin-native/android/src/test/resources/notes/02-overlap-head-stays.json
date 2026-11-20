@@ -1,0 +1,9 @@
+{
+ "name": "same line both sides: the head stays, the other side is returned",
+ "base": "- [ ] buy milk\n",
+ "head": "- [ ] buy oat milk\n",
+ "incoming": "- [ ] buy soy milk\n",
+ "expect": "- [ ] buy oat milk\n",
+ "clean": false,
+ "conflicts": 1
+}

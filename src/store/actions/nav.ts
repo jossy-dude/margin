@@ -1,5 +1,5 @@
 import { fx } from '../../services/fx';
-import { getState, set, type RouteName, type SheetSpec } from '../core';
+import { getState, set, type PageSpec, type RouteName, type SheetSpec } from '../core';
 
 export function go(route: RouteName) { const st = getState(); if (route === st.route) return; set({ prevRoute: st.route, route }); fx.page(); }
 
@@ -21,6 +21,9 @@ export const navActions = {
    *  one the user tapped for, so there is no second hop to watch. */
   openSettingsAt(page: string) { fx.tap(); set({ sheet: { t: 'settings' }, settingsPath: ['appearance', page] }); },
   close() { set({ sheet: null }); },
+  /** v0.8: a full page (Subjects, Notice board); the sheet that opened it closes in the same write. */
+  openPage(page: PageSpec) { fx.page(); set({ page, sheet: null }); },
+  closePage() { set({ page: null }); },
   /** Open Settings straight onto a page, with the real path behind it so Back walks out of it. */
   openSettingsPath(path: string[]) { fx.tap(); set({ sheet: { t: 'settings' }, settingsPath: path }); },
   settingsPush(p: string) { fx.select(); set((s) => ({ settingsPath: [...s.settingsPath, p] })); },

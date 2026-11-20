@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v0.8 §4.3 (D8): one card, 4×2 by default, resizable from 4×1 to 4×3. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-  android:minWidth="250dp" android:minHeight="250dp" android:minResizeWidth="180dp" android:minResizeHeight="180dp"
-  android:targetCellWidth="4" android:targetCellHeight="4"
+  android:minWidth="250dp" android:minHeight="110dp" android:minResizeWidth="180dp" android:minResizeHeight="40dp"
+  android:maxResizeHeight="260dp"
+  android:targetCellWidth="4" android:targetCellHeight="2"
   android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
   android:updatePeriodMillis="0"
-  android:initialLayout="@layout/mg_widget_board" android:previewLayout="@layout/mg_widget_board_preview"
+  android:initialLayout="@layout/mg_widget_card" android:previewLayout="@layout/mg_widget_card"
   android:previewImage="@drawable/mg_widget_preview"
   android:description="@string/mg_widget_board_desc"/>

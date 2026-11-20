@@ -40,3 +40,8 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android && ./gradlew :app:compileReleaseKotlin -PmarginVariant=over --no-daemon --stacktrace
+
+      # v0.8: the phone's file-class table runs vault-sync's fixtures (FileClassesTest). Expo autolinking names the
+      # module's Gradle project after its package: `:margin-native`.
+      - name: Kotlin unit tests (margin-native)
+        run: cd android && ./gradlew :margin-native:testDebugUnitTest -PmarginVariant=over --no-daemon --stacktrace

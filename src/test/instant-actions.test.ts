@@ -59,7 +59,7 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeOutDown', 'FadeInRight', 'FadeOutRight', 'FadeInLeft', 'FadeOutLeft'].map((k) => { const b: Record<string, () => unknown> = {}; b.duration = b.easing = b.delay = () => b; return [k, b]; })),
   };
   return { ...api, default: api };
 });
@@ -203,7 +203,7 @@ describe('the + button opens the sheet on the down frame', () => {
   it('and keeps onPress as the accessibility route', () => {
     // `Fab` is module-local to Overlay.tsx, so this is a shape assertion rather than a render.
     const overlay = readFileSync(join(__dirname, '../ui', 'Overlay.tsx'), 'utf8');
-    const fab = overlay.slice(overlay.indexOf('function Fab('), overlay.indexOf('function Fab(') + 900);
+    const fab = overlay.slice(overlay.indexOf('function Fab('), overlay.indexOf('function Fab(') + 1600);
     expect(fab).toContain('usePressIn(onPress)');
     expect(fab).toContain('onPress={actLift}'); // the accessibility path is not deleted
     expect(fab).toContain('actIn();');          // and the action is dispatched from press-in

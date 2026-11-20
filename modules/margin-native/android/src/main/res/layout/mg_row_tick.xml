@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One due task on the card: a checkbox that ticks it (Android 12+), the title, when. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/mg_t_root" android:layout_width="match_parent" android:layout_height="34dp"
+  android:orientation="horizontal" android:gravity="center_vertical">
+  <CheckBox android:id="@+id/mg_t_box" android:layout_width="32dp" android:layout_height="32dp" android:contentDescription="Done"/>
+  <TextView android:id="@+id/mg_t_title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp"
+    android:text="Problem set 5" android:textColor="@color/mg_ink" android:textSize="14sp" android:maxLines="1" android:ellipsize="end"/>
+  <TextView android:id="@+id/mg_t_due" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp"
+    android:text="today 23:59" android:textColor="@color/mg_mut" android:textSize="12sp" android:maxLines="1"/>
+</LinearLayout>

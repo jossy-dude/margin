@@ -32,6 +32,9 @@ jest.mock('../services/fx', () => ({ configureFx: () => {}, fx: new Proxy({}, { 
 /** Monday 5 Oct 2026, 08:00. */
 const NOW = new Date(2026, 9, 5, 8).getTime();
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+/** v0.8: wait for a condition, not a fixed count of microtask turns. Under the full parallel run a save's promise
+ *  chain took more than 30 turns and the test flaked (SPEC §0.5); this keeps turning until it holds (or gives up). */
+const eventually = async (f: () => Promise<boolean>, turns = 5000) => { for (let i = 0; i < turns; i++) { if (await f()) return true; await Promise.resolve(); } return false; };
 const settle = async (ms: number) => { await jest.advanceTimersByTimeAsync(ms); await flush(); };
 
 const made: Store[] = [];
@@ -80,8 +83,7 @@ describe('boot', () => {
     expect(s.R()).not.toBe(real);
 
     s.act.saveTask(mine());
-    await flush();
-    expect((await s.R().load()).tasks.some((t) => t.id === 't-mine')).toBe(true); // the tour's write lands in memory
+    expect(await eventually(async () => (await s.R().load()).tasks.some((t) => t.id === 't-mine'))).toBe(true); // the tour's write lands in memory
     expect((await real.load()).tasks).toEqual([]);                                // …never on disk
 
     await settle(5000);

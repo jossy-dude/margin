@@ -19,4 +19,14 @@ dependencies {
   // added); Java-WebSocket is the small server for phone Obsidian on 127.0.0.1:7429 and the hotspot.
   implementation 'com.squareup.okhttp3:okhttp:4.9.2'
   implementation 'org.java-websocket:Java-WebSocket:1.6.0'
+  // v0.8 §4.2: pairing by the desktop's QR code. Google's code scanner runs in Play services: no camera permission,
+  // no camera code in the app.
+  implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+}
+
+// v0.8: the file-class table runs the same fixtures as vault-sync's sync-core (JVM unit test, CI native.yml).
+// Android's own org.json is a stub on the JVM, so the tests get the real one.
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20231013'
 }

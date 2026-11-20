@@ -1,6 +1,6 @@
 /**
  * Face — Margin's mascot (DESIGN.md D-21): twelve hand-drawn kaomoji faces in five strokes, alive on the UI thread.
- * It keeps the old mascot's name: TalkBack calls it "Jot".
+ * TalkBack calls it "Margin" (v0.8 U8: the old mascot's name "Jot" was retired with it in v0.7).
  *
  * Public API (stable; screens use nothing else from this folder but `faces.ts` names and `moments.ts`):
  *
@@ -172,7 +172,7 @@ export function Face({ name, size = 28, look, react, slowBlink = false, breathe 
   const pen = { stroke: ink, strokeWidth: sw, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' } as const;
   const a11y = decorative
     ? ({ accessible: false, importantForAccessibility: 'no-hide-descendants', accessibilityElementsHidden: true } as const)
-    : ({ accessible: true, accessibilityRole: 'image', accessibilityLabel: label ?? `Jot, ${FACES[name].label}` } as const);
+    : ({ accessible: true, accessibilityRole: 'image', accessibilityLabel: label ?? `Margin, ${FACES[name].label}` } as const);
   return (
     <View testID={testID} {...a11y} style={[{ width: (size * VIEW_W) / VIEW_H, height: size }, style]}>
       <Animated.View style={[{ flex: 1 }, body]} pointerEvents="none">

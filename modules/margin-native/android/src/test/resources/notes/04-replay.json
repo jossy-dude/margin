@@ -1,0 +1,9 @@
+{
+ "name": "the same stale put again after the merge changes nothing",
+ "base": "a\nb\nc\n",
+ "head": "a desk\nb\nc phone\n",
+ "incoming": "a\nb\nc phone\n",
+ "expect": "a desk\nb\nc phone\n",
+ "clean": true,
+ "conflicts": 0
+}

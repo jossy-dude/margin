@@ -516,7 +516,7 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     expect(hits).toHaveLength(1);
     // v0.5 S2: the deck title prints `title` (the picked class's label, or "Free day"), set once above it.
     expect(hits[0]!.body).toContain('title');
-    expect(src()).toContain("const title = d.period ? d.period.label : 'Free day';");
+    expect(src()).toContain("const title = d.period ? d.period.label : isToday && d.total > 0 ? (doneLine ?? 'Done for today') : 'Free day';");
   });
 
   it('the masthead row keeps its state word and its clock time, and drops the name', () => {
@@ -544,7 +544,8 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     expect(src()).toContain("todayPeriods.length ? 'All done for today' : 'No classes today'");
     // the deck's own no-period title is the reference's wording and stays — a day whose only classes are
     // cancelled still mounts the card, and it must still say something
-    expect(src()).toContain("d.period ? d.period.label : 'Free day'");
+    // v0.8 U5: after the last class of today it is the day's attendance ("2 classes · all present"), not "Free day"
+    expect(src()).toContain("isToday && d.total > 0 ? (doneLine ?? 'Done for today') : 'Free day'");
   });
 
   it('the deck is still mounted on a day with classes, and only then', () => {

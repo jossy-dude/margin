@@ -1,0 +1,307 @@
+/**
+ * Margin ↔ the Obsidian vault (v0.8 SPEC §1.5, §3.4). Replaces the v0.6/v0.7 file bridge (`obsidian.json` /
+ * `margin.json` as a transport, D4): task lines in notes ARE the transport.
+ *
+ *  · in:  the native sync engine says which notes changed (`onVaultChanged`); their task lines that carry a tracked
+ *         tag (default #school, a subject's tag counts too) become Margin tasks, keyed by block id (`extId`);
+ *  · out: a task changed in Margin is written back as a field-level patch of its line (status, dates, priority;
+ *         the title too in Margin/Tasks.md), through the native compare-and-swap write; a new school task is
+ *         appended to Margin/Tasks.md with a block id;
+ *  · Margin's own notes (Timetable, Subjects, Notices) and the read-only `.margin/margin.json` snapshot are
+ *    rewritten when their text changes.
+ * No SAF read on the JS thread and no polling: everything arrives as native events, and the native writes run on
+ * the sync thread.
+ */
+import { applySnapshot, getState, subscribe } from './core';
+import { db, R } from './persist';
+import { resync } from './reminders';
+import { faceEvent } from '../ui/mascot/moments';
+import { recordCrash } from '../services/problems';
+import { whenIdle } from '../services/idle';
+import { onSyncEvent, syncStart, syncInbox, vaultChanges, vaultEdit, vaultFiles, type VaultFile } from '../services/native';
+import { timerActions } from './actions/timer';
+import { buildEnvelope, prioToBone } from '../domain/bridge';
+import { effective, isCancelled as occCancelled } from '../domain/attendance';
+import {
+  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, hmOf, isCancelled, isDone, newLine,
+  parseLine, parseNote, patchLine, replaceLine, subjectTag, tracked, ymdOf, type LinePatch,
+} from '../domain/vaultTasks';
+import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
+import { startOfDay } from '../domain/time';
+import { taskFromLine } from '../domain/vaultMap';
+import type { Course, Task } from '../domain/types';
+
+
+const K = { known: 'vault.known', ids: 'vault.ids', lines: 'vault.lines', out: 'vault.outAt', retry: 'vault.retry', gen: 'vault.gen' };
+interface Cache { known: Record<string, string>; ids: Record<string, string[]>; lines: Record<string, { p: string; raw: string }>; gen: Record<string, string> }
+let cache: Cache | null = null;
+const loadJson = async <T,>(k: string, d: T): Promise<T> => { try { const v = await R().getKv(k); return v ? (JSON.parse(v) as T) : d; } catch { return d; } };
+async function load(): Promise<Cache> {
+  if (cache) return cache;
+  cache = { known: await loadJson(K.known, {}), ids: await loadJson(K.ids, {}), lines: await loadJson(K.lines, {}), gen: await loadJson(K.gen, {}) };
+  return cache;
+}
+async function save() { if (!cache) return; await R().setKv(K.known, JSON.stringify(cache.known)); await R().setKv(K.ids, JSON.stringify(cache.ids)); await R().setKv(K.lines, JSON.stringify(cache.lines)); await R().setKv(K.gen, JSON.stringify(cache.gen)); }
+
+export interface ObsidianStatus { at: number; ok: boolean; note: string; tasks: number }
+let status: ObsidianStatus = { at: 0, ok: true, note: '', tasks: 0 };
+const subs = new Set<() => void>();
+export const obsidianStatus = () => status;
+export const onObsidian = (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; };
+const report = (s: Partial<ObsidianStatus>) => { status = { ...status, at: Date.now(), ...s }; subs.forEach((f) => f()); };
+
+/** The tags whose lines come in: the owner's list, plus every subject's own tag. */
+export function trackedTags(courses: readonly Course[] = getState().courses): string[] {
+  const own = getState().settings.trackedTags?.length ? getState().settings.trackedTags! : DEFAULT_TRACKED;
+  return [...own, ...courses.filter((c) => !c.demo && !c.archived).map(subjectTag)];
+}
+const norm = (t: string) => t.replace(/^#/, '').toLocaleLowerCase();
+/** The out cursor follows the change feed's own clock (the repository's), never the wall clock. */
+async function bumpOut() {
+  const since = Number(await R().getKv(K.out)) || 0;
+  const ch = await R().changes('task', since);
+  if (ch.length) await R().setKv(K.out, String(Math.max(...ch.map((x) => x.updatedAt))));
+}
+const newId = () => `m${Date.now().toString(36).slice(-5)}${Math.random().toString(36).slice(2, 5)}`;
+
+const same = (a: Task, b: Task) => JSON.stringify({ ...a, ord: a.ord ?? null }) === JSON.stringify({ ...b, ord: b.ord ?? null });
+
+/* ── in ───────────────────────────────────────────────────────────────────────────────────────── */
+let busy: Promise<void> = Promise.resolve();
+const serial = (f: () => Promise<void>) => { busy = busy.then(f).catch((e) => { recordCrash(e, 'save', 'Obsidian'); report({ ok: false, note: String((e as Error)?.message ?? e) }); }); return busy; };
+
+/** Read the vault's notes (`only` = these paths, [] = every note) and bring their task lines in. */
+export const refreshVault = (only: string[] = []) => serial(async () => {
+  if (db.demo) return;
+  const c = await load();
+  const res = await vaultFiles(c.known, only);
+  if (!res) return;
+  if (res.error) { report({ ok: false, note: res.error === 'no vault' ? 'Choose the vault folder' : res.error }); return; }
+  await pushOut();   // Margin's own changes first: they are newer than what the notes say
+  const n = await ingest(res.files, res.gone, only.length === 0);
+  await save();
+  report({ ok: true, note: n.added || n.changed || n.removed ? `${n.added} new · ${n.changed} changed · ${n.removed} removed` : 'Up to date', tasks: Object.keys(c.lines).length });
+  if (n.added) faceEvent('taskArrived');
+});
+
+async function ingest(files: VaultFile[], gone: string[], full: boolean): Promise<{ added: number; changed: number; removed: number }> {
+  const c = await load(), s = getState(), now = Date.now();
+  const own = s.settings.trackedTags?.length ? s.settings.trackedTags : DEFAULT_TRACKED, all = trackedTags(s.courses);
+  const pending = new Set((await R().changes('task', Number(await R().getKv(K.out)) || 0)).map((x) => x.id));
+  let added = 0, changed = 0, removed = 0;
+  const writes: Task[] = [];
+  const byExt = new Map(s.tasks.filter((t) => t.extId).map((t) => [t.extId!, t]));
+  const byOwn = new Map(s.tasks.filter((t) => !t.origin).map((t) => [blockIdOf(t.id), t]));
+  for (const f of files) {
+    if (f.text === undefined) continue;
+    let text = f.text, h = f.h;
+    // a tracked line without a block id gets one, so Margin can find it again (written back at once)
+    const ids = addBlockIds(text, f.p, all, newId);
+    if (ids.given.size) {
+      const r = await vaultEdit(f.p, h, ids.text);
+      if (r.startsWith('ok:')) { text = ids.text; h = r.slice(3); }
+    }
+    const lines = parseNote(text, f.p).filter((t) => t.blockId && (tracked(t, all) || byExt.has(t.blockId) || byOwn.has(t.blockId)));
+    c.ids[f.p] = lines.map((t) => t.blockId!);
+    c.known[f.p] = h;
+    for (const t of lines) {
+      const bid = t.blockId!;
+      c.lines[bid] = { p: f.p, raw: t.raw };
+      const prev = byExt.get(bid) ?? byOwn.get(bid);
+      if (prev && pending.has(prev.id)) continue;   // changed in Margin since: that change goes out first
+      const next = taskFromLine(t, prev, s.courses, own, now);
+      if (prev && same(prev, next)) continue;
+      writes.push(next); if (prev) changed++; else added++;
+    }
+  }
+  for (const p of gone) { delete c.known[p]; c.ids[p] = []; }
+  // a block id that is in no note any more: its task goes (the line was deleted in Obsidian)
+  const live = new Set(Object.values(c.ids).flat());
+  const drop: string[] = [];
+  const touched = new Set([...files.filter((f) => f.text !== undefined).map((f) => f.p), ...gone]);
+  for (const [bid, l] of Object.entries(c.lines)) {
+    if (live.has(bid) || (!full && !touched.has(l.p))) continue;
+    delete c.lines[bid];
+    const t = byExt.get(bid) ?? byOwn.get(bid);
+    if (t && !pending.has(t.id)) { drop.push(t.id); removed++; }
+  }
+  for (const t of writes) await R().upsert('task', t);
+  if (drop.length) await R().removeMany(drop.map((id) => ({ entity: 'task' as const, id })));
+  if (writes.length || drop.length) { applySnapshot(await R().load(), true); resync(0); }
+  // our own writes are not Margin edits: move the out cursor past them so they are not patched back
+  if (writes.length || drop.length) await bumpOut();
+  return { added, changed, removed };
+}
+
+/* ── out ──────────────────────────────────────────────────────────────────────────────────────── */
+/** The line fields Margin owns, as they should be for this task. */
+function wanted(t: Task, inTasksNote: boolean): LinePatch {
+  const due = t.dueAt === null ? null : ymdOf(t.dueAt);
+  const tm = t.dueAt === null ? null : hmOf(t.dueAt);
+  const p: LinePatch = { due, time: tm === '23:59' ? null : tm, prio: prioToBone(t.priority), status: t.status === 2 ? (t.cancelled ? '-' : 'x') : ' ', today: ymdOf(t.completedAt ?? Date.now()) };
+  if (inTasksNote) p.title = t.title;
+  return p;
+}
+/** Only what differs from the line, so a line Margin did not change is left byte for byte. */
+function diff(raw: string, w: LinePatch): LinePatch | null {
+  const cur = parseLine(raw);
+  if (!cur) return null;
+  const out: LinePatch = {};
+  const curOpen = !isDone(cur.status) && !isCancelled(cur.status);
+  if (w.status === ' ' && !curOpen) out.status = ' ';
+  if (w.status === 'x' && !isDone(cur.status)) out.status = 'x';
+  if (w.status === '-' && !isCancelled(cur.status)) out.status = '-';
+  if (out.status) out.today = w.today;
+  if ((w.due ?? null) !== (cur.due ?? cur.scheduled ?? null)) out.due = w.due;
+  if ((w.time ?? null) !== (cur.time ?? null)) out.time = w.time;
+  if (w.prio !== undefined && w.prio !== cur.prio) out.prio = w.prio;
+  if (w.title !== undefined && w.title !== cur.title) out.title = w.title;
+  return Object.keys(out).length ? out : null;
+}
+/** Does a Margin task go to the vault? Its tags carry a tracked tag (the Task form has #school on by default). */
+const goesOut = (t: Task, own: readonly string[]) => !t.demo && (t.tags ?? ['school']).some((x) => own.map(norm).includes(norm(x)));
+
+async function textOf(p: string): Promise<{ text: string; h: string } | null> {
+  const c = await load();
+  const res = await vaultFiles({ ...c.known, [p]: '' }, [p]);
+  const f = res?.files.find((x) => x.p === p);
+  if (!f) return res && res.gone.includes(p) ? { text: '', h: '' } : null;
+  return { text: f.text ?? '', h: f.h };
+}
+/** One edit of one note, retried once when the note changed under it. False = try again later. */
+async function editNote(p: string, change: (text: string) => string | null): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    const cur = await textOf(p);
+    if (!cur) return false;
+    const next = change(cur.text);
+    if (next === null || next === cur.text) return true;
+    const r = await vaultEdit(p, cur.h, next);
+    if (r.startsWith('ok:')) { const c = await load(); c.known[p] = r.slice(3); for (const t of parseNote(next, p)) if (t.blockId && c.lines[t.blockId]) c.lines[t.blockId] = { p, raw: t.raw }; return true; }
+    if (r === 'deferred' || r.startsWith('error:')) return false;
+  }
+  return false;
+}
+
+async function pushOut(): Promise<void> {
+  if (db.demo) return;
+  const c = await load(), s = getState();
+  const own = s.settings.trackedTags?.length ? s.settings.trackedTags : DEFAULT_TRACKED;
+  const since = Number(await R().getKv(K.out)) || 0;
+  const retry = new Set(await loadJson<string[]>(K.retry, []));
+  const changes = await R().changes('task', since);
+  const ids = new Set([...changes.map((x) => x.id), ...retry]);
+  const failed: string[] = [];
+  const stamp: Task[] = [];
+  for (const id of ids) {
+    const ch = changes.find((x) => x.id === id);
+    const t = ch?.deleted ? null : s.tasks.find((x) => x.id === id) ?? ch?.value ?? null;
+    const bid = t?.extId ?? ch?.value.extId ?? (id.startsWith('ob-') ? id.slice(3) : blockIdOf(id));
+    const line = c.lines[bid];
+    if (!t) {
+      // deleted in Margin: its line leaves the note it is in
+      if (line && !(await editNote(line.p, (txt) => replaceLine(txt, bid, null)))) failed.push(id); else delete c.lines[bid];
+      continue;
+    }
+    if (line) {
+      const d = diff(line.raw, wanted(t, line.p === TASKS_NOTE));
+      if (!d) continue;
+      if (!(await editNote(line.p, (txt) => { const i = txt.split('\n').findIndex((l) => l.endsWith(`^${bid}`)); if (i < 0) return null; return replaceLine(txt, bid, patchLine(txt.split('\n')[i]!, d)); }))) failed.push(id);
+      continue;
+    }
+    if (!goesOut(t, own)) continue;
+    // a new school task: one line in Margin/Tasks.md, with the subject's tag and its kind tags
+    const course = s.courses.find((x) => x.id === t.courseId);
+    const w = wanted(t, true);
+    const tags = [...new Set([...(t.tags ?? []).map(norm), ...(course ? [subjectTag(course).replace(/^#/, '')] : [])])];
+    const ln = newLine({ title: t.title, tags, due: w.due ?? null, time: w.time ?? null, prio: w.prio ?? 0, estimateMin: t.estimateMin, created: ymdOf(t.createdAt), blockId: blockIdOf(t.id), done: t.status === 2, doneOn: t.completedAt ? ymdOf(t.completedAt) : null });
+    const ok = await editNote(TASKS_NOTE, (txt) => (txt.includes(`^${blockIdOf(t.id)}`) ? null : appendLine(txt || TASKS_NOTE_HEAD, ln)));
+    if (!ok) { failed.push(id); continue; }
+    c.lines[blockIdOf(t.id)] = { p: TASKS_NOTE, raw: ln };
+    c.ids[TASKS_NOTE] = [...new Set([...(c.ids[TASKS_NOTE] ?? []), blockIdOf(t.id)])];
+    stamp.push({ ...t, extId: blockIdOf(t.id), extPath: TASKS_NOTE });
+  }
+  for (const t of stamp) await R().upsert('task', t);
+  if (stamp.length) applySnapshot(await R().load(), true);
+  if (changes.length) await R().setKv(K.out, String(Math.max(...changes.map((x) => x.updatedAt))));
+  if (stamp.length) await bumpOut();
+  await R().setKv(K.retry, JSON.stringify(failed));
+  await save();
+  if (failed.length) scheduleRetry();
+}
+let retryT: ReturnType<typeof setTimeout> | null = null;
+function scheduleRetry() { if (retryT) return; retryT = setTimeout(() => { retryT = null; void serial(pushOut); }, 5000); }
+
+/* ── Margin's own notes ───────────────────────────────────────────────────────────────────────── */
+async function writeGenerated() {
+  if (db.demo) return;
+  const c = await load(), s = getState(), now = Date.now();
+  const env = buildEnvelope({
+    now, since: now, courses: s.courses, meetings: s.meetings, tasks: [], notices: [], focus: [], moves: s.settings.moves ?? [],
+    cancelled: (d, m) => occCancelled(effective(new Date(`${d}T12:00:00`), m, s.attendance, s.dayMarks, now)),
+  });
+  const cls = env.events.filter((e) => e.data?.kind === 'class' && !e.data.cancelled).map((e) => e.data!);
+  const nowClass = cls.find((e) => e.at <= now && (e.end ?? e.at) > now) ?? null, nextClass = cls.find((e) => e.at > now) ?? null;
+  const snapshot = {
+    ...env, writtenAt: 0, format: 'margin-snapshot/2', readOnly: true,
+    // for Bone Tasks' School switch and subject picker, and Bone Home's "Now" line (§3.4)
+    trackedTags: trackedTags(s.courses).slice(0, (s.settings.trackedTags?.length || 1)),
+    subjects: s.courses.filter((x) => !x.demo && !x.archived).map((x) => ({ id: x.id, name: x.name, tag: subjectTag(x), color: x.color ?? null })),
+    now: nowClass, next: nextClass,
+  };
+  const out: [string, string][] = [
+    ['Margin/Timetable.md', timetableNote(env.events)],
+    ['Margin/Subjects.md', subjectsNote({ courses: s.courses, marks: s.marks, variants: s.variants ?? [], adjusts: s.adjusts })],
+    ['Margin/Notices.md', noticesNote(s.notices, s.courses, startOfDay(now))],
+    ['.margin/margin.json', `${JSON.stringify(snapshot, null, 1)}\n`],
+  ];
+  for (const [p, text] of out) {
+    if (c.gen[p] === text) continue;
+    const r = await vaultEdit(p, '*', text);
+    if (r.startsWith('ok:')) c.gen[p] = text;
+  }
+  await save();
+}
+
+/* ── start ────────────────────────────────────────────────────────────────────────────────────── */
+/** Rows the sync service queued while JS slept: only the newest timer state matters. */
+function drainInbox() {
+  const timers = syncInbox().filter((x) => x.kind === 'timer');
+  const last = timers[timers.length - 1];
+  if (last) timerActions.timerFromHub(last.json);
+}
+
+/** Starts the link. Work waits until the first screen is drawn (§2.3); returns the stop function. */
+export function startObsidian(): () => void {
+  syncStart();
+  drainInbox();
+  let stopped = false;
+  const cancelFirst = whenIdle(() => {
+    if (stopped) return;
+    const queued = vaultChanges();
+    void refreshVault(queued.length ? queued : []).then(() => serial(writeGenerated));
+  }, 3000);
+  const offVault = onSyncEvent('onVaultChanged', () => { const paths = vaultChanges(); if (paths.length) void refreshVault(paths); });
+  const offTimer = onSyncEvent('onSyncTimer', (json) => timerActions.timerFromHub(json));
+  let wasOnline = false;
+  const offStatus = onSyncEvent('onSyncStatus', (json) => {
+    let online = false; try { online = !!(JSON.parse(json) as { live?: boolean }).live; } catch { /* */ }
+    if (online && !wasOnline) timerActions.timerRejoin();
+    wasOnline = online;
+  });
+  /* 750 ms after Margin's own rows change: tasks go out as line patches, Margin's notes are rewritten */
+  let soon: ReturnType<typeof setTimeout> | null = null;
+  const rowsOf = () => { const s = getState(); return [s.tasks, s.meetings, s.courses, s.notices, s.marks, s.settings] as const; };
+  let rows = rowsOf();
+  const unsub = subscribe(() => {
+    const next = rowsOf();
+    if (next.every((x, i) => x === rows[i])) return;
+    rows = next;
+    if (soon) clearTimeout(soon);
+    soon = setTimeout(() => { soon = null; void serial(pushOut).then(() => serial(writeGenerated)); }, 750);
+  });
+  return () => { stopped = true; cancelFirst(); if (soon) clearTimeout(soon); if (retryT) clearTimeout(retryT); offVault(); offTimer(); offStatus(); unsub(); };
+}
+/** Sync now (Settings): every note again, then Margin's notes. */
+export const obsidianNow = () => refreshVault([]).then(() => serial(writeGenerated));
+/** Tests only. */
+export const resetObsidianCache = () => { cache = null; };

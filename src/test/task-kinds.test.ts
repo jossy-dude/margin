@@ -23,19 +23,14 @@ const taskKinds = () => {
 /** The picker's `k:` values, in the order they render. */
 const chips = () => [...read('sheets/forms.tsx').matchAll(/\{ k: '([a-z]+)', l: /g)].map((x) => x[1]);
 
-describe('the Task sheet can pick every kind a task can have', () => {
-  it('the union and the chip list are the same set', () => {
-    expect([...chips()].sort()).toEqual([...taskKinds()].sort());
+/* v0.8 §3.1 (D6): kinds became TAGS on a task. Every kind a task can be given in the form is a tag chip; 'exam' is a
+   dated notice now (migration 8 moves old ones), and 'other' is what a task with no kind tag is. */
+describe('the Task sheet can tag every kind a task can have', () => {
+  it('the tag chips are the union, less exam (a notice now) and other (no tag)', () => {
+    expect([...chips()].sort()).toEqual(taskKinds().filter((k) => k !== 'exam' && k !== 'other').sort());
   });
-
-  it('not vacuous: the union really does have more members than the sheet used to offer', () => {
-    expect(taskKinds().length).toBeGreaterThanOrEqual(7);
-    expect(chips().length).toBe(taskKinds().length);
-  });
-
   it("and 'deadline' is one of them, since the seed ships one", () => {
     expect(chips()).toContain('deadline');
-    // `mk(9, 'Library book due', …, 'deadline', …)` — passed positionally, not as `kind:`
     expect(read('data/seed.ts')).toMatch(/'deadline'/);
   });
 });

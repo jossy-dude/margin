@@ -1,0 +1,9 @@
+{
+ "name": "both made the daily note; the phone has the untouched template",
+ "base": null,
+ "head": "---\ncreated: 2026-11-19\n---\n# Log\n- 02:37 woke up\n- 09:30 lecture\n",
+ "incoming": "---\ncreated: 2026-11-19\n---\n# Log\n\n",
+ "expect": "---\ncreated: 2026-11-19\n---\n# Log\n- 02:37 woke up\n- 09:30 lecture\n",
+ "clean": true,
+ "conflicts": 0
+}

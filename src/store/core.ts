@@ -12,7 +12,10 @@ import type { NotifStatus } from '../services/notifications';
 export type RouteName = 'Today' | 'Week' | 'Tasks' | 'Grades' | 'Stats' | 'Focus';
 export type SheetSpec =
   | { t: 'add' } | { t: 'task'; id?: string; kind?: Task['kind']; courseId?: string | null } | { t: 'status'; mode: 'class' | 'day'; key: string; title: string; date: string }
-  | { t: 'settings' } | { t: 'course'; id?: string } | { t: 'meeting'; courseId?: string; id?: string; weekday?: number } | { t: 'mark'; courseId: string; id?: string } | { t: 'notice'; id?: string };
+  | { t: 'settings' } | { t: 'course'; id?: string } | { t: 'meeting'; courseId?: string; id?: string; weekday?: number } | { t: 'mark'; courseId: string; id?: string } | { t: 'notice'; id?: string; courseId?: string | null };
+/** v0.8: a full page over the book (`ui/FullPage.tsx`), under any sheet, so a form opens over it and closing the
+ *  form comes back to it. */
+export type PageSpec = { t: 'notices' } | { t: 'subjects'; id?: string };
 export interface Toast { id: number; text: string; undo?: () => void; kind?: 'success' | 'error' }
 export interface Moved { title: string; at: number; was: number; why: string }
 export interface PlanInfo { count: number; deferred: number; shifted: number; next: Planned | null; at: number; moved: Moved[]; dropped: { id: string; why: string }[] }
@@ -21,14 +24,14 @@ export interface State {
   courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>; dayMarks: Record<string, DayMark>;
   tasks: Task[]; notices: Notice[]; marks: Mark[]; adjusts: Record<string, number>; focus: FocusSession[]; trips: Trip[]; alarms: Alarm[]; variants: SubjectVariant[]; settings: Settings;
   semesters: SemesterRow[];
-  timer: TimerState; sheet: SheetSpec | null; settingsPath: string[]; toast: Toast | null; route: RouteName; prevRoute: RouteName | null; focusTaskId: string | null;
+  timer: TimerState; sheet: SheetSpec | null; page: PageSpec | null; settingsPath: string[]; toast: Toast | null; route: RouteName; prevRoute: RouteName | null; focusTaskId: string | null;
   notifStatus: NotifStatus | null; plan: PlanInfo | null; notifLog: NotifLogRow[];
   fev: { k: string; at: number } | null;
 }
 
 let state: State = {
   ready: false, error: null, now: Date.now(), courses: [], meetings: [], attendance: {}, dayMarks: {}, tasks: [], notices: [], marks: [], adjusts: {}, focus: [], trips: [], alarms: [], variants: [], settings: withDefaults({}), semesters: [],
-  timer: initTimer(), sheet: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, notifLog: [], fev: null,
+  timer: initTimer(), sheet: null, page: null, settingsPath: [], toast: null, route: 'Today', prevRoute: null, focusTaskId: null, notifStatus: null, plan: null, notifLog: [], fev: null,
 };
 const subs = new Set<() => void>();
 export const getState = () => state;

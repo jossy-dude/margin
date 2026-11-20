@@ -748,6 +748,70 @@ absent or cancelled, and subjects lowest-first with a dot per class and "You can
 
 ---
 
+## V08 — the v0.8 overhaul (UNVERIFIED-ON-DEVICE until this pass)
+
+Build: the dev APK from `native.yml` for this branch, plus vault-sync with this session's hub and margin-bridge 0.8
+copied into the vault (`.obsidian/plugins/margin-bridge/`). Before step 1: freeze sync and copy both vaults (SPEC §1.6).
+
+### V08-SYNC — Phase 1 (SPEC §1.7 chaos matrix; run `vault-sync/health.sh` after each block)
+1. Spike (§1.1): Margin rewrites a note that is OPEN in phone Obsidian (tick its task in Margin). Does the editor show
+   the change? While typing in it, does the tick wait (Settings → Obsidian & sync → event log: "waiting for phone
+   Obsidian to save…") and land after you stop? No characters lost.
+2. Same Wi-Fi: desktop edit → phone vault ≤ 5 s; `#school` task typed on the desktop → Margin To-do ≤ 5 s without
+   leaving the app; tick in Margin → `[x]` in the desktop note ≤ 5 s.
+3. Same line edited on both sides offline → desktop text stays, the phone's lines in `Conflicts/<today>.md`, no callout;
+   reconnect 3× → no second entry.
+4. Phone Obsidian makes today's daily note from the template while the desktop has a full one → the desktop text wins.
+5. Hotspot (data on, then off): desktop joins the phone's hotspot; the sync page says "Phone hotspot".
+6. Router WAN unplugged: everything still syncs. Tailscale only (mobile data, away): the sync page says "Tailscale".
+7. Airplane on/off, reboot, Margin force-stopped, screen off 1 h, Battery Saver: no rewind (sync page cursor), no
+   duplicate tasks.
+8. Bulk: rename a folder of 200 notes; delete 100 files (the question appears); 50 MB video; case-only rename;
+   emoji and Amharic text.
+9. Update a bone plugin on the desktop → the phone gets all its files, then it reloads; the phone never sends it back.
+10. Pair from scratch with the QR (Settings → Obsidian & sync → Scan the desktop's code); phone Obsidian links itself.
+
+### V08-FOUNDATION — Phase 2
+11. Cold start: one look from tap to Today (the logo on your skin's paper, then Today); no spinner, no white flash.
+12. Collage → Daylight → Collage: instant, no lost tap (`adb shell dumpsys gfxinfo app.marginalia.planner`).
+13. Daylight: Today and Week are the same pages as the other skins; the Settings page's words never show the list
+    behind them.
+14. Reopen after an hour: the first tap registers at once.
+15. Week: hold a class, drag it to another day: "This week only" / "Every week" both work, in every skin.
+16. Today after the last class: "Done for today" with the day's attendance, not "Free day".
+
+### V08-PRODUCT — Phase 3
+17. + shows Task · Class · Mark · Notice · Subject (+ focus). Task form: tag chips wrap; #school on by default.
+18. An old exam task is now a pinned notice with its date; it reminds the day before.
+19. Notice board: from Today ("All"); swipe right unpins, left archives, both with Undo.
+20. Subjects: from Grades ("Subjects") and Settings; colour, Obsidian tag (unique), marks, tasks, notices, archive,
+    delete asks twice and says what goes with it.
+21. Bone Tasks quick-add: choose School → Margin's subjects appear, the class on now pre-picked; the line gets its tag.
+22. The + slides away while a page scrolls; the face reads "Margin, …" in TalkBack; Save stays reachable with the
+    keyboard up; onboarding page 5's last card is above the dots.
+
+### V08-SURFACES — Phase 4
+23. Settings is a full page with sections and search; system Back walks out one page at a time.
+24. Obsidian & sync: four device dots, the path line, stage and bar while syncing, a problem card with one button,
+    the event log copies.
+25. Widget: add it → 4×2 card in your skin; resize to 4×1 and 4×3; tick a task on it (Android 12+), open Margin: done.
+26. Alarm: the page wears your skin; press volume-down (Silence) and leave it: after the ring limit it says "Missed
+    alarm". Ask the owner about the 21:45 weekday alarm's label (SPEC §0.4).
+27. Two days of battery readings (SYNC_ANDROID.md budget: ≤ 5 mAh/day added).
+
+### V08-EXTRAS — the owner's three extra asks (2026-11-20)
+28. Alarm, locked phone: it rings full screen, no status bar or nav bar, the face below the camera cut-out and
+    breathing. Also open it from the notification while unlocked: still full screen. Tap Snooze: the label says
+    "Snoozed until HH:MM" and the page fades down (no cut). Dismiss: happy face, then the fade.
+29. Notification icons: an alarm, a reminder, the sync notice and the focus countdown all show the M (not a white
+    blob, not a square) in the status bar, tinted rust in the shade. The launcher icon's M fills the circle.
+    (In Expo Go the Expo icon is expected: Expo Go posts them. Check this on the dev APK.)
+30. Focus on the lock screen: start a round, lock the phone, wake it: "Focus · Subject" counts down, "Ends at …".
+    Pause: it goes. Break: "Break" counts down. End the session: it goes. Tap it: the Focus page opens.
+31. Transitions: Settings, Subjects, the Notice board drift in from the right and fade out when closed; Subjects
+    list → a subject slides left, Back slides right; Week hold-and-drag sheet fades in and rises. With Reduce motion
+    on, all of these cut.
+
 ## Appending for later workstreams
 
 Add a new `## W<N> — <title>` section at the **bottom**, and number its steps inside that section only

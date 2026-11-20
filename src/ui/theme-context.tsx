@@ -1,14 +1,36 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useDeferredValue, useEffect, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
-import { makeTheme, type Theme } from '../tokens/theme';
+import { makeTheme, palettes, type Theme } from '../tokens/theme';
 import { useStore } from '../store/store';
+import { setLook } from '../services/native';
+
+/* v0.8 §2.1: one Theme object per skin × mode × pen, made once and kept, so switching back to a skin hands every
+   leaf the SAME object (a memoised row with unchanged props does not re-render) and costs no allocation. */
+const made = new Map<string, Theme>();
+export function themeFor(s: Parameters<typeof makeTheme>[0], sys: boolean): Theme {
+  const k = `${s.palette}|${s.theme === 'auto' ? (sys ? 'dark' : 'light') : s.theme}|${s.pen}`;
+  let t = made.get(k);
+  if (!t) { t = makeTheme(s, sys); made.set(k, t); }
+  return t;
+}
 
 const Ctx = createContext<Theme>(makeTheme({ theme: 'light', palette: 'refined', pen: 'warm' }, false));
 export const useTheme = () => useContext(Ctx);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const sys = useColorScheme() === 'dark', theme = useStore((s) => s.settings.theme), palette = useStore((s) => s.settings.palette), pen = useStore((s) => s.settings.pen);
-  const t = useMemo(() => makeTheme({ theme, palette, pen }, sys), [theme, palette, pen, sys]);
+  const now = themeFor({ theme, palette, pen }, sys);
+  /* The switch is a transition: the tap that chose the skin commits at once and the re-skin of the tree follows,
+     interruptible, so a second tap during it is never dropped (P2: a 650 ms frame and a lost tap). */
+  const t = useDeferredValue(now);
+  /* The splash, the widget and the alarm page wear the skin too: its papers and inks go to the native side, read
+     at the next launch (MainActivity) and on every widget redraw. */
+  useEffect(() => {
+    const p = palettes[palette] ?? palettes.collage;
+    setLook({ mode: theme, palette, paperLight: p.light.paper, paperDark: p.dark.paper, cardLight: p.light.card.slice(0, 7), cardDark: p.dark.card.slice(0, 7),
+      inkLight: p.light.ink, inkDark: p.dark.ink, mutLight: p.light.mut, mutDark: p.dark.mut, accLight: now.dark ? p.light.acc : now.c.acc, accDark: now.dark ? now.c.acc : p.dark.acc,
+      deckLight: p.light.deck, deckDark: p.dark.deck, deckInkLight: p.light.deckInk, deckInkDark: p.dark.deckInk, look: now.look });
+  }, [theme, palette, now]);
   return <Ctx.Provider value={t}>{children}</Ctx.Provider>;
 }
 /** The OS "remove animations" switch combined with the in-app override. */

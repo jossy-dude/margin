@@ -38,6 +38,8 @@
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_board"/>
     </receiver>
+    <!-- v0.8: a task ticked on the widget (Android 12+ checkbox); Margin's JS applies it on its next start. -->
+    <receiver android:name="app.marginalia.nativebits.WidgetTickReceiver" android:exported="false"/>
 
     <!-- Alarms: the moment, the ringing, and the full-screen answer. -->
     <receiver android:name="app.marginalia.nativebits.AlarmReceiver" android:exported="false"/>

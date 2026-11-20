@@ -91,8 +91,8 @@ export const MARGIN = { light: '#C0392B', dark: '#E0705F' } as const;
  * against the glass composited over the brightest and darkest sky of each theme (`ui.test.ts`).
  */
 const DAYLIGHT: Record<'light' | 'dark', Colors> = {
-  light: { paper: '#F4F5F7', card: '#FFFFFFBD', desk: '#E4E7EC', ink: '#1A1E24', mut: '#48505B', acc: '#35619A', hl: '#F6E3B8', rule: '#1118211A', dot: '#11182112', shadow: '#000000', ok: '#287A4E', warn: '#8A5A12', bad: '#B8304A', slab: '#1A1E24', slabInk: '#F4F5F7', slabMut: '#C3C8D0', deck: '#2B3038', deckInk: '#F4F5F7', deckMut: '#C3C8D0', grain: 0, photo: 0, onAcc: '#FFFFFF' },
-  dark: { paper: '#0E1116', card: '#10141BAD', desk: '#07090C', ink: '#ECEEF1', mut: '#B5BBC4', acc: '#9BBBE0', hl: '#4A3F22', rule: '#FFFFFF1A', dot: '#FFFFFF12', shadow: '#000000', ok: '#5CC48A', warn: '#E0A64A', bad: '#F2768A', slab: '#07090C', slabInk: '#ECEEF1', slabMut: '#B5BBC4', deck: '#E3E6EA', deckInk: '#14181F', deckMut: '#48505B', grain: 0, photo: 0, onAcc: '#0E1116' },
+  light: { paper: '#F4F5F7', card: '#FFFFFFE0', desk: '#E4E7EC', ink: '#1A1E24', mut: '#48505B', acc: '#35619A', hl: '#F6E3B8', rule: '#1118211A', dot: '#11182112', shadow: '#000000', ok: '#287A4E', warn: '#8A5A12', bad: '#B8304A', slab: '#1A1E24', slabInk: '#F4F5F7', slabMut: '#C3C8D0', deck: '#2B3038', deckInk: '#F4F5F7', deckMut: '#C3C8D0', grain: 0, photo: 0, onAcc: '#FFFFFF' },
+  dark: { paper: '#0E1116', card: '#10141BDB', desk: '#07090C', ink: '#ECEEF1', mut: '#B5BBC4', acc: '#9BBBE0', hl: '#4A3F22', rule: '#FFFFFF1A', dot: '#FFFFFF12', shadow: '#000000', ok: '#5CC48A', warn: '#E0A64A', bad: '#F2768A', slab: '#07090C', slabInk: '#ECEEF1', slabMut: '#B5BBC4', deck: '#E3E6EA', deckInk: '#14181F', deckMut: '#48505B', grain: 0, photo: 0, onAcc: '#0E1116' },
 };
 export const palettes = { collage: COLLAGE, plain: PLAIN, refined: REFINED, original: ORIGINAL, daylight: DAYLIGHT };
 

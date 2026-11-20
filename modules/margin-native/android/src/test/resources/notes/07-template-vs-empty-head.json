@@ -1,0 +1,9 @@
+{
+ "name": "head is the template, incoming has text",
+ "base": null,
+ "head": "---\ncreated: x\n---\n# Log\n",
+ "incoming": "---\ncreated: x\n---\n# Log\n- hi\n",
+ "expect": "---\ncreated: x\n---\n# Log\n- hi\n",
+ "clean": true,
+ "conflicts": 0
+}

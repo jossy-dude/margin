@@ -60,8 +60,14 @@ class SyncService : Service() {
   private val goReady = Runnable { if (!keepLive()) { SyncEngine.disconnect("idle"); setState("ready") } }
 
   private val net = object : ConnectivityManager.NetworkCallback() {
-    override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) { main.post { homeFp = SyncNet.fingerprint(lp); evaluate("wifi") } }
+    override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) { main.post { val fp = SyncNet.fingerprint(lp); if (fp != homeFp) { homeFp = fp; SyncEngine.networkChanged(fp) }; evaluate("wifi") } }
     override fun onLost(network: Network) { main.post { homeFp = null; SyncEngine.disconnect("wifi lost"); evaluate("wifi lost") } }
+  }
+  /** Any usable network: off home Wi-Fi the desktop may still be reachable over Tailscale (tried last). */
+  private var anyUp = false
+  private val anyNet = object : ConnectivityManager.NetworkCallback() {
+    override fun onAvailable(network: Network) { main.post { anyUp = true; SyncEngine.networkChanged(homeFp); evaluate("network") } }
+    override fun onLost(network: Network) { main.post { anyUp = false; evaluate("network lost") } }
   }
   private val screen = object : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
@@ -69,7 +75,7 @@ class SyncService : Service() {
         Intent.ACTION_SCREEN_OFF -> { screenOn = false; main.removeCallbacks(goReady); main.postDelayed(goReady, 60_000) }
         Intent.ACTION_SCREEN_ON -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncEngine.ping() }
         // unlocked: whatever changed on the phone while it was locked goes now, not at the next 30 s tick
-        Intent.ACTION_USER_PRESENT -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncEngine.scanNow() }
+        Intent.ACTION_USER_PRESENT -> { screenOn = true; main.removeCallbacks(goReady); evaluate("screen"); SyncFiles.scanNow() }
       }
     }
   }
@@ -79,7 +85,7 @@ class SyncService : Service() {
       main.postDelayed({
         val addr = SyncNet.hotspotAddress()
         hotspotUp = st != 11 && addr != null
-        if (hotspotUp && addr != null) SyncEngine.hotspotOn(addr) else SyncEngine.hotspotOff()
+        if (hotspotUp && addr != null) SyncLocal.hotspotOn(addr) else SyncLocal.hotspotOff()
         evaluate("hotspot")
       }, 1500) // the interface gets its address a moment after the broadcast
     }
@@ -99,8 +105,10 @@ class SyncService : Service() {
     listen(screen, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) })
     listen(ap, IntentFilter("android.net.wifi.WIFI_AP_STATE_CHANGED"))
     screenOn = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
-    SyncNet.hotspotAddress()?.let { hotspotUp = true; SyncEngine.hotspotOn(it) }
-    SyncEngine.exec.execute { SyncEngine.startLoopback() }
+    SyncNet.hotspotAddress()?.let { hotspotUp = true; SyncLocal.hotspotOn(it) }
+    SyncEngine.exec.execute { SyncLocal.startLoopback() }
+    // v0.8 §1.4: any network change (Wi-Fi, mobile data with Tailscale, a VPN coming up) restarts the dial at once
+    try { cm?.registerDefaultNetworkCallback(anyNet) } catch (e: Exception) { }
     scheduleJob()
     setState("dormant")
   }
@@ -118,15 +126,17 @@ class SyncService : Service() {
 
   override fun onDestroy() {
     try { cm?.unregisterNetworkCallback(net) } catch (e: Exception) { }
+    try { cm?.unregisterNetworkCallback(anyNet) } catch (e: Exception) { }
     try { unregisterReceiver(screen) } catch (e: Exception) { }
     try { unregisterReceiver(ap) } catch (e: Exception) { }
     main.removeCallbacksAndMessages(null)
     SyncEngine.disconnect("service stopped")
-    SyncEngine.exec.execute { SyncEngine.stopServers() }
+    SyncEngine.exec.execute { SyncLocal.stopServers() }
     super.onDestroy()
   }
 
-  private fun near() = homeFp != null || hotspotUp
+  /** Home Wi-Fi or the hotspot; with the screen on, any network (Tailscale is the last resort, §1.4). */
+  private fun near() = homeFp != null || hotspotUp || (screenOn && anyUp)
   /** LIVE is kept with the screen off only while something is pending (outbox) or a timer runs. */
   private fun keepLive() = screenOn || SyncStore.get(this).outboxSize() > 0
 
@@ -169,9 +179,9 @@ class SyncService : Service() {
     val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
       PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
-    val text = when (SyncEngine.state) { "live" -> "Connected to your desktop"; "ready" -> "Home network: syncs when you look"; else -> "Waiting for home Wi-Fi or the hotspot" }
+    val text = when (SyncEngine.state) { "live" -> if (SyncEngine.live) "Connected to your desktop" else "Looking for your desktop"; "ready" -> "Home network: syncs when you look"; else -> "Waiting for home Wi-Fi or the hotspot" }
     val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
-    return b.setSmallIcon(applicationInfo.icon).setContentTitle("Margin").setContentText(text).setOngoing(true)
+    return b.setSmallIcon(Live.smallIcon(this)).setColor(getColor(R.color.mg_acc)).setContentTitle("Margin").setContentText(text).setOngoing(true)
       .setContentIntent(open).setShowWhen(false).setCategory(Notification.CATEGORY_SERVICE).build()
   }
   private fun startInForeground() {

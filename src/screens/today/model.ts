@@ -3,7 +3,7 @@ import { effective, isCancelled, occEnd, occKey, occurrencesOn, statusLabel } fr
 import { DW, MO, addDays, atTime, fmtTime, mondayOf, plural, startOfDay, weekdayOf, ymd } from '../../domain/time';
 import { roomOf } from '../../domain/rooms';
 import type { ClassMove } from '../../domain/moves';
-import { bubbleOf, bubbleWords, type BubbleState } from '../../ui/Bubble';
+import { bubbleOf, type BubbleState } from '../../ui/Bubble';
 import type { FaceName } from '../../ui/mascot/faces';
 import { pageFace } from '../../ui/mascot/moments';
 
@@ -195,8 +195,8 @@ export function dueOf(i: Pick<TodayInput, 'tasks' | 'courses' | 'now' | 'hour12'
 
 /** Pinned notes: urgent first, then the soonest date still ahead, then pin order (v0.6's rule). */
 export function notesOf(i: Pick<TodayInput, 'notices' | 'courses' | 'now' | 'hour12'>): TodayVM['notes'] {
-  const ahead = (n: Notice) => (n.dueAt > startOfDay(i.now) && n.dueAt >= i.now - 60_000 ? n.dueAt : null);
-  return i.notices.map((n, k) => ({ n, k })).sort((a, b) => b.n.priority - a.n.priority || (ahead(a.n) ?? 9e15) - (ahead(b.n) ?? 9e15) || a.k - b.k)
+  const ahead = (n: Notice) => (n.dueAt != null && n.dueAt > startOfDay(i.now) && n.dueAt >= i.now - 60_000 ? n.dueAt : null);
+  return i.notices.filter((n) => !n.archived).map((n, k) => ({ n, k })).sort((a, b) => Number(!!b.n.pinned) - Number(!!a.n.pinned) || b.n.priority - a.n.priority || (ahead(a.n) ?? 9e15) - (ahead(b.n) ?? 9e15) || a.k - b.k)
     .map(({ n }) => {
       const when = ahead(n);
       const meta = [i.courses.find((c) => c.id === n.courseId)?.name ?? '', when !== null ? dueWhen(when, i.now, i.hour12) : '', n.priority >= 3 ? 'Urgent' : n.priority === 2 ? 'Important' : ''].filter(Boolean).join(' · ');
@@ -261,5 +261,3 @@ export function weekPills(sel: number, i: Pick<TodayInput, 'now' | 'meetings' | 
   });
 }
 
-/** What a bubble says, for the track's and the strip's TalkBack labels. */
-export const bubbleSaid = (b: BubbleState) => bubbleWords(b);

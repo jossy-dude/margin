@@ -73,7 +73,7 @@ jest.mock('react-native-reanimated', () => {
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
     /* `.easing()` too: the shell test below draws the real `Overlay`, whose toast enters with
        `FadeInDown.duration(220).easing(EASE)`. */
-    FadeIn: { duration: () => ({ easing: () => ({}) }) }, FadeOut: { duration: () => ({ easing: () => ({}) }) },
+    ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeOutDown', 'FadeInRight', 'FadeOutRight', 'FadeInLeft', 'FadeOutLeft'].map((k) => { const b: Record<string, () => unknown> = {}; b.duration = b.easing = b.delay = () => b; return [k, b]; })),
     FadeInDown: { duration: () => ({ easing: () => ({}) }) }, FadeOutDown: { duration: () => ({ easing: () => ({}) }) },
   };
   return { ...api, default: api };

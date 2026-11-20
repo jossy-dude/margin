@@ -24,7 +24,7 @@ describe('floating chrome yields to the keyboard (BUG-028)', () => {
     // (`fabAllowed`), so tapping a tab re-renders the overlay only when this boolean actually flips;
     // `showFab` still means "not behind a sheet, not on Focus, and no keyboard", which is what the
     // assertion below pins.
-    expect(overlay).toMatch(/const fabAllowed = useStore\(\(s\) => !s\.sheet && s\.route !== 'Focus'\)/);
+    expect(overlay).toMatch(/const fabAllowed = useStore\(\(s\) => !s\.sheet && !s\.page && s\.route !== 'Focus'\)/);
     expect(overlay).toMatch(/showFab = fabAllowed && !kbUp/);
     expect(overlay).toContain('showFab && (');
     expect(overlay).not.toContain('useStore((s) => s.route)'); // the object-shaped route read is gone

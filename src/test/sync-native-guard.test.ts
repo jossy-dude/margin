@@ -13,10 +13,13 @@ it('every task on the sync executor runs inside a catch-all', () => {
   expect(def).toMatch(/RejectedExecutionException/);
 });
 
+/* v0.8: the loopback and hotspot servers moved to SyncLocal.kt */
+const local = readFileSync(join(__dirname, '..', '..', 'modules', 'margin-native', 'android', 'src', 'main', 'java', 'app', 'marginalia', 'nativebits', 'SyncLocal.kt'), 'utf8');
 it('a Java-WebSocket send goes through sendSafe, which checks isOpen and catches', () => {
-  const helper = /private fun sendSafe\(conn: JWebSocket, text: String\): Boolean \{[\s\S]*?\n {2}\}/.exec(kt)?.[0] ?? '';
+  const helper = /private fun sendSafe\(conn: JWebSocket, text: String\): Boolean \{[\s\S]*?\n {2}\}/.exec(local)?.[0] ?? '';
   expect(helper).toMatch(/conn\.isOpen/);
   expect(helper).toMatch(/catch \(e: Exception\)/);
-  const raw = kt.replace(helper, '').match(/\bconn\.send\(/g) ?? [];
+  expect(kt).not.toMatch(/\bconn\.send\(/);
+  const raw = local.replace(helper, '').match(/\bconn\.send\(/g) ?? [];
   expect(raw).toHaveLength(0);
 });

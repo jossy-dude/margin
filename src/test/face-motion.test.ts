@@ -127,7 +127,7 @@ describe('Face renders', () => {
       expect(sweat!.props.opacity).toBe(FACES[name].extras.includes('sweat') ? 1 : 0);
       const host = r.root.findAll((n) => n.props.accessibilityRole === 'image')[0]!;
       expect(host.props.accessible).toBe(true);
-      expect(host.props.accessibilityLabel).toBe(`Jot, ${FACES[name].label}`);
+      expect(host.props.accessibilityLabel).toBe(`Margin, ${FACES[name].label}`);
       unmount();
     }
   });

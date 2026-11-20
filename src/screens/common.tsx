@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { fabScrollProps } from '../ui/fabScroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { BEAT, EASE, HandBox, Icon, Txt } from '../ui/kit';
-import { PaperBg } from '../ui/PaperBg';
 import { Face } from '../ui/mascot/Face';
 import { FACES, type FaceName } from '../ui/mascot/faces';
 import { faceEvent, useFaceMoment } from '../ui/mascot/moments';
@@ -25,7 +25,7 @@ function TopFace({ rest }: { rest: FaceName }) {
   const live = useScreenLive();
   const { face, play } = useFaceMoment(rest, live);
   return (
-    <Pressable testID="top-face" accessibilityRole="button" accessibilityLabel={`Jot, ${FACES[face.name].label}`} onPress={() => play('tip')} hitSlop={10}
+    <Pressable testID="top-face" accessibilityRole="button" accessibilityLabel={`Margin, ${FACES[face.name].label}. Tap for a tip`} onPress={() => play('tip')} hitSlop={10}
       style={{ height: 46, justifyContent: 'center' }}>
       <Face {...face} size={28} awake={live} decorative />
     </Pressable>
@@ -44,8 +44,8 @@ export function Page({ title, sub, children, right, face }: { title: string; sub
   /* The tour's third step rings this gear. Every page renders this header, so one ref covers all six. */
   return (
     <View style={{ flex: 1 }}>
-      <PaperBg />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 14 }}>
+      {/* the background layer is drawn once behind the navigator (App Shell), not per page */}
+      <ScrollView {...fabScrollProps} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
           {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
               word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}

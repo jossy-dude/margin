@@ -1,7 +1,13 @@
 package app.marginalia.planner
 
+import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -17,6 +23,20 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    // v0.8 §2.2: one look from tap to Today. The window shows the logo on the paper of the skin used last (written
+    // by the app on every theme change, `MarginNative.setLook`), and JS draws nothing until Today is ready, so there
+    // is no white flash, no default paper and no spinner screen in between.
+    try { window.setBackgroundDrawable(splashLayer()) } catch (e: Exception) { }
+  }
+
+  private fun splashLayer(): Drawable {
+    val look = getSharedPreferences("margin_look", MODE_PRIVATE)
+    val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val dark = when (look.getString("mode", "auto")) { "dark" -> true; "light" -> false; else -> night }
+    val hex = look.getString(if (dark) "paperDark" else "paperLight", null) ?: if (dark) "#3C352C" else "#FAF4E6"
+    val bg = ColorDrawable(try { Color.parseColor(hex.take(7)) } catch (e: Exception) { if (dark) 0xFF3C352C.toInt() else 0xFFFAF4E6.toInt() })
+    @Suppress("DEPRECATION") val logo = resources.getDrawable(R.drawable.splashscreen_logo)
+    return LayerDrawable(arrayOf(bg, logo)).apply { setLayerGravity(1, Gravity.CENTER) }
   }
 
   /**

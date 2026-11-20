@@ -1,0 +1,9 @@
+{
+ "name": "both made the same note with real text: union, head first",
+ "base": null,
+ "head": "# Ideas\n- a\n",
+ "incoming": "# Ideas\n- b\n",
+ "expect": "# Ideas\n- a\n- b\n",
+ "clean": true,
+ "conflicts": 0
+}

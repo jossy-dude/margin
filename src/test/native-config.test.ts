@@ -251,11 +251,11 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
-  it('ships as 0.7.2, version code 8', () => {
-    expect(appJson.expo.version).toBe('0.7.2');
-    expect(gradle).toMatch(/versionCode 8\b/);
-    expect(gradle).toContain('versionName "0.7.2"');
-    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.2</string>');
+  it('ships as 0.7.5, version code 9', () => {
+    expect(appJson.expo.version).toBe('0.7.5');
+    expect(gradle).toMatch(/versionCode 9\b/);
+    expect(gradle).toContain('versionName "0.7.5"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.5</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {
@@ -299,15 +299,18 @@ describe('the margin-native module', () => {
     expect(readFileSync(join(ROOT, 'metro.config.js'), 'utf8')).not.toContain("assetExts.push('riv')");
   });
   /* v0.7 U7: the full-screen alarm wears the mascot as static vectors made from the same paths as the app's face
-     (polish-pass/handoff/mascot/export/build.mjs): sleepy while it rings, happy for 400 ms after Dismiss. */
+     (polish-pass/handoff/mascot/export/build.mjs): sleepy while it rings, happy after Dismiss. v0.8: the page fills the screen and fades out instead of cutting. */
   it('the alarm screen shows the sleepy face, and Dismiss shows the happy one before it closes', () => {
     const res = (...p: string[]) => mod('android', 'src', 'main', 'res', ...p);
     for (const f of ['sleepy', 'happy']) expect(res('drawable', `mg_face_${f}.xml`)).toMatch(/<vector[\s\S]*android:viewportWidth="120" android:viewportHeight="64"/);
     const layout = res('layout', 'mg_alarm.xml');
-    expect(layout).toMatch(/<ImageView android:id="@\+id\/mg_al_face" android:layout_width="180dp" android:layout_height="96dp"[^>]*android:src="@drawable\/mg_face_sleepy"[^>]*android:tint="@color\/mg_alarm_ink"/);
+    expect(layout).toMatch(/<ImageView android:id="@\+id\/mg_al_face" android:layout_width="260dp" android:layout_height="140dp"[^>]*android:src="@drawable\/mg_face_sleepy"[^>]*android:tint="@color\/mg_alarm_ink"/);
     const kt = mod('android', 'src', 'main', 'java', 'app', 'marginalia', 'nativebits', 'Alarms.kt');
     expect(kt).toContain('setImageResource(R.drawable.mg_face_happy)');
-    expect(kt).toMatch(/postDelayed\(\{[^}]*finish\(\)[^}]*\}, 400\)/);
+    expect(kt).toMatch(/private fun dismissHappy\(\)[\s\S]*?leave\(350\)/);
+    expect(kt).toMatch(/alpha\(0f\)[\s\S]*?withEndAction[\s\S]*?finish\(\)/);
+    expect(kt).toContain('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE');
+    expect(layout).not.toContain('fitsSystemWindows');
   });
 
 });

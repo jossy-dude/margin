@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { DayBar, type AnyBarKind } from '../ui/DayBar';
-import { Btn, HandBox, HStrip, Icon, Txt } from '../ui/kit';
+import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
 import { handPath } from '../ui/hand';
 import { RunningTimer } from '../ui/RunningTimer';
 import { useNow, useTheme } from '../ui/theme-context';
@@ -17,10 +17,11 @@ import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
 import { waitPeriod } from '../ui/instruments/time';
 import { NoteCard } from '../ui/collage/NoteCard';
-import { sortNotes } from '../ui/collage/notes';
+import { noticeOrder } from '../domain/vaultNotes';
 import { FS } from '../ui/fit';
 import type { Course, SubjectVariant, Task } from '../domain/types';
 import { fx } from '../services/fx';
+import { attendanceSummary, classesOn } from './today/model';
 
 /* ── the command deck ─────────────────────────────────────────────────────
    `deck()` in the design of record (`marginalia-v10(1).html`, line 236),
@@ -138,14 +139,16 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
   const many = slotOf.length > 1;
   return {
     state, period, at, total: ps.length, slot: slotOf.map((x) => x.i), after: afterHit ? afterHit.i : -1,
-    word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : 'Rest day',
+    /* v0.8 U5 (Daylight's good part, now every skin): after the day's last class it is "Done for today", not a
+       rest day; the card's title then carries the day's attendance ("2 classes · all present"). */
+    word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : isToday && ps.length ? 'Done for today' : 'Rest day',
     countdown: target === null || !period ? '--:--' : isToday ? fmtClock((target - t) / 1000) : `${fmtTime(period.start, h12)}–${fmtTime(period.end, h12)}`,
     /* The reference's `lb` is only ever overwritten when there is a class to point at: with nothing
        on, `cn` and `lb` keep their opening values and it reads `--:--  nothing on`, not a countdown
        with a unit borrowed from a state that is not happening. */
     /* The unit says what the digits are: "34:12" is minutes and seconds, "1:05:00" is hours (S2: it used
        to say "min left" beside an hours readout). */
-    unit: cur ? (target !== null && target - t >= 3_600_000 ? 'left' : 'min left') : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
+    unit: cur ? (target !== null && target - t >= 3_600_000 ? 'left' : 'min left') : next ? (isToday ? 'until it starts' : 'first bell') : isToday && ps.length ? '' : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
       /* Beside the "Now" / "Next up" pill, so it reads "Now +1 more". Short on purpose: at 320 dp the
          header row has about 50 dp for this line once the clock, the pill and the room have theirs. */
@@ -264,8 +267,10 @@ function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
  * same off-screen gate the page applies to its own `useNow` — a hidden
  * screen must not tick fast — so off Today the card drops to the same 60 s the page uses.
  */
-export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, variants, isToday, bar, w, live, hour12, headPad = 0 }: {
+export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, variants, isToday, bar, w, live, hour12, headPad = 0, doneLine }: {
   periods: Period[]; occ: Occurrence[]; courses: Course[]; variants?: SubjectVariant[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
+  /** v0.8 U5: the day's attendance in words, shown as the title once its last class is over */
+  doneLine?: string;
   /** The user's 12/24-hour choice, for the non-today window the card prints. */
   hour12?: boolean;
   /** Extra left padding on the header row, for when the clock is taped over the card's top-left
@@ -294,7 +299,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   /* The bar draws the class the card is about; the other classes of the slot are left out of it, or two
      overlapping periods would be drawn as one muddle. */
   const barPeriods = many ? periods.filter((_, i) => !(d.slot.includes(i) && i !== d.at)) : periods;
-  const title = d.period ? d.period.label : 'Free day';
+  const title = d.period ? d.period.label : isToday && d.total > 0 ? (doneLine ?? 'Done for today') : 'Free day';
   /* The disc fills across the gap the card is actually in: from the previous non-cancelled class's end
      (or midnight when this is the first class), floored at a minute so a same-minute back-to-back swap
      can never divide by zero or render a backwards ring. */
@@ -416,6 +421,8 @@ export function TodayScreen() {
      re-render this whole page — only the slices it actually reads. Settings are read field by field
      (`name`, `bar`). `st` is rebuilt locally each render. */
   const name = useStore((s) => s.settings.name), bar = useStore((s) => s.settings.bar), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
+  const moves = useStore((s) => s.settings.moves);
+  const pinnedNotices = React.useMemo(() => noticeOrder(notices).filter((n) => n.pinned !== false), [notices]);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks, notices };
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
      so a store subscription here would re-render the whole of Today on every tap anywhere in the app —
@@ -458,7 +465,8 @@ export function TodayScreen() {
               {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}
             </View>
           </View>
-          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X} />
+          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X}
+            doneLine={sel === today ? attendanceSummary(classesOn(sel, { now, meetings, courses, variants: variants ?? [], attendance, dayMarks, hour12, moves })) : undefined} />
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -497,14 +505,15 @@ export function TodayScreen() {
             </Pressable>);
         })}
       </Section>
-      <Section title="Notes" right={<Btn small kind="ghost" icon="plus" a11y="New note" onPress={() => act.open({ t: 'notice' })} />}>
+      {/* v0.8 §3.2: the Notice board (was "Notes"): pinned first, then dated ones by date; "All" opens the full board */}
+      <Section title="Notice board" right={<Row style={{ flexWrap: 'nowrap', gap: 4 }}><Btn small kind="ghost" label="All" testID="open-notices" a11y="Open the notice board" onPress={() => act.openPage({ t: 'notices' })} /><Btn small kind="ghost" icon="plus" a11y="New notice" onPress={() => act.open({ t: 'notice' })} /></Row>}>
         {/* `hl` is a surface, and `ink` is the only text token that clears 4.5:1 on it in all four
             palette×theme combinations — `mut`/`hl` is 4.02 in `original.dark`. COORDINATION.md §4 forbids
             re-valuing a palette, so an important note prints in ink on its highlight and the ordinary card
             keeps `mut`. Pinned by `src/test/color-drift.test.ts` and the table in `src/test/ui.test.ts`. */}
-        {st.notices.length === 0 ? <Empty text="Nothing pinned. Add a reminder to yourself." /> : (
+        {pinnedNotices.length === 0 ? <Empty text="Nothing pinned. An exam date, a heads-up: pin it here." /> : (
           <HStrip gap={12} contentStyle={{ paddingTop: 8 }}>
-            {sortNotes(st.notices, now).map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} live={focused} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
+            {pinnedNotices.map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} live={focused} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
           </HStrip>)}
       </Section>
       <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>

@@ -61,6 +61,12 @@ Check on the phone: `polish-pass/handoff/mascot/CHECK.md`.
 - R6 waits: Focus D-16 is visual and swaps Break for +5 (question for Jossy).
 
 ## Now
+- **v0.8 overhaul built, all four phases, uncommitted and untested on the phone** (2026-11-20): what is done and
+  what is not is in `docs/v08/PROGRESS.md`; the phone pass is `docs/DEVICE_CHECKLIST.md` §V08. Kotlin has not been
+  compiled (CI only). vault-sync (hub, core) and margin-bridge 0.8 changed too; neither is installed yet.
+- **v0.8 overhaul spec** (2026-11-19): `docs/v08/SPEC.md`: 4 phases (1 sync rebuild, 2 speed/clean code/one UI
+  with skins, 3 Add/tags/Subjects/Notices/Obsidian tasks, 4 full-page Settings, sync page, widget).
+  Phone state after the test: vault folder re-picked (it had been lost, S9); alarm verified stoppable.
 - **v0.7.2** (versionCode 8, tag `v0.7.2`, 2026-11-15): one Focus timer shared by Margin, phone and desktop
   Obsidian (offline actions queued and sent on reconnect, ends on every device at once); SyncEngine guards a socket
   closed mid-reply; margin.json writes read back and redone, readers repair trailing junk (`domain/jsonRepair.ts`).

@@ -1,4 +1,4 @@
-import type { AttRecord, Course, DayMark, Meeting, NotifSettings, SubjectVariant, Task } from './types';
+import type { AttRecord, Course, DayMark, Meeting, NotifSettings, SubjectVariant, Task, Notice } from './types';
 import { addDays, atTime, fmtDur, fmtTime, hm, startOfDay, weekdayOf, ymd, DAY_MS } from './time';
 import { effective, isCancelled, occEnd, occKey, occurrencesBetween } from './attendance';
 import { roomOf } from './rooms';
@@ -13,6 +13,8 @@ export interface Planned {
 export interface PlanInput {
   now: number; courses: Course[]; meetings: Meeting[]; attendance: Record<string, AttRecord>;
   dayMarks: Record<string, DayMark>; tasks: Task[]; settings: NotifSettings; horizonDays?: number; cap?: number;
+  /** v0.8 §3.2: notices; a dated one with `remind` rings that many minutes before its date (exam reminders' switch) */
+  notices?: Notice[];
   /** `settings.hour12` — the one display choice that reaches the notification BODIES the user reads
    *  (a heads-up that says `due 18:00` while the app prints `6:00 PM` is a lie about this app's own
    *  clock). It is an argument rather than a read of the store so `domain/` keeps importing nothing but
@@ -220,6 +222,13 @@ export function planReminders(i: PlanInput): Plan {
         if (w && w.startBy > i.now && w.startBy < horizon) push({ kind: 'start', at: w.startBy, title: `Start now: ${x.title}`, body: `Needs about ${fmtDur(w.needMin)} and that is all the free time you have before it is due.`, channel: 'tasks', route: 'Tasks', entityId: x.id + 'b' }, { notAfter: x.dueAt });
       }
     }
+  }
+  // v0.8 §3.2: a dated notice with a reminder (an exam is a notice now, D6)
+  if (s.examReminders) for (const n of i.notices ?? []) {
+    if (n.demo || n.archived || n.dueAt == null || n.remind == null) continue;
+    const at = n.remind === 0 ? atTime(startOfDay(n.dueAt), s.activeFrom || '08:00') : n.dueAt - n.remind * MIN;
+    if (at < i.now || at > horizon) continue;
+    push({ kind: 'exam', at, title: n.text.split('\n')[0]!.slice(0, 80), body: `${cn(n.courseId)?.name ?? 'Notice'} · ${fmtTime(n.dueAt, i.hour12)}`, channel: 'tasks', route: 'Today', entityId: `n-${n.id}` }, { notAfter: n.dueAt });
   }
   // v0.7 R9: reminder rules, anchored to the timetable (cancelled classes move "first class" on)
   if (i.rules?.length) {

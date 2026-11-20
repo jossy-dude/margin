@@ -581,7 +581,7 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeOutDown', 'FadeInRight', 'FadeOutRight', 'FadeInLeft', 'FadeOutLeft'].map((k) => { const b: Record<string, () => unknown> = {}; b.duration = b.easing = b.delay = () => b; return [k, b]; })),
   };
   return { ...api, default: api };
 });
@@ -666,7 +666,7 @@ describe('the introduction is replayable from Settings', () => {
     // Cast for the same reason `Settings.tsx` casts: `Settings.onboarded` is A4's field and its patch to
     // the shared `src/domain/types.ts` has not landed. See `qa/HANDOFF-A6.md`.
     await act(async () => { set({ settings: { ...getState().settings, onboarded: TOUR_VERSION } as Settings }); });
-    expect(s.json()).toContain('Five pages with Jot');
+    expect(s.json()).toContain('Five short pages');
   });
 
   it('its page offers the run button, and running it writes 0 and closes the sheet', async () => {

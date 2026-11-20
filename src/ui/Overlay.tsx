@@ -9,10 +9,14 @@ import { PAPER, hexA } from '../tokens/theme';
 import { act, dismissToast, useStore } from '../store/store';
 import { useKeyboardUp } from './keyboard';
 import { CourseSheet, MarkSheet, MeetingSheet, NoticeSheet, StatusSheet, TaskSheet } from '../sheets/forms';
+import { NoticeBoard } from '../sheets/NoticeBoard';
+import { SubjectsPage } from '../sheets/SubjectsPage';
+import { PageStack, usePageMotion } from './FullPage';
 import { AddSheet } from '../sheets/AddSheet';
 import { SettingsSheet } from '../sheets/Settings';
 import { fx } from '../services/fx';
 import { FAB_GAP, TOAST_CLEAR, navHeight, navInset, toastBottom } from './fit';
+import { onFab } from './fabScroll';
 import { Face } from './mascot/Face';
 import { MOMENTS, SNACK, useFaceMoment, type SnackKind } from './mascot/moments';
 
@@ -39,10 +43,14 @@ function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
   /* The sheet opens on the down frame, like every other control — a sheet that waits for the lift is
      a sheet that waits for the user's own hold time. */
   const [actIn, actLift] = usePressIn(onPress);
+  const gone = useSharedValue(0);
+  React.useEffect(() => onFab((a) => gone.set(reduce ? (a ? 1 : 0) : withTiming(a ? 1 : 0, { duration: a ? 160 : 220 }))), [gone, reduce]);
+  const away = useAnimatedStyle(() => ({ transform: [{ translateY: gone.get() * 140 }], opacity: 1 - gone.get() }));
   return (
+    <Animated.View style={[{ position: 'absolute', right: 18, bottom: navHeight(bottom) + FAB_GAP }, away]}>
     <Pressable testID="fab-add" accessibilityRole="button" accessibilityLabel="Add" onPress={actLift}
       onPressIn={() => { actIn(); s.set(reduce ? 1 : withTiming(0.94, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 200, dampingRatio: 0.7 }))}
-      style={{ position: 'absolute', right: 18, bottom: navHeight(bottom) + FAB_GAP }}>
+      >
       <Animated.View style={[{ width: 62, height: 62 }, face]}>
         {look === 'collage'
           /* a torn disc of denim paper (scripts/paper-art.mjs), its shadow and white core baked in; the
@@ -53,6 +61,17 @@ function Fab({ bottom, onPress }: { bottom: number; onPress: () => void }) {
           : <HandBox seed="fab" fill={c.acc} stroke={c.ink} sw={2.2} amp={1.8} corners={{ h: [34, 30, 34, 30], v: [30, 34, 30, 34] }} style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={32} color={c.onAcc} sw={2.6} /></HandBox>}
       </Animated.View>
     </Pressable>
+    </Animated.View>
+  );
+}
+
+/** The Subjects pages: the slot drifts in and out as one page, and the list ↔ subject steps slide inside it. */
+function SubjectsSlot({ id }: { id?: string }) {
+  const motion = usePageMotion();
+  return (
+    <Animated.View entering={motion.entering} exiting={motion.exiting} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}>
+      <PageStack depth={id ? 1 : 0}><SubjectsPage key={id ?? 'list'} id={id} /></PageStack>
+    </Animated.View>
   );
 }
 
@@ -64,7 +83,7 @@ export function Overlay() {
      them before the first moving frame, and the overlay + FAB subtree came with it (audit M6). The
      selector returns a PRIMITIVE, so `useSyncExternalStore`'s `Object.is` comparison means a tap that
      does not change this boolean does not re-render the unit at all. */
-  const fabAllowed = useStore((s) => !s.sheet && s.route !== 'Focus');
+  const fabAllowed = useStore((s) => !s.sheet && !s.page && s.route !== 'Focus'), page = useStore((s) => s.page);
   /* The + button floats over the page and covers whatever card is under it. While the keyboard is up
      the visible strip is about half the screen and the button lands squarely on a task's text, and
      neither it nor the nav can be used without dismissing the keyboard first. */
@@ -89,12 +108,14 @@ export function Overlay() {
 
           `showFab` is the only gate, and it is untouched: it is about *when* the floating chrome must get
           out of the way (a sheet is open, the route is Focus, the keyboard is up — BUG-028). */}
+      {/* v0.8: a full page (Subjects, Notice board) sits over the book and under any sheet it opens */}
+      {page ? (page.t === 'notices' ? <NoticeBoard /> : <SubjectsSlot id={page.id} />) : null}
       {showFab && (<Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
       {sheet && (
         sheet.t === 'add' ? <AddSheet /> : sheet.t === 'task' ? <TaskSheet key={sheet.id ?? sheet.kind ?? 'new'} id={sheet.id} kind={sheet.kind} courseId={sheet.courseId} />
         : sheet.t === 'status' ? <StatusSheet key={sheet.key} spec={sheet} /> : sheet.t === 'settings' ? <SettingsSheet />
         : sheet.t === 'course' ? <CourseSheet key={sheet.id ?? 'new'} id={sheet.id} /> : sheet.t === 'meeting' ? <MeetingSheet key={sheet.id ?? 'new'} id={sheet.id} courseId={sheet.courseId} weekday={sheet.weekday} />
-        : sheet.t === 'mark' ? <MarkSheet key={sheet.id ?? 'new'} courseId={sheet.courseId} id={sheet.id} /> : <NoticeSheet key={sheet.id ?? 'new'} id={sheet.id} />)}
+        : sheet.t === 'mark' ? <MarkSheet key={sheet.id ?? 'new'} courseId={sheet.courseId} id={sheet.id} /> : <NoticeSheet key={sheet.id ?? 'new'} id={sheet.id} courseId={sheet.courseId} />)}
       {/* `toastBottom` is TOAST_CLEAR dp above the nav bar's top edge, which is exactly the 90 dp the old flat
           `Math.max(ins.bottom, 8) + 90` produced — same pixels, now derived from the shared nav metrics. */}
       {toast && (

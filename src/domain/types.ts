@@ -18,7 +18,10 @@ export type TaskKind = 'assignment' | 'exam' | 'reading' | 'project' | 'lab' | '
  *  subject owns a list and each meeting picks one (`Meeting.room`, defaulting to the first). The legacy
  *  string was split on `,` `/` `;` `·` when the column was added, so "LR-601, LR-303" became two chips.
  *  `bar` is the subject's own progress instrument; `null` means "use the default in Settings". */
-export interface Course { id: string; name: string; rooms: string[]; teacher: string; goal: number | null; sort: number; demo: boolean; bar?: string | null }
+export interface Course { id: string; name: string; rooms: string[]; teacher: string; goal: number | null; sort: number; demo: boolean; bar?: string | null;
+  /** v0.8 (migration 8): the subject's Obsidian tag (`#Database-Systems`; absent = its name with dashes), its own
+   *  colour (absent = from the palette by position) and archived (kept, out of the way). */
+  tag?: string | null; color?: string | null; archived?: boolean | null }
 /** A subject's alternate identity — the same course under another room/teacher, for a timetable that
  *  differs per group (v0.5/WS8). It is a separate table rather than fields on `Course` because a
  *  subject may have several, and a meeting points at exactly one by `variantId`.
@@ -54,8 +57,18 @@ export interface Task {
   origin?: Origin | null; extId?: string | null; extPath?: string | null;
   /** v0.7 To-do "My order" (R3): a sortable position; absent = never hand-ordered. */
   ord?: number | null;
+  /** v0.8 (migration 8, D6): tags on a task (`assignment`, `reading`, `project`, `lab`, `deadline`, `school`, or any
+   *  the owner types), without '#'. `kind` is derived from them for export and older imports. */
+  tags?: string[] | null;
+  /** `- [!]` in Obsidian. */
+  important?: boolean | null;
+  /** `- [-]` in Obsidian: done without being done (status 2, shown struck through). */
+  cancelled?: boolean | null;
 }
-export interface Notice { id: string; courseId: string | null; text: string; dueAt: number; priority: 0 | 1 | 2 | 3; demo: boolean; origin?: Origin | null; extId?: string | null }
+/** A notice (v0.8 §3.2, was "Note"): a pinned reminder for the future self. The date is optional (migration 8):
+ *  a dated one counts down and can remind (`remind` = minutes before; absent = no reminder). */
+export interface Notice { id: string; courseId: string | null; text: string; dueAt: number | null; priority: 0 | 1 | 2 | 3; demo: boolean; origin?: Origin | null; extId?: string | null;
+  pinned?: boolean | null; archived?: boolean | null; remind?: number | null }
 /** `variantId` (migration 5): a mark earned in one of the subject's variants (the lab, say). It still
  *  belongs to `courseId`, so the subject's average rolls every variant up; the id only splits the breakdown. */
 export interface Mark { id: string; courseId: string; name: string; score: number | null; weight: number; on: boolean; sort: number; demo: boolean; variantId?: string | null }
@@ -145,6 +158,8 @@ export interface Settings {
   /** One-off class moves from Week ("This week only", v0.7 R2, `domain/moves.ts`). Optional: an older row has none,
    *  and none is the answer. The weekly timetable stays in `meeting`; a move only says where one week's class went. */
   moves?: ClassMove[];
+  /** v0.8 §3.4: tags whose task lines in the vault come to Margin (default `#school`); a subject's own tag counts too. */
+  trackedTags?: string[];
   /** Which generation of the default look this settings row has been moved to (2 = the collage). Absent on
    *  a row written before the collage existed; `withDefaults` moves such a row over once. See there. */
   lookV?: number;

@@ -94,7 +94,7 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: () => {}, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f,
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => (cb ? { done: cb } : to),
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
-    FadeIn: layout, FadeOut: layout, FadeInDown: layout, FadeOutDown: layout,
+    FadeIn: layout, FadeOut: layout, FadeInDown: layout, FadeOutDown: layout, FadeInRight: layout, FadeOutRight: layout, FadeInLeft: layout, FadeOutLeft: layout,
   };
   /* `default` is the same object: `react-native-gesture-handler` reads `Reanimated.default.createAnimatedComponent`
      at import time, and a default that lacks it takes the whole suite down before a test runs. */
@@ -248,10 +248,10 @@ describe('a form that writes its row also dismisses itself', () => {
     expect(getState().sheet).toBeNull();
   });
 
-  it('the note form: Delete note', async () => {
+  it('the notice form: Delete notice', async () => {
     const s = await open({ t: 'notice', id: 'seed-note-1' });
     const before = getState().notices.length;
-    await s.press('Delete note');
+    await s.press('Delete notice');
     expect(getState().notices.length).toBe(before - 1);
     expect(getState().sheet).toBeNull();
   });

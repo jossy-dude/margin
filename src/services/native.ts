@@ -42,6 +42,16 @@ interface MarginNative {
   syncInbox(): string;
   syncObsidianCode(): string;
   syncNetworks(): string;
+  syncVaultUri(): string;
+  setLook(json: string): boolean;
+  scanQr(): Promise<string>;
+  widgetTicks(): string;
+  fontsEmbedded(): boolean;
+  syncEvents(): string;
+  vaultFiles(known: string, only: string): Promise<string>;
+  vaultRead(path: string): Promise<string>;
+  vaultEdit(path: string, expect: string, text: string): Promise<string>;
+  vaultChanges(): string;
   alarmRinging(): string;
   stopAlarm(): boolean;
   alarmTones(): string;
@@ -93,6 +103,8 @@ export const canFullScreen = () => safe((m) => m.canFullScreen(), false);
 /** Ring now, exactly as a real alarm would. */
 export const ringNow = (label: string) => safe((m) => m.ringNow(label), false);
 export const openAlarmSettings = (kind: 'exact' | 'fullscreen' | 'app') => safe((m) => m.openAlarmSettings(kind), false);
+/** Task ids ticked on the home-screen widget since the last call (v0.8 §4.3). */
+export const widgetTicks = (): string[] => parse<string[]>(safe<string | null>((m) => m.widgetTicks(), null)) ?? [];
 export const hasWidgets = () => safe((m) => m.hasWidgets(), false);
 export type WidgetKind = 'board';
 /** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
@@ -111,6 +123,11 @@ export interface SyncStatus {
   scanAt?: number; scanMs?: number; scanFiles?: number; pushedAt?: number; sending?: number;
   /** v0.7.1: a big delete stopped sync until the owner chooses (here, on the desktop, or in phone Obsidian) */
   hold?: SyncHold | null;
+  /** v0.8: the path in use ("Wi-Fi", "Phone hotspot", "Tailscale"), the desktop's address, what is happening now
+   *  and how far, changes still to come, and changes that could not land (with why). */
+  path?: string | null; addr?: string | null; lastPath?: string | null; lastAddr?: string | null; dialing?: boolean; head?: number;
+  stage?: string; stageDone?: number; stageOf?: number; pending?: number; skipped?: { p: string; seq: number; reason: string; at: number }[];
+  vaultName?: string | null;
   stats: { day: string; liveMs: number; connects: number; catchups: number; rx: number; tx: number; err: number; lastErr: string | null }[];
 }
 export type { SyncHold };
@@ -125,7 +142,7 @@ export const syncPushBridge = (rows: unknown) => safe((m) => m.syncPushBridge(JS
 export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify(op)), false);
 /** Send the phone vault's changes now; false on builds before 0.7.1. */
 /** Events from the sync service (Expo module events). Returns the unsubscribe; a no-op without the native half. */
-export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus', fn: (json: string) => void): () => void {
+export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus' | 'onVaultChanged', fn: (json: string) => void): () => void {
   const m = mod() as unknown as { addListener?: (n: string, f: (e: { json: string }) => void) => { remove(): void } } | null;
   if (!m?.addListener) return () => {};
   try { const sub = m.addListener(name, (e) => { try { fn(e.json); } catch { /* a bad frame must not break the app */ } }); return () => sub.remove(); } catch { return () => {}; }
@@ -138,6 +155,29 @@ export const syncHold = (op: 'apply' | 'cancel') => safe((m) => m.syncHold(op), 
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
 export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
 export const syncNetworks = () => safe<string | null>((m) => m.syncNetworks(), null);
+
+/* ── the look outside the app (v0.8): splash, widget and alarm page follow the skin ── */
+export const setLook = (look: Record<string, string>) => safe((m) => m.setLook(JSON.stringify(look)), false);
+/** The APK carries the font files (v0.8 §2.2): no runtime load. False in Expo Go and older builds. */
+export const fontsEmbedded = () => safe((m) => m.fontsEmbedded(), false);
+
+/* ── the vault, through Margin's one phone writer (v0.8 §1.5) ──────────────────────────────────────── */
+/** Kotlin owns the vault folder; '' when none (or no native half). */
+export const syncVaultUri = () => safe<string>((m) => m.syncVaultUri(), '') || null;
+export interface SyncEvent { at: number; kind: string; msg: string }
+/** Scan a QR code with Google's scanner: the text, '' when cancelled, or 'error:…'. */
+export async function scanQr(): Promise<string> { const m = mod(); if (!m) return 'error:This build cannot scan.'; try { return await m.scanQr(); } catch (e) { return `error:${String((e as Error)?.message ?? e)}`; } }
+export const syncEvents = (): SyncEvent[] => parse<SyncEvent[]>(safe<string | null>((m) => m.syncEvents(), null)) ?? [];
+export interface VaultFile { p: string; h: string; text?: string }
+/** Notes for the task parser; text only for those whose hash differs from `known`. Null without a native half. */
+export async function vaultFiles(known: Record<string, string>, only: string[] = []): Promise<{ files: VaultFile[]; gone: string[]; error?: string } | null> {
+  const m = mod(); if (!m) return null;
+  try { return JSON.parse(await m.vaultFiles(JSON.stringify(known), JSON.stringify(only))) as { files: VaultFile[]; gone: string[]; error?: string }; } catch { return null; }
+}
+export async function vaultRead(path: string): Promise<string | null> { const m = mod(); if (!m) return null; try { const t = await m.vaultRead(path); return t === '' ? null : t; } catch { return null; } }
+/** Compare-and-swap write: "ok:<h>" | "changed:<h>" | "deferred" | "error:<why>". */
+export async function vaultEdit(path: string, expect: string, text: string): Promise<string> { const m = mod(); if (!m) return 'error:no native half'; try { return await m.vaultEdit(path, expect, text); } catch (e) { return `error:${String((e as Error)?.message ?? e)}`; } }
+export const vaultChanges = (): string[] => parse<string[]>(safe<string | null>((m) => m.vaultChanges(), null)) ?? [];
 
 /** The alarm ringing now ('' = none) and a way to stop it from the app (test report #1). */
 export const alarmRinging = () => safe<string>((m) => m.alarmRinging(), '');

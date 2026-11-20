@@ -2392,7 +2392,88 @@ function applyPatch(base, patchText) {
   return text;
 }
 
-return { lines, merge3, makePatch, applyPatch };
+// ── v0.8: notes are merged without ever writing into them (SPEC §1.2, D2) ──────────────────────────────────────
+
+/** The body of a note without its frontmatter. */
+const bodyOf = (s) => s.replace(/^---\n[\s\S]*?\n---\n?/, '');
+/** A note with nothing typed in it yet: empty, or only frontmatter, headings, empty list items and template
+ *  placeholders (`{{date}}`). An untouched daily-note template loses to real text (incident 2026-11-19, S17). */
+function isUntouched(s) {
+  if (s == null) return true;
+  return bodyOf(s).split('\n').every((l) => {
+    const t = l.trim();
+    return t === '' || /^#{1,6}(\s|$)/.test(t) || /^([-*+]|\d+[.)])(\s+\[.\])?\s*$/.test(t) || /^\{\{[^}]*\}\}$/.test(t) || t === '---';
+  });
+}
+const realLines = (s) => (s ?? '').split('\n').filter((l) => l.trim() !== '').length;
+/** True when `next` would throw away most of `cur` (more than half its non-blank lines, on a note of 4+ lines).
+ *  Such a change is never applied by the sync: it goes to the conflicts note for the owner to decide. */
+function deletesMost(cur, next) {
+  const a = realLines(cur), b = realLines(next);
+  return a >= 4 && b < a / 2;
+}
+
+/**
+ * mergeNote(base, head, incoming) → { text, clean, conflicts: [{ head, incoming }] }
+ *   head     = the hub's current text (the desktop's text stays in place: owner's rule)
+ *   incoming = the other device's text, made from `base`
+ * Non-overlapping changes from both sides are kept. Where both changed the same lines (and a character-level retry
+ * does not settle it), the head's lines stay and the incoming lines are returned in `conflicts`, so the caller can
+ * file them in `Conflicts/`. Nothing is ever added to the note itself.
+ * base null = both sides made the file: a union (an untouched template loses to real text; else the head, then the
+ * incoming lines it does not already have).
+ * Deterministic: the same three inputs always give the same text, so a replayed put changes nothing.
+ */
+function mergeNote(base, head, incoming) {
+  if (head === incoming) return { text: head, clean: true, conflicts: [] };
+  if (base === null || base === undefined) {
+    if (isUntouched(incoming)) return { text: head, clean: true, conflicts: [] };
+    if (isUntouched(head)) return { text: incoming, clean: true, conflicts: [] };
+    const have = new Set(head.split('\n'));
+    const extra = incoming.split('\n').filter((l) => l.trim() !== '' && !have.has(l) && !/^---$/.test(l.trim()));
+    // frontmatter of the incoming copy is not appended: the head's frontmatter stays
+    const fm = /^---\n[\s\S]*?\n---\n?/.exec(incoming)?.[0] ?? '';
+    const fmLines = new Set(fm.split('\n'));
+    const add = extra.filter((l) => !fmLines.has(l));
+    if (!add.length) return { text: head, clean: true, conflicts: [] };
+    const sep = head.endsWith('\n') || head === '' ? '' : '\n';
+    return { text: `${head}${sep}${add.join('\n')}\n`, clean: true, conflicts: [] };
+  }
+  if (head === base) return { text: incoming, clean: true, conflicts: [] };
+  if (incoming === base) return { text: head, clean: true, conflicts: [] };
+  const conflicts = [];
+  const { out } = diff3(lines(base), lines(head), lines(incoming), (b, o, t) => {
+    const cb = b.join(''), co = o.join(''), ct = t.join('');
+    const c = diff3([...cb], [...co], [...ct], () => null);
+    if (c.clean) return { tokens: lines(c.out.join('')) ?? [] };
+    conflicts.push({ head: co, incoming: ct });
+    return { tokens: o, conflict: true };
+  }, true);
+  return { text: out.join(''), clean: conflicts.length === 0, conflicts };
+}
+
+/** The section a conflict adds to `Conflicts/YYYY-MM-DD.md`: a link back to the note and both versions, quoted as
+ *  plain text in fences so nothing in them renders as a task or a link. */
+function conflictEntry({ path, at = new Date(), who = 'phone', conflicts = [], whole = null }) {
+  const p2 = (n) => String(n).padStart(2, '0');
+  const fence = (s) => { const t = s.replace(/\n$/, ''); const f = t.includes('```') ? '~~~~' : '```'; return `${f}text\n${t}\n${f}`; };
+  const link = path.replace(/\.md$/i, '');
+  const out = [`## ${p2(at.getHours())}:${p2(at.getMinutes())} · [[${link}]]`, ''];
+  if (whole !== null) {
+    out.push(`The ${who}'s copy would have removed most of this note, so it was not applied. The note kept its text. The ${who}'s copy:`, '', fence(whole), '');
+  } else {
+    for (const c of conflicts) {
+      out.push('Kept in the note:', '', fence(c.head || '(nothing)'), '', `From the ${who}, not applied:`, '', fence(c.incoming || '(deleted)'), '');
+    }
+  }
+  return out.join('\n');
+}
+const conflictsPath = (at = new Date()) => {
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `Conflicts/${at.getFullYear()}-${p2(at.getMonth() + 1)}-${p2(at.getDate())}.md`;
+};
+
+return { lines, merge3, makePatch, applyPatch, isUntouched, deletesMost, mergeNote, conflictEntry, conflictsPath };
 })();
 var __json3 = (function () {
 // Port of tools/json3.py: three-way merge of a JSON value, key by key (SYNC_PROTOCOL §7).
@@ -2903,6 +2984,108 @@ function newerTimer(last, inc) {
 
 return { TIMER_OPS, DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS, timerLive, tickTimer, nextTimerEvent, timerLeft, applyTimer, newerTimer };
 })();
+var __classes = (function () {
+// File classes (v0.8 SPEC §1.2): what kind of file a path is decides who may write it and how a clash is settled.
+// One table for the hub and the phone; Margin's Kotlin port (FileClasses.kt) runs the same fixtures
+// (fixtures/classes.json).
+//
+//   note    *.md / *.canvas / *.base outside .obsidian/   both ways; diff3 against the true base, a clash goes to
+//                                                         Conflicts/YYYY-MM-DD.md, never into the note
+//   plugin  plugin code and assets, snippets, themes      desktop → phone only; never merged
+//   shared  plugin data on the allow-list, .obsidian/*.json both ways; json3 against the true base
+//   local   workspace, *.local.json, plugin data.json      never synced
+//           not on the allow-list, .obsidian/app.json
+//   single  a file with one writer (Margin's generated     the writer's version wins; never merged
+//           notes, *.phone.json, *.desktop.json)
+//   file    everything else (attachments, PDFs, csv…)     both ways; a clash keeps both (a dated copy)
+//
+// A vault can extend the table with `.bone-sync-classes` at its root: one rule per line, `<class> <glob>`
+// (class = note | plugin | shared | local | single:phone | single:desktop | file), later lines win, # comments.
+
+const CLASSES = ['note', 'plugin', 'shared', 'local', 'single', 'file'];
+
+/** Plugin data that holds real, shared data (games, history, libraries). Any other plugin data.json is per device. */
+const SHARED_PLUGIN_DATA = [
+  'bone-calendar/data.json', 'bone-cards/data.json', 'bone-chess/data.json', 'bone-chess/studies.json',
+  'bone-emoji/data.json', 'bone-fix/data.json', 'bone-fix/fixes.json', 'bone-media/data.json', 'bone-notes/data.json',
+  'bone-tasks/data.json', 'bone-type/data.json', 'bone-yt/data.json', 'bone-yt/history.json', 'bone-home/read.json',
+  'obsidian-excalidraw-plugin/data.json', 'obsidian-style-settings/data.json',
+];
+
+/** Margin writes these; nobody else may. */
+const MARGIN_FILES = ['.margin/margin.json', 'Margin/Timetable.md', 'Margin/Subjects.md', 'Margin/Notices.md'];
+
+const DEFAULT_CLASSES = `# bone-sync file classes (v0.8): <class> <glob>; later lines win
+local .obsidian/workspace*.json
+local .obsidian/app.json
+local **/*.local.json
+local .margin/obsidian.json
+local .obsidian/plugins/*/data.json
+${SHARED_PLUGIN_DATA.map((p) => `shared .obsidian/plugins/${p}`).join('\n')}
+single:phone **/*.phone.json
+single:desktop **/*.desktop.json
+${MARGIN_FILES.map((p) => `single:phone ${p}`).join('\n')}
+`;
+
+function globToRe(g) {
+  let re = '';
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === '*') {
+      if (g[i + 1] === '*') { i++; if (g[i + 1] === '/') { i++; re += '(?:.*/)?'; } else re += '.*'; } else re += '[^/]*';
+    } else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`);
+}
+
+const NOTE_RE = /\.(md|canvas|base)$/i;
+const OBS = '.obsidian/';
+
+/** The built-in part of the table, before any rule from `.bone-sync-classes`. */
+function builtin(p) {
+  if (p.startsWith(OBS)) {
+    const rest = p.slice(OBS.length);
+    // plugin folders: code and assets go desktop → phone; data.json is decided by the rules (local unless shared)
+    if (rest.startsWith('plugins/')) return { cls: 'plugin' };
+    if (rest.startsWith('snippets/') || rest.startsWith('themes/')) return { cls: 'plugin' };
+    if (/^[^/]+\.json$/.test(rest)) return { cls: 'shared' };
+    return { cls: 'plugin' };
+  }
+  if (NOTE_RE.test(p)) return { cls: 'note' };
+  return { cls: 'file' };
+}
+
+/** compileClasses(extra) → classify(path) → { cls, writer? }. `extra` is the text of `.bone-sync-classes`. */
+function compileClasses(extra = '') {
+  const rules = [];
+  for (const raw of `${DEFAULT_CLASSES}\n${extra}`.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const m = /^(\S+)\s+(\S+)$/.exec(line);
+    if (!m) continue;
+    const [cls, writer] = m[1].split(':');
+    if (!CLASSES.includes(cls)) continue;
+    if (cls === 'single' && writer !== 'phone' && writer !== 'desktop') continue;
+    rules.push({ re: globToRe(m[2]), cls, writer: cls === 'single' ? writer : undefined });
+  }
+  return (p) => {
+    let hit = builtin(p);
+    for (const r of rules) if (r.re.test(p)) hit = r.writer ? { cls: r.cls, writer: r.writer } : { cls: r.cls };
+    return hit;
+  };
+}
+
+/** Who may send a change to a path of this class: 'desktop' (the hub's disk), 'phone' (Margin), or both. */
+function mayWrite(c, side /* 'desktop' | 'phone' */) {
+  if (c.cls === 'local') return false;
+  if (c.cls === 'plugin') return side === 'desktop';
+  if (c.cls === 'single') return c.writer === side;
+  return true;
+}
+
+return { CLASSES, SHARED_PLUGIN_DATA, MARGIN_FILES, DEFAULT_CLASSES, compileClasses, mayWrite };
+})();
 var __proto = (function () {
 // bone-sync/1 messages (SYNC_PROTOCOL §5). One JSON object per text frame. `frame()` fills the common fields;
 // `check()` rejects anything a peer must never act on (wrong version, wrong vault, missing fields).
@@ -2933,6 +3116,10 @@ const REQ = {
   hold: ['op'],          // big-delete guard: held | apply | cancel | done (§9)
   restore: ['paths'],    // hub → client: push these files back, the hub lost them
   rekey: ['key'],        // Margin → phone Obsidian, on a sealed link: the strong key that replaces the 6-digit code
+  // v0.8: phone Obsidian no longer sends files (Margin is the only phone-side writer). It sends hints, and Margin
+  // tells it which file it rewrote so Obsidian re-reads it (SPEC §1.1).
+  hint: ['op', 'p'],     // phone Obsidian → Margin: editing | saved | open | closed
+  changed: ['p'],        // Margin → phone Obsidian (or the hub → desktop Obsidian): re-read this file; `plugin` = reload it
 };
 const TYPES = Object.keys(REQ);
 
@@ -2955,6 +3142,7 @@ function check(m, vault) {
   if (m.t === 'put') { const e = partError(m); if (e) return e; }
   if ((m.t === 'want' || m.t === 'restore') && (!Array.isArray(m.paths) || !m.paths.every(safePath))) return 'bad-path';
   if (m.t === 'hold' && !['held', 'apply', 'cancel', 'done'].includes(m.op)) return 'bad-hold-op';
+  if (m.t === 'hint' && (!['editing', 'saved', 'open', 'closed'].includes(m.op) || !safePath(m.p))) return 'bad-hint';
   if (m.t === 'mv' && (!safePath(m.from) || !safePath(m.to))) return 'bad-path';
   return null;
 }
@@ -2989,7 +3177,7 @@ var __client = (function () {
 const { V, frame } = __proto;
 const { proofOf, sameHex, sessionKeys, sealer, newNonce, unhex, SEAL_VERSION } = __seal;
 function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, role, app = '0.7.0', key /* hex */, vault, hubId = null,
-  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {} }) {
+  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {}, pingMs = 20_000 }) {
   const ws = new WebSocketImpl(url);
   const st = { ws, ready: false, sealOut: null, sealIn: null, offset: 0, hubId, mode: null, closed: false };
   let nonce = null, q = Promise.resolve(), out = Promise.resolve();
@@ -3001,7 +3189,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
     return out;
   };
   st.frame = (t, fields) => frame(t, fields, ids);
-  st.close = () => { st.closed = true; try { ws.close(); } catch { /* */ } };
+  st.close = () => { st.closed = true; clearInterval(st.beat); clearTimeout(st.pongWait); try { ws.close(); } catch { /* */ } };
   st.ping = () => { st.pingAt = Date.now(); return st.send(frame('ping', {}, ids)); };
 
   const handle = async (data) => {
@@ -3030,6 +3218,16 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
         st.hubId = m.hub; st.mode = m.mode; st.resume = m.resume === true; st.offset = m.serverTime - Date.now(); st.head = m.head;
         const k = await sessionKeys(unhex(key), st.serverNonce, nonce); st.sealOut = sealer(k.c2h); st.sealIn = sealer(k.h2c);
         st.ready = true; onState('ready', st);
+        // liveness (v0.8 §1.4): a ping every 20 s; no answer within 10 s and the link is dead (a half-open socket
+        // after sleep or a network switch looks alive forever otherwise). The hub drops a link silent for 60 s.
+        st.beat = setInterval(() => {
+          if (st.closed) { clearInterval(st.beat); return; }
+          st.ping();
+          clearTimeout(st.pongWait);
+          st.pongWait = setTimeout(() => { log('no pong in 10 s; closing'); st.close(); }, 10_000);
+          st.pongWait.unref?.();
+        }, pingMs);
+        st.beat.unref?.();
         return;
       }
       // unproven: anyone can say "bad-proof", so the app must not give up pairing on it (it is told `preauth`)
@@ -3038,18 +3236,18 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
       return;
     }
     if (m.t === 'challenge' || m.t === 'welcome') return;
-    if (m.t === 'pong') { if (st.pingAt) { const rtt = Date.now() - st.pingAt; st.offset = m.serverTime + rtt / 2 - Date.now(); st.rtt = rtt; } }
+    if (m.t === 'pong') { clearTimeout(st.pongWait); if (st.pingAt) { const rtt = Date.now() - st.pingAt; st.offset = m.serverTime + rtt / 2 - Date.now(); st.rtt = rtt; } }
     if (m.t === 'bye') log(`bye: ${m.reason}`);
     onFrame(m, st);
   };
   ws.onmessage = (e) => { q = q.then(() => handle(e.data)).catch((err) => log(`frame: ${err.message}`)); };
   ws.onopen = () => onState('open', st);
-  ws.onclose = () => { st.ready = false; onState('closed', st); };
+  ws.onclose = () => { st.ready = false; clearInterval(st.beat); clearTimeout(st.pongWait); onState('closed', st); };
   ws.onerror = () => onState('error', st);
   return st;
 }
 
 return { connect };
 })();
-return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, parseLenient: __json3.parseLenient, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, TIMER_OPS: __timer.TIMER_OPS, DEFAULT_FOCUS_MS: __timer.DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS: __timer.DEFAULT_BREAK_MS, timerLive: __timer.timerLive, tickTimer: __timer.tickTimer, nextTimerEvent: __timer.nextTimerEvent, timerLeft: __timer.timerLeft, applyTimer: __timer.applyTimer, newerTimer: __timer.newerTimer, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
+return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, isUntouched: __merge.isUntouched, deletesMost: __merge.deletesMost, mergeNote: __merge.mergeNote, conflictEntry: __merge.conflictEntry, conflictsPath: __merge.conflictsPath, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, parseLenient: __json3.parseLenient, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, TIMER_OPS: __timer.TIMER_OPS, DEFAULT_FOCUS_MS: __timer.DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS: __timer.DEFAULT_BREAK_MS, timerLive: __timer.timerLive, tickTimer: __timer.tickTimer, nextTimerEvent: __timer.nextTimerEvent, timerLeft: __timer.timerLeft, applyTimer: __timer.applyTimer, newerTimer: __timer.newerTimer, CLASSES: __classes.CLASSES, SHARED_PLUGIN_DATA: __classes.SHARED_PLUGIN_DATA, MARGIN_FILES: __classes.MARGIN_FILES, DEFAULT_CLASSES: __classes.DEFAULT_CLASSES, compileClasses: __classes.compileClasses, mayWrite: __classes.mayWrite, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
 })();

@@ -50,7 +50,7 @@ jest.mock('react-native-reanimated', () => {
     withTiming: (to: number, _c?: unknown, cb?: (d: boolean) => void) => { cb?.(true); return to; },
     withSequence: (...a: number[]) => a[a.length - 1] ?? 0, withRepeat: (v: number) => v, withSpring: (to: number) => to, withDelay: (_d: number, v: number) => v,
     /* Layout-animation builders are called as `FadeOut.duration(n)` in production. */
-    FadeIn: { duration: () => ({}) }, FadeOut: { duration: () => ({}) }, FadeInDown: { duration: () => ({}) }, FadeOutDown: { duration: () => ({}) },
+    ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeOutDown', 'FadeInRight', 'FadeOutRight', 'FadeInLeft', 'FadeOutLeft'].map((k) => { const b: Record<string, () => unknown> = {}; b.duration = b.easing = b.delay = () => b; return [k, b]; })),
   };
   return { ...api, default: api };
 });
@@ -92,12 +92,12 @@ describe('one face per page', () => {
     expect(topFace(r)).toHaveLength(0);
     await act(async () => { r.unmount(); });
   });
-  it('a To-do with work due today: the top bar is excited at 28 dp, a button TalkBack reads as Jot', async () => {
+  it('a To-do with work due today: the top bar is excited at 28 dp, a button TalkBack reads as Margin (U8)', async () => {
     const r = await mount(React.createElement(TasksScreen), [task(1)]);
     expect(faces(r)).toEqual([{ name: 'excited', size: 28 }]);
     const b = topFace(r)[0]!;
     expect(b.props.accessibilityRole).toBe('button');
-    expect(String(b.props.accessibilityLabel)).toMatch(/^Jot, /);
+    expect(String(b.props.accessibilityLabel)).toMatch(/^Margin, /);
     await act(async () => { r.unmount(); });
   });
 });

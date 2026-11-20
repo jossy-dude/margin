@@ -11,15 +11,15 @@ const o = (p: string, k: Kind = 'text', c?: string): Field => ({ ...f(p, k, true
 export const SPECS: Record<EntityName, Spec> = {
   /* Migration 5: `rooms` (a JSON list) replaces the bound `room` string, which stays in the table
      unbound — an old migration is never edited, and the backfill below copied it into `rooms` first. */
-  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('rooms', 'json'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool'), f('bar', 'text', true)] },
+  course: { table: 'course', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('name', 'text'), f('rooms', 'json'), f('teacher', 'text'), f('goal', 'real', true), f('sort', 'int'), f('demo', 'bool'), f('bar', 'text', true), o('tag'), o('color'), o('archived', 'bool')] },
   meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id'), f('room', 'text', true)] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
-  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath'), o('ord', 'real')] },
+  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath'), o('ord', 'real'), o('tags', 'json'), o('important', 'bool'), o('cancelled', 'bool')] },
   /* No `read` field: the flag was written and never read anywhere, so the object, the export column
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
-  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int'), f('priority', 'int'), f('demo', 'bool'), o('origin'), o('extId')] },
+  notice: { table: 'notice', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text', true), f('text', 'text', false, 'body'), f('dueAt', 'int', true), f('priority', 'int'), f('demo', 'bool'), o('origin'), o('extId'), o('pinned', 'bool'), o('archived', 'bool'), o('remind', 'int')] },
   mark: { table: 'mark', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('name', 'text'), f('score', 'real', true), f('weight', 'real'), f('on', 'bool', false, 'on_'), f('sort', 'int'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id')] },
   adjust: { table: 'adjust', pk: 'course_id', pkProp: 'courseId', fields: [f('courseId', 'text'), f('adj', 'real')] },
   /* `mode`/`completed` are bound here from W3 on: migration 2 (W1) added the columns, and until the finish
@@ -151,6 +151,20 @@ export const MIGRATIONS: string[] = [
    CREATE INDEX IF NOT EXISTS idx_override_meeting ON meeting_override(meeting_id, date);
    CREATE INDEX IF NOT EXISTS idx_meeting_variant ON meeting(variant_id);
    CREATE INDEX IF NOT EXISTS idx_mark_variant ON mark(variant_id);`,
+  /* Migration 8 (v0.8 SPEC §1.5, §3.1–3.3). Tasks get tags (kinds become tags, D6) and the two Obsidian states
+     Margin had no word for; notices get pinned / archived / a reminder and an optional date; subjects get their
+     Obsidian tag, a colour and an archive flag. `BACKFILL[7]` fills tags from kind, turns exam tasks into dated
+     notices, and merges tasks that share a block id (S7, the doubled "Do exerise the rest"). */
+  `ALTER TABLE task ADD COLUMN tags TEXT;
+   ALTER TABLE task ADD COLUMN important INTEGER;
+   ALTER TABLE task ADD COLUMN cancelled INTEGER;
+   ALTER TABLE notice ADD COLUMN pinned INTEGER;
+   ALTER TABLE notice ADD COLUMN archived INTEGER;
+   ALTER TABLE notice ADD COLUMN remind INTEGER;
+   ALTER TABLE course ADD COLUMN tag TEXT;
+   ALTER TABLE course ADD COLUMN color TEXT;
+   ALTER TABLE course ADD COLUMN archived INTEGER;
+   CREATE INDEX IF NOT EXISTS idx_task_path ON task(ext_path);`,
 ];
 
 /** Old letter → v0.6 state + why (the same table `domain/attendance.ts` `legacyStatus` reads). */
@@ -192,4 +206,33 @@ export const BACKFILL: Partial<Record<number, (db: BackfillDb) => Promise<void>>
     }
     await db.runAsync(`UPDATE subject_variants SET kind = CASE WHEN lower(name) LIKE '%lab%' THEN 'lab' WHEN lower(name) LIKE '%tut%' THEN 'tutorial' ELSE 'other' END WHERE kind IS NULL AND is_base = 0`, []);
   },
+  7: backfill8,
 };
+
+/** Migration 8's data step. Nothing is dropped: an exam task becomes a notice with its date (and a reminder a day
+ *  before), soft-deleting the task; a duplicate keeps the richer row (Margin's own) with the note's place. */
+export async function backfill8(db: BackfillDb): Promise<void> {
+  const now = Date.now();
+  // every task Margin had went to Obsidian before v0.8, so each keeps the school tag (the owner can switch it off)
+  await db.runAsync(`UPDATE task SET tags = CASE WHEN kind IN ('assignment','reading','project','lab','deadline') THEN '["' || kind || '","school"]' ELSE '["school"]' END WHERE tags IS NULL`, []);
+  const exams = await db.getAllAsync<{ id: string; title: string; course_id: string | null; due_at: number | null; priority: number | null; demo: number | null }>(
+    "SELECT id, title, course_id, due_at, priority, demo FROM task WHERE kind='exam' AND deleted_at IS NULL");
+  for (const e of exams) {
+    await db.runAsync('INSERT OR IGNORE INTO notice(id, course_id, body, due_at, priority, demo, pinned, remind, updated_at, rev) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      [`ex-${e.id}`, e.course_id, e.title, e.due_at, e.priority ?? 0, e.demo ?? 0, 1, e.due_at ? 1440 : null, now, 1]);
+    await db.runAsync('UPDATE task SET deleted_at=?, updated_at=?, rev=COALESCE(rev,0)+1 WHERE id=?', [now, now, e.id]);
+  }
+  // one task per block id: Margin's own row (origin NULL) wins over the copy that came back from Obsidian
+  const rows = await db.getAllAsync<{ id: string; origin: string | null; ext_id: string | null; ext_path: string | null; updated_at: number | null }>(
+    'SELECT id, origin, ext_id, ext_path, updated_at FROM task WHERE deleted_at IS NULL');
+  const key = (r: { id: string; origin: string | null; ext_id: string | null }) => (r.ext_id ?? (r.origin === 'obsidian' ? null : r.id.replace(/[^\w-]/g, '-')));
+  const groups = new Map<string, typeof rows>();
+  for (const r of rows) { const k = key(r); if (k) groups.set(k, [...(groups.get(k) ?? []), r]); }
+  for (const [k, g] of groups) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => (a.origin === 'obsidian' ? 1 : 0) - (b.origin === 'obsidian' ? 1 : 0) || (b.updated_at ?? 0) - (a.updated_at ?? 0));
+    const keep = g[0]!, path = g.find((x) => x.ext_path)?.ext_path ?? null;
+    await db.runAsync('UPDATE task SET ext_id=?, ext_path=COALESCE(ext_path, ?), updated_at=?, rev=COALESCE(rev,0)+1 WHERE id=?', [k, path, now, keep.id]);
+    for (const d of g.slice(1)) await db.runAsync('UPDATE task SET deleted_at=?, updated_at=?, rev=COALESCE(rev,0)+1 WHERE id=?', [now, now, d.id]);
+  }
+}

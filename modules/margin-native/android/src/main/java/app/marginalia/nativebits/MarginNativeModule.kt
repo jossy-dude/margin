@@ -8,8 +8,16 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
-import expo.modules.kotlin.modules.ModuleDefinition
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.modules.Module
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanningDefinition
 
 /**
  * Margin's own Android bits. Everything here is a thin, total wrapper over a platform API: no call throws
@@ -24,31 +32,54 @@ class MarginNativeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("MarginNative")
-    Events("onSyncStatus", "onBridgeRows", "onSyncTimer")
+    Events("onSyncStatus", "onBridgeRows", "onSyncTimer", "onVaultChanged")
 
     OnCreate {
       SyncEngine.init(context)
       SyncEngine.onStatus = { sendEvent("onSyncStatus", mapOf("json" to it.toString())) }
       SyncEngine.onBridgeRows = { sendEvent("onBridgeRows", mapOf("json" to it)) }
       SyncEngine.onTimer = { sendEvent("onSyncTimer", mapOf("json" to it)) }
+      SyncEngine.onVaultChanged = { sendEvent("onVaultChanged", mapOf("json" to it)) }
     }
-    OnDestroy { SyncEngine.onStatus = null; SyncEngine.onBridgeRows = null; SyncEngine.onTimer = null }
+    OnDestroy { SyncEngine.onStatus = null; SyncEngine.onBridgeRows = null; SyncEngine.onTimer = null; SyncEngine.onVaultChanged = null }
 
     /* ── sync with the desktop (v0.7, SYNC_ANDROID.md) ──────────────────────────────────────────── */
     /** Pairing text from the hub's QR (or "8 words|vaultId|hubId|addr"). Returns "" on success, else a sentence. */
     Function("syncPair") { text: String -> SyncEngine.init(context); val err = SyncEngine.pair(text); if (err == null) SyncService.ensure(context); err ?: "" }
     Function("syncForget") { SyncEngine.forget(); SyncService.stop(context); true }
-    /** The vault folder (SAF tree URI) and its Obsidian name, from settings. */
-    Function("syncConfigure") { vaultUri: String, vaultName: String -> SyncEngine.init(context); SyncEngine.configure(vaultUri.ifEmpty { null }, vaultName.ifEmpty { null }); true }
+    /** v0.8 (S9): Kotlin owns the vault folder. JS sets it only when the owner picks one; an empty value is ignored,
+     *  so a start-up before settings load can never erase it. */
+    Function("syncConfigure") { vaultUri: String, vaultName: String -> SyncEngine.init(context); if (vaultUri.isNotEmpty()) SyncEngine.setVault(vaultUri, vaultName.ifEmpty { null }); true }
+    /** v0.8 §4.2: scan the desktop's pairing QR. "" = cancelled, "error:…" = the scanner is not available. */
+    AsyncFunction("scanQr") { promise: Promise ->
+      val activity = appContext.currentActivity
+      if (activity == null) { promise.resolve("error:no screen"); return@AsyncFunction }
+      try {
+        val opts = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(activity, opts).startScan()
+          .addOnSuccessListener { promise.resolve(it.rawValue ?: "") }
+          .addOnCanceledListener { promise.resolve("") }
+          .addOnFailureListener { promise.resolve("error:${it.message ?: "scanner failed"}") }
+      } catch (e: Exception) { promise.resolve("error:${e.message ?: "scanner failed"}") }
+    }
+    Function("syncVaultUri") { SyncEngine.init(context); SyncEngine.vaultUri() ?: "" }
+    /** The last 200 sync events, newest first (the sync page's log). */
+    Function("syncEvents") { SyncEngine.init(context); SyncEngine.store.eventsJson() }
+
+    /* ── the vault for Margin's own data (v0.8 §1.5): task lines and generated notes, through the one writer ── */
+    AsyncFunction("vaultFiles") { known: String, only: String -> SyncEngine.init(context); SyncLocal.vaultFiles(known, only) }
+    AsyncFunction("vaultRead") { path: String -> SyncEngine.init(context); SyncLocal.vaultRead(path) ?: "" }
+    AsyncFunction("vaultEdit") { path: String, expect: String, text: String -> SyncEngine.init(context); try { SyncLocal.vaultEdit(path, expect, text) } catch (e: Exception) { "error:${e.message ?: "failed"}" } }
+    Function("vaultChanges") { SyncEngine.init(context); SyncLocal.vaultChanges() }
     Function("syncStart") { SyncService.ensure(context); SyncEngine.paired }
     Function("syncStatus") { SyncEngine.init(context); SyncEngine.statusJson().toString() }
-    /** Margin's own bridge rows (tasks, events, sessions) as JSON; JS debounces (750 ms). */
-    Function("syncPushBridge") { json: String -> SyncEngine.pushBridge(json); true }
+    /** Retired in v0.8 (D4): task lines travel in the notes. Kept so an older JS bundle does not fail. */
+    Function("syncPushBridge") { _: String -> true }
     Function("syncTimer") { json: String -> SyncEngine.timer(json); true }
     /** Send the phone's changes now (and connect first if needed); v0.7.1. */
-    Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncEngine.scanNow(); true }
+    Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncFiles.scanNow(); true }
     Function("syncClearErrors") { SyncEngine.init(context); SyncEngine.clearErrors(); true }
-    Function("syncHold") { op: String -> SyncEngine.init(context); SyncEngine.answerHold(if (op == "apply") "apply" else "cancel"); true }
+    Function("syncHold") { op: String -> SyncEngine.init(context); SyncFiles.answerHold(if (op == "apply") "apply" else "cancel"); true }
     /** Rows that arrived while JS was not running: [{kind, json}], removed once read. */
     Function("syncInbox") {
       SyncEngine.init(context)
@@ -57,10 +88,21 @@ class MarginNativeModule : Module() {
       arr.toString()
     }
     /** A fresh 6-digit code for phone Obsidian (margin-bridge asks for it once). */
-    Function("syncObsidianCode") { SyncEngine.init(context); SyncEngine.obsidianCode() }
+    Function("syncObsidianCode") { SyncEngine.init(context); SyncLocal.obsidianCode() }
     Function("syncNetworks") { SyncNet.describe() }
 
     Function("sdkInt") { Build.VERSION.SDK_INT }
+
+    /* ── the look outside the app (v0.8 §2.2, §4.3, §4.4): the splash, the widget and the alarm page wear the skin ── */
+    /** `json`: {mode: light|dark|auto, paperLight, paperDark, …tokens}. Read synchronously at the next launch. */
+    Function("setLook") { json: String ->
+      val o = org.json.JSONObject(json)
+      val e = context.getSharedPreferences("margin_look", Context.MODE_PRIVATE).edit()
+      val keys = o.keys(); while (keys.hasNext()) { val k = keys.next(); e.putString(k, o.optString(k)) }
+      e.apply(); Surfaces.refresh(context); true
+    }
+    /** True when the APK carries the fonts (assets/fonts), so JS need not load them at start-up. */
+    Function("fontsEmbedded") { try { (context.assets.list("fonts") ?: emptyArray()).any { it.startsWith("Caveat_500Medium") } } catch (e: Exception) { false } }
 
     /* ── the pinned live countdown ─────────────────────────────────────────────────────────────── */
     Function("canPromote") { Live.canPromote(context) }
@@ -111,6 +153,8 @@ class MarginNativeModule : Module() {
       }
       try { context.startActivity(Intent(action, Uri.parse("package:" + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
     }
+    /** Tasks ticked on the widget since JS last asked (v0.8 §4.3), as a JSON array of task ids; each is returned once. */
+    Function("widgetTicks") { org.json.JSONArray(WidgetTicks.take(context).toList()).toString() }
     /** Is at least one Margin widget on a home screen? */
     Function("hasWidgets") { Widgets.any(context) }
     /** Asks the launcher to add a widget ("next", "today" or "tasks"). False when this launcher cannot. */

@@ -13,7 +13,7 @@ import { hasParts, kindsIn, partDraftsOf, planParts, roomsForParts, type PartDra
 import { NOTE_LEVEL, noteDate } from '../ui/collage/notes';
 import { act, getState, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE, WHY, WHY_LABEL } from '../domain/attendance';
-import { DW, fmtDur, fmtWhen, fromMin, hm, uid, startOfDay } from '../domain/time';
+import { DW, fmtDur, fmtWhen, fromMin, hm, uid } from '../domain/time';
 import { workload } from '../domain/reminders';
 import type { AttStatus, AttWhy, Course, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
 import { fx } from '../services/fx';
@@ -22,7 +22,10 @@ import { STATUS_GLYPH, statusColor } from '../screens/common';
 import { attNews, markNews } from '../screens/faceNews';
 import { faceEvent } from '../ui/mascot/moments';
 
-const KINDS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'exam', l: 'Exam', i: 'exam' }, { k: 'deadline', l: 'Deadline', i: 'timer' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'other', l: 'Other', i: 'pencil' }];
+/* v0.8 §3.1 (D6): what kind of task it is, as tags. The kind (for export and older imports) is the first kind tag. */
+const TAGS: { k: TaskKind; l: string; i: string }[] = [{ k: 'assignment', l: 'Assignment', i: 'tasks' }, { k: 'reading', l: 'Reading', i: 'book' }, { k: 'project', l: 'Project', i: 'flag' }, { k: 'lab', l: 'Lab', i: 'lab' }, { k: 'deadline', l: 'Deadline', i: 'timer' }];
+const kindOfTags = (tags: readonly string[]): TaskKind => (TAGS.find((x) => tags.includes(x.k))?.k ?? 'other');
+const schoolTag = (tracked: readonly string[] | undefined) => (tracked?.[0] ?? '#school').replace(/^#/, '');
 const PRI = ['None', 'Low', 'Medium', 'High'];
 
 /**
@@ -76,15 +79,22 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
   const tasks = useStore((s) => s.tasks), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), nset = useStore((s) => s.settings.notif), hour12 = useStore((s) => s.settings.hour12);
   const st = { tasks, meetings, attendance, dayMarks };
   const existing = id ? st.tasks.find((t) => t.id === id) : undefined, [now] = useState(() => Date.now());
-  const [title, setTitle] = useState(existing?.title ?? ''), [k, setK] = useState<TaskKind>(existing?.kind ?? kind ?? 'assignment'), [cid, setCid] = useState<string | null>(existing ? existing.courseId : courseId ?? null);
+  const tracked = useStore((s) => s.settings.trackedTags), school = schoolTag(tracked);
+  /* a new task is a school task (it goes to Obsidian) unless the chip is switched off; a kind asked for by a caller
+     (an old link, the widget) becomes its tag */
+  const [tags, setTags] = useState<string[]>(() => existing?.tags ?? (existing ? [] : [...(kind && kind !== 'other' && kind !== 'exam' ? [kind] : []), school]));
+  const [tagIn, setTagIn] = useState('');
+  const k = kindOfTags(tags);
+  const flip = (t: string) => setTags((x) => (x.includes(t) ? x.filter((y) => y !== t) : [...x, t]));
+  const [title, setTitle] = useState(existing?.title ?? ''), [cid, setCid] = useState<string | null>(existing ? existing.courseId : courseId ?? null);
   const [due, setDue] = useState<number | null>(existing ? existing.dueAt : null), [start, setStart] = useState<number | null>(existing?.startAt ?? null), [est, setEst] = useState(existing?.estimateMin ?? 0), [pri, setPri] = useState<number>(existing?.priority ?? 0);
   const [notes, setNotes] = useState(existing?.notes ?? ''), [subs, setSubs] = useState(existing?.subtasks ?? []), [ns, setNs] = useState(''), [showStart, setShowStart] = useState(!!existing?.startAt), [custom, setCustom] = useState(60), [addAt, setAddAt] = useState(false), [atV, setAtV] = useState<number | null>(null);
   const [rem, setRem] = useState<ReminderSpec[]>(existing?.reminders ?? nset.defaultTaskMinutes.map((m) => ({ id: uid('r'), mode: 'before' as const, minutes: m, label: m ? `${fmtDur(m)} before` : 'At due time' })));
-  const { closeRef, close } = useSheetClose(), { c } = useTheme(), [saveId] = useState(() => existing?.id ?? uid('t')), [submit] = useState(latch);
+  const { closeRef, close } = useSheetClose(), [saveId] = useState(() => existing?.id ?? uid('t')), [submit] = useState(latch);
   /* "You touched it, it's yours": every form save writes `demo: false`, so a sample row the user edits
      stops being sample data and survives "Remove all sample data" — the flag is preserved by nothing
      except `seed.ts`. The same literal governs the four forms at the bottom of this file. */
-  const draft: Task = { id: existing?.id ?? 'draft', title, courseId: cid, kind: k, dueAt: due, startAt: start, estimateMin: est || null, priority: pri as Task['priority'], notes, status: existing?.status ?? 0, createdAt: existing?.createdAt ?? now, completedAt: existing?.completedAt ?? null, reminders: rem, subtasks: subs, demo: false };
+  const draft: Task = { id: existing?.id ?? 'draft', title, courseId: cid, kind: existing?.kind === 'exam' && !tags.some((t) => TAGS.some((x) => x.k === t)) ? 'exam' : k, tags, dueAt: due, startAt: start, estimateMin: est || null, priority: pri as Task['priority'], notes, status: existing?.status ?? 0, createdAt: existing?.createdAt ?? now, completedAt: existing?.completedAt ?? null, reminders: rem, subtasks: subs, demo: false };
   const w = useMemo(() => workload(draft, { now, meetings: st.meetings, attendance: st.attendance, dayMarks: st.dayMarks, settings: nset }), [due, est, start]); // eslint-disable-line react-hooks/exhaustive-deps
   const has = (m: number) => rem.some((r) => r.mode === 'before' && r.minutes === m), home = due ? nextHome(now, nset.homeAt) : null, hasHome = rem.some((r) => r.mode === 'abs' && r.label === 'When I get home');
   const toggleOff = (m: number) => setRem((r) => (has(m) ? r.filter((x) => !(x.mode === 'before' && x.minutes === m)) : [...r, { id: uid('r'), mode: 'before', minutes: m, label: m ? `${fmtDur(m)} before` : 'At due time' }]));
@@ -94,13 +104,21 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
    *  second, unrecoverable one. */
   const save = () => submit(() => {
     const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : [] };
-    act.saveTask(t); toast(existing ? 'Saved' : `${KINDS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`, undefined, 'success'); close();
+    act.saveTask(t); toast(existing ? 'Saved' : `${TAGS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`, undefined, 'success'); close();
   });
   return (
-    <Sheet title={existing ? 'Edit' : KINDS.find((x) => x.k === k)?.l ?? 'Task'} onClose={act.close} maxH={0.93} closeRef={closeRef}
+    <Sheet title={existing ? 'Edit task' : 'New task'} onClose={act.close} maxH={0.93} closeRef={closeRef}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => close(() => act.focusOpen(existing.id))} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
       <Field label="What is it?" placeholder="e.g. Problem set 6" value={title} onChangeText={setTitle} autoFocus={!existing} returnKeyType="done" />
-      <HStrip gap={8} bg={c.card}>{KINDS.map((x) => <Chip key={x.k} label={x.l} icon={x.i} on={k === x.k} onPress={() => setK(x.k)} />)}</HStrip>
+      {/* tags wrap onto a second line instead of running off the edge (U7) */}
+      <Label>Tags</Label>
+      <Row style={{ flexWrap: 'wrap' }}>
+        <Chip small label={`#${school}`} icon="note" on={tags.includes(school)} onPress={() => flip(school)} />
+        {TAGS.map((x) => <Chip small key={x.k} label={x.l} icon={x.i} on={tags.includes(x.k)} onPress={() => flip(x.k)} />)}
+        {tags.filter((t) => t !== school && !TAGS.some((x) => x.k === t)).map((t) => <Chip small key={t} label={`#${t}`} icon="x" on onPress={() => flip(t)} />)}
+      </Row>
+      <Field placeholder="Another tag" value={tagIn} onChangeText={setTagIn} autoCapitalize="none" returnKeyType="done"
+        onSubmitEditing={() => { const t = tagIn.trim().replace(/^#/, '').replace(/\s+/g, '-').toLocaleLowerCase(); if (t && !tags.includes(t)) setTags((x) => [...x, t]); setTagIn(''); }} />
       <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" h12={hour12} />
       {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (shows from then)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
@@ -260,20 +278,28 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
     </Sheet>
   );
 }
-export function NoticeSheet({ id }: { id?: string }) {
+/* ───── a notice (v0.8 §3.2, was "Note"): a pinned reminder for the future self ───── */
+const REMIND = [{ m: null, l: 'No reminder' }, { m: 0, l: 'On the day' }, { m: 1440, l: '1 day before' }, { m: 2880, l: '2 days before' }, { m: 10080, l: '1 week before' }] as const;
+export function NoticeSheet({ id, courseId }: { id?: string; courseId?: string | null }) {
   const n0 = useStore((s) => s.notices.find((x) => x.id === id)), { closeRef, close } = useSheetClose(), [saveId] = useState(() => n0?.id ?? uid('n')), [submit] = useState(latch);
-  const [text, setText] = useState(n0?.text ?? ''), [cid, setCid] = useState(n0?.courseId ?? null), [pri, setPri] = useState<number>(n0?.priority ?? 0);
-  /* A note can be FOR a day (a notice, as the name says). A note's stored date used to be the day it was
-     pinned, so only a date still ahead is treated as one the user set (`noteDate`). No date = today's midnight,
-     which never shows. */
+  const [text, setText] = useState(n0?.text ?? ''), [cid, setCid] = useState(n0?.courseId ?? courseId ?? null), [pri, setPri] = useState<number>(n0?.priority ?? 0);
+  /* The date is optional (migration 8). A notice from before v0.8 stored the day it was pinned; only a date still
+     ahead counts as one the owner set (`noteDate`). */
   const [now] = useState(() => Date.now()), [when, setWhen] = useState<number | null>(() => (n0 ? noteDate(n0, now) : null));
+  const [pinned, setPinned] = useState(n0?.pinned ?? true), [remind, setRemind] = useState<number | null>(n0?.remind ?? null);
   const homeAt = useStore((s) => s.settings.notif.homeAt), hour12 = useStore((s) => s.settings.hour12);
+  const save = () => submit(() => {
+    const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: when, priority: pri as Notice['priority'], demo: false, pinned, archived: n0?.archived ?? false, remind: when ? remind : null };
+    act.saveNotice(n); fx.tap(); close();
+  });
   return (
-    <Sheet title={n0 ? 'Edit note' : 'New note'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete note" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label="Pin it" icon="check" disabled={!text.trim()} onPress={() => submit(() => { const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: when ?? startOfDay(Date.now()), priority: pri as Notice['priority'], demo: false }; act.saveNotice(n); fx.tap(); close(); })} /></Row>}>
-      <Field label="Note" multiline value={text} onChangeText={setText} autoFocus={!n0} placeholder="What should you remember?" />
+    <Sheet title={n0 ? 'Edit notice' : 'New notice'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete notice" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label={pinned ? 'Pin it' : 'Save'} icon="check" disabled={!text.trim()} onPress={save} /></Row>}>
+      <Field label="Notice" multiline value={text} onChangeText={setText} autoFocus={!n0} placeholder="e.g. DB midterm, chapters 1–5" />
       <Label>About</Label><CourseChips value={cid} onChange={setCid} />
       <Label>How important?</Label><Row style={{ flexWrap: 'wrap' }}>{NOTE_LEVEL.map((p, i) => <Chip key={p.word} label={p.word} icon={p.icon} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
-      <Label>For when?</Label><WhenPicker value={when} onChange={setWhen} now={now} homeAt={homeAt} optional nonePlaceholder="No date" h12={hour12} />
+      <Label>Date (an exam, a deadline)</Label><WhenPicker value={when} onChange={setWhen} now={now} homeAt={homeAt} optional nonePlaceholder="No date" h12={hour12} />
+      {when ? <><Label>Remind me</Label><Row style={{ flexWrap: 'wrap' }}>{REMIND.map((r) => <Chip key={String(r.m)} small label={r.l} on={remind === r.m} onPress={() => setRemind(r.m)} />)}</Row></> : null}
+      <Chip small icon="flag" label={pinned ? 'Pinned on Today' : 'Not pinned'} on={pinned} onPress={() => setPinned(!pinned)} />
       <Hair />
     </Sheet>
   );

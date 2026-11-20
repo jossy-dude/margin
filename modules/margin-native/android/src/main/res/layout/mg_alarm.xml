@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- v0.8: full screen, edge to edge; AlarmActivity hides the system bars and adds the cut-out's inset itself -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/mg_al_root"
   android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
-  android:background="@color/mg_alarm_bg" android:paddingStart="28dp" android:paddingEnd="28dp" android:paddingTop="72dp" android:paddingBottom="44dp"
-  android:fitsSystemWindows="true">
+  android:background="@color/mg_alarm_bg" android:paddingStart="28dp" android:paddingEnd="28dp" android:paddingTop="56dp" android:paddingBottom="36dp">
   <TextView android:id="@+id/mg_al_date" android:layout_width="match_parent" android:layout_height="wrap_content"
     android:textColor="@color/mg_alarm_mut" android:textSize="17sp"/>
   <TextView android:id="@+id/mg_al_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp"
@@ -13,7 +13,7 @@
     android:textColor="@color/mg_alarm_mut" android:textSize="16sp" android:maxLines="3" android:ellipsize="end"/>
   <!-- the mascot (v0.7 U7): sleepy while it rings, happy for a moment after Dismiss (AlarmActivity) -->
   <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
-    <ImageView android:id="@+id/mg_al_face" android:layout_width="180dp" android:layout_height="96dp" android:layout_gravity="center"
+    <ImageView android:id="@+id/mg_al_face" android:layout_width="260dp" android:layout_height="140dp" android:layout_gravity="center"
       android:src="@drawable/mg_face_sleepy" android:tint="@color/mg_alarm_ink" android:importantForAccessibility="no"/>
   </FrameLayout>
   <TextView android:id="@+id/mg_al_snooze" android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center"

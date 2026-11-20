@@ -65,7 +65,10 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   const pager = useRef<Animated.ScrollView>(null), gone = useRef(false), touch = useRef({ x: 0, y: 0, t: 0 }), steerT = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* Where Scrap stands on each page: centre x, centre y, scale. */
-  const heroBottom = ins.top + 56 + Math.min(H * 0.27, 230), hero5 = ins.top + 56 + Math.min(H * 0.27, 230);
+  const heroBottom = ins.top + 56 + Math.min(H * 0.27, 230);
+  /* v0.8 U9 #14: page 5 carries the most (reminders, then the ready-made classes), so its hero is shorter and the
+     last card ends above the dots instead of under them on a 6.5" phone */
+  const hero5 = ins.top + 56 + Math.min(H * (PACKS.length ? 0.17 : 0.27), PACKS.length ? 140 : 230);
   const anchors = [
     { cx: W / 2, cy: heroBottom - 22 - (SZH * 1.05) / 2, s: 1.05 },
     { cx: W - 58, cy: ins.top + 96, s: 0.36 },
@@ -188,7 +191,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <Art name="leaf" w={44} rot={-24} style={{ position: 'absolute', left: 18, top: heroBottom - 150 }} />
           <Art name="leaf-sage" w={38} rot={14} style={{ position: 'absolute', left: 52, top: heroBottom - 134 }} />
         </>, <>
-          <Title>Hi, I&apos;m Jot.</Title>
+          <Title>Hi, I&apos;m Margin.</Title>
           <Kicker style={{ marginTop: 14 }}>Pick your style</Kicker>
           <StylePicker W={W} value={settings.palette === 'original' ? 'refined' : settings.palette} onChange={(p) => { void act.setSettings({ palette: p }); fx.select(); faceRef.current?.bounce(); }} />
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }} accessibilityRole="radiogroup" accessibilityLabel="Light or dark">

@@ -1,0 +1,9 @@
+{
+ "name": "both edit different lines",
+ "base": "a\nb\nc\n",
+ "head": "a desk\nb\nc\n",
+ "incoming": "a\nb\nc phone\n",
+ "expect": "a desk\nb\nc phone\n",
+ "clean": true,
+ "conflicts": 0
+}

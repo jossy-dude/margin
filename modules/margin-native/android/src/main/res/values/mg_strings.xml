@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="mg_widget_board_name">Margin</string>
-  <string name="mg_widget_board_desc">Next class, today\'s timetable and what is due.</string>
+  <string name="mg_widget_board_desc">The class on now or next, and what is due.</string>
   <string name="mg_add_task">Add a task</string>
   <string name="mg_alarm_dismiss">Dismiss</string>
 </resources>

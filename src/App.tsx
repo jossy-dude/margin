@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { startVault } from './store/vault';
-import { ActivityIndicator, StatusBar, View } from 'react-native';
+import { startObsidian } from './store/obsidian';
+import { startFocusLive } from './store/focusLive';
+import { Platform, StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
@@ -29,8 +30,8 @@ import { PaperBg } from './ui/PaperBg';
 import { Btn, HandBox, Icon, Tape, Txt } from './ui/kit';
 import { Overlay } from './ui/Overlay';
 import { createBookNavigator } from './navigation/Book';
-import { TodayPage } from './screens/today/TodayPage';
-import { WeekPage } from './screens/week/WeekPage';
+import { TodayScreen } from './screens/Today';
+import { WeekScreen } from './screens/Week';
 import { TasksScreen } from './screens/Tasks';
 import { GradesScreen } from './screens/Grades';
 import { StatsScreen } from './screens/Stats';
@@ -43,6 +44,7 @@ import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudioSoon } from './services/audio';
 import { mark, reportBoot } from './services/bootClock';
 import { RingingPill } from './ui/RingingPill';
+import { fontsEmbedded } from './services/native';
 
 const Book = createBookNavigator();
 
@@ -56,7 +58,7 @@ const guarded = (route: string, C: React.ComponentType) => {
   Page.displayName = `${route}Page`;
   return Page;
 };
-const TodayGuarded = guarded('Today', TodayPage), WeekGuarded = guarded('Week', WeekPage), TasksGuarded = guarded('Tasks', TasksScreen);
+const TodayGuarded = guarded('Today', TodayScreen), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
 const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('Stats', StatsScreen), FocusGuarded = guarded('Focus', FocusScreen);
 
 /** Exported only so `test/ota-loop` can draw the real shell and see the update sentence on screen. */
@@ -83,6 +85,9 @@ export function Shell() {
   ), []);
   return (
     <View style={{ flex: 1, backgroundColor: c.desk }}>
+      {/* v0.8 §2.1: the skin's background layer (paper, ruling, grain, or Daylight's sky) is drawn ONCE, behind the
+          navigator; pages are transparent over it, so a tab arrival no longer rebuilds a full-screen SVG */}
+      <PaperBg />
       <View style={{ flex: 1 }} importantForAccessibility={sheet ? 'no-hide-descendants' : 'auto'} accessibilityElementsHidden={!!sheet}>
         <NavigationContainer theme={navTheme}>
           {navTree}
@@ -210,10 +215,9 @@ function Gate() {
   );
 }
 
-const Splash = () => {
-  const { c } = useTheme();
-  return <View style={{ flex: 1, backgroundColor: c.paper }}><PaperBg /><View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={c.acc} size="large" /></View></View>;
-};
+/** v0.8 §2.2: nothing. Until Today is ready the native window shows (the logo on the paper of the skin used last,
+ *  MainActivity), so the start is one look, not five (white splash → blank → default paper → spinner → Today). */
+const Splash = () => <View style={{ flex: 1 }} testID="splash" />;
 
 /** Module scope so the map identity is stable: `useFonts` re-runs its effect on every render if handed a
  *  fresh object literal. Loading imperatively also lets a failure be reported and retried. */
@@ -227,18 +231,26 @@ const FONT_MAP = { Caveat_500Medium, Caveat_700Bold, Newsreader_400Regular_Itali
  *  `android/gradle.properties`) and StatusBar no longer takes `backgroundColor`: the strip under the status bar
  *  is this View's own paper, and only the icon tint is ours to set. */
 function Themed({ children }: { children: React.ReactNode }) {
-  const { c, dark } = useTheme();
-  return <View style={{ flex: 1, backgroundColor: c.paper }}><StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />{children}<RingingPill /></View>;
+  const { c, dark } = useTheme(), ready = useStore((s) => s.ready);
+  /* no paint before the planner is ready: the default skin's paper would flash over the native splash */
+  return <View style={{ flex: 1, backgroundColor: ready ? c.paper : 'transparent' }}><StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />{children}<RingingPill /></View>;
 }
 
 export default function App() {
-  /* The Obsidian link reads and writes its two files while the app is open; it does nothing until a vault is chosen. */
-  useEffect(() => startVault(), []);
-  const [fonts, setFonts] = useState(false), [fontError, setFontError] = useState<string | null>(null), [fontTry, setFontTry] = useState(0), [booted, setBooted] = useState(false);
+  /* The Obsidian link (v0.8): task lines and Margin's notes, through the native sync engine; its first read waits
+     until Today is drawn. */
+  useEffect(() => startObsidian(), []);
+  /* the focus countdown on the lock screen (owner's ask 2026-11-20) */
+  useEffect(() => startFocusLive(), []);
+  /* v0.8 §2.2: the APK carries the fonts (android/app/src/main/assets/fonts), so there is nothing to load; Expo Go
+     and older builds still load them at start-up. */
+  const [fonts, setFonts] = useState(() => Platform.OS === 'android' && fontsEmbedded()), [fontError, setFontError] = useState<string | null>(null), [fontTry, setFontTry] = useState(0), [booted, setBooted] = useState(false);
   useEffect(() => {
+    if (fonts && fontTry === 0) { mark('fonts'); return; }
     let alive = true;
     loadAsync(FONT_MAP).then(() => { mark('fonts'); if (alive) { setFonts(true); setFontError(null); } }).catch((e: unknown) => { if (alive) setFontError(String((e as Error)?.message ?? e)); });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `fonts` is read once: embedded fonts never need a load
   }, [fontTry]);
   useEffect(() => {
     let alive = true;

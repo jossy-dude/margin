@@ -60,7 +60,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
       </Section>
 
       <Section title="It's open source">
-        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes Jot smile.</Txt>
+        <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes the face smile.</Txt>
         <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Margin on GitHub" onPress={() => { play('starred'); openLink(GITHUB_URL); }} /></Row>
       </Section>
 

@@ -110,158 +110,111 @@ abstract class MarginWidget : AppWidgetProvider() {
 /** The one home-screen widget: the class that is on, the day's timetable and what is due, on one card. */
 class BoardWidget : MarginWidget()
 
+/**
+ * v0.8 §4.3: one card that looks like Today's Now card in the current skin. 4×1: the class line; 4×2 (default): the
+ * class with its bar and minutes left, then the next two due tasks with tap-to-tick; 4×3: up to five tasks and
+ * tomorrow's first class. Every list says how many it left out. Redrawn on class boundaries, task and theme changes.
+ */
 object Widgets {
-  /** True when at least one Margin widget is on a home screen. */
-  fun any(c: Context): Boolean {
-    val mgr = AppWidgetManager.getInstance(c)
-    return mgr.getAppWidgetIds(ComponentName(c, BoardWidget::class.java)).isNotEmpty()
-  }
+  fun any(c: Context): Boolean = AppWidgetManager.getInstance(c).getAppWidgetIds(ComponentName(c, BoardWidget::class.java)).isNotEmpty()
 
   fun updateAll(c: Context, a: Agenda, now: Long) {
     val mgr = AppWidgetManager.getInstance(c)
+    val look = Look.read(c)
+    val ticked = WidgetTicks.pending(c)
     for (id in mgr.getAppWidgetIds(ComponentName(c, BoardWidget::class.java))) {
-      /* The rows left under the next-class slab and the two headers are shared: the timetable gets the odd one. */
-      val rows = rowsFor(mgr, id, 230, 42).coerceAtLeast(2)
-      val rv = RemoteViews(c.packageName, R.layout.mg_widget_board)
-      rv.removeAllViews(R.id.mg_b_next)
-      rv.addView(R.id.mg_b_next, nextClass(c, a, now))
-      rv.removeAllViews(R.id.mg_b_today)
-      rv.addView(R.id.mg_b_today, today(c, a, now, (rows + 1) / 2))
-      rv.removeAllViews(R.id.mg_b_tasks)
-      rv.addView(R.id.mg_b_tasks, tasks(c, a, now, rows / 2))
-      mgr.updateAppWidget(id, rv)
+      val h = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+      val size = when { h in 1..99 -> 1; h in 100..199 || h == 0 -> 2; else -> 3 }
+      mgr.updateAppWidget(id, card(c, a, now, size, look, ticked))
     }
   }
 
-  /** How many rows fit: the widget's height in dp, less its header, over one row. */
-  private fun rowsFor(mgr: AppWidgetManager, id: Int, header: Int, row: Int): Int {
-    val h = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
-    if (h <= 0) return 3
-    return ((h - header) / row).coerceIn(1, 10)
+  private fun card(c: Context, a: Agenda, now: Long, size: Int, look: Look, ticked: Set<String>): RemoteViews {
+    val rv = RemoteViews(c.packageName, R.layout.mg_widget_card)
+    if (Build.VERSION.SDK_INT >= 31) rv.setColorStateList(R.id.mg_w_root, "setBackgroundTintList", android.content.res.ColorStateList.valueOf(look.card))
+    else rv.setInt(R.id.mg_w_root, "setBackgroundColor", look.card)
+    for (v in intArrayOf(R.id.mg_w_title, R.id.mg_w_count, R.id.mg_w_when)) rv.setTextColor(v, look.ink)
+    for (v in intArrayOf(R.id.mg_w_state, R.id.mg_w_sub, R.id.mg_w_more, R.id.mg_w_tomorrow)) rv.setTextColor(v, look.mut)
+    if (Build.VERSION.SDK_INT >= 31) rv.setColorStateList(R.id.mg_w_bar, "setProgressTintList", android.content.res.ColorStateList.valueOf(look.acc))
+    rv.setOnClickPendingIntent(R.id.mg_w_class, Surfaces.open(c, "marginalia://today", 51))
+    classLine(rv, a, now)
+    // tasks: what fits, and how many were left out
+    val list = a.todos.filter { it.due > 0L && it.id !in ticked }.sortedBy { it.due }
+    val room = when (size) { 1 -> 0; 2 -> 2; else -> 5 }
+    rv.removeAllViews(R.id.mg_w_tasks)
+    rv.setViewVisibility(R.id.mg_w_tasks, if (room > 0) View.VISIBLE else View.GONE)
+    for ((i, t) in list.take(room).withIndex()) rv.addView(R.id.mg_w_tasks, taskRow(c, a, t, now, look, i))
+    val left = list.size - minOf(list.size, room)
+    rv.setViewVisibility(R.id.mg_w_more, if (room > 0 && (left > 0 || list.isEmpty())) View.VISIBLE else View.GONE)
+    rv.setTextViewText(R.id.mg_w_more, when { list.isEmpty() -> if (a.writtenAt == 0L) "Open Margin once to fill this in." else "Nothing due."; else -> "+$left more" })
+    rv.setOnClickPendingIntent(R.id.mg_w_more, Surfaces.open(c, "marginalia://tasks", 53))
+    // 4×3: tomorrow's first class
+    val tmr = if (size >= 3) a.lessons.filter { Agenda.startOfDay(it.start) == Agenda.startOfDay(now) + Agenda.DAY }.minByOrNull { it.start } else null
+    rv.setViewVisibility(R.id.mg_w_tomorrow, if (tmr != null) View.VISIBLE else View.GONE)
+    if (tmr != null) rv.setTextViewText(R.id.mg_w_tomorrow, "Tomorrow ${Fmt.time(tmr.start, a.hour12)} · ${tmr.title}${if (tmr.room.isNotEmpty()) " · ${tmr.room}" else ""}")
+    return rv
   }
 
-  private fun countdown(rv: RemoteViews, id: Int, target: Long, now: Long) {
-    rv.setChronometer(id, SystemClock.elapsedRealtime() + (target - now), null, true)
-    rv.setChronometerCountDown(id, true)
-  }
-
-  private fun nextClass(c: Context, a: Agenda, now: Long): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_part_next)
-    rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://today", 51))
-    val cur = a.current(now)
-    val next = a.next(now)
-    val l = cur ?: next
+  private fun classLine(rv: RemoteViews, a: Agenda, now: Long) {
+    val cur = a.current(now); val next = a.next(now); val l = cur ?: next
     if (l == null) {
-      rv.setTextViewText(R.id.mg_state, "Margin")
-      rv.setTextViewText(R.id.mg_room, "")
-      rv.setTextViewText(R.id.mg_title, if (a.writtenAt == 0L) "Open Margin once to fill this in" else "No classes coming up")
-      rv.setViewVisibility(R.id.mg_count_row, View.GONE)
-      rv.setViewVisibility(R.id.mg_when, View.GONE)
-      rv.setViewVisibility(R.id.mg_bar, View.GONE)
-      rv.setTextViewText(R.id.mg_after, "")
-      return rv
+      rv.setTextViewText(R.id.mg_w_state, "Margin"); rv.setTextViewText(R.id.mg_w_title, if (a.writtenAt == 0L) "Open Margin once" else "No classes coming up")
+      rv.setViewVisibility(R.id.mg_w_count, View.GONE); rv.setViewVisibility(R.id.mg_w_when, View.GONE); rv.setViewVisibility(R.id.mg_w_bar, View.GONE)
+      rv.setTextViewText(R.id.mg_w_sub, ""); return
     }
-    rv.setTextViewText(R.id.mg_title, l.title)
-    rv.setTextViewText(R.id.mg_room, l.room)
+    rv.setTextViewText(R.id.mg_w_title, l.title)
     if (cur != null) {
-      rv.setTextViewText(R.id.mg_state, "Now")
-      rv.setViewVisibility(R.id.mg_count_row, View.VISIBLE)
-      rv.setViewVisibility(R.id.mg_when, View.GONE)
-      countdown(rv, R.id.mg_count, cur.end, now)
-      rv.setTextViewText(R.id.mg_unit, "left")
+      rv.setTextViewText(R.id.mg_w_state, "Now")
+      rv.setViewVisibility(R.id.mg_w_count, View.VISIBLE); rv.setViewVisibility(R.id.mg_w_when, View.GONE)
+      rv.setChronometer(R.id.mg_w_count, SystemClock.elapsedRealtime() + (cur.end - now), null, true); rv.setChronometerCountDown(R.id.mg_w_count, true)
       val total = ((cur.end - cur.start) / 60_000L).toInt().coerceAtLeast(1)
-      rv.setViewVisibility(R.id.mg_bar, View.VISIBLE)
-      rv.setProgressBar(R.id.mg_bar, total, ((now - cur.start) / 60_000L).toInt().coerceIn(0, total), false)
+      rv.setViewVisibility(R.id.mg_w_bar, View.VISIBLE); rv.setProgressBar(R.id.mg_w_bar, total, ((now - cur.start) / 60_000L).toInt().coerceIn(0, total), false)
       val then = a.lessons.filter { it.start >= cur.end && Agenda.startOfDay(it.start) == Agenda.startOfDay(now) }.minByOrNull { it.start }
-      rv.setTextViewText(R.id.mg_after, if (then != null) "Then ${then.title} · ${Fmt.time(then.start, a.hour12)}" else "Last class of the day")
+      val left = ((cur.end - now) / 60_000L).coerceAtLeast(0)
+      rv.setTextViewText(R.id.mg_w_sub, listOf(cur.room, "$left min left", if (then != null) "then ${then.title} ${Fmt.time(then.start, a.hour12)}" else "last class today").filter { it.isNotEmpty() }.joinToString(" · "))
     } else {
-      val soon = l.start - now <= 3 * 3_600_000L
-      rv.setTextViewText(R.id.mg_state, if (Agenda.startOfDay(l.start) == Agenda.startOfDay(now)) "Next up" else "Next · ${Fmt.day(l.start, now)}")
-      rv.setViewVisibility(R.id.mg_bar, View.GONE)
-      if (soon) {
-        rv.setViewVisibility(R.id.mg_count_row, View.VISIBLE)
-        rv.setViewVisibility(R.id.mg_when, View.GONE)
-        countdown(rv, R.id.mg_count, l.start, now)
-        rv.setTextViewText(R.id.mg_unit, "until it starts")
+      val today = Agenda.startOfDay(l.start) == Agenda.startOfDay(now)
+      rv.setTextViewText(R.id.mg_w_state, if (today) "Next" else Fmt.day(l.start, now).replaceFirstChar { it.uppercase() })
+      rv.setViewVisibility(R.id.mg_w_bar, View.GONE)
+      if (today && l.start - now <= 3 * 3_600_000L) {
+        rv.setViewVisibility(R.id.mg_w_count, View.VISIBLE); rv.setViewVisibility(R.id.mg_w_when, View.GONE)
+        rv.setChronometer(R.id.mg_w_count, SystemClock.elapsedRealtime() + (l.start - now), null, true); rv.setChronometerCountDown(R.id.mg_w_count, true)
       } else {
-        rv.setViewVisibility(R.id.mg_count_row, View.GONE)
-        rv.setViewVisibility(R.id.mg_when, View.VISIBLE)
-        rv.setTextViewText(R.id.mg_when, Fmt.time(l.start, a.hour12))
+        rv.setViewVisibility(R.id.mg_w_count, View.GONE); rv.setViewVisibility(R.id.mg_w_when, View.VISIBLE); rv.setTextViewText(R.id.mg_w_when, Fmt.time(l.start, a.hour12))
       }
-      rv.setTextViewText(R.id.mg_after, "${Fmt.time(l.start, a.hour12)} – ${Fmt.time(l.end, a.hour12)}${if (l.who.isNotEmpty()) " · ${l.who}" else ""}")
+      rv.setTextViewText(R.id.mg_w_sub, listOf(l.room, "${Fmt.time(l.start, a.hour12)}–${Fmt.time(l.end, a.hour12)}", l.who).filter { it.isNotEmpty() }.joinToString(" · "))
     }
-    return rv
   }
 
-  private fun today(c: Context, a: Agenda, now: Long, rows: Int): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_part_today)
-    rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://today", 52))
-    rv.removeAllViews(R.id.mg_rows)
-    /* Today, while anything of it is left; after the last bell, the next day that has classes. */
-    var day = now
-    var list = a.today(now)
-    if (list.none { it.end > now }) {
-      val n = a.next(now)
-      if (n != null) { day = n.start; list = a.today(n.start) } else list = emptyList()
-    }
-    val isToday = Agenda.startOfDay(day) == Agenda.startOfDay(now)
-    rv.setTextViewText(R.id.mg_date, if (isToday) Fmt.date(day) else "${Fmt.day(day, now).replaceFirstChar { it.uppercase() }} · ${Fmt.date(day)}")
-    rv.setTextViewText(R.id.mg_count, when (list.size) { 0 -> ""; 1 -> "1 class"; else -> "${list.size} classes" })
-    if (list.isEmpty()) {
-      rv.setViewVisibility(R.id.mg_empty, View.VISIBLE)
-      rv.setTextViewText(R.id.mg_empty, if (a.writtenAt == 0L) "Open Margin once to fill this in." else "No classes coming up.")
-      return rv
-    }
-    rv.setViewVisibility(R.id.mg_empty, View.GONE)
-    /* When they do not all fit, start at the first class that is not over yet. */
-    var from = 0
-    if (list.size > rows) { from = list.indexOfFirst { it.end > now }.coerceAtLeast(0); if (from + rows > list.size) from = list.size - rows }
-    val ink = c.getColor(R.color.mg_ink)
-    val mut = c.getColor(R.color.mg_mut)
-    for (l in list.drop(from).take(rows)) {
-      val row = RemoteViews(c.packageName, R.layout.mg_row_class)
-      val live = isToday && l.start <= now && now < l.end
-      val over = isToday && l.end <= now
-      row.setTextViewText(R.id.mg_r_start, Fmt.time(l.start, a.hour12))
-      row.setTextViewText(R.id.mg_r_end, Fmt.time(l.end, a.hour12))
-      row.setTextViewText(R.id.mg_r_title, l.title)
-      row.setTextViewText(R.id.mg_r_sub, listOf(l.room, l.who).filter { it.isNotEmpty() }.joinToString(" · "))
-      row.setTextColor(R.id.mg_r_start, if (over) mut else ink)
-      row.setTextColor(R.id.mg_r_title, if (over) mut else ink)
-      row.setInt(R.id.mg_r_root, "setBackgroundResource", if (live) R.drawable.mg_row_now else 0)
-      row.setViewVisibility(R.id.mg_r_live, if (live) View.VISIBLE else View.GONE)
-      rv.addView(R.id.mg_rows, row)
-    }
-    return rv
+  private fun taskRow(c: Context, a: Agenda, t: Todo, now: Long, look: Look, i: Int): RemoteViews {
+    val row = RemoteViews(c.packageName, R.layout.mg_row_tick)
+    row.setTextViewText(R.id.mg_t_title, t.title); row.setTextColor(R.id.mg_t_title, look.ink)
+    val overdue = t.due < now
+    row.setTextViewText(R.id.mg_t_due, if (overdue) Fmt.due(t.due, now) else "${Fmt.day(t.due, now)} ${Fmt.time(t.due, a.hour12)}")
+    row.setTextColor(R.id.mg_t_due, if (overdue) c.getColor(R.color.mg_bad) else look.mut)
+    if (Build.VERSION.SDK_INT >= 31) {
+      // tap-to-tick: the box records the tick here; Margin's JS marks the task done on its next start
+      val pi = android.app.PendingIntent.getBroadcast(c, 6000 + (t.id.hashCode() and 0xfff), Intent(c, WidgetTickReceiver::class.java).putExtra("id", t.id),
+        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE)
+      row.setCompoundButtonChecked(R.id.mg_t_box, false)
+      row.setOnCheckedChangeResponse(R.id.mg_t_box, RemoteViews.RemoteResponse.fromPendingIntent(pi))
+    } else row.setViewVisibility(R.id.mg_t_box, View.GONE)
+    row.setOnClickPendingIntent(R.id.mg_t_root, Surfaces.open(c, "marginalia://tasks", 60 + i))
+    return row
   }
+}
 
-  private fun tasks(c: Context, a: Agenda, now: Long, rows: Int): RemoteViews {
-    val rv = RemoteViews(c.packageName, R.layout.mg_part_tasks)
-    rv.setOnClickPendingIntent(R.id.mg_root, Surfaces.open(c, "marginalia://tasks", 53))
-    rv.setOnClickPendingIntent(R.id.mg_add, Surfaces.open(c, "marginalia://add/task", 54))
-    rv.removeAllViews(R.id.mg_rows)
-    val list = a.todos.filter { it.due > 0L }.sortedBy { it.due }
-    val late = list.count { it.due < now }
-    rv.setTextViewText(R.id.mg_count, when { late > 0 -> "$late overdue"; list.isEmpty() -> ""; list.size == 1 -> "1 open"; else -> "${list.size} open" })
-    rv.setTextColor(R.id.mg_count, c.getColor(if (late > 0) R.color.mg_bad else R.color.mg_mut))
-    if (list.isEmpty()) {
-      rv.setViewVisibility(R.id.mg_empty, View.VISIBLE)
-      rv.setTextViewText(R.id.mg_empty, if (a.writtenAt == 0L) "Open Margin once to fill this in." else "Nothing due. Nice.")
-      return rv
-    }
-    rv.setViewVisibility(R.id.mg_empty, View.GONE)
-    val bad = c.getColor(R.color.mg_bad)
-    val mut = c.getColor(R.color.mg_mut)
-    for (t in list.take(rows)) {
-      val row = RemoteViews(c.packageName, R.layout.mg_row_task)
-      row.setTextViewText(R.id.mg_r_title, t.title)
-      row.setTextViewText(R.id.mg_r_sub, t.subject)
-      row.setViewVisibility(R.id.mg_r_sub, if (t.subject.isEmpty()) View.GONE else View.VISIBLE)
-      val overdue = t.due < now
-      row.setTextViewText(R.id.mg_r_due, if (overdue) Fmt.due(t.due, now) else "${Fmt.day(t.due, now)} ${Fmt.time(t.due, a.hour12)}")
-      row.setTextColor(R.id.mg_r_due, if (overdue) bad else mut)
-      rv.addView(R.id.mg_rows, row)
-    }
-    return rv
+/** Tasks ticked on the widget, until Margin's JS takes them (`widgetTicks()`). */
+object WidgetTicks {
+  private const val PREFS = "margin_widget_ticks"
+  fun pending(c: Context): Set<String> = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet("ids", emptySet()) ?: emptySet()
+  fun add(c: Context, id: String) { val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); p.edit().putStringSet("ids", pending(c) + id).apply() }
+  fun take(c: Context): Set<String> { val s = pending(c); c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("ids").apply(); return s }
+}
+class WidgetTickReceiver : BroadcastReceiver() {
+  override fun onReceive(context: Context, intent: Intent) {
+    val id = intent.getStringExtra("id") ?: return
+    WidgetTicks.add(context, id)
+    Surfaces.refresh(context)
   }
 }

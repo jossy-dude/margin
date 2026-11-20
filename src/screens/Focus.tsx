@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { HandBox, HStrip, Icon, Toggle, Txt, usePressIn } from '../ui/kit';
 import { NumberField } from '../ui/fields';
-import { PaperBg } from '../ui/PaperBg';
 import { Face } from '../ui/mascot/Face';
 import { MOMENTS, useFaceMoment } from '../ui/mascot/moments';
 import { subjectTint } from '../ui/collage/tint';
@@ -120,8 +119,8 @@ export function FocusScreen() {
   const awakeS = useAnimatedStyle(() => ({ opacity: 1 - dim.get() * 0.9 }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.paper }} onTouchStart={onTouch}>
-      <PaperBg />
+    <View style={{ flex: 1 }} onTouchStart={onTouch}>
+      {/* the background layer is the Shell's, drawn once behind every page (v0.8 §2.1) */}
       {ambient && <StatusBar hidden animated />}
       <Animated.View style={[{ flex: 1 }, awakeS]}>
         {/* ── header ── */}

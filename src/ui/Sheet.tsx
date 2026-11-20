@@ -193,7 +193,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
                 </View>
               </View>
             </GestureDetector>
-            <ScrollView key={scrollKey ?? 's'} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? 8 : Math.max(ins.bottom, 12) + 10, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
+            <ScrollView key={scrollKey ?? 's'} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: footer ? (kb > 0 ? 140 : 8) : Math.max(ins.bottom, 12) + 10, gap: 12 }} style={{ flexGrow: 0, flexShrink: 1 }}>{children}</ScrollView>
             {footer ? <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 10) + 6 }}>{footer}</View> : null}
           </Surface>
         </Animated.View>

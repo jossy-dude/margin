@@ -2394,7 +2394,88 @@ function applyPatch(base, patchText) {
   return text;
 }
 
-return { lines, merge3, makePatch, applyPatch };
+// ── v0.8: notes are merged without ever writing into them (SPEC §1.2, D2) ──────────────────────────────────────
+
+/** The body of a note without its frontmatter. */
+const bodyOf = (s) => s.replace(/^---\n[\s\S]*?\n---\n?/, '');
+/** A note with nothing typed in it yet: empty, or only frontmatter, headings, empty list items and template
+ *  placeholders (`{{date}}`). An untouched daily-note template loses to real text (incident 2026-11-19, S17). */
+function isUntouched(s) {
+  if (s == null) return true;
+  return bodyOf(s).split('\n').every((l) => {
+    const t = l.trim();
+    return t === '' || /^#{1,6}(\s|$)/.test(t) || /^([-*+]|\d+[.)])(\s+\[.\])?\s*$/.test(t) || /^\{\{[^}]*\}\}$/.test(t) || t === '---';
+  });
+}
+const realLines = (s) => (s ?? '').split('\n').filter((l) => l.trim() !== '').length;
+/** True when `next` would throw away most of `cur` (more than half its non-blank lines, on a note of 4+ lines).
+ *  Such a change is never applied by the sync: it goes to the conflicts note for the owner to decide. */
+function deletesMost(cur, next) {
+  const a = realLines(cur), b = realLines(next);
+  return a >= 4 && b < a / 2;
+}
+
+/**
+ * mergeNote(base, head, incoming) → { text, clean, conflicts: [{ head, incoming }] }
+ *   head     = the hub's current text (the desktop's text stays in place: owner's rule)
+ *   incoming = the other device's text, made from `base`
+ * Non-overlapping changes from both sides are kept. Where both changed the same lines (and a character-level retry
+ * does not settle it), the head's lines stay and the incoming lines are returned in `conflicts`, so the caller can
+ * file them in `Conflicts/`. Nothing is ever added to the note itself.
+ * base null = both sides made the file: a union (an untouched template loses to real text; else the head, then the
+ * incoming lines it does not already have).
+ * Deterministic: the same three inputs always give the same text, so a replayed put changes nothing.
+ */
+function mergeNote(base, head, incoming) {
+  if (head === incoming) return { text: head, clean: true, conflicts: [] };
+  if (base === null || base === undefined) {
+    if (isUntouched(incoming)) return { text: head, clean: true, conflicts: [] };
+    if (isUntouched(head)) return { text: incoming, clean: true, conflicts: [] };
+    const have = new Set(head.split('\n'));
+    const extra = incoming.split('\n').filter((l) => l.trim() !== '' && !have.has(l) && !/^---$/.test(l.trim()));
+    // frontmatter of the incoming copy is not appended: the head's frontmatter stays
+    const fm = /^---\n[\s\S]*?\n---\n?/.exec(incoming)?.[0] ?? '';
+    const fmLines = new Set(fm.split('\n'));
+    const add = extra.filter((l) => !fmLines.has(l));
+    if (!add.length) return { text: head, clean: true, conflicts: [] };
+    const sep = head.endsWith('\n') || head === '' ? '' : '\n';
+    return { text: `${head}${sep}${add.join('\n')}\n`, clean: true, conflicts: [] };
+  }
+  if (head === base) return { text: incoming, clean: true, conflicts: [] };
+  if (incoming === base) return { text: head, clean: true, conflicts: [] };
+  const conflicts = [];
+  const { out } = diff3(lines(base), lines(head), lines(incoming), (b, o, t) => {
+    const cb = b.join(''), co = o.join(''), ct = t.join('');
+    const c = diff3([...cb], [...co], [...ct], () => null);
+    if (c.clean) return { tokens: lines(c.out.join('')) ?? [] };
+    conflicts.push({ head: co, incoming: ct });
+    return { tokens: o, conflict: true };
+  }, true);
+  return { text: out.join(''), clean: conflicts.length === 0, conflicts };
+}
+
+/** The section a conflict adds to `Conflicts/YYYY-MM-DD.md`: a link back to the note and both versions, quoted as
+ *  plain text in fences so nothing in them renders as a task or a link. */
+function conflictEntry({ path, at = new Date(), who = 'phone', conflicts = [], whole = null }) {
+  const p2 = (n) => String(n).padStart(2, '0');
+  const fence = (s) => { const t = s.replace(/\n$/, ''); const f = t.includes('```') ? '~~~~' : '```'; return `${f}text\n${t}\n${f}`; };
+  const link = path.replace(/\.md$/i, '');
+  const out = [`## ${p2(at.getHours())}:${p2(at.getMinutes())} · [[${link}]]`, ''];
+  if (whole !== null) {
+    out.push(`The ${who}'s copy would have removed most of this note, so it was not applied. The note kept its text. The ${who}'s copy:`, '', fence(whole), '');
+  } else {
+    for (const c of conflicts) {
+      out.push('Kept in the note:', '', fence(c.head || '(nothing)'), '', `From the ${who}, not applied:`, '', fence(c.incoming || '(deleted)'), '');
+    }
+  }
+  return out.join('\n');
+}
+const conflictsPath = (at = new Date()) => {
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `Conflicts/${at.getFullYear()}-${p2(at.getMonth() + 1)}-${p2(at.getDate())}.md`;
+};
+
+return { lines, merge3, makePatch, applyPatch, isUntouched, deletesMost, mergeNote, conflictEntry, conflictsPath };
 })();
 var __json3 = (function () {
 // Port of tools/json3.py: three-way merge of a JSON value, key by key (SYNC_PROTOCOL §7).
@@ -2905,6 +2986,108 @@ function newerTimer(last, inc) {
 
 return { TIMER_OPS, DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS, timerLive, tickTimer, nextTimerEvent, timerLeft, applyTimer, newerTimer };
 })();
+var __classes = (function () {
+// File classes (v0.8 SPEC §1.2): what kind of file a path is decides who may write it and how a clash is settled.
+// One table for the hub and the phone; Margin's Kotlin port (FileClasses.kt) runs the same fixtures
+// (fixtures/classes.json).
+//
+//   note    *.md / *.canvas / *.base outside .obsidian/   both ways; diff3 against the true base, a clash goes to
+//                                                         Conflicts/YYYY-MM-DD.md, never into the note
+//   plugin  plugin code and assets, snippets, themes      desktop → phone only; never merged
+//   shared  plugin data on the allow-list, .obsidian/*.json both ways; json3 against the true base
+//   local   workspace, *.local.json, plugin data.json      never synced
+//           not on the allow-list, .obsidian/app.json
+//   single  a file with one writer (Margin's generated     the writer's version wins; never merged
+//           notes, *.phone.json, *.desktop.json)
+//   file    everything else (attachments, PDFs, csv…)     both ways; a clash keeps both (a dated copy)
+//
+// A vault can extend the table with `.bone-sync-classes` at its root: one rule per line, `<class> <glob>`
+// (class = note | plugin | shared | local | single:phone | single:desktop | file), later lines win, # comments.
+
+const CLASSES = ['note', 'plugin', 'shared', 'local', 'single', 'file'];
+
+/** Plugin data that holds real, shared data (games, history, libraries). Any other plugin data.json is per device. */
+const SHARED_PLUGIN_DATA = [
+  'bone-calendar/data.json', 'bone-cards/data.json', 'bone-chess/data.json', 'bone-chess/studies.json',
+  'bone-emoji/data.json', 'bone-fix/data.json', 'bone-fix/fixes.json', 'bone-media/data.json', 'bone-notes/data.json',
+  'bone-tasks/data.json', 'bone-type/data.json', 'bone-yt/data.json', 'bone-yt/history.json', 'bone-home/read.json',
+  'obsidian-excalidraw-plugin/data.json', 'obsidian-style-settings/data.json',
+];
+
+/** Margin writes these; nobody else may. */
+const MARGIN_FILES = ['.margin/margin.json', 'Margin/Timetable.md', 'Margin/Subjects.md', 'Margin/Notices.md'];
+
+const DEFAULT_CLASSES = `# bone-sync file classes (v0.8): <class> <glob>; later lines win
+local .obsidian/workspace*.json
+local .obsidian/app.json
+local **/*.local.json
+local .margin/obsidian.json
+local .obsidian/plugins/*/data.json
+${SHARED_PLUGIN_DATA.map((p) => `shared .obsidian/plugins/${p}`).join('\n')}
+single:phone **/*.phone.json
+single:desktop **/*.desktop.json
+${MARGIN_FILES.map((p) => `single:phone ${p}`).join('\n')}
+`;
+
+function globToRe(g) {
+  let re = '';
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === '*') {
+      if (g[i + 1] === '*') { i++; if (g[i + 1] === '/') { i++; re += '(?:.*/)?'; } else re += '.*'; } else re += '[^/]*';
+    } else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`);
+}
+
+const NOTE_RE = /\.(md|canvas|base)$/i;
+const OBS = '.obsidian/';
+
+/** The built-in part of the table, before any rule from `.bone-sync-classes`. */
+function builtin(p) {
+  if (p.startsWith(OBS)) {
+    const rest = p.slice(OBS.length);
+    // plugin folders: code and assets go desktop → phone; data.json is decided by the rules (local unless shared)
+    if (rest.startsWith('plugins/')) return { cls: 'plugin' };
+    if (rest.startsWith('snippets/') || rest.startsWith('themes/')) return { cls: 'plugin' };
+    if (/^[^/]+\.json$/.test(rest)) return { cls: 'shared' };
+    return { cls: 'plugin' };
+  }
+  if (NOTE_RE.test(p)) return { cls: 'note' };
+  return { cls: 'file' };
+}
+
+/** compileClasses(extra) → classify(path) → { cls, writer? }. `extra` is the text of `.bone-sync-classes`. */
+function compileClasses(extra = '') {
+  const rules = [];
+  for (const raw of `${DEFAULT_CLASSES}\n${extra}`.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const m = /^(\S+)\s+(\S+)$/.exec(line);
+    if (!m) continue;
+    const [cls, writer] = m[1].split(':');
+    if (!CLASSES.includes(cls)) continue;
+    if (cls === 'single' && writer !== 'phone' && writer !== 'desktop') continue;
+    rules.push({ re: globToRe(m[2]), cls, writer: cls === 'single' ? writer : undefined });
+  }
+  return (p) => {
+    let hit = builtin(p);
+    for (const r of rules) if (r.re.test(p)) hit = r.writer ? { cls: r.cls, writer: r.writer } : { cls: r.cls };
+    return hit;
+  };
+}
+
+/** Who may send a change to a path of this class: 'desktop' (the hub's disk), 'phone' (Margin), or both. */
+function mayWrite(c, side /* 'desktop' | 'phone' */) {
+  if (c.cls === 'local') return false;
+  if (c.cls === 'plugin') return side === 'desktop';
+  if (c.cls === 'single') return c.writer === side;
+  return true;
+}
+
+return { CLASSES, SHARED_PLUGIN_DATA, MARGIN_FILES, DEFAULT_CLASSES, compileClasses, mayWrite };
+})();
 var __proto = (function () {
 // bone-sync/1 messages (SYNC_PROTOCOL §5). One JSON object per text frame. `frame()` fills the common fields;
 // `check()` rejects anything a peer must never act on (wrong version, wrong vault, missing fields).
@@ -2935,6 +3118,10 @@ const REQ = {
   hold: ['op'],          // big-delete guard: held | apply | cancel | done (§9)
   restore: ['paths'],    // hub → client: push these files back, the hub lost them
   rekey: ['key'],        // Margin → phone Obsidian, on a sealed link: the strong key that replaces the 6-digit code
+  // v0.8: phone Obsidian no longer sends files (Margin is the only phone-side writer). It sends hints, and Margin
+  // tells it which file it rewrote so Obsidian re-reads it (SPEC §1.1).
+  hint: ['op', 'p'],     // phone Obsidian → Margin: editing | saved | open | closed
+  changed: ['p'],        // Margin → phone Obsidian (or the hub → desktop Obsidian): re-read this file; `plugin` = reload it
 };
 const TYPES = Object.keys(REQ);
 
@@ -2957,6 +3144,7 @@ function check(m, vault) {
   if (m.t === 'put') { const e = partError(m); if (e) return e; }
   if ((m.t === 'want' || m.t === 'restore') && (!Array.isArray(m.paths) || !m.paths.every(safePath))) return 'bad-path';
   if (m.t === 'hold' && !['held', 'apply', 'cancel', 'done'].includes(m.op)) return 'bad-hold-op';
+  if (m.t === 'hint' && (!['editing', 'saved', 'open', 'closed'].includes(m.op) || !safePath(m.p))) return 'bad-hint';
   if (m.t === 'mv' && (!safePath(m.from) || !safePath(m.to))) return 'bad-path';
   return null;
 }
@@ -2991,7 +3179,7 @@ var __client = (function () {
 const { V, frame } = __proto;
 const { proofOf, sameHex, sessionKeys, sealer, newNonce, unhex, SEAL_VERSION } = __seal;
 function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, role, app = '0.7.0', key /* hex */, vault, hubId = null,
-  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {} }) {
+  cursor = 0, onFrame = () => {}, onState = () => {}, log = () => {}, hello = {}, pingMs = 20_000 }) {
   const ws = new WebSocketImpl(url);
   const st = { ws, ready: false, sealOut: null, sealIn: null, offset: 0, hubId, mode: null, closed: false };
   let nonce = null, q = Promise.resolve(), out = Promise.resolve();
@@ -3003,7 +3191,7 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
     return out;
   };
   st.frame = (t, fields) => frame(t, fields, ids);
-  st.close = () => { st.closed = true; try { ws.close(); } catch { /* */ } };
+  st.close = () => { st.closed = true; clearInterval(st.beat); clearTimeout(st.pongWait); try { ws.close(); } catch { /* */ } };
   st.ping = () => { st.pingAt = Date.now(); return st.send(frame('ping', {}, ids)); };
 
   const handle = async (data) => {
@@ -3032,6 +3220,16 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
         st.hubId = m.hub; st.mode = m.mode; st.resume = m.resume === true; st.offset = m.serverTime - Date.now(); st.head = m.head;
         const k = await sessionKeys(unhex(key), st.serverNonce, nonce); st.sealOut = sealer(k.c2h); st.sealIn = sealer(k.h2c);
         st.ready = true; onState('ready', st);
+        // liveness (v0.8 §1.4): a ping every 20 s; no answer within 10 s and the link is dead (a half-open socket
+        // after sleep or a network switch looks alive forever otherwise). The hub drops a link silent for 60 s.
+        st.beat = setInterval(() => {
+          if (st.closed) { clearInterval(st.beat); return; }
+          st.ping();
+          clearTimeout(st.pongWait);
+          st.pongWait = setTimeout(() => { log('no pong in 10 s; closing'); st.close(); }, 10_000);
+          st.pongWait.unref?.();
+        }, pingMs);
+        st.beat.unref?.();
         return;
       }
       // unproven: anyone can say "bad-proof", so the app must not give up pairing on it (it is told `preauth`)
@@ -3040,388 +3238,125 @@ function connect({ url, WebSocketImpl = globalThis.WebSocket, deviceId, name, ro
       return;
     }
     if (m.t === 'challenge' || m.t === 'welcome') return;
-    if (m.t === 'pong') { if (st.pingAt) { const rtt = Date.now() - st.pingAt; st.offset = m.serverTime + rtt / 2 - Date.now(); st.rtt = rtt; } }
+    if (m.t === 'pong') { clearTimeout(st.pongWait); if (st.pingAt) { const rtt = Date.now() - st.pingAt; st.offset = m.serverTime + rtt / 2 - Date.now(); st.rtt = rtt; } }
     if (m.t === 'bye') log(`bye: ${m.reason}`);
     onFrame(m, st);
   };
   ws.onmessage = (e) => { q = q.then(() => handle(e.data)).catch((err) => log(`frame: ${err.message}`)); };
   ws.onopen = () => onState('open', st);
-  ws.onclose = () => { st.ready = false; onState('closed', st); };
+  ws.onclose = () => { st.ready = false; clearInterval(st.beat); clearTimeout(st.pongWait); onState('closed', st); };
   ws.onerror = () => onState('error', st);
   return st;
 }
 
 return { connect };
 })();
-return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, parseLenient: __json3.parseLenient, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, TIMER_OPS: __timer.TIMER_OPS, DEFAULT_FOCUS_MS: __timer.DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS: __timer.DEFAULT_BREAK_MS, timerLive: __timer.timerLive, tickTimer: __timer.tickTimer, nextTimerEvent: __timer.nextTimerEvent, timerLeft: __timer.timerLeft, applyTimer: __timer.applyTimer, newerTimer: __timer.newerTimer, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
+return { enc: __hash.enc, dec: __hash.dec, hex: __hash.hex, toBytes: __hash.toBytes, hashOf: __hash.hashOf, base32: __hash.base32, randomBytes: __hash.randomBytes, newId: __hash.newId, ulid: __hash.ulid, lines: __merge.lines, merge3: __merge.merge3, makePatch: __merge.makePatch, applyPatch: __merge.applyPatch, isUntouched: __merge.isUntouched, deletesMost: __merge.deletesMost, mergeNote: __merge.mergeNote, conflictEntry: __merge.conflictEntry, conflictsPath: __merge.conflictsPath, MISSING: __json3.MISSING, merge: __json3.merge, dumpLike: __json3.dumpLike, json3Text: __json3.json3Text, parseLenient: __json3.parseLenient, DEFAULT_IGNORE: __ignore.DEFAULT_IGNORE, HARD_IGNORE: __ignore.HARD_IGNORE, MAX_FILE_BYTES: __ignore.MAX_FILE_BYTES, compileIgnore: __ignore.compileIgnore, caseSafePath: __ignore.caseSafePath, kindOf: __ignore.kindOf, copyName: __ignore.copyName, b64: __seal.b64, unb64: __seal.unb64, unhex: __seal.unhex, proofOf: __seal.proofOf, sameHex: __seal.sameHex, SEAL_VERSION: __seal.SEAL_VERSION, sessionKeys: __seal.sessionKeys, sealer: __seal.sealer, newNonce: __seal.newNonce, newPairKey: __seal.newPairKey, WORDS: __seal.WORDS, codeToWords: __seal.codeToWords, wordsToCode: __seal.wordsToCode, PART_BYTES: __chunk.PART_BYTES, MAX_PARTS: __chunk.MAX_PARTS, needsParts: __chunk.needsParts, partsOf: __chunk.partsOf, partError: __chunk.partError, Assembler: __chunk.Assembler, TIMER_OPS: __timer.TIMER_OPS, DEFAULT_FOCUS_MS: __timer.DEFAULT_FOCUS_MS, DEFAULT_BREAK_MS: __timer.DEFAULT_BREAK_MS, timerLive: __timer.timerLive, tickTimer: __timer.tickTimer, nextTimerEvent: __timer.nextTimerEvent, timerLeft: __timer.timerLeft, applyTimer: __timer.applyTimer, newerTimer: __timer.newerTimer, CLASSES: __classes.CLASSES, SHARED_PLUGIN_DATA: __classes.SHARED_PLUGIN_DATA, MARGIN_FILES: __classes.MARGIN_FILES, DEFAULT_CLASSES: __classes.DEFAULT_CLASSES, compileClasses: __classes.compileClasses, mayWrite: __classes.mayWrite, V: __proto.V, ROLES: __proto.ROLES, PORT_HUB: __proto.PORT_HUB, PORT_PHONE: __proto.PORT_PHONE, TYPES: __proto.TYPES, frame: __proto.frame, check: __proto.check, safePath: __proto.safePath, allowedPeer: __proto.allowedPeer, connect: __client.connect };
 })();
 
 /* ── 10_bridge.js ── */
 /*
- * Margin Bridge — the Obsidian half of docs/BRIDGE.md (format `margin-bridge/1`).
+ * Margin Bridge 0.8 — the Obsidian half of Margin's sync (v0.8 SPEC §1.1, D1/D4).
  *
- *   <vault>/.margin/margin.json     written only by Margin, read here
- *   <vault>/.margin/obsidian.json   written only here, read by Margin
- *
- * One writer per file, so git (Obsidian Git on the desktop, GitSync on the phone) never has to merge
- * inside one. For the same reason the bridge runs on ONE device: by default the phone, where Margin
- * lives (Settings → "Run the bridge on this device", kept per device, not synced). The desktop sees
- * the results — Margin/Tasks.md, Margin/Timetable.md, the task lines — when git brings them over. Tasks made in Margin become lines in one note; task lines in the vault that carry the
- * school tag and a due date go to Margin. Task lines use the Bone Tasks grammar, so both plugins read
- * the same line. Plain JavaScript; `node build.mjs` joins src/ (with vault-sync's sync-core) into main.js.
+ * Margin's own sync engine on the phone is the ONLY thing that reads or writes synced files there. This plugin no
+ * longer moves files or writes bridge files (`.margin/obsidian.json` is retired, and so are the tasks/timetable
+ * notes it used to write; Margin writes those itself). What is left:
+ *   · phone: a thin link to Margin on 127.0.0.1:7429 (20_live.js). It tells Margin which note is being typed in
+ *     ("editing") and when it was saved ("saved"), so Margin never writes under the cursor; Margin tells it which
+ *     files it rewrote ("changed"), and Obsidian re-reads them; a plugin updated from the desktop is reloaded.
+ *     Pairing needs no code: Margin leaves a key in `link.local.json` next to this file (never synced).
+ *   · both: the shared focus timer (30_timer.js). Desktop: a small link straight to bone-syncd.
+ * Plain JavaScript; `node build.mjs` joins src/ (with vault-sync's sync-core) into main.js.
  */
 const obsidian = require('obsidian');
 
-const FORMAT = 'margin-bridge/1', DIR = '.margin', IN = `${DIR}/margin.json`, OUT = `${DIR}/obsidian.json`;
-const DEFAULTS = { tasksNote: 'Margin/Tasks.md', timetableNote: 'Margin/Timetable.md', tag: '#school', seen: {}, sent: {}, lastSync: 0 };
-const TOMBSTONE_DAYS = 30;
-
-/* ── the task line, both directions (the same grammar as src/domain/bridge.ts) ─────────────── */
-const PRIO_EMOJI = { 5: '🔺', 4: '⏫', 3: '🔼', 2: '🔽', 1: '⏬' };
-const PRIO_OF = { '🔺': 5, '⏫': 4, '🔼': 3, '🔽': 2, '⏬': 1 };
-const TASK_RE = /^(\s*(?:>\s*)*)([-*+]|\d+[.)])\s+\[(.)\]\s+(.*)$/;
-const FIELD_STRIP = /(?:[📅⏳🛫✅➕❌]\s*\d{4}-\d{2}-\d{2})|(?:[🔺⏫🔼🔽⏬])|(?:🔁\s*[^📅⏳🛫✅➕❌⏰⏱🔺⏫🔼🔽⏬]*)|(?:⏰\s*\d{1,2}:\d{2})|(?:⏱\s*\d+m)|(?:[🆔⛔]\s*\S+)/gu;
-const ID_RE = /\s\^([\w-]+)\s*$/;
-const TAG_RE = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
-const blockId = (id) => String(id).replace(/[^\w-]/g, '-');
-const clock = (t) => { const [h, m] = t.split(':'); return `${h.padStart(2, '0')}:${m}`; };
-
-function taskLine(id, t) {
-  const parts = [`- [${t.done ? 'x' : ' '}] ${String(t.title).replace(/\s+/g, ' ').trim()}`];
-  if (t.course) parts.push(`#${t.course.replace(/\s+/g, '-')}`);
-  if (PRIO_EMOJI[t.prio]) parts.push(PRIO_EMOJI[t.prio]);
-  if (t.start) parts.push(`🛫 ${t.start}`);
-  if (t.due) parts.push(`📅 ${t.due}`);
-  if (t.time) parts.push(`⏰ ${t.time}`);
-  if (t.spentMin > 0) parts.push(`⏱ ${Math.round(t.spentMin)}m`);
-  if (t.done && t.doneOn) parts.push(`✅ ${t.doneOn}`);
-  parts.push(`^${blockId(id)}`);
-  return parts.join(' ');
-}
-
-/** A task line as a bridge task, or null when the line is not a task. `scopeTag` is left out of the subject. */
-function parseTaskLine(line, path = null, scopeTag = '') {
-  const m = TASK_RE.exec(line);
-  if (!m) return null;
-  const body = m[4], status = m[3];
-  const get = (e) => (new RegExp(`${e}\\s*(\\d{4}-\\d{2}-\\d{2})`, 'u').exec(body) || [])[1] || null;
-  const time = (/⏰\s*(\d{1,2}:\d{2})/u.exec(body) || [])[1] || null, spent = (/⏱\s*(\d+)m/u.exec(body) || [])[1];
-  const prio = (body.match(/[🔺⏫🔼🔽⏬]/u) || [])[0], id = (ID_RE.exec(body) || [])[1] || null;
-  const tags = [...body.matchAll(TAG_RE)].map((x) => x[2]), scope = scopeTag.replace(/^#/, '').toLowerCase();
-  const subject = tags.find((t) => t.toLowerCase() !== scope) || null;
-  const title = body.replace(FIELD_STRIP, '').replace(ID_RE, '').replace(TAG_RE, '$1').replace(/\s{2,}/g, ' ').trim();
-  return {
-    title, blockId: id, status, tags, done: status === 'x' || status === 'X', doneOn: get('✅'), due: get('📅') || get('⏳'), time: time ? clock(time) : null, start: get('🛫'),
-    prio: prio ? PRIO_OF[prio] || 0 : 0, estimateMin: null, spentMin: spent ? +spent : 0, course: subject ? subject.replace(/-/g, ' ') : null, kind: null, notes: '', path, steps: [],
-  };
-}
-
-/** The bridge fields of a parsed line, without the bookkeeping this file adds. */
-const dataOf = (p) => ({ title: p.title, done: p.done, doneOn: p.doneOn, due: p.due, time: p.time, start: p.start, prio: p.prio, estimateMin: p.estimateMin, spentMin: p.spentMin, course: p.course, kind: p.kind, notes: p.notes, path: p.path, steps: p.steps });
-
-function parseEnvelope(text) {
-  try {
-    // tolerant: a margin.json written without truncation has the old tail after it; its start is the newest file
-    const e = BoneSyncCore.parseLenient(text)?.value;
-    if (!e || e.format !== FORMAT || !Array.isArray(e.tasks)) return null;
-    return { ...e, events: Array.isArray(e.events) ? e.events : [], sessions: Array.isArray(e.sessions) ? e.sessions : [] };
-  } catch (err) { return null; }
-}
-
-/* ── Margin → the tasks note ───────────────────────────────────────────────────────────────── */
-/**
- * Writes Margin's own tasks into the note's text. A row is applied once: `seen[blockId]` remembers the
- * stamp it carried, and `sent[blockId]` the line as written, so an untouched line is never sent back
- * to Margin as if Obsidian had changed it.
- */
-function applyMargin(text, env, state) {
-  const lines = text.length ? text.split('\n') : [];
-  let changed = false;
-  for (const item of env.tasks) {
-    if (item.origin !== 'margin') continue;
-    const id = blockId(item.id), was = state.seen[id];
-    if (was && item.updatedAt <= was.at) continue;
-    const at = lines.findIndex((l) => (ID_RE.exec(l) || [])[1] === id);
-    if (item.deleted || !item.data) {
-      if (at >= 0) { lines.splice(at, 1); changed = true; }
-      delete state.sent[id];
-    } else {
-      const line = taskLine(item.id, item.data);
-      if (at >= 0) { if (lines[at] !== line) { lines[at] = line; changed = true; } } else { lines.push(line); changed = true; }
-      state.sent[id] = { hash: line, updatedAt: item.updatedAt, origin: 'margin', id: item.id };
-    }
-    state.seen[id] = { at: item.updatedAt, id: item.id };
-  }
-  return { text: lines.join('\n'), changed };
-}
-
-/** A change Margin made to a task that lives in a note (ticked, re-dated): only the checkbox and the dates move. */
-function patchLine(line, d) {
-  const p = parseTaskLine(line);
-  if (!p) return line;
-  let out = line.replace(/\[(.)\]/, `[${d.done ? 'x' : ' '}]`);
-  out = out.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/u, '');
-  if (d.due && p.due && d.due !== p.due) out = out.replace(/(📅\s*)\d{4}-\d{2}-\d{2}/u, `$1${d.due}`);
-  if (d.done && d.doneOn) out = out.replace(ID_RE, ` ✅ ${d.doneOn} ^${p.blockId}`);
-  return out;
-}
-
-/* ── the vault's task lines → obsidian.json ────────────────────────────────────────────────── */
-const newId = () => `m${Math.random().toString(36).slice(2, 8)}`;
-
-/**
- * One file's lines as bridge rows. A line is taken when it already has a block id this bridge knows,
- * or when it is in scope (the tasks note, or the school tag), still open and has a due date; such a
- * line is given a block id. Returns the rows and the text, changed only if an id was added.
- */
-function collectFile(text, path, mtime, state, opts) {
-  const lines = text.split('\n'), rows = [];
-  let changed = false;
-  const scope = opts.tag.replace(/^#/, '').toLowerCase();
-  for (let i = 0; i < lines.length; i++) {
-    const p = parseTaskLine(lines[i], path, opts.tag);
-    if (!p) continue;
-    let id = p.blockId;
-    const known = id && (state.sent[id] || state.seen[id]);
-    const inScope = path === opts.tasksNote || (scope && p.tags.some((t) => t.toLowerCase() === scope));
-    if (!known && !(inScope && !p.done && p.due)) continue;
-    if (!id) { id = (opts.makeId || newId)(); lines[i] = `${lines[i].replace(/\s+$/, '')} ^${id}`; changed = true; }
-    const prev = state.sent[id], origin = state.seen[id] ? 'margin' : 'obsidian';
-    /* A Margin task whose line nobody touched goes back unsent: Margin already has it, and has more of it. */
-    if (origin === 'margin' && prev && prev.hash === lines[i]) continue;
-    const updatedAt = prev && prev.hash === lines[i] ? prev.updatedAt : mtime;
-    state.sent[id] = { hash: lines[i], updatedAt, origin, id: origin === 'margin' ? state.seen[id].id : id, path };
-    rows.push({ id: state.sent[id].id, origin, updatedAt, data: dataOf(p) });
-  }
-  return { rows, text: lines.join('\n'), changed };
-}
-
-/** Rows for lines that were sent before and are gone now, kept for a month so Margin hears about it. */
-function tombstones(state, live, now) {
-  const out = [];
-  for (const [bid, s] of Object.entries(state.sent)) {
-    if (s.origin !== 'obsidian') continue;
-    if (s.deleted) { if (now - s.updatedAt > TOMBSTONE_DAYS * 86_400_000) delete state.sent[bid]; else out.push({ id: s.id, origin: 'obsidian', updatedAt: s.updatedAt, deleted: true }); continue; }
-    if (!live.has(bid)) { state.sent[bid] = { ...s, deleted: true, updatedAt: now }; out.push({ id: s.id, origin: 'obsidian', updatedAt: now, deleted: true }); }
-  }
-  return out;
-}
-
-/** What goes in obsidian.json. Sorted, so two devices reading the same notes write the same bytes. */
-function buildOut(rows, now) {
-  const tasks = [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { format: FORMAT, app: 'bone', writtenAt: now, tasks, events: [], sessions: [] };
-}
-const sameOut = (a, b) => JSON.stringify({ ...a, writtenAt: 0 }) === JSON.stringify({ ...b, writtenAt: 0 });
-
-/* ── the timetable note ────────────────────────────────────────────────────────────────────── */
-const two = (n) => String(n).padStart(2, '0');
-const hm = (ms) => { const d = new Date(ms); return `${two(d.getHours())}:${two(d.getMinutes())}`; };
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-function timetableNote(env) {
-  const events = env.events.filter((e) => e.data && !e.deleted).map((e) => e.data).sort((a, b) => a.at - b.at);
-  const out = ['---', 'margin: timetable', '---', '', '> Written by Margin Bridge. Edits here are overwritten; change classes in Margin.', ''];
-  let day = '';
-  for (const e of events) {
-    const d = new Date(e.at), key = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
-    if (key !== day) { if (day) out.push(''); out.push(`## ${DAYS[d.getDay()]} ${key}`); day = key; }
-    const text = `${hm(e.at)}${e.end ? `–${hm(e.end)}` : ''} ${e.title}${e.room ? ` · ${e.room}` : ''}`;
-    out.push(`- ${e.cancelled ? `~~${text}~~ cancelled` : text}`);
-  }
-  if (!events.length) out.push('No classes in the next two weeks.');
-  return `${out.join('\n')}\n`;
-}
-
-/* ── the plugin ────────────────────────────────────────────────────────────────────────────── */
 class MarginBridge extends obsidian.Plugin {
   async onload() {
-    this.state = Object.assign({}, DEFAULTS, await this.loadData());
-    this.state.seen = this.state.seen || {}; this.state.sent = this.state.sent || {};
-    this.savedAs = this.stateText();
-    this.files = new Map(); // path -> { mtime, rows }: a file is parsed again only when it changes
-    this.busy = false;
     this.status = this.addStatusBarItem();
     this.addSettingTab(new MarginSettings(this.app, this));
-    this.addCommand({ id: 'sync-now', name: 'Sync with Margin now', callback: () => this.sync(true) });
-    const soon = obsidian.debounce(() => this.sync(false), 1500, true);
-    this.registerEvent(this.app.vault.on('modify', soon));
-    this.registerEvent(this.app.vault.on('delete', soon));
-    this.registerDomEvent(document, 'visibilitychange', () => { if (!document.hidden) this.sync(false); });
-    /* v0.7: no 30 s polling any more (battery; vault-sync PLAN found issue 13). The bridge runs on file
-       changes and when Obsidian comes to the front; live sync carries the files themselves. */
-    this.app.workspace.onLayoutReady(() => this.sync(false));
     this.live = new LiveSync(this);
     this.live.start();
-    /* v0.7.1: the shared focus timer's transport (Bone Tasks draws it), see 30_timer.js */
     this.timerLink = new TimerLink(this);
     this.timerLink.startDesktop();
+    this.renderStatus();
   }
   onunload() { this.live?.stop(); this.timerLink?.stop(); }
-  /** data.json changed on disk (another device, through sync): take it, so the next save keeps it. */
-  async onExternalSettingsChange() {
-    const d = await this.loadData();
-    if (!d) return;
-    this.state = Object.assign({}, DEFAULTS, d);
-    this.state.seen = this.state.seen || {}; this.state.sent = this.state.sent || {};
-    this.savedAs = this.stateText();
-  }
   liveChanged(state, note) {
     this.liveState = state;
     if (note) new obsidian.Notice(`Margin: ${note}`);
-    this.renderStatus?.();
+    this.renderStatus();
   }
-
-  /** Whether this device runs the bridge: a per-device choice (local storage), the phone by default. */
-  runsHere() { const v = this.app.loadLocalStorage?.('margin-bridge-run'); return v == null ? !!obsidian.Platform.isMobile : v === 'true'; }
-  setRunsHere(on) { this.app.saveLocalStorage?.('margin-bridge-run', on ? 'true' : 'false'); }
-  /** The part of the state worth a write to data.json; lastSync changes every 30 s and is kept in memory. */
-  stateText() { const { lastSync, ...rest } = this.state; return JSON.stringify(rest); }
-  async saveState() { const t = this.stateText(); if (t !== this.savedAs) { await this.saveData(this.state); this.savedAs = t; } }
-
-  async readNote(path) { const f = this.app.vault.getAbstractFileByPath(path); return f instanceof obsidian.TFile ? this.app.vault.read(f) : null; }
-  async writeNote(path, text) {
-    const f = this.app.vault.getAbstractFileByPath(path);
-    if (f instanceof obsidian.TFile) { await this.app.vault.modify(f, text); return; }
-    const dir = path.split('/').slice(0, -1).join('/');
-    if (dir && !this.app.vault.getAbstractFileByPath(dir)) await this.app.vault.createFolder(dir).catch(() => {});
-    await this.app.vault.create(path, text);
-  }
-
-  async sync(loud) {
-    if (this.busy) return;
-    if (!this.runsHere()) {
-      this.status.setText('Margin: synced on the phone');
-      if (loud) new obsidian.Notice('Margin Bridge runs on the phone, where Margin is. Turn on "Run the bridge on this device" in its settings to run it here instead.');
-      return;
-    }
-    this.busy = true;
-    try {
-      const ad = this.app.vault.adapter, now = Date.now(), s = this.state;
-      const env = (await ad.exists(IN)) ? parseEnvelope(await ad.read(IN)) : null;
-      if (env) {
-        /* Margin's tasks into the tasks note. */
-        const before = (await this.readNote(s.tasksNote)) ?? '';
-        const res = applyMargin(before, env, s);
-        if (res.changed) await this.writeNote(s.tasksNote, res.text);
-        /* Margin's changes to tasks that live in notes. */
-        for (const item of env.tasks) {
-          if (item.origin !== 'obsidian' || item.deleted || !item.data) continue;
-          const sent = s.sent[blockId(item.id)];
-          if (!sent || sent.deleted || item.updatedAt <= sent.updatedAt || !sent.path) continue;
-          const text = await this.readNote(sent.path);
-          if (text == null) continue;
-          const lines = text.split('\n'), at = lines.findIndex((l) => (ID_RE.exec(l) || [])[1] === blockId(item.id));
-          if (at < 0) continue;
-          const next = patchLine(lines[at], item.data);
-          if (next !== lines[at]) { lines[at] = next; await this.writeNote(sent.path, lines.join('\n')); }
-          s.sent[blockId(item.id)] = { ...sent, hash: next, updatedAt: item.updatedAt };
-        }
-        /* The timetable, rewritten whole when it differs. */
-        const table = timetableNote(env);
-        if ((await this.readNote(s.timetableNote)) !== table) await this.writeNote(s.timetableNote, table);
-      }
-      /* The vault's task lines out. */
-      const rows = [], live = new Set(), opts = { tag: s.tag || '', tasksNote: s.tasksNote };
-      for (const f of this.app.vault.getMarkdownFiles()) {
-        const cache = this.app.metadataCache.getFileCache(f);
-        if (!cache || !cache.listItems || !cache.listItems.some((li) => li.task !== undefined)) { this.files.delete(f.path); continue; }
-        let got = this.files.get(f.path);
-        if (!got || got.mtime !== f.stat.mtime) {
-          const text = await this.app.vault.cachedRead(f), res = collectFile(text, f.path, f.stat.mtime, s, opts);
-          if (res.changed) await this.app.vault.modify(f, res.text);
-          got = { mtime: res.changed ? -1 : f.stat.mtime, rows: res.rows, ids: res.text.split('\n').map((l) => (ID_RE.exec(l) || [])[1]).filter(Boolean) };
-          this.files.set(f.path, got);
-        }
-        for (const r of got.rows) rows.push(r);
-        for (const id of got.ids) live.add(id);
-      }
-      const out = buildOut([...rows, ...tombstones(s, live, now)], now);
-      const prev = (await ad.exists(OUT)) ? parseEnvelope(await ad.read(OUT)) : null;
-      if (!prev || !sameOut(prev, out)) {
-        if (!(await ad.exists(DIR))) await ad.mkdir(DIR);
-        await ad.write(OUT, `${JSON.stringify(out, null, 1)}\n`);
-      }
-      s.lastSync = now;
-      await this.saveState();
-      this.status.setText(env ? `Margin ✓ ${hm(now)}` : 'Margin: waiting for the app');
-      if (loud) new obsidian.Notice(env ? `Margin: ${out.tasks.length} task(s) sent, ${env.tasks.length} read.` : 'Margin: no .margin/margin.json yet. Connect the vault in Margin → Settings → Obsidian.');
-    } catch (e) {
-      console.error('Margin Bridge', e);
-      this.status.setText('Margin: sync problem');
-      if (loud) new obsidian.Notice(`Margin: ${e && e.message ? e.message : e}`);
-    } finally { this.busy = false; }
+  renderStatus() {
+    if (!this.status) return;
+    if (!obsidian.Platform.isMobile) { this.status.setText(this.timerLink?.online ? 'Margin ✓' : ''); return; }
+    const s = this.liveState || 'off';
+    this.status.setText(s === 'live' ? 'Margin ✓' : s === 'connecting' ? 'Margin …' : s === 'waiting' ? 'Margin: not running' : 'Margin: not linked');
   }
 }
 
 class MarginSettings extends obsidian.PluginSettingTab {
   constructor(app, plugin) { super(app, plugin); this.plugin = plugin; }
   display() {
-    const { containerEl: el } = this, s = this.plugin.state;
+    const { containerEl: el } = this, live = this.plugin.live;
     el.empty();
-    const field = (name, desc, key) => new obsidian.Setting(el).setName(name).setDesc(desc).addText((t) => t.setValue(s[key]).onChange(async (v) => { s[key] = v.trim(); this.plugin.files.clear(); await this.plugin.saveData(s); }));
-    field('Tasks note', 'Tasks made in Margin are written here.', 'tasksNote');
-    field('Timetable note', 'The next two weeks of classes, rewritten by the bridge.', 'timetableNote');
-    field('School tag', 'Open tasks with this tag and a due date are sent to Margin. Empty: only the tasks note.', 'tag');
-    new obsidian.Setting(el).setName('Run the bridge on this device').setDesc('On for the phone, where Margin lives. Keep it on for one device only: two devices writing the same files give git conflicts. Not synced.').addToggle((t) => t.setValue(this.plugin.runsHere()).onChange((v) => { this.plugin.setRunsHere(v); this.plugin.sync(true); this.display(); }));
-    const live = this.plugin.live;
-    new obsidian.Setting(el).setHeading().setName('Live sync with your desktop');
-    new obsidian.Setting(el).setName('Connect to Margin')
-      .setDesc(live.enabled ? `Status: ${live.state}${live.peers ? ` · ${live.peers.map((p) => p.name || p.role).join(', ')}` : ''}. Edits reach your desktop through Margin while Obsidian is open.`
-        : 'Get a 6-digit code in Margin → Settings → Sync → "Connect phone Obsidian", then type it here. Per device, not synced.')
+    new obsidian.Setting(el).setHeading().setName('Margin');
+    if (!obsidian.Platform.isMobile) {
+      new obsidian.Setting(el).setName('On this computer')
+        .setDesc('The desktop hub (bone-syncd) keeps this vault in step with the phone. Margin writes its own notes (Margin/…); nothing to set up here. The shared focus timer works while the hub runs.');
+      return;
+    }
+    new obsidian.Setting(el).setName('Link with Margin')
+      .setDesc(live.enabled
+        ? `Status: ${live.state}. Margin writes this vault; Obsidian tells it which note you are typing in, so nothing is written under your cursor.`
+        : 'Open Margin once with this vault chosen in Settings → Obsidian & sync: it links itself. No code to type.')
+      .addButton((b) => b.setButtonText(live.enabled ? 'Reconnect' : 'Look again').onClick(async () => { await live.loadKey(); live.close(); live.open(); this.display(); }));
+    new obsidian.Setting(el).setName('Older Margin: link with a code')
+      .setDesc('Only for Margin before 0.8: Settings → Sync → "Connect phone Obsidian" shows six digits.')
       .addText((t) => { t.setPlaceholder('6-digit code'); t.inputEl.inputMode = 'numeric'; this.code = t; })
-      .addButton((b) => b.setButtonText(live.enabled ? 'Reconnect' : 'Connect').onClick(async () => {
+      .addButton((b) => b.setButtonText('Link').onClick(async () => {
         try { await live.pairWithCode(this.code.getValue()); new obsidian.Notice('Margin: connecting…'); } catch (e) { new obsidian.Notice(`Margin: ${e.message}`); }
         this.display();
       }));
-    if (live.enabled) new obsidian.Setting(el).setName('Turn live sync off on this device').addButton((b) => b.setButtonText('Turn off').onClick(() => { live.forget(); this.display(); }));
-    new obsidian.Setting(el).setName('Sync now').setDesc(s.lastSync ? `Last sync ${new Date(s.lastSync).toLocaleString()}` : 'Not synced yet').addButton((b) => b.setButtonText('Sync').onClick(() => this.plugin.sync(true)));
   }
 }
 
-
 /* ── 20_live.js ── */
-/* ── live sync (v0.7, bone-sync/1) ─────────────────────────────────────────────────────────────────
- * Phone Obsidian ("O" in vault-sync/docs/v07/SYNC_PROTOCOL.md) is a client of Margin on 127.0.0.1:7429.
- * Margin keeps the link to the desktop hub; this side only runs while Obsidian is in front:
- *   · connect on `visible`, ping first and reconnect if no pong within 2 s (sockets are half-dead after resume);
- *   · close 5 s after `hidden` (Margin then writes the vault itself); no timers at all while hidden;
- *   · edits leave 1.5 s after the last keystroke per file, as one `put` with the base both sides agreed on;
- *   · what arrives is written through the vault API (`vault.process`), so the open editor updates cleanly;
- *   · the link is sealed (seal 2) even on loopback, and the 6-digit code is swapped for a random key on first
- *     contact (`rekey`), so another app on the phone can neither read the stream nor guess the key;
- *   · the cursor moves only after a change is on disk, so a change cut off by closing Obsidian comes again.
- * Per-device state (the key, the device id, the per-file base hashes) is in local storage, never in data.json:
- * data.json travels with the vault.
+/* ── the thin link to Margin (v0.8, phone only) ───────────────────────────────────────────────────
+ * Phone Obsidian is a client of Margin on 127.0.0.1:7429 while it is in front:
+ *   · connect on `visible` (ping first, reconnect without a pong in 2 s), close 5 s after `hidden`;
+ *   · typing in a note sends `hint editing <path>` (at most every 5 s); 2 s after the last save it sends
+ *     `hint saved <path>`; Margin holds its own writes to that note in between;
+ *   · `changed <path>` from Margin: the file was rewritten on disk; Obsidian re-reads it (the open editor updates);
+ *     `changed` with `plugin`: a plugin was updated from the desktop and is reloaded;
+ *   · the link is sealed (seal 2) even on loopback; the key comes from `link.local.json`, which Margin writes.
  */
 const LIVE_URL = 'ws://127.0.0.1:7429';
-const liveUrl = () => globalThis.__marginLiveUrl || LIVE_URL; // tests point it at a local hub
-const LS = { key: 'margin-bridge-sync-key', dev: 'margin-bridge-sync-device', files: 'margin-bridge-sync-files', cursor: 'margin-bridge-sync-cursor', on: 'margin-bridge-sync-on' };
-const TEXT_RE = /\.(md|canvas|base|txt|css|js|mjs|py|csv|json)$/i;
-const b64 = (buf) => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
-const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)).buffer;
+const liveUrl = () => globalThis.__marginLiveUrl || LIVE_URL;
+const LINK_FILE = '.obsidian/plugins/margin-bridge/link.local.json';
+const LS = { key: 'margin-bridge-sync-key', dev: 'margin-bridge-sync-device', on: 'margin-bridge-sync-on' };
+const EDIT_EVERY_MS = 5000, SAVED_AFTER_MS = 2000;
 
 class LiveSync {
   constructor(plugin) {
     this.p = plugin; this.app = plugin.app;
     this.link = null; this.hideTimer = null; this.pongTimer = null;
-    this.pending = new Map();   // path → timeout (debounced edits)
-    this.applying = new Set();  // paths being written from the wire (their modify events are ours)
-    // paths deleted or moved from the wire: their delete/rename events are ours. Separate from `applying`, and
-    // cleared after the op: an incoming write must never swallow a real delete made right after it (2026-11-15)
-    this.removing = new Set();
-    this.files = this.load(LS.files, {});  // path → { h, base }
-    this.ignore = BoneSyncCore.compileIgnore();
-    this.asm = new BoneSyncCore.Assembler();
-    this.inflight = new Map();   // frame id (or transfer id) → what we sent, until Margin/the hub acks it
+    this.editingAt = new Map();   // path → when the last "editing" hint went
+    this.savedT = new Map();      // path → timer for its "saved" hint
     this.state = 'off';
   }
   ls(k, v) { if (v === undefined) return this.app.loadLocalStorage(k); this.app.saveLocalStorage(k, v); }
-  load(k, d) { try { return JSON.parse(this.ls(k) || '') || d; } catch { return d; } }
-  saveFiles() { this.ls(LS.files, JSON.stringify(this.files)); }
   get enabled() { return this.ls(LS.on) === 'true' && !!this.ls(LS.key); }
   get deviceId() { let d = this.ls(LS.dev); if (!d) { d = BoneSyncCore.newId(); this.ls(LS.dev, d); } return d; }
 
-  /** The 6-digit code from Margin → Settings → Sync → "Connect phone Obsidian". */
+  /** Margin leaves the key here (device-local class: never synced). */
+  async loadKey() {
+    try {
+      const j = JSON.parse(await this.app.vault.adapter.read(LINK_FILE));
+      if (/^[0-9a-f]{64}$/.test(j.key)) { if (this.ls(LS.key) !== j.key) this.ls(LS.key, j.key); this.ls(LS.on, 'true'); return true; }
+    } catch { /* not written yet: Margin has not run with this vault */ }
+    return false;
+  }
+  /** Margin before 0.8: the 6-digit code from Settings → Sync → "Connect phone Obsidian". */
   async pairWithCode(code) {
     const digits = String(code).replace(/\D/g, '');
     if (digits.length !== 6) throw new Error('The code has six digits.');
@@ -3433,22 +3368,38 @@ class LiveSync {
   forget() { this.ls(LS.key, ''); this.ls(LS.on, 'false'); this.close(); this.setState('off'); }
 
   start() {
+    if (!obsidian.Platform.isMobile) return;
     const p = this.p;
     p.registerDomEvent(document, 'visibilitychange', () => (document.hidden ? this.onHidden() : this.onVisible()));
-    p.registerEvent(this.app.vault.on('modify', (f) => this.local(f.path)));
-    p.registerEvent(this.app.vault.on('create', (f) => this.local(f.path)));
-    p.registerEvent(this.app.vault.on('delete', (f) => this.localDelete(f.path)));
-    p.registerEvent(this.app.vault.on('rename', (f, old) => this.localRename(old, f.path)));
-    this.app.workspace.onLayoutReady(() => { if (!document.hidden) this.open(); });
+    p.registerEvent(this.app.workspace.on('editor-change', (_ed, info) => this.editing(info?.file?.path)));
+    p.registerEvent(this.app.vault.on('modify', (f) => this.armSaved(f.path)));
+    p.registerEvent(this.app.vault.on('create', (f) => this.armSaved(f.path)));
+    p.registerEvent(this.app.vault.on('delete', (f) => this.armSaved(f.path)));
+    p.registerEvent(this.app.vault.on('rename', (f, old) => { this.armSaved(old); this.armSaved(f.path); }));
+    this.app.workspace.onLayoutReady(async () => { await this.loadKey(); if (!document.hidden) this.open(); });
   }
-  stop() { this.close(); for (const t of this.pending.values()) clearTimeout(t); }
+  stop() { this.flushAll(); this.close(); }
   setState(s, note) { this.state = s; this.p.liveChanged?.(s, note); }
+
+  // ── hints ──
+  hint(op, p) { const l = this.link; if (p && l?.ready) l.send(l.frame('hint', { op, p })); }
+  editing(path) {
+    if (!path) return;
+    const t = Date.now();
+    if (t - (this.editingAt.get(path) || 0) >= EDIT_EVERY_MS) { this.editingAt.set(path, t); this.hint('editing', path); }
+    this.armSaved(path);
+  }
+  armSaved(path) {
+    if (!path || path.startsWith('.obsidian/')) return;
+    clearTimeout(this.savedT.get(path));
+    this.savedT.set(path, setTimeout(() => { this.savedT.delete(path); this.editingAt.delete(path); this.hint('saved', path); }, SAVED_AFTER_MS));
+  }
+  flushAll() { for (const [p, t] of this.savedT) { clearTimeout(t); this.hint('saved', p); } this.savedT.clear(); this.editingAt.clear(); }
 
   onVisible() {
     clearTimeout(this.hideTimer);
-    if (!this.enabled) return;
+    if (!this.enabled) { this.loadKey().then((ok) => { if (ok) this.open(); }); return; }
     if (this.link?.ready) {
-      // a socket from before the pause may be half-dead: no pong in 2 s → reconnect
       this.link.ping();
       clearTimeout(this.pongTimer);
       this.pongTimer = setTimeout(() => { this.close(); this.open(); }, 2000);
@@ -3463,57 +3414,38 @@ class LiveSync {
   open() {
     if (!this.enabled || this.link) return;
     this.setState('connecting');
-    const cursor = Number(this.ls(LS.cursor) || 0);
     const link = this.link = BoneSyncCore.connect({
-      url: liveUrl(), deviceId: this.deviceId, name: 'Obsidian (phone)', role: 'phone-obsidian', app: this.p.manifest.version,
-      key: this.ls(LS.key), vault: null, cursor,
-      onFrame: (m) => this.onFrame(m).catch((e) => console.error('Margin live sync', e)),
+      url: liveUrl(), deviceId: this.deviceId, name: 'Obsidian (phone)', role: 'phone-obsidian', app: this.p.manifest?.version ?? '0.8.0',
+      key: this.ls(LS.key), vault: null, cursor: 0, hello: { files: false },
+      onFrame: (m) => this.onFrame(m).catch((e) => console.error('Margin link', e)),
       onState: (s) => {
-        // only the current link speaks: after close() + open(), the old socket's late close event used to set
-        // `this.link = null` under the new one, so the state said "live" while every edit was dropped (2026-11-15)
         if (this.link !== link) return;
         if (s === 'ready') { this.setState('live'); this.p.timerLink?.linkReady(link); }
-        if (s === 'closed' || s === 'error') { this.link = null; this.setState(this.enabled ? 'waiting' : 'off', s === 'error' ? 'Margin is not reachable' : undefined); }
+        if (s === 'closed' || s === 'error') { this.link = null; this.setState(this.enabled ? 'waiting' : 'off'); }
       },
-      log: (s) => console.log('Margin live sync:', s),
+      log: (s) => console.log('Margin link:', s),
     });
   }
   close() { clearTimeout(this.pongTimer); if (this.link) { try { this.link.send(this.link.frame('bye', { reason: 'hidden' })); } catch { /* */ } this.link.close(); this.link = null; } }
 
-  // ── incoming ──
+  // ── from Margin ──
   async onFrame(m) {
     if (m.t === 'pong') { clearTimeout(this.pongTimer); return; }
-    // anyone listening on Margin's port can say "bad-proof" before proving anything, so sync stays on: it says
-    // so and tries again the next time Obsidian comes to the front
-    if (m.t === 'bye' && m.reason === 'bad-proof') { this.setState('waiting', 'Margin did not accept this key. If you paired Margin again, get a new code in Margin.'); return; }
-    if (m.t === 'bye' && m.reason === 'busy') { this.setState('waiting', 'Margin is busy; trying again soon.'); return; }
+    if (m.t === 'bye' && m.reason === 'bad-proof') { this.setState('waiting', 'Margin did not accept this link. Open Margin once so it writes a new key.'); await this.loadKey(); return; }
+    if (m.t === 'bye' && m.reason === 'busy') { this.setState('waiting'); return; }
     if (m.t === 'rekey') return this.onRekey(m);
     if (m.t === 'hold') return this.onHold(m);
-    if (m.t === 'restore') { for (const p of m.paths) if (!this.skip(p)) await this.send(p, null); return; }
-    if (m.t === 'manifest') { await this.reconcile(m); return this.bump(m.head); }
-    if (m.t === 'put' && m.xfer) {
-      let bytes; try { bytes = this.asm.add(m); } catch { return this.want(m.p); }
-      if (!bytes) return;
-      m = { ...m, id: m.xfer, bytes };
-    }
-    if (m.t === 'put') { if (await this.applyPut(m)) this.bump(m.seq); return; }
-    if (m.t === 'del') { await this.applyDel(m); return this.bump(m.seq); }
-    if (m.t === 'mv') { if (await this.applyMv(m)) this.bump(m.seq); return; }
-    if (m.t === 'ack') return this.onAck(m);
-    if (m.t === 'conflict') { new obsidian.Notice(`Merged edits in ${m.p.split('/').pop()} (phone + desktop)`); return; }
-    if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.state); }
+    if (m.t === 'conflict') { if (m.resolution === 'conflicts-note') new obsidian.Notice(`Sync: a clash in ${String(m.p).split('/').pop()}. The other version is in ${m.file}.`); return; }
+    if (m.t === 'presence') { this.peers = m.peers; this.p.liveChanged?.(this.state); return; }
     if (m.t === 'timer') { this.p.timerLink?.receive(m); return; }
-    // Margin wrote a file in `.obsidian/` that this app cannot watch (a plugin's data.json): let it reload
-    if (m.t === 'changed') return reloadPluginData(this.app, m.p);
+    if (m.t === 'changed') return m.plugin ? reloadPlugin(this.app, m.plugin) : reread(this.app, m.p);
   }
-  bump(seq) { if (seq) this.ls(LS.cursor, String(Math.max(Number(this.ls(LS.cursor) || 0), seq))); }
-  want(p) { this.link?.send(this.link.frame('want', { paths: [p] })); return false; }
   onRekey(m) {
     if (!/^[0-9a-f]{64}$/.test(m.key)) return;
     this.ls(LS.key, m.key);
     this.link?.send(this.link.frame('ack', { ref: m.id, ok: true }));
   }
-  /** The hub stopped a big delete: ask here too (the owner can answer on the desktop or the phone). */
+  /** The hub stopped a big delete: ask here too (the owner can answer on the desktop, in Margin, or here). */
   onHold(m) {
     if (m.op === 'done') { this.holdModal?.close(); this.holdModal = null; if (m.result) new obsidian.Notice(m.result === 'apply' ? 'Sync: the deletes went through.' : 'Sync: the deleted files are coming back.'); return; }
     if (m.op !== 'held' || !obsidian.Modal) return;
@@ -3527,172 +3459,36 @@ class LiveSync {
     row.createEl('button', { text: 'Keep the files' }).onclick = () => answer('cancel');
     md.open();
   }
-  skip(p) { return this.ignore(p) || p.startsWith('.obsidian/'); }
-  async hashOf(path) {
-    const ad = this.app.vault.adapter;
-    if (!(await ad.exists(path))) return null;
-    return BoneSyncCore.hashOf(TEXT_RE.test(path) ? await ad.read(path) : new Uint8Array(await ad.readBinary(path)));
-  }
-  async reconcile(m) {
-    const want = [];
-    for (const f of m.files) {
-      if (this.skip(f.p)) continue;
-      const rec = this.files[f.p];
-      const local = await this.hashOf(f.p);
-      if (f.h === null) { if (local && rec && local === rec.base) await this.applyDel({ p: f.p }); continue; }
-      if (local === f.h) { this.files[f.p] = { h: f.h, base: f.h }; continue; }
-      if (!local || (rec && local === rec.base)) want.push(f.p);
-      else this.send(f.p, rec?.base ?? null);   // changed here (and maybe there): the hub merges
-    }
-    this.saveFiles();
-    if (want.length) this.link?.send(this.link.frame('want', { paths: want }));
-  }
-  async write(path, data, isText) {
-    const v = this.app.vault, f = v.getAbstractFileByPath(path);
-    this.applying.add(path);
-    try {
-      if (f instanceof obsidian.TFile) {
-        if (isText) await v.process(f, () => data); else await v.modifyBinary(f, data);
-      } else {
-        const dir = path.split('/').slice(0, -1).join('/');
-        if (dir && !v.getAbstractFileByPath(dir)) await v.createFolder(dir).catch(() => {});
-        if (isText) await v.create(path, data); else await v.createBinary(path, data);
-      }
-    } finally { setTimeout(() => this.applying.delete(path), 1500); }
-  }
-  /** true when the file on disk is now the incoming one (the cursor may move past it). */
-  async applyPut(m) {
-    if (this.skip(m.p)) return true;
-    let data, isText = m.enc !== 'bin';
-    if (m.bytes) data = m.bytes.buffer.slice(m.bytes.byteOffset, m.bytes.byteOffset + m.bytes.byteLength);
-    else if (m.enc === 'patch') {
-      const rec = this.files[m.p];
-      const cur = await this.hashOf(m.p);
-      if (!rec || cur !== m.base) return this.want(m.p);
-      try { data = BoneSyncCore.applyPatch(await this.app.vault.adapter.read(m.p), m.patch); } catch { return this.want(m.p); }
-    } else data = m.enc === 'bin' ? unb64(m.body) : m.body;
-    const h = await BoneSyncCore.hashOf(isText ? data : new Uint8Array(data));
-    if (h !== m.h) return this.want(m.p);
-    // a local version the hub has not seen (an unsent edit, or the same new note made here at the same time, e.g.
-    // the daily note at midnight): send ours with its base first; the hub merges both and sends the result back.
-    // Before, a note made on both sides lost the phone's text (report #3).
-    const rec = this.files[m.p], cur = await this.hashOf(m.p);
-    if (cur && cur !== h && (!rec || cur !== rec.base)) {
-      clearTimeout(this.pending.get(m.p)); this.pending.delete(m.p);
-      await this.send(m.p, rec?.base ?? null);
-      return false;
-    }
-    await this.write(m.p, data, isText);
-    // confirm it landed before saying so (report #5)
-    if ((await this.hashOf(m.p)) !== h) { this.link?.send(this.link.frame('ack', { ref: m.id, ok: false, err: 'write-failed', seq: m.seq })); return this.want(m.p); }
-    this.files[m.p] = { h, base: h }; this.saveFiles();
-    this.link?.send(this.link.frame('ack', { ref: m.id, ok: true, seq: m.seq, h, p: m.p }));
-    return true;
-  }
-  async applyDel(m) {
-    const f = this.app.vault.getAbstractFileByPath(m.p);
-    const rec = this.files[m.p];
-    if (f instanceof obsidian.TFile) {
-      if (rec && (await this.hashOf(m.p)) !== rec.base) return; // edited here: an edit beats a delete
-      this.removing.add(m.p);
-      try { await this.app.vault.delete(f).catch(() => {}); } finally { setTimeout(() => this.removing.delete(m.p), 1500); }
-    }
-    delete this.files[m.p]; this.saveFiles();
-  }
-  async applyMv(m) {
-    const f = this.app.vault.getAbstractFileByPath(m.from);
-    if (!(f instanceof obsidian.TFile)) return this.want(m.to);
-    this.removing.add(m.from); this.removing.add(m.to);
-    try { await this.app.fileManager.renameFile(f, m.to); } finally { setTimeout(() => { this.removing.delete(m.from); this.removing.delete(m.to); }, 1500); }
-    if (this.files[m.from]) { this.files[m.to] = this.files[m.from]; delete this.files[m.from]; this.saveFiles(); }
-    return true;
-  }
-  onAck(m) {
-    const sent = this.inflight.get(m.ref);
-    if (!sent) return;
-    // a resumable transfer: the hub holds parts 0…have−1; send the rest under the same transfer id
-    if (m.err === 'resume' && sent.f) { this.sendRest(m.ref, sent, Number(m.have) || 1).catch((e) => console.error('Margin live sync: resume', e)); return; }
-    this.inflight.delete(m.ref);
-    if (sent.kind === 'mv') {
-      // the hub never had the old name (a new note renamed before it was sent, report P2): send it as new
-      if (!m.ok && (m.err === 'missing' || m.err === 'edited')) this.send(sent.to, null);
-      return;
-    }
-    if (m.ok) {
-      if (sent.kind !== 'put') return;
-      const p = m.renamed ?? sent.p;
-      // merged: the hub now holds what we sent, so that is our base; the merged text follows as a put and lands
-      // on it cleanly (taking the merged hash as base here made the phone resend its own copy over the merge)
-      const h = m.merged ? sent.h : m.h;
-      this.files[p] = { h, base: h }; this.saveFiles();
-    } else if (m.err === 'need-full' || m.err === 'hash-mismatch' || m.err === 'write-failed') {
-      if ((sent.tries ?? 0) < 3) this.send(sent.p, sent.base, sent.tries + 1);
-    }
-  }
+}
 
-  // ── outgoing ──
-  local(path) {
-    // no `applying` check here: a real edit right after an incoming write must still go out. The echo of our
-    // own write is dropped in send(), where its hash equals the base we just recorded.
-    if (!this.link || this.skip(path)) return;
-    clearTimeout(this.pending.get(path));
-    this.pending.set(path, setTimeout(() => { this.pending.delete(path); this.send(path, this.files[path]?.base ?? null); }, 1500));
-  }
-  flushAll() { for (const [p, t] of this.pending) { clearTimeout(t); this.send(p, this.files[p]?.base ?? null); } this.pending.clear(); }
-  async send(path, base, tries = 0) {
-    if (!this.link?.ready) return;
-    const ad = this.app.vault.adapter;
-    if (!(await ad.exists(path))) return;
-    const isText = TEXT_RE.test(path);
-    const data = isText ? await ad.read(path) : await ad.readBinary(path);
-    const h = await BoneSyncCore.hashOf(isText ? data : new Uint8Array(data));
-    if (h === base) return;
-    const stat = await ad.stat(path);
-    const f = { p: path, h, base, s: stat?.size ?? 0, m: stat?.mtime ?? Date.now() };
-    this.files[path] = { h, base }; this.saveFiles();
-    if (!isText && BoneSyncCore.needsParts(data.byteLength)) {
-      // resumable (when Margin and the hub say so): part 0 first, then the rest from where the answer says, so a
-      // transfer cut off by a closed app or a network switch goes on instead of starting over (2026-11-15)
-      if (this.link.resume) {
-        const first = BoneSyncCore.partsOf(f, new Uint8Array(data)).next().value;
-        this.inflight.set(first.xfer, { kind: 'put', p: path, h, base, tries, f });
-        await this.link.send(this.link.frame('put', { ...first, resumable: true }));
-        return;
-      }
-      // a big binary goes in 1 MB parts; the hub acks the transfer id
-      let xfer = null;
-      for (const part of BoneSyncCore.partsOf(f, new Uint8Array(data))) { xfer = part.xfer; await this.link?.send(this.link.frame('put', part)); }
-      if (xfer) this.inflight.set(xfer, { kind: 'put', p: path, h, base, tries });
-      return;
+/** Margin rewrote `p` on disk. Obsidian on Android does not watch the disk, so ask it to look again: the adapter's
+ *  own reconcile when this Obsidian has one, else the text goes through the vault API (open editors update). A
+ *  file in `.obsidian/` belongs to a plugin: that plugin reloads its data. */
+async function reread(app, p) {
+  if (!p) return;
+  if (p.startsWith('.obsidian/')) return reloadPluginData(app, p);
+  const ad = app.vault.adapter;
+  try {
+    for (const fn of ['reconcileFile', 'reconcileFileChanged']) {
+      if (typeof ad[fn] === 'function') { await ad[fn](p, p); return; }
     }
-    Object.assign(f, isText ? { enc: 'text', body: data } : { enc: 'bin', body: b64(data) });
-    const fr = this.link.frame('put', f);
-    this.inflight.set(fr.id, { kind: 'put', p: path, h, base, tries });
-    this.link.send(fr);
+  } catch (e) { console.warn('Margin link: reconcile', e); }
+  const f = app.vault.getAbstractFileByPath(p);
+  if (!(await ad.exists(p))) { if (f instanceof obsidian.TFile) await app.vault.delete(f).catch(() => {}); return; }
+  const disk = await ad.read(p);
+  if (f instanceof obsidian.TFile) { if ((await app.vault.read(f)) !== disk) await app.vault.modify(f, disk); }
+  else {
+    const dir = p.split('/').slice(0, -1).join('/');
+    if (dir && !app.vault.getAbstractFileByPath(dir)) await app.vault.createFolder(dir).catch(() => {});
+    // the file exists on disk but Obsidian does not know it yet: let its file list catch up
+    try { await ad.reconcileFolderCreation?.(dir, dir); } catch { /* */ }
   }
-  async sendRest(xfer, sent, from) {
-    const bytes = new Uint8Array(await this.app.vault.adapter.readBinary(sent.p));
-    // changed since part 0 went out: drop this transfer, the change is sent as a new one
-    if ((await BoneSyncCore.hashOf(bytes)) !== sent.h) { this.inflight.delete(xfer); this.local(sent.p); return; }
-    for (const part of BoneSyncCore.partsOf(sent.f, bytes, BoneSyncCore.PART_BYTES, { xfer, from })) await this.link?.send(this.link.frame('put', part));
-  }
-  localDelete(path) {
-    if (!this.link || this.removing.has(path) || this.skip(path)) return;
-    clearTimeout(this.pending.get(path)); this.pending.delete(path);
-    const rec = this.files[path];
-    this.link.send(this.link.frame('del', { p: path, base: rec?.base ?? null }));
-    delete this.files[path]; this.saveFiles();
-  }
-  localRename(from, to) {
-    if (!this.link || this.removing.has(to) || this.skip(to)) return;
-    const rec = this.files[from];
-    // never sent yet (still in its 1.5 s wait, or new): it is simply a new file under the new name
-    if (this.pending.has(from) || !rec) { clearTimeout(this.pending.get(from)); this.pending.delete(from); this.local(to); return; }
-    const fr = this.link.frame('mv', { from, to, h: rec.h ?? null });
-    this.inflight.set(fr.id, { kind: 'mv', from, to });
-    this.link.send(fr);
-    this.files[to] = rec; delete this.files[from]; this.saveFiles();
-  }
+}
+/** A plugin's code changed under it (an update from the desktop): turn it off and on again. */
+async function reloadPlugin(app, id) {
+  const pl = app.plugins;
+  if (!pl?.enabledPlugins?.has?.(id) || id === 'margin-bridge') return;
+  try { await pl.disablePlugin(id); await pl.enablePlugin(id); new obsidian.Notice(`Updated ${pl.manifests?.[id]?.name ?? id}`); } catch (e) { console.error(`Margin link: reload ${id}`, e); }
 }
 
 /* ── 30_timer.js ── */
@@ -3828,7 +3624,7 @@ async function reloadPluginData(app, p) {
 
 /* ── 90_exports.js ── */
 module.exports = MarginBridge;
-module.exports.pure = { FORMAT, taskLine, parseTaskLine, parseEnvelope, applyMargin, patchLine, collectFile, tombstones, buildOut, sameOut, timetableNote, blockId };
 module.exports.LiveSync = LiveSync;
 module.exports.TimerLink = TimerLink;
 module.exports.reloadPluginData = reloadPluginData;
+module.exports.reread = reread;
