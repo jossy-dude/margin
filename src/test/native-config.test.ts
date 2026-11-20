@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -319,7 +319,6 @@ describe('the margin-native module', () => {
 /** Kotlin only compiles in CI, so catch the two lexer traps here: Kotlin nests block comments, so a `/*` inside a
  * comment (a glob like `plugins/STAR/x`) swallows the rest of the file; and an import listed twice is ambiguous. */
 describe('Kotlin sources lex', () => {
-  const { readdirSync } = require('node:fs') as typeof import('node:fs');
   const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.kt') ? [join(d, e.name)] : []);
   const files = [...walk(join(ROOT, 'modules', 'margin-native', 'android', 'src')), ...walk(join(ANDROID, 'app', 'src'))];
