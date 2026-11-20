@@ -14,7 +14,6 @@ const book = readFileSync(join(__dirname, '..', 'navigation', 'Book.tsx'), 'utf8
 const win = readFileSync(join(__dirname, '..', 'navigation', 'window.ts'), 'utf8');
 const today = readFileSync(join(__dirname, '..', 'screens', 'Today.tsx'), 'utf8');
 const focus = readFileSync(join(__dirname, '..', 'screens', 'Focus.tsx'), 'utf8');
-const charts = readFileSync(join(__dirname, '..', 'ui', 'charts.tsx'), 'utf8');
 const tasks = readFileSync(join(__dirname, '..', 'screens', 'Tasks.tsx'), 'utf8');
 const week = readFileSync(join(__dirname, '..', 'screens', 'Week.tsx'), 'utf8');
 
@@ -67,10 +66,9 @@ describe('book navigator mount policy', () => {
   it('no screen re-renders on a tap: focus is the context, never a store-route subscription', () => {
     // The latency this replaced was threefold — cold mount, plus every mounted page re-rendering on
     // `s.route` before the first moving frame. With all six mounted, the subscription would be at its
-    // worst, so the three screens that act on `live` read the navigator's context instead.
-    for (const src of [today, focus, charts]) expect(src).not.toContain('useStore((s) => s.route)');
+    // worst, so the screens that act on `live` read the navigator's context instead.
+    for (const src of [today, focus]) expect(src).not.toContain('useStore((s) => s.route)');
     expect(today).toContain('const focused = useScreenLive();');
     expect(focus).toContain('const focused = useScreenLive();');
-    expect(charts).toContain('function useLive() { return useScreenLive(); }');
   });
 });

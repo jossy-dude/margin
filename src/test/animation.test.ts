@@ -107,29 +107,6 @@ function chip(on: boolean, reduce = false) {
   };
 }
 
-/** The chart leaves: it enters once — on FIRST FOCUS, not on mount, because every page now mounts on
- *  the navigator's first render — and then travels. `live` is the off-screen gate (`show`/`hide` flip
- *  it the way the navigator's focus context does); while hidden the value is assigned the correct
- *  picture and no tween ever starts. Mirrors `useEnter`/`Ring` in `charts.tsx`. */
-function chart(target: number, live: boolean, reduce: boolean) {
-  const v = new Shared(reduce || !live ? target : 0);
-  let on = live, entered = false;
-  const paint = () => {
-    if (!on) { v.set(target); return; } // hidden: the picture, no motion, no entrance
-    if (entered || reduce) { entered = true; if (reduce) v.set(target); else retarget(v, target); return; }
-    entered = true;
-    v.set(0); // first focus: grow from zero, under the drop
-    retarget(v, target);
-  };
-  return {
-    v,
-    render() { return v.get(); },
-    drive(next: number) { target = next; paint(); },
-    show() { on = true; paint(); },
-    hide() { on = false; paint(); },
-  };
-}
-
 /* ═════════════════════════════════════════════════════════ the real files ══ */
 
 const SRC = join(__dirname, '..');
@@ -141,7 +118,6 @@ const kit = readFileSync(join(SRC, 'ui', 'kit.tsx'), 'utf8');
 const sheet = readFileSync(join(SRC, 'ui', 'Sheet.tsx'), 'utf8');
 const swipe = readFileSync(join(SRC, 'ui', 'Swipe.tsx'), 'utf8');
 const overlay = readFileSync(join(SRC, 'ui', 'Overlay.tsx'), 'utf8');
-const charts = readFileSync(join(SRC, 'ui', 'charts.tsx'), 'utf8');
 const paperBg = readFileSync(join(SRC, 'ui', 'PaperBg.tsx'), 'utf8');
 const week = readFileSync(join(SRC, 'screens', 'Week.tsx'), 'utf8');
 const settings = readFileSync(join(SRC, 'sheets', 'Settings.tsx'), 'utf8');
@@ -188,9 +164,9 @@ describe('the motion vocabulary is one vocabulary', () => {
     // and its siblings. `Btn` had `borderBottomWidth` waiting in `Field` and `borderRadius` in `Swipe`;
     // both are gone. `flex`, `top` and `gap` count too.
     // `useAnimatedStyle` returns a **view** style, and every one of these is a Yoga property: animating
-    // one re-lays-out that node and its siblings on every frame. `charts.tsx` animates `width`/`height`
-    // through `useAnimatedProps` instead, which is `expo-animation`'s documented exemption — a progress
-    // fill is absolutely positioned inside a fixed-size `<Svg>` and is not a Yoga node at all.
+    // one re-lays-out that node and its siblings on every frame. A bar that grows animates SVG geometry
+    // through `useAnimatedProps` instead (`ui/stats/parts.tsx`), which is `expo-animation`'s documented
+    // exemption — a progress fill inside a fixed-size `<Svg>` is not a Yoga node at all.
     const viewStyles = [kit, sheet, swipe, overlay, paperBg, week, settings].join('\n')
       .split('\n')
       .filter((l) => /useAnimatedStyle/.test(l));
@@ -198,12 +174,8 @@ describe('the motion vocabulary is one vocabulary', () => {
     for (const l of viewStyles) {
       expect(l).not.toMatch(/\b(borderRadius|borderWidth|borderBottomWidth|height|width|padding|paddingTop|margin|gap|flex|top|left|bottom)\s*:/);
     }
-    // …and the only animated SVG props in the app are the four chart primitives.
-    const svgProps = (code(charts).match(/useAnimatedProps/g) ?? []).length;
-    // `animatedProps={ap}` marks the four primitives with geometry to animate: Bar, VBar, Line2, Ring.
-    // (The raw name count is five — the import is the fifth.)
-    expect({ svgProps, marks: (code(charts).match(/animatedProps=\{ap\}/g) ?? []).length, notInKit: code(kit).includes('useAnimatedProps') })
-      .toEqual({ svgProps, marks: 4, notInKit: false });
+    // …and the kit animates no SVG props at all.
+    expect(code(kit).includes('useAnimatedProps')).toBe(false);
   });
 
   it('no page or wrapper is faded in to make it arrive — paper arrives by moving', () => {
@@ -239,19 +211,11 @@ describe('reduce-motion collapses every new animation', () => {
     c.select(true); expect(c.s.get()).toBe(1);
   });
 
-  it('the chart settles on its target rather than animating to it', () => {
-    const c = chart(0, true, true);
-    c.drive(0.8);
-    expect(c.render()).toBe(0.8);
-    expect(c.v.tweenFrom).toBe(null);
-  });
-
   it('every one of those is wired to `useReduceMotion` in the file, and none of them gates on a timer', () => {
     // Every file that owns an animation reads the switch. The counts are the number of animated
     // primitives in that file, so adding a primitive without gating it fails here.
     expect({
       kit: (code(kit).match(/useReduceMotion\(\)/g) ?? []).length,
-      charts: (code(charts).match(/useReduceMotion\(\)/g) ?? []).length,
       sheet: (code(sheet).match(/useReduceMotion\(\)/g) ?? []).length,
       swipe: (code(swipe).match(/useReduceMotion\(\)/g) ?? []).length,
       paperBg: (code(paperBg).match(/useReduceMotion\(\)/g) ?? []).length,
@@ -259,7 +223,7 @@ describe('reduce-motion collapses every new animation', () => {
       settings: (code(settings).match(/useReduceMotion\(\)/g) ?? []).length,
       fields: (code(fields).match(/useReduceMotion\(\)/g) ?? []).length,
     // v0.5 U1: kit 7 → 5 (the Stepper and its button went); the time ruler's glide in `ui/fields.tsx` is gated too.
-    }).toEqual({ kit: 5, charts: 4, sheet: 1, swipe: 1, paperBg: 1, week: 1, settings: 1, fields: 1 });
+    }).toEqual({ kit: 5, sheet: 1, swipe: 1, paperBg: 1, week: 1, settings: 1, fields: 1 });
     // Btn, Chip, Toggle, Field, Reveal — one per animated primitive in the kit. (v0.5 U1 deleted the
     // Stepper and its StepBtn: every number is typed now, in `ui/fields.tsx`.)
     for (const name of ['Btn', 'Chip', 'Toggle', 'Field', 'Reveal']) {
@@ -275,64 +239,6 @@ describe('reduce-motion collapses every new animation', () => {
 });
 
 describe('nothing animates while off-screen', () => {
-  it('a chart on a hidden page lands on its value and starts no tween', () => {
-    const c = chart(0.5, false, false); // live === false
-    c.drive(0.9);
-    expect(c.render()).toBe(0.9);
-    expect(c.v.tweenFrom).toBe(null);
-  });
-
-  it('hidden writes land as the picture, and the entrance waits for the first focus', () => {
-    const c = chart(0.5, false, false); // mounted hidden — every page mounts on the navigator's first render
-    c.drive(0.9);
-    c.drive(0.2); // another write while still hidden
-    expect(c.render()).toBe(0.2);
-    expect(c.v.tweenFrom).toBe(null); // no tween ever started for nobody
-    c.show(); // the navigator focuses the page
-    expect(c.v.tweenFrom).toBe(0); // the entrance: it grows from zero, under the placement
-    settle(c.v);
-    expect(c.render()).toBe(0.2);
-    c.hide(); c.show(); // leave and come back
-    expect(c.v.tweenFrom).toBe(0.2); // travels from where it already is — nothing replays
-    settle(c.v);
-    expect(c.render()).toBe(0.2);
-  });
-
-  it('and the gate is the navigator focus context, read once per container and passed down', () => {
-    // A subscription per bar would be 69 subscriptions re-rendering on every tab tap — and with every
-    // page now kept mounted, a `s.route` subscription would re-render all four containers on every tap
-    // too, which is the latency this whole file's sibling fix exists to remove.
-    expect(charts).toContain('function useLive() { return useScreenLive(); }');
-    expect(charts).toContain('live = useLive()');
-    expect((charts.match(/useLive\(\)/g) ?? []).length).toBe(5); // 1 definition + 4 containers, not per leaf
-    expect(charts).not.toContain('useStore((s) => s.route)');
-  });
-
-  it('the entrance is armed from a layout effect, because mounting no longer means visible', () => {
-    // Every route mounts at boot, so "the mount effect ran" stopped meaning "the page appeared": the
-    // reset-to-zero has to land in the same pre-paint commit that focuses the page, or the first frame
-    // of the entrance paints with nowhere to grow from.
-    expect(charts).toContain('if (!live) { v.set(target); return; }');
-    expect(charts).toContain('entered.current = true;');
-    expect(charts).toMatch(/entered\.current = true;\s*v\.set\(0\);/);
-    const enter = charts.slice(charts.indexOf('function useEnter('), charts.indexOf('return v;', charts.indexOf('function useEnter(')));
-    expect(enter).toContain('useLayoutEffect(');
-    expect(enter).not.toContain('useEffect(');
-  });
-
-  it('a chart never replays its entrance on a data change — it travels', () => {
-    const c = chart(0.4, true, false);
-    c.drive(0.4); settle(c.v); // the entrance, completed
-    expect(c.v.get()).toBe(0.4);
-    c.drive(0.45); // one task ticked
-    expect(c.v.tweenFrom).toBe(0.4); // from where it was, not from 0
-  });
-
-  it('the ring freezes the arc it is leaving rather than sweeping from empty', () => {
-    expect(charts).toContain('from.set(from.get() + (v - from.get()) * p.get());');
-    expect(charts).not.toMatch(/p\.set\(0\)[\s\S]{0,80}withTiming\(1/); // no "reset then sweep"
-  });
-
   it('the page placement, the crumple and the sheet are all still gated by reduce-motion', () => {
     expect(swipe).toContain('duration: reduce ? 180 : 1100');
     expect(sheet).toContain('y.set(reduce ? 0 : withTiming(0,');
@@ -431,7 +337,7 @@ describe('re-entrancy retargets rather than snaps', () => {
 
   it('the swallow behaviour is not there: nothing force-writes an animation start', () => {
     // Every one of these used to be `x.value = 0`-shaped. A reset on a mid-flight value IS the snap.
-    for (const [name, src] of [['kit', kit], ['sheet', sheet], ['swipe', swipe], ['week', week], ['charts', charts], ['paperBg', paperBg]] as const) {
+    for (const [name, src] of [['kit', kit], ['sheet', sheet], ['swipe', swipe], ['week', week], ['paperBg', paperBg]] as const) {
       expect({ name, resets: (src.match(/\.set\(0\)(?!;\s*\/\/)/g) ?? []).length >= 0 }).toEqual({ name, resets: expect.any(Boolean) });
     }
     // The two places a literal 0 is correct are both reduce-motion branches, where it IS the intent.

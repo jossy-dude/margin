@@ -33,7 +33,6 @@ class SyncStore private constructor(c: Context) : SQLiteOpenHelper(c.application
     db.execSQL("CREATE TABLE file(path TEXT PRIMARY KEY, h TEXT, base TEXT, size INTEGER, mtime INTEGER, seq INTEGER)")
     db.execSQL("CREATE TABLE outbox(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT, frame TEXT, created_at INTEGER, tries INTEGER DEFAULT 0)")
     db.execSQL("CREATE TABLE inbox(seq INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, json TEXT, applied INTEGER DEFAULT 0)")
-    db.execSQL("CREATE TABLE ext_reminder(id TEXT PRIMARY KEY, title TEXT, due_at INTEGER, path TEXT, line INTEGER, done INTEGER DEFAULT 0, updated_at INTEGER)")
     db.execSQL("CREATE TABLE stats(day TEXT PRIMARY KEY, live_ms INTEGER DEFAULT 0, connects INTEGER DEFAULT 0, catchups INTEGER DEFAULT 0, rx INTEGER DEFAULT 0, tx INTEGER DEFAULT 0, err INTEGER DEFAULT 0, last_err TEXT)")
     v2(db)
   }
@@ -215,21 +214,6 @@ class SyncStore private constructor(c: Context) : SQLiteOpenHelper(c.application
     }
     if (rows.isNotEmpty()) db.execSQL("DELETE FROM inbox WHERE seq <= ${rows.last().first}")
     return rows.map { it.second to it.third }
-  }
-
-  // ── Obsidian reminders that are not school tasks (PLAN item 4) ──
-  data class Ext(val id: String, val title: String, val dueAt: Long, val path: String, val line: Int, val done: Boolean)
-  fun putExt(e: Ext, updatedAt: Long) {
-    writableDatabase.insertWithOnConflict("ext_reminder", null, ContentValues().apply {
-      put("id", e.id); put("title", e.title); put("due_at", e.dueAt); put("path", e.path); put("line", e.line); put("done", if (e.done) 1 else 0); put("updated_at", updatedAt)
-    }, SQLiteDatabase.CONFLICT_REPLACE)
-  }
-  fun ext(id: String): Ext? = readableDatabase.rawQuery("SELECT id,title,due_at,path,line,done FROM ext_reminder WHERE id=?", arrayOf(id)).use {
-    if (it.moveToFirst()) Ext(it.getString(0), it.getString(1), it.getLong(2), it.getString(3) ?: "", it.getInt(4), it.getInt(5) == 1) else null
-  }
-  fun upcomingExt(now: Long, limit: Int): List<Ext> = readableDatabase.rawQuery(
-    "SELECT id,title,due_at,path,line,done FROM ext_reminder WHERE done=0 AND due_at > ? ORDER BY due_at LIMIT $limit", arrayOf(now.toString())).use {
-    val out = ArrayList<Ext>(); while (it.moveToNext()) out.add(Ext(it.getString(0), it.getString(1), it.getLong(2), it.getString(3) ?: "", it.getInt(4), it.getInt(5) == 1)); out
   }
 
   // ── per-day counters for Diagnostics → Sync ──

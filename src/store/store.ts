@@ -24,15 +24,14 @@ import { alarmActions } from './actions/alarms';
 import './ota'; // binds the OTA marker to the open repository on load
 
 import { backupNow } from './backup';
-export type { RouteName, SheetSpec, PageSpec, Toast, Moved, PlanInfo, State } from './core';
+export type { RouteName, SheetSpec, State } from './core';
 export { getState, subscribe, set, useStore, snapshotOf } from './core';
 export { R, ensureRepo } from './persist';
 export { toast, dismissToast } from './toast';
 export { useUpdateAnnouncement, resetUpdateAnnouncement } from './ota';
-export { refreshNotifLog, stopResync, resync, refreshNotifStatus, notificationAccent } from './reminders';
+export { stopResync, resync, refreshNotifStatus, notificationAccent } from './reminders';
 export { hydrate, boot } from './session';
 export { wireLifecycle } from './lifecycle';
-export { pushAgenda } from './surfaces';
 
 /* ───── actions ───── */
 export const act = {

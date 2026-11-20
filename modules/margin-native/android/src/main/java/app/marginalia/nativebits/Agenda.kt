@@ -115,11 +115,6 @@ object Fmt {
     val hh = if (h % 12 == 0) 12 else h % 12
     return "$hh:${two(m)} ${if (h < 12) "AM" else "PM"}"
   }
-  fun hm(hour: Int, minute: Int, h12: Boolean): String {
-    if (!h12) return "${two(hour)}:${two(minute)}"
-    val hh = if (hour % 12 == 0) 12 else hour % 12
-    return "$hh:${two(minute)} ${if (hour < 12) "AM" else "PM"}"
-  }
   /** "Tue 10 Nov" */
   fun date(ms: Long): String { val c = cal(ms); return "${DAYS[c.get(Calendar.DAY_OF_WEEK) - 1]} ${c.get(Calendar.DAY_OF_MONTH)} ${MONTHS[c.get(Calendar.MONTH)]}" }
   /** "today", "tomorrow", or the weekday — for a moment relative to now. */

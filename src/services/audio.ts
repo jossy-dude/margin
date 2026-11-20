@@ -130,9 +130,7 @@ export const PRELOAD: SoundName[] = [...new Set<SoundName>([
   'detent_a', 'detent_b', 'detent_c', 'tick', 'tick_tock', 'mark', 'pop', 'pop_off', 'page',
   ...Object.values(SAMPLE),
 ])];
-/** Warm those sounds so the first dial detent, and the first Play tap, are not late. */
-export function preloadAudio() { PRELOAD.forEach((n) => { try { pool(n); } catch { /* ignore */ } }); }
-/** v0.6 cold start: the same warm-up, one player per 40 ms instead of 14 synchronous native loads before the
+/** Warm those sounds so the first dial detent, and the first Play tap, are not late (v0.6 cold start: one player per 40 ms instead of 14 synchronous native loads before the
  *  first frame. A sound asked for before its turn simply builds its player then (`pool` is lazy). */
 export function preloadAudioSoon(step = 40): () => void {
   let i = 0, t: ReturnType<typeof setTimeout> | null = null;

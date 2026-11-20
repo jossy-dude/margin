@@ -1,5 +1,5 @@
 import type { SemesterRow, Snapshot } from '../domain/types';
-import { fmtTime, pad, ymd } from '../domain/time';
+import { pad, ymd } from '../domain/time';
 import { effective, occurrencesBetween } from '../domain/attendance';
 import { roomOf, roomsLabel } from '../domain/rooms';
 import { total } from '../domain/grades';
@@ -108,4 +108,3 @@ export function toXlsx(tables: Table[], now = Date.now()): Uint8Array {
   return zip([{ name: '[Content_Types].xml', data: enc(ct) }, { name: '_rels/.rels', data: enc(rels) }, { name: 'xl/workbook.xml', data: enc(wb) }, { name: 'xl/_rels/workbook.xml.rels', data: enc(wbRels) }, { name: 'xl/styles.xml', data: enc(styles) }, ...tables.map((t, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: enc(sheetXml(t)) }))], now);
 }
 export const toCsvZip = (tables: Table[], now: number) => zip(tables.map((t) => ({ name: `${t.name.replace(/[^\w -]/g, '')}.csv`, data: enc(toCsv(t)) })), now);
-export const fmt = { time: fmtTime, pad };

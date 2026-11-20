@@ -6,50 +6,35 @@ import type { SyncHold } from '../domain/syncHold';
  * Margin's own Android module (`modules/margin-native`), seen from JS.
  *
  * Every call is total: off Android, on web, in a build that predates the module, or when the platform
- * refuses, it answers `false` / `null` instead of throwing — the callers (the live countdown, the Focus
- * silent switch) turn that answer into an honest sentence, never a crash. The module is resolved on first
+ * refuses, it answers `false` / `null` instead of throwing — the callers (the live countdown, the alarm
+ * page, the sync page) turn that answer into an honest sentence, never a crash. The module is resolved on first
  * use, not at import, so importing this file costs nothing at startup.
  */
 interface MarginNative {
-  sdkInt(): number;
-  canPromote(): boolean;
   showLive(id: string, title: string, text: string, endAt: number, link: string): boolean;
   hideLive(id: string): boolean;
-  wasDismissed(id: string): boolean;
-  hasPolicyAccess(): boolean;
-  interruptionFilter(): number;
-  silence(): boolean;
-  restore(previous: number): boolean;
-  openPolicySettings(): boolean;
   setAgenda(json: string): number;
-  nextAlarmAt(): number;
   canExactAlarm(): boolean;
   canFullScreen(): boolean;
   ringNow(label: string): boolean;
   openAlarmSettings(kind: string): boolean;
-  hasWidgets(): boolean;
   pinWidget(kind: string): boolean;
   syncPair(text: string): string;
   syncForget(): boolean;
   syncConfigure(vaultUri: string, vaultName: string): boolean;
   syncStart(): boolean;
   syncStatus(): string;
-  syncPushBridge(json: string): boolean;
   syncTimer(json: string): boolean;
   syncNow(): boolean;
   syncClearErrors(): boolean;
   syncHold(op: string): boolean;
   syncInbox(): string;
-  syncObsidianCode(): string;
-  syncNetworks(): string;
-  syncVaultUri(): string;
   setLook(json: string): boolean;
   scanQr(): Promise<string>;
   widgetTicks(): string;
   fontsEmbedded(): boolean;
   syncEvents(): string;
   vaultFiles(known: string, only: string): Promise<string>;
-  vaultRead(path: string): Promise<string>;
   vaultEdit(path: string, expect: string, text: string): Promise<string>;
   vaultChanges(): string;
   alarmRinging(): string;
@@ -71,31 +56,18 @@ const safe = <T,>(f: (m: MarginNative) => T, dflt: T): T => { const m = mod(); i
 
 /** Is the module in this build at all? */
 export const nativeAvailable = () => mod() !== null;
-export const sdkInt = () => safe((m) => m.sdkInt(), 0);
 
 /* ── the pinned live countdown ─────────────────────────────────────────────────────────────────── */
-/** Android 16's Live Updates: may this app's ongoing countdown be promoted to the status-bar chip? */
-export const canPromote = () => safe((m) => m.canPromote(), false);
 /** Post (or refresh) the countdown. False when it was not posted: no module, no permission, the end has
  *  passed, or the person swiped this one away already. */
 export const showLive = (id: string, title: string, text: string, endAt: number, link: string) => safe((m) => m.showLive(id, title, text, endAt, link), false);
 export const hideLive = (id: string) => safe((m) => m.hideLive(id), false);
-export const liveDismissed = (id: string) => safe((m) => m.wasDismissed(id), false);
-
-/* ── Do Not Disturb for a focus session ────────────────────────────────────────────────────────── */
-export const hasPolicyAccess = () => safe((m) => m.hasPolicyAccess(), false);
-/** The current interruption filter (Android's constant), or `null` when it cannot be read. */
-export const interruptionFilter = () => safe<number | null>((m) => m.interruptionFilter(), null);
-export const silence = () => safe((m) => m.silence(), false);
-export const restoreFilter = (previous: number) => safe((m) => m.restore(previous), false);
-export const openPolicySettings = () => safe((m) => m.openPolicySettings(), false);
 
 /* ── the agenda: widgets, the pinned class, alarms (v0.7) ──────────────────────────────────────── */
 /** Hand the phone the agenda (`domain/agenda.ts`, as JSON). It redraws the widgets and the pinned class and
  *  arms the next alarm; the answer is when that alarm rings (ms), 0 for none, and `null` when this build has
  *  no native half to hand it to (web, an older APK). */
 export const setAgenda = (json: string) => safe<number | null>((m) => m.setAgenda(json), null);
-export const nextAlarmAt = () => safe<number | null>((m) => m.nextAlarmAt() || null, null);
 /** May this app set an alarm to the minute? Always true before Android 12. */
 export const canExactAlarm = () => safe((m) => m.canExactAlarm(), false);
 /** May a ringing alarm take over a locked screen? Android 14+ can withhold it. */
@@ -105,7 +77,6 @@ export const ringNow = (label: string) => safe((m) => m.ringNow(label), false);
 export const openAlarmSettings = (kind: 'exact' | 'fullscreen' | 'app') => safe((m) => m.openAlarmSettings(kind), false);
 /** Task ids ticked on the home-screen widget since the last call (v0.8 §4.3). */
 export const widgetTicks = (): string[] => parse<string[]>(safe<string | null>((m) => m.widgetTicks(), null)) ?? [];
-export const hasWidgets = () => safe((m) => m.hasWidgets(), false);
 export type WidgetKind = 'board';
 /** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
 export const pinWidget = (kind: WidgetKind) => safe((m) => m.pinWidget(kind), false);
@@ -138,23 +109,20 @@ export const syncForget = () => safe((m) => m.syncForget(), false);
 export const syncConfigure = (vaultUri: string | null, vaultName: string | null) => safe((m) => m.syncConfigure(vaultUri ?? '', vaultName ?? ''), false);
 export const syncStart = () => safe((m) => m.syncStart(), false);
 export const syncStatus = (): SyncStatus | null => parse<SyncStatus>(safe<string | null>((m) => m.syncStatus(), null));
-export const syncPushBridge = (rows: unknown) => safe((m) => m.syncPushBridge(JSON.stringify(rows)), false);
 export const syncTimer = (op: unknown) => safe((m) => m.syncTimer(JSON.stringify(op)), false);
-/** Send the phone vault's changes now; false on builds before 0.7.1. */
 /** Events from the sync service (Expo module events). Returns the unsubscribe; a no-op without the native half. */
 export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus' | 'onVaultChanged', fn: (json: string) => void): () => void {
   const m = mod() as unknown as { addListener?: (n: string, f: (e: { json: string }) => void) => { remove(): void } } | null;
   if (!m?.addListener) return () => {};
   try { const sub = m.addListener(name, (e) => { try { fn(e.json); } catch { /* a bad frame must not break the app */ } }); return () => sub.remove(); } catch { return () => {}; }
 }
+/** Send the phone vault's changes now; false on builds before 0.7.1. */
 export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
 /** Answer the big-delete question: apply = delete everywhere, cancel = keep the files. */
 export const syncHold = (op: 'apply' | 'cancel') => safe((m) => m.syncHold(op), false);
 /** Rows the service received while JS was not running; each is returned once. */
 export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => parse(safe<string | null>((m) => m.syncInbox(), null)) ?? [];
-export const syncObsidianCode = () => safe<string | null>((m) => m.syncObsidianCode(), null);
-export const syncNetworks = () => safe<string | null>((m) => m.syncNetworks(), null);
 
 /* ── the look outside the app (v0.8): splash, widget and alarm page follow the skin ── */
 export const setLook = (look: Record<string, string>) => safe((m) => m.setLook(JSON.stringify(look)), false);
@@ -162,8 +130,6 @@ export const setLook = (look: Record<string, string>) => safe((m) => m.setLook(J
 export const fontsEmbedded = () => safe((m) => m.fontsEmbedded(), false);
 
 /* ── the vault, through Margin's one phone writer (v0.8 §1.5) ──────────────────────────────────────── */
-/** Kotlin owns the vault folder; '' when none (or no native half). */
-export const syncVaultUri = () => safe<string>((m) => m.syncVaultUri(), '') || null;
 export interface SyncEvent { at: number; kind: string; msg: string }
 /** Scan a QR code with Google's scanner: the text, '' when cancelled, or 'error:…'. */
 export async function scanQr(): Promise<string> { const m = mod(); if (!m) return 'error:This build cannot scan.'; try { return await m.scanQr(); } catch (e) { return `error:${String((e as Error)?.message ?? e)}`; } }
@@ -174,7 +140,6 @@ export async function vaultFiles(known: Record<string, string>, only: string[] =
   const m = mod(); if (!m) return null;
   try { return JSON.parse(await m.vaultFiles(JSON.stringify(known), JSON.stringify(only))) as { files: VaultFile[]; gone: string[]; error?: string }; } catch { return null; }
 }
-export async function vaultRead(path: string): Promise<string | null> { const m = mod(); if (!m) return null; try { const t = await m.vaultRead(path); return t === '' ? null : t; } catch { return null; } }
 /** Compare-and-swap write: "ok:<h>" | "changed:<h>" | "deferred" | "error:<why>". */
 export async function vaultEdit(path: string, expect: string, text: string): Promise<string> { const m = mod(); if (!m) return 'error:no native half'; try { return await m.vaultEdit(path, expect, text); } catch (e) { return `error:${String((e as Error)?.message ?? e)}`; } }
 export const vaultChanges = (): string[] => parse<string[]>(safe<string | null>((m) => m.vaultChanges(), null)) ?? [];

@@ -1,11 +1,8 @@
 import type { P2 } from './types';
 
-export const clamp01 = (v: number) => (v > 1 ? 1 : v < 0 ? 0 : v);
 /** One decimal, the reference's own `F`. It does NOT hide NaN: `NaN.toFixed(1)` is "NaN", so a bad
  *  number reaches the rendered string and `bars.test.ts` sees it. */
 export const F = (n: number) => +n.toFixed(1);
-
-export const P = (x: number, y: number): P2 => [x, y];
 
 export const poly = (pts: readonly P2[]) => pts.map((q, i) => `${i ? 'L' : 'M'}${F(q[0])} ${F(q[1])}`).join('');
 
@@ -23,8 +20,6 @@ export const polar = (cx: number, cy: number, r: number, deg: number): P2 => {
   const a = (deg * Math.PI) / 180;
   return [cx + r * Math.cos(a), cy - r * Math.sin(a)];
 };
-
-export const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 24) => sample(n, (t) => polar(cx, cy, r, a0 + (a1 - a0) * t));
 
 /** A straight run of `n` segments from a to b, optionally bowed. Used where the reference draws a
  *  dashed line or a diagonal of unknown length: the length is measured, not assumed. */

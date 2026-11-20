@@ -51,10 +51,6 @@ export const prioToBone = (p: Task['priority']): number => [0, 2, 3, 4][p] ?? 0;
 /** Bone 0–5 → Margin 0–3: lowest and low are low, highest and high are high. */
 export const prioFromBone = (p: number): Task['priority'] => (p >= 4 ? 3 : p === 3 ? 2 : p >= 1 ? 1 : 0);
 
-/* ── ids ────────────────────────────────────────────────────────────────────────────────────── */
-/** A block id Obsidian accepts (`^id`: letters, digits, dashes). Margin's ids are base36 already. */
-export const blockId = (id: string) => id.replace(/[^\w-]/g, '-');
-
 /* ── Margin → envelope ──────────────────────────────────────────────────────────────────────── */
 const dayOf = (ms: number | null) => (ms === null ? null : ymd(new Date(ms)));
 const clockOf = (ms: number | null) => { if (ms === null) return null; const d = new Date(ms); const t = d.getHours() * 60 + d.getMinutes(); return t === 23 * 60 + 59 ? null : `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
