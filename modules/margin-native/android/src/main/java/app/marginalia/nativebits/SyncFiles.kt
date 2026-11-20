@@ -19,7 +19,12 @@ import java.util.concurrent.TimeUnit
 internal object SyncFiles {
   private val E = SyncEngine
   private const val TAG = "MarginSync"
-  private const val SCAN_EVERY_S = 30L
+  private const val TICK_S = 30L
+  /** The full walk of the vault through the document provider is heavy: a cursor window per folder, about 100 MB of
+   *  garbage on the owner's 2,800-file vault, so every 30 s it kept the phone collecting 10+ times a minute
+   *  (v0.7.4 phone pass). What changes here reaches the hub without it: Margin's own writes, phone Obsidian's
+   *  "saved", unlocking, reconnecting. The walk is the safety net for other apps: every 10th tick (5 min). */
+  private const val WALK_EVERY_TICKS = 10
   private const val MAX_PUSH_PER_SCAN = 200
   private const val MAX_FILE_BYTES = 20L * 1024 * 1024        // phone → desktop (read into memory to send)
   private const val MAX_IN_BYTES = 100L * 1024 * 1024          // desktop → phone (arrives in parts, streamed to disk)
@@ -105,9 +110,11 @@ internal object SyncFiles {
   }
 
   // ── the phone's own changes ──────────────────────────────────────────────────────────────────
+  private var ticks = 0
   fun startScans() {
     stopScans()
-    scanTask = E.sched.scheduleWithFixedDelay(Runnable { E.exec.execute { scanAndPush(); SyncLocal.expireEditing() } }, SCAN_EVERY_S, SCAN_EVERY_S, TimeUnit.SECONDS)
+    ticks = 0
+    scanTask = E.sched.scheduleWithFixedDelay(Runnable { E.exec.execute { SyncLocal.expireEditing(); if (++ticks % WALK_EVERY_TICKS == 0) scanAndPush() } }, TICK_S, TICK_S, TimeUnit.SECONDS)
   }
   fun stopScans() { scanTask?.cancel(false); scanTask = null }
   /** Sync now (the button, the periodic tick, unlocking the phone). Connects first if needed. */
@@ -126,10 +133,14 @@ internal object SyncFiles {
     else if (row?.h == null || row.size != st.size || row.mtime != st.mtime) {
       val bytes = v.read(p) ?: return
       val h = Seal.hash(bytes)
-      if (row != null && h == row.h) { E.store.putFile(row.copy(size = st.size, mtime = st.mtime)); return }
-      E.store.putFile(SyncStore.FileRow(p, h, row?.base, st.size, st.mtime, row?.seq ?: 0))
-      if (klass(p).cls == "note") SyncLocal.vaultChanged(listOf(p))
-    } else return
+      if (row != null && h == row.h) E.store.putFile(row.copy(size = st.size, mtime = st.mtime))
+      else {
+        E.store.putFile(SyncStore.FileRow(p, h, row?.base, st.size, st.mtime, row?.seq ?: 0))
+        if (klass(p).cls == "note") SyncLocal.vaultChanged(listOf(p))
+      }
+    }
+    // No early return for a row that is already up to date: Margin's own write (vaultEdit) records it before
+    // calling here, and it still has to go out now, not at the next full scan (v0.7.4 phone pass: 38 s).
     val now = E.store.file(p) ?: return
     if (live() && mayPush(p) && !inflightPath.containsKey(p)) {
       when {
