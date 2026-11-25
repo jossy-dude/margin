@@ -14,6 +14,11 @@ export function themeFor(s: Parameters<typeof makeTheme>[0], sys: boolean): Them
   return t;
 }
 
+/** A "late" ink that reads on the deck: the dark mode's soft red on a dark deck, the light mode's deep red on a light one. */
+const onDeckBad = (deck: string, p: { light: { bad: string }; dark: { bad: string } }) => {
+  const n = parseInt(deck.slice(1, 7), 16), lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum < 128 ? p.dark.bad : p.light.bad;
+};
 const Ctx = createContext<Theme>(makeTheme({ theme: 'light', palette: 'refined', pen: 'warm' }, false));
 export const useTheme = () => useContext(Ctx);
 /** A hidden page keeps the skin it was last seen in and takes the new one when it is shown (v0.7.6): a skin change
@@ -36,7 +41,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const p = palettes[palette] ?? palettes.collage;
     setLook({ mode: theme, palette, paperLight: p.light.paper, paperDark: p.dark.paper, cardLight: p.light.card.slice(0, 7), cardDark: p.dark.card.slice(0, 7),
       inkLight: p.light.ink, inkDark: p.dark.ink, mutLight: p.light.mut, mutDark: p.dark.mut, accLight: now.dark ? p.light.acc : now.c.acc, accDark: now.dark ? now.c.acc : p.dark.acc,
-      deckLight: p.light.deck, deckDark: p.dark.deck, deckInkLight: p.light.deckInk, deckInkDark: p.dark.deckInk, look: now.look });
+      deckLight: p.light.deck, deckDark: p.dark.deck, deckInkLight: p.light.deckInk, deckInkDark: p.dark.deckInk, deckMutLight: p.light.deckMut, deckMutDark: p.dark.deckMut,
+      deckBadLight: onDeckBad(p.light.deck, p), deckBadDark: onDeckBad(p.dark.deck, p), look: now.look });
   }, [theme, palette, now]);
   return <Ctx.Provider value={t}>{children}</Ctx.Provider>;
 }

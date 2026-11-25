@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The deck's ruling: the same faint diagonal hatch the in-app class card carries (SlabHatch), tinted at draw time. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android" android:src="@drawable/mg_hatch_tile" android:tileMode="repeat" android:antialias="true"/>

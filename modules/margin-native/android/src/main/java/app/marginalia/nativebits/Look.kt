@@ -10,7 +10,9 @@ import android.graphics.Color
  * resolving "auto" against the phone's own dark mode. Defaults are the Notebook look's, so an install that never ran
  * the app still draws something.
  */
-data class Look(val dark: Boolean, val paper: Int, val card: Int, val ink: Int, val mut: Int, val acc: Int, val deck: Int, val deckInk: Int) {
+data class Look(val dark: Boolean, val paper: Int, val card: Int, val ink: Int, val mut: Int, val acc: Int, val deck: Int, val deckInk: Int,
+  /** v0.7.6 (widget): the deck's quiet ink, a "late" ink that reads on the deck, and whether the skin is Plain (no hatch, one font). */
+  val deckMut: Int = deckInk, val deckBad: Int = 0xFFF4998A.toInt(), val plain: Boolean = false) {
   companion object {
     private fun col(hex: String?, dflt: Int): Int = try { if (hex.isNullOrEmpty()) dflt else Color.parseColor(hex.take(7)) } catch (e: Exception) { dflt }
     fun read(c: Context): Look {
@@ -18,12 +20,15 @@ data class Look(val dark: Boolean, val paper: Int, val card: Int, val ink: Int, 
       val night = (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
       val dark = when (p.getString("mode", "auto")) { "dark" -> true; "light" -> false; else -> night }
       val k = if (dark) "Dark" else "Light"
+      val plain = p.getString("look", "") == "plain"
       return if (dark) Look(true, col(p.getString("paper$k", null), 0xFF3C352C.toInt()), col(p.getString("card$k", null), 0xFF433D35.toInt()),
         col(p.getString("ink$k", null), 0xFFF2EAD8.toInt()), col(p.getString("mut$k", null), 0xFFBCB19C.toInt()), col(p.getString("acc$k", null), 0xFFE3AA82.toInt()),
-        col(p.getString("deck$k", null), 0xFFF2EAD8.toInt()), col(p.getString("deckInk$k", null), 0xFF2B2620.toInt()))
+        col(p.getString("deck$k", null), 0xFFF2EAD8.toInt()), col(p.getString("deckInk$k", null), 0xFF2B2620.toInt()),
+        col(p.getString("deckMut$k", null), 0xFF665B4B.toInt()), col(p.getString("deckBad$k", null), 0xFF9C3322.toInt()), plain)
       else Look(false, col(p.getString("paper$k", null), 0xFFFAF4E6.toInt()), col(p.getString("card$k", null), 0xFFFFFBF1.toInt()),
         col(p.getString("ink$k", null), 0xFF2A241C.toInt()), col(p.getString("mut$k", null), 0xFF665B4B.toInt()), col(p.getString("acc$k", null), 0xFF8A4B27.toInt()),
-        col(p.getString("deck$k", null), 0xFF2A241C.toInt()), col(p.getString("deckInk$k", null), 0xFFFAF4E6.toInt()))
+        col(p.getString("deck$k", null), 0xFF2A241C.toInt()), col(p.getString("deckInk$k", null), 0xFFFAF4E6.toInt()),
+        col(p.getString("deckMut$k", null), 0xFFD9CDB4.toInt()), col(p.getString("deckBad$k", null), 0xFFF4998A.toInt()), plain)
     }
   }
 }

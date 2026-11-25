@@ -14,7 +14,8 @@ import { roomOf } from './rooms';
  * Pure: the same input always builds the same document.
  */
 export interface AgendaClass { k: string; s: number; e: number; t: string; r: string; w: string }
-export interface AgendaTask { id: string; t: string; d: number; s: string; k: string }
+/** `p`: priority 0–3, plus 2 when the task is marked important (v0.7.6, the widget's urgency order) */
+export interface AgendaTask { id: string; t: string; d: number; s: string; k: string; p?: number }
 export interface AgendaAlarm { id: string; label: string; h: number; m: number; days: boolean[]; at: number[]; snooze: number; vib: boolean; on: boolean }
 export interface AgendaDoc { v: 1; at: number; h12: boolean; pinClass: boolean; classes: AgendaClass[]; tasks: AgendaTask[]; alarms: AgendaAlarm[] }
 
@@ -104,7 +105,7 @@ export function buildAgenda(i: AgendaInput): AgendaDoc {
   const today = startOfDay(i.now), classes: AgendaClass[] = [];
   for (let d = 0; d < AGENDA_DAYS; d++) classes.push(...classesOn(addDays(today, d), i));
   const tasks = i.tasks.filter((t) => t.status !== 2 && t.dueAt !== null).sort((a, b) => (a.dueAt as number) - (b.dueAt as number)).slice(0, MAX_TASKS)
-    .map((t) => ({ id: t.id, t: t.title, d: t.dueAt as number, s: i.courses.find((c) => c.id === t.courseId)?.name ?? '', k: t.kind }));
+    .map((t) => ({ id: t.id, t: t.title, d: t.dueAt as number, s: i.courses.find((c) => c.id === t.courseId)?.name ?? '', k: t.kind, ...(t.priority || t.important ? { p: t.priority + (t.important ? 2 : 0) } : {}) }));
   return { v: 1, at: i.now, h12: i.settings.hour12, pinClass: i.settings.notif.enabled && i.settings.notif.pinClass, classes, tasks, alarms: (i.settings.alarms ?? []).map((r) => alarmOf(r, i)) };
 }
 
