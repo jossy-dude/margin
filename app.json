@@ -14,7 +14,7 @@
       }
     },
     "orientation": "portrait",
-    "scheme": "marginalia",
+    "scheme": "marrow",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "backgroundColor": "#FAF4E6",
@@ -24,7 +24,7 @@
       "backgroundColor": "#FAF4E6"
     },
     "android": {
-      "package": "app.marginalia.planner",
+      "package": "app.marrow",
       "allowBackup": true,
       "permissions": [
         "POST_NOTIFICATIONS",
@@ -39,7 +39,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.marginalia.planner"
+      "bundleIdentifier": "app.marrow"
     },
     "web": {
       "favicon": "./assets/favicon.png"

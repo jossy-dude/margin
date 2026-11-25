@@ -18,8 +18,8 @@ afterAll(() => os('ios'));
 
 it('on Android with the module, it passes calls through', () => {
   expect(N.nativeAvailable()).toBe(true);
-  expect(N.showLive('c1', 'Database', 'LR-601', 123, 'marginalia://today')).toBe(true);
-  expect(mockMod.showLive).toHaveBeenCalledWith('c1', 'Database', 'LR-601', 123, 'marginalia://today');
+  expect(N.showLive('c1', 'Database', 'LR-601', 123, 'marrow://today')).toBe(true);
+  expect(mockMod.showLive).toHaveBeenCalledWith('c1', 'Database', 'LR-601', 123, 'marrow://today');
   expect(N.hideLive('c1')).toBe(true);
   expect(N.canExactAlarm()).toBe(true);
   expect(N.setAgenda('{}')).toBe(1234);

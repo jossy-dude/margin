@@ -1,6 +1,6 @@
 # Margin
 
-Expo/React Native school planner for Android (package `marginalia`), Kotlin bits in `modules/margin-native`.
+Expo/React Native school planner for Android (npm `marrow`, Android id `app.marrow` since v0.7.7; the old Margin is `app.marginalia.planner`), Kotlin bits in `modules/margin-native`.
 
 ## Rules
 - Commits carry no AI attribution: no `Co-Authored-By` or "Generated with" lines. The `.githooks/commit-msg`

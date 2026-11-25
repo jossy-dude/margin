@@ -17,7 +17,7 @@ export function startFocusLive(): () => void {
     const subject = s.courses.find((c) => c.id === t.courseId)?.name ?? null;
     const live = focusLive(t, Date.now(), subject, s.settings.hour12);
     if (shown && shown !== live?.id) { hideLive(shown); shown = null; }
-    if (live && showLive(live.id, live.title, live.text, live.endAt, 'marginalia://focus')) shown = live.id;
+    if (live && showLive(live.id, live.title, live.text, live.endAt, 'marrow://focus')) shown = live.id;
   };
   sync();
   const off = subscribe(sync);

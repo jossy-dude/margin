@@ -94,7 +94,7 @@ object AlarmClock {
     if (d == null) { am.cancel(fire(c, null)); return 0L }
     val pi = fire(c, d)
     return try {
-      am.setAlarmClock(AlarmManager.AlarmClockInfo(d.at, Surfaces.open(c, "marginalia://alarms", 62)), pi)
+      am.setAlarmClock(AlarmManager.AlarmClockInfo(d.at, Surfaces.open(c, "marrow://alarms", 62)), pi)
       d.at
     } catch (e: SecurityException) {
       /* No exact-alarm permission: the best the system will give is a window around the minute. */
@@ -278,7 +278,7 @@ class AlarmService : Service() {
       .setContentTitle("Missed alarm")
       .setContentText(titleLine())
       .setAutoCancel(true)
-      .setContentIntent(Surfaces.open(this, "marginalia://alarms", 66))
+      .setContentIntent(Surfaces.open(this, "marrow://alarms", 66))
     try { nm.notify(NOTE_MISSED, b.build()) } catch (e: Exception) { }
     finish()
   }
@@ -291,7 +291,7 @@ class AlarmService : Service() {
       .setContentTitle("Snoozed until ${Fmt.time(at, Agenda.read(this).hour12)}")
       .setContentText(if (label.isNotEmpty()) label else "Alarm")
       .setOngoing(true)
-      .setContentIntent(Surfaces.open(this, "marginalia://alarms", 66))
+      .setContentIntent(Surfaces.open(this, "marrow://alarms", 66))
       .addAction(Notification.Action.Builder(null, "Cancel snooze", cancel).build())
     if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(at - System.currentTimeMillis())
     try { nm.notify(NOTE_SNOOZED, b.build()) } catch (e: Exception) { }
@@ -391,7 +391,7 @@ class AlarmService : Service() {
         .setContentText(Fmt.time(System.currentTimeMillis(), Agenda.read(c).hour12))
         .setCategory(Notification.CATEGORY_ALARM)
         .setAutoCancel(true)
-        .setContentIntent(Surfaces.open(c, "marginalia://alarms", 66))
+        .setContentIntent(Surfaces.open(c, "marrow://alarms", 66))
       try { nm.notify(NOTE_MISSED, b.build()) } catch (e: Exception) { }
     }
   }

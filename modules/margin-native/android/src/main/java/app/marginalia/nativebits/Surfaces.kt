@@ -30,7 +30,7 @@ object Surfaces {
     try { Ticker.arm(app, a, now) } catch (e: Exception) { }
   }
 
-  /** Opens the app at one of its pages (`marginalia://today`, `…/tasks`, `…/alarms`). */
+  /** Opens the app at one of its pages (`marrow://today`, `…/tasks`, `…/alarms`). */
   fun open(c: Context, link: String, code: Int): PendingIntent {
     val i = Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(c.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return PendingIntent.getActivity(c, code, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -95,7 +95,7 @@ object ClassPin {
     else "Last class of the day"
     val total = ((cur.end - cur.start) / 60_000L).toInt().coerceAtLeast(1)
     val done = ((now - cur.start) / 60_000L).toInt().coerceIn(0, total)
-    Live.showClass(c, id, cur.title, line, then, cur.end, total, done, "marginalia://today")
+    Live.showClass(c, id, cur.title, line, then, cur.end, total, done, "marrow://today")
     if (was != id) prefs.edit().putString(KEY, id).apply()
   }
 }
@@ -144,7 +144,7 @@ object Widgets {
     rv.setTextColor(R.id.mg_w_state, look.deck)
     if (Build.VERSION.SDK_INT >= 31) tint(R.id.mg_w_state, look.deckInk, "setBackgroundTintList")
     rv.setInt(R.id.mg_w_rule, "setColorFilter", look.deckMut)
-    rv.setOnClickPendingIntent(R.id.mg_w_class, Surfaces.open(c, "marginalia://today", 51))
+    rv.setOnClickPendingIntent(R.id.mg_w_class, Surfaces.open(c, "marrow://today", 51))
     val barPx = ((wDp - 28) * c.resources.displayMetrics.density).toInt()
     classLine(c, rv, a, now, look, barPx, rows)
     // the tasks that most need you, and how many more there are
@@ -157,7 +157,7 @@ object Widgets {
     rv.setViewVisibility(R.id.mg_w_tasks, if (shown.isNotEmpty()) View.VISIBLE else View.GONE)
     rv.setViewVisibility(R.id.mg_w_more, if (rows > 0 && (left > 0 || list.isEmpty())) View.VISIBLE else View.GONE)
     rv.setTextViewText(R.id.mg_w_more, when { list.isEmpty() -> if (a.writtenAt == 0L) "Open Marrow once to fill this in." else "Nothing due. Enjoy it."; else -> "+$left more in To-do" })
-    rv.setOnClickPendingIntent(R.id.mg_w_more, Surfaces.open(c, "marginalia://tasks", 53))
+    rv.setOnClickPendingIntent(R.id.mg_w_more, Surfaces.open(c, "marrow://tasks", 53))
     return rv
   }
 
@@ -213,7 +213,7 @@ object Widgets {
       row.setOnCheckedChangeResponse(R.id.mg_t_box, RemoteViews.RemoteResponse.fromPendingIntent(pi))
       row.setColorStateList(R.id.mg_t_box, "setButtonTintList", android.content.res.ColorStateList.valueOf(look.deckInk))
     } else row.setViewVisibility(R.id.mg_t_box, View.GONE)
-    row.setOnClickPendingIntent(R.id.mg_t_root, Surfaces.open(c, "marginalia://tasks", 60 + i))
+    row.setOnClickPendingIntent(R.id.mg_t_root, Surfaces.open(c, "marrow://tasks", 60 + i))
     return row
   }
 }

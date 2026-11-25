@@ -129,13 +129,14 @@ describe('an unchanged agenda is not sent twice', () => {
 
 describe('links', () => {
   it('land where the widget or notification meant', () => {
-    expect(linkTarget('marginalia://today')).toEqual({ t: 'route', route: 'Today' });
+    expect(linkTarget('marrow://today')).toEqual({ t: 'route', route: 'Today' });
+    expect(linkTarget('marginalia://today')).toEqual({ t: 'route', route: 'Today' }); // links made before the rename
     expect(linkTarget('marginalia://tasks/')).toEqual({ t: 'route', route: 'Tasks' });
     expect(linkTarget('marginalia://add/task')).toEqual({ t: 'add-task' });
     expect(linkTarget('marginalia://alarms')).toEqual({ t: 'alarms' });
     expect(linkTarget('exp+marginalia://today')).toEqual({ t: 'route', route: 'Today' });
   });
   it('anything else opens the app where it was', () => {
-    for (const u of [null, '', 'https://example.com/today', 'marginalia://', 'marginalia://nonsense', 'marginalia://expo-development-client/?url=x']) expect(linkTarget(u)).toBeNull();
+    for (const u of [null, '', 'https://example.com/today', 'marrow://', 'marginalia://', 'marginalia://nonsense', 'marginalia://expo-development-client/?url=x']) expect(linkTarget(u)).toBeNull();
   });
 });

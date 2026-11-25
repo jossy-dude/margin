@@ -1,5 +1,5 @@
 /**
- * Where a `marginalia://…` link lands (v0.7). The widgets, the pinned class and the alarm notifications open the
+ * Where a `marrow://…` link lands (v0.7). The widgets, the pinned class and the alarm notifications open the
  * app with one; this is the whole vocabulary. Pure, and total: anything it does not know is `null`, and the
  * app simply opens where it was.
  */
@@ -7,7 +7,7 @@ export type LinkTarget = { t: 'route'; route: 'Today' | 'Tasks' | 'Week' | 'Grad
 
 export function linkTarget(url: string | null | undefined): LinkTarget | null {
   if (!url) return null;
-  const m = /^(?:exp\+)?marginalia:\/\/\/?([a-z/-]*)/i.exec(url.trim());
+  const m = /^(?:exp\+)?(?:marrow|marginalia):\/\/\/?([a-z/-]*)/i.exec(url.trim());
   if (!m) return null;
   const path = (m[1] ?? '').toLowerCase().replace(/\/+$/, '');
   switch (path) {

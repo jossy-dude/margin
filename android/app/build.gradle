@@ -99,7 +99,9 @@ android {
 
     namespace 'app.marginalia.planner'
     defaultConfig {
-        applicationId 'app.marginalia.planner'
+        // v0.7.7: Marrow is a new variant with its own id, so it installs BESIDE the old Margin
+        // (`app.marginalia.planner`) instead of over it. The Kotlin namespace keeps the old name; only the id moves.
+        applicationId 'app.marrow'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // v0.3.1. This committed native project is what the APK reports, so these two must track
@@ -119,12 +121,12 @@ android {
         /* v0.5 (R1) build variants, chosen by `-PmarginVariant=` (the APK workflow's `variant` input):
              over    — the debug key on the real id: installs OVER an existing v0.1.0/0.3.1 (the default,
                        and what every earlier build was);
-             dev     — the debug key on `app.marginalia.planner.dev`, labelled "Margin dev": installs
+             dev     — the debug key on `app.marrow.dev`, labelled "Marrow dev": installs
                        BESIDE the real app, so testing never touches the owner's data;
              release — the owner's release key (from the environment; see docs/RELEASING.md). */
         if (marginVariant == 'dev') {
             applicationIdSuffix '.dev'
-            manifestPlaceholders = [appLabel: 'Margin dev']
+            manifestPlaceholders = [appLabel: 'Marrow dev']
         }
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""

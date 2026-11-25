@@ -266,7 +266,7 @@ describeIfNative('v0.5 release engineering (R1)', () => {
   });
 
   it('the dev variant installs beside the real app under its own label; release refuses to build without the key', () => {
-    expect(gradle).toMatch(/marginVariant == 'dev'\) \{\s*applicationIdSuffix '\.dev'\s*manifestPlaceholders = \[appLabel: 'Margin dev'\]/);
+    expect(gradle).toMatch(/marginVariant == 'dev'\) \{\s*applicationIdSuffix '\.dev'\s*manifestPlaceholders = \[appLabel: 'Marrow dev'\]/);
     expect(manifest).toContain('android:label="${appLabel}"');
     expect(gradle).toContain("throw new GradleException('variant=release needs MARGIN_KEYSTORE_PATH");
     expect(gradle).not.toMatch(/storePassword System\.getenv\('ANDROID_KEYSTORE_PASSWORD'\) \?:/); // no fallback password

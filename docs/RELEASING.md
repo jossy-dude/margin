@@ -34,9 +34,9 @@ Actions → **Release APK** → *Run workflow* on `v2-improvements`, with `varia
 
 | variant | id | key | use |
 |---|---|---|---|
-| `dev` | `app.marginalia.planner.dev`, labelled "Margin dev" | debug | testing beside the real app |
-| `over` | `app.marginalia.planner` | debug | installs **over** v0.1.0/0.3.1, keeping data |
-| `release` | `app.marginalia.planner` | release (secrets) | the shipped build |
+| `dev` | `app.marrow.dev`, labelled "Marrow dev" | debug | testing beside the real app |
+| `over` | `app.marrow` | debug | installs **over** an earlier Marrow (0.7.7+), keeping data; the old Margin (`app.marginalia.planner`) is a separate app, so move data with an export and import |
+| `release` | `app.marrow` | release (secrets) | the shipped build |
 
 From a terminal: `gh workflow run release-apk.yml --ref v2-improvements -f variant=dev`, then
 `gh run watch` and `gh run download <run-id>`. The artifact is `margin-android-apk-<variant>`, holding
