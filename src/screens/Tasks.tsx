@@ -5,7 +5,7 @@ import { RunningTimer } from '../ui/RunningTimer';
 
 import { useLiveNow } from '../ui/live';
 import { act, useStore } from '../store/store';
-import { Empty, Page, TaskCard } from './common';
+import { Empty, Page, TaskCard, type PageRow } from './common';
 import { addDays, startOfDay } from '../domain/time';
 import { emptyFace, pageFace } from '../ui/mascot/moments';
 import { sortTasks } from '../domain/taskOrder';
@@ -53,8 +53,18 @@ export function TasksScreen() {
   let budget = shown;
   const capped = groups.map((g) => { const items = g.items.slice(0, Math.max(0, budget)); budget -= items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
   const hidden = list.length - Math.min(list.length, shown);
+  /* v0.7.7.4 (SPEC §2 E4): the list is virtualised — a group's title and each card are rows of the page's FlatList,
+     so about 12 are mounted however long the list is. */
+  const rows: PageRow[] = capped.flatMap((g) => [
+    ...(g.title ? [{ key: `h:${g.title}`, render: () => <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header" style={{ marginTop: 4 }}>{g.title} · {g.total}</Txt> }] : []),
+    ...g.items.map((t) => ({ key: t.id, render: () => <TaskCard t={t} now={now} /> })),
+  ]);
+  const footer = <>
+    {hidden > 0 ? <Btn kind="ghost" testID="tasks-show-more" label={`Show ${Math.min(hidden, PAGE_ROWS)} more · ${hidden} not shown`} onPress={() => setMore({ key: askKey, n: shown + PAGE_ROWS })} /> : null}
+    <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />
+  </>;
   return (
-    <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />} face={face}>
+    <Page title="To-do" sub={`${openN} open · swipe right to finish, left to crumple`} right={<RunningTimer />} face={face} rows={rows} footer={footer}>
       <Field placeholder="Search tasks" value={q} onChangeText={setQ} returnKeyType="search" />
       {/* BUGS #7: one quiet row, three controls with different shapes for different jobs. */}
       <Row style={{ flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
@@ -75,10 +85,7 @@ export function TasksScreen() {
           })}
         </View>
       ) : null}
-      {list.length === 0 ? <Empty icon="tasks" face={empty} text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add one.'} /> : capped.map((g) => (
-        <View key={g.title || 'all'} style={{ gap: 10 }}>{g.title ? <Txt f="serif" s={17} c={g.title === 'Late' ? 'bad' : 'mut'} accessibilityRole="header">{g.title} · {g.total}</Txt> : null}{g.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</View>))}
-      {hidden > 0 ? <Btn kind="ghost" testID="tasks-show-more" label={`Show ${Math.min(hidden, PAGE_ROWS)} more · ${hidden} not shown`} onPress={() => setMore({ key: askKey, n: shown + PAGE_ROWS })} /> : null}
-      <Btn kind="ghost" icon="plus" label="New task" onPress={() => act.open({ t: 'task' })} />
+      {list.length === 0 ? <Empty icon="tasks" face={empty} text={q ? 'Nothing matches that search.' : 'All clear. Tap + to add one.'} /> : null}
     </Page>
   );
 }

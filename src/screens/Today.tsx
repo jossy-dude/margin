@@ -67,6 +67,8 @@ export interface Deck {
   word: string;
   /** what the digits say */
   countdown: string;
+  /** v0.7.7.4: the moment the digits count to (a class's end or start), when they tick; null for a window or `--:--` */
+  target: number | null;
   /** the unit beside the digits */
   unit: string;
   /** where in the day this class sits, in the words the app already used here */
@@ -140,6 +142,7 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
   const many = slotOf.length > 1;
   return {
     state, period, at, total: ps.length, slot: slotOf.map((x) => x.i), after: afterHit ? afterHit.i : -1,
+    target: target !== null && period && isToday ? target : null,
     /* v0.8 U5 (Daylight's good part, now every skin): after the day's last class it is "Done for today", not a
        rest day; the card's title then carries the day's attendance ("2 classes · all present"). */
     word: cur ? 'Now' : next ? (isToday ? 'Next up' : 'First class') : isToday && ps.length ? 'Done for today' : 'Rest day',
@@ -229,6 +232,12 @@ const DISC = { h: [28, 28, 28, 28], v: [28, 28, 28, 28] } as const;
  *  window or the `--:--` placeholder is set as ordinary text, where per-glyph cells would mis-space
  *  the en dash and the dashes. */
 const TICKING = /^[\d:]+$/;
+/** v0.7.7.4 (SPEC §2 E5): the digits own the 1 Hz clock, so a second re-renders these few glyphs, not the whole
+ *  deck card (~40 components). The card itself follows the minute. */
+function TickingCountdown({ target, color }: { target: number; color: string }) {
+  const now = useLiveNow(1000, 60_000), text = fmtClock(Math.max(0, target - now) / 1000);
+  return TICKING.test(text) ? <Countdown text={text} color={color} /> : <Txt f="type" s={42} style={{ color }}>{text}</Txt>;
+}
 function Countdown({ text, color }: { text: string; color: string }) {
   return (
     <>
@@ -239,7 +248,9 @@ function Countdown({ text, color }: { text: string; color: string }) {
   );
 }
 
-function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
+function StartCircle({ start, gapMs }: { start: number; gapMs: number }) {
+  /* its own 1 Hz clock too (E5): the ring and the time inside move every second without the card */
+  const now = useLiveNow(1000, 60_000), leftMs = Math.max(0, start - now);
   const { c } = useTheme(), size = 56, R = 22, circ = 2 * Math.PI * R;
   const prog = gapMs > 0 ? Math.max(0, Math.min(1, 1 - leftMs / gapMs)) : 0;
   const d = React.useMemo(() => handPath(size, size, DISC, 77, 1.6), []);
@@ -281,7 +292,9 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   headPad?: number;
 }) {
   const { c, look } = useTheme();
-  const live = useScreenLive(), t = useLiveNow(1000, 60_000);
+  /* v0.7.7.4 (SPEC §2 E5): the card follows the minute (classes start and end on one); the ticking digits and the
+     start disc are leaves with their own 1 Hz clocks */
+  const live = useScreenLive(), t = useLiveNow(60_000, 60_000);
   /* Which class of a shared slot the card is about (S2). Stored with the slot it belongs to, so when the
      slot changes (the class ends, another day is picked) it falls back to the first without an effect. */
   const [picked, setPicked] = React.useState<{ key: string; i: number } | null>(null);
@@ -380,7 +393,9 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
           {d.state === 'first'
             ? <Txt f="type" s={RANGE_S} style={{ color: c.deckInk }}>{d.countdown}</Txt>
-            : TICKING.test(d.countdown)
+            : d.target !== null
+              ? <TickingCountdown target={d.target} color={c.deckInk} />
+              : TICKING.test(d.countdown)
               ? <Countdown text={d.countdown} color={c.deckInk} />
               : <Txt f="type" s={42} style={{ color: c.deckInk }}>{d.countdown}</Txt>}
           <Txt f="bold" s={22} maxFontSizeMultiplier={FS} style={{ color: c.deckInk, marginLeft: 9 }}>{d.unit}</Txt>
@@ -392,7 +407,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           as the same kind of annotation. The digits above stay the thing actually read. */}
       {soon && (
         <View pointerEvents="none" style={{ position: 'absolute', right: DECK_PAD_X - 10, top: 86, transform: [{ rotate: '-8deg' }] }}>
-          <StartCircle leftMs={Math.max(0, d.period!.start - t)} gapMs={gapMs} />
+          <StartCircle start={d.period!.start} gapMs={gapMs} />
         </View>
       )}
       <DayBar kind={bar} periods={shown} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />

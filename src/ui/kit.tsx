@@ -99,11 +99,26 @@ export function faceOf(t: { type: TypeMap }, f: FontKey, s: number) { const fc =
  *  says what the control is. Pass `testID` explicitly only to disambiguate repeats (two "Save" buttons). */
 const tid = (s?: string) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 export interface TxtProps extends TextProps { f?: FontKey; s?: number; c?: keyof Colors | string; style?: StyleProp<TextStyle> }
+/** v0.7.7.4 (SPEC §2 E6): a Txt's own style is made once per skin and size, not per render — Txt is the most
+ *  rendered component in the app (60 in one Today tick), and each render built a fresh object for the GC. */
+const TXT_STYLES = new WeakMap<object, Map<string, TextStyle>>();
+function txtStyle(th: ReturnType<typeof useTheme>, f: FontKey, s: number, color: string): TextStyle {
+  let m = TXT_STYLES.get(th);
+  if (!m) { m = new Map(); TXT_STYLES.set(th, m); }
+  const k = `${f}|${s}|${color}`;
+  let st = m.get(k);
+  if (!st) {
+    const fc = th.type[f];
+    /* The line box is computed from the REQUESTED size, the glyphs from the scaled one: a role re-faced by the
+       look keeps the exact height it had, so swapping the notebook hand for the collage grotesque moves nothing. */
+    st = { fontFamily: fc.fam || undefined, fontWeight: fc.w, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)), ...(fc.tnum ? TNUM : null) };
+    m.set(k, st);
+  }
+  return st;
+}
 export function Txt({ f = 'hand', s = 18, c = 'ink', style, ...p }: TxtProps) {
-  const th = useTheme(), color = (th.c as unknown as Record<string, string>)[c] ?? c, fc = th.type[f];
-  /* The line box is computed from the REQUESTED size, the glyphs from the scaled one: a role re-faced by the
-     look keeps the exact height it had, so swapping the notebook hand for the collage grotesque moves nothing. */
-  return <Text {...p} allowFontScaling style={[{ fontFamily: fc.fam || undefined, fontWeight: fc.w, fontSize: s * fc.k, letterSpacing: fc.track * (s / 24), color, lineHeight: Math.round(s * (f === 'marker' ? 1.25 : 1.18)) }, fc.tnum ? TNUM : null, style]} />;
+  const th = useTheme(), color = (th.c as unknown as Record<string, string>)[c] ?? c;
+  return <Text {...p} allowFontScaling style={style ? [txtStyle(th, f, s, color), style] : txtStyle(th, f, s, color)} />;
 }
 
 const TNUM = { fontVariant: ['tabular-nums' as const] };

@@ -63,12 +63,18 @@ it('draws one page of cards out of 1,000 tasks, and Show more draws the next pag
   await hydrate(repo);
   let r!: TestRenderer.ReactTestRenderer;
   await act(async () => { r = TestRenderer.create(React.createElement(TasksScreen)); });
-  const cards = () => r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && /^Problem set \d+/.test(n.props.accessibilityLabel) && typeof n.type !== 'string').length;
+  const cards = () => new Set(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && /^Problem set \d+/.test(n.props.accessibilityLabel) && typeof n.type !== 'string').map((n) => n.props.accessibilityLabel as string)).size;
+  /* v0.7.7.4 (SPEC §2 E4): the list is virtualised, so only the rows near the screen are mounted — about 12 of
+     the 60 the page holds — and Show more grows the list's data, not the number of mounted cards */
+  const data = () => (r.root.findAll((n) => Array.isArray(n.props.data) && typeof n.props.renderItem === 'function')[0]!.props.data as { key: string }[]).filter((x) => !x.key.startsWith('h:')).length;
   const firstPage = cards();
   expect(firstPage).toBeGreaterThan(0);
+  expect(firstPage).toBeLessThanOrEqual(13);
+  expect(data()).toBe(PAGE_ROWS);
   const more = r.root.find((n) => n.props.testID === 'tasks-show-more' && typeof n.props.onPress === 'function');
   expect(String(more.props.label)).toBe(`Show ${PAGE_ROWS} more · ${1000 - PAGE_ROWS} not shown`);
   await act(async () => { more.props.onPress(); });
-  expect(cards()).toBe(firstPage * 2);
+  expect(data()).toBe(PAGE_ROWS * 2);
+  expect(cards()).toBeLessThanOrEqual(13);
   await act(async () => { r.unmount(); });
 });

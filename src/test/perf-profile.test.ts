@@ -112,6 +112,12 @@ run('speed profile', () => {
        
       console.log(`[perf] ${k}: ${Object.values(counts[k] ?? {}).reduce((a, b) => a + b, 0)} renders · ${top}`);
     }
+    /* v0.7.7.4 (SPEC §2 E8): what a tab switch costs the layer over every page — the + button and the overlay */
+    for (const k of ['again Week', 'again Tasks', 'again Today', 'go Tasks']) {
+      const over = Object.entries(counts[k] ?? {}).filter(([n]) => /^(Fab|Overlay|Toast|Shell)$/.test(n)).map(([n, c]) => `${n}×${c}`).join(' ');
+       
+      console.log(`[perf] ${k}: over every page ${over || 'nothing re-rendered'}`);
+    }
     await act(async () => { live?.unmount(); });
     expect(rows.length).toBeGreaterThan(0);
   });

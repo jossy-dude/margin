@@ -343,8 +343,11 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('<DayBar kind={bar} periods={shown}');
   });
 
-  it('the countdown ticks at 1 Hz only while Today is on screen', () => {
-    expect(src).toContain('const live = useScreenLive(), t = useLiveNow(1000, 60_000);'); // v0.7.6: the card reads focus itself
+  it('the countdown ticks at 1 Hz only while Today is on screen, and only the digits do (v0.7.7.4, E5)', () => {
+    expect(src).toContain('const live = useScreenLive(), t = useLiveNow(60_000, 60_000);'); // the card follows the minute
+    const tick = src.slice(src.indexOf('function TickingCountdown'), src.indexOf('function Countdown('));
+    expect(tick).toContain('useLiveNow(1000, 60_000)'); // the digits own the 1 Hz clock, gated off-screen as before
+    expect(src).toContain('<TickingCountdown target={d.target} color={c.deckInk} />');
   });
 
   it('the saved bar setting is not cast to the four legacy kinds it may not be', () => {

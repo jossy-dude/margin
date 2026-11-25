@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { fabScrollProps } from '../ui/fabScroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
@@ -37,8 +37,32 @@ function TopFace({ rest }: { rest: FaceName }) {
 
 /** `face`: the page's top-bar face (`pageFace(…)`), or null while the page shows a page-wide empty state, whose
  *  own 64 dp face takes over (the one-face rule, `ui/mascot/moments.ts`). */
-export function Page({ title, sub, children, right, face }: { title: string; sub?: string; children: React.ReactNode; right?: React.ReactNode; face?: FaceName | null }) {
+/** One row of a virtualised page (v0.7.7.4): a stable key and how to draw it. */
+export interface PageRow { key: string; render: () => React.ReactNode }
+/** `rows` (v0.7.7.4, SPEC §2 E4): a long list below the page's own controls is virtualised — the page becomes a
+ *  FlatList whose header is the title row and `children`, so only the rows near the screen are mounted (about 12,
+ *  not 60). `footer` follows the rows. Without `rows` the page is the plain ScrollView it always was. */
+export function Page({ title, sub, children, right, face, rows, footer }: { title: string; sub?: string; children: React.ReactNode; right?: React.ReactNode; face?: FaceName | null; rows?: readonly PageRow[]; footer?: React.ReactNode }) {
   const ins = useSafeAreaInsets();
+  const header = <PageHeader title={title} sub={sub} right={right} face={face} />;
+  return (
+    <View style={{ flex: 1 }}>
+      {/* the background layer is drawn once behind the navigator (App Shell), not per page */}
+      {rows ? (
+        <FlatList {...fabScrollProps} showsVerticalScrollIndicator={false} data={rows as PageRow[]} keyExtractor={(r) => r.key} renderItem={({ item }) => <>{item.render()}</>}
+          initialNumToRender={12} maxToRenderPerBatch={8} windowSize={7} removeClippedSubviews
+          contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 10 }}
+          ListHeaderComponent={<View style={{ gap: 14, marginBottom: 4 }}>{header}{children}</View>} ListFooterComponent={footer ? <View style={{ gap: 14, marginTop: 4 }}>{footer}</View> : undefined} />
+      ) : (
+      <ScrollView {...fabScrollProps} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 14 }}>
+        {header}
+        {children}
+      </ScrollView>)}
+    </View>
+  );
+}
+/** The page's title row, shared by both page bodies. */
+function PageHeader({ title, sub, right, face }: { title: string; sub?: string; right?: React.ReactNode; face?: FaceName | null }) {
   const { c } = useTheme(), reduce = useReduceMotion(), gp = useSharedValue(1);
   /* The gear was the one control in the app with no press state at all: no ripple, no dip, nothing —
      it read as a printed icon until the sheet opened. It now dips like `StepBtn` does (0.95, the number
@@ -46,9 +70,6 @@ export function Page({ title, sub, children, right, face }: { title: string; sub
   const gear = useAnimatedStyle(() => ({ transform: [{ scale: gp.get() }] }));
   /* The tour's third step rings this gear. Every page renders this header, so one ref covers all six. */
   return (
-    <View style={{ flex: 1 }}>
-      {/* the background layer is drawn once behind the navigator (App Shell), not per page */}
-      <ScrollView {...fabScrollProps} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
           {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
               word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
@@ -61,9 +82,6 @@ export function Page({ title, sub, children, right, face }: { title: string; sub
             <Animated.View style={gear}><Icon name="gear" size={26} /></Animated.View>
           </Pressable>
         </View>
-        {children}
-      </ScrollView>
-    </View>
   );
 }
 export const Section = ({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) => (
