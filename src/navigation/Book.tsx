@@ -108,7 +108,9 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
   const hideNav = cur === 'Focus' || kbUp || touring;
   return (
     <NavigationContent>
-      <View style={{ flex: 1, backgroundColor: c.paper }}>
+      {/* transparent: the skin's ground (paper, or Daylight's sky) is drawn once behind the navigator (Shell); an opaque
+          paper here hid the whole sky until v0.7.6.3 */}
+      <View style={{ flex: 1 }}>
         {/* Every route mounts on this first render and stays for the session: a tap's only pre-paint
             work is the shell and the two pages whose focus flipped, so no tap ever pays a cold mount.
             Hidden pages answer `live=false` from the navigator context and tick at the slow cadence.

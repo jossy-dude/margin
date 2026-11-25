@@ -128,12 +128,20 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
     /* Plain: no drawing at all — a rounded view, a hairline, a soft native shadow. A coloured stroke is still a
        mark (selection, live, late) and keeps its weight; a ghost or dashed box keeps a visible outline. */
     const bare = fill === 'transparent' || dashed, mark = stroke && stroke !== c.ink ? stroke : null;
-    /* Daylight: the glass card (D-8) — radius 16, a one-pixel ring, no drop shadow; the sky shows through `card`. */
-    if (sky) return (
-      <View style={[{ position: 'relative', borderRadius: 16, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule), borderStyle: dashed ? 'dashed' : 'solid' }, style]}>
-        {children}
-      </View>
-    );
+    /* Daylight: the glass card (D-8). v0.7.6.3, the owner: "the card looks too generic". Glass now reads as glass: the
+       top edge catches the light (a brighter rim than the other three sides), a sheet-sized card floats a little over
+       the sky on a soft offset shadow, and the corners open to 20. A chip or a day cell stays flat (no lift), and a
+       coloured stroke is still a mark. */
+    if (sky) {
+      const lift = shadow && !bare && !mark && Math.min(sz.w, sz.h) >= 64, ring = mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule);
+      return (
+        <View onLayout={onLayout} style={[{ position: 'relative', borderRadius: lift ? 20 : 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: ring,
+          borderTopColor: mark || bare ? ring : dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.95)', borderStyle: dashed ? 'dashed' : 'solid' },
+          lift ? { boxShadow: dark ? '0 1px 1px rgba(0,0,0,0.35), 0 10px 26px -10px rgba(0,0,0,0.6)' : '0 1px 1px rgba(17,24,33,0.05), 0 10px 26px -12px rgba(17,24,33,0.22)' } : null, style]}>
+          {children}
+        </View>
+      );
+    }
     return (
       <View style={[{ position: 'relative', borderRadius: 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : 1, borderColor: mark ?? (bare ? hexA(c.ink, dashed ? 0.45 : 0.5) : hexA(c.ink, dark ? 0.14 : 0.09)), borderStyle: dashed ? 'dashed' : 'solid' },
         shadow && !bare ? { boxShadow: dark ? `0 1px 2px ${hexA(c.shadow, 0.5)}, 0 6px 16px ${hexA(c.shadow, 0.35)}` : `0 1px 2px ${hexA(c.shadow, 0.06)}, 0 6px 16px ${hexA(c.shadow, 0.07)}` } : null, style]}>

@@ -46,8 +46,13 @@ describe('Daylight reaches every screen', () => {
     expect(s).toContain('<Sky mode={mode} scheme={scheme} />');
     expect(s).toContain('V2[scheme].glassStrong');
   });
-  it('HandBox draws a glass card with a hairline ring and no shadow', () => {
-    expect(src('ui/kit.tsx')).toMatch(/if \(sky\) return \(\s*<View style=\{\[\{ position: 'relative', borderRadius: 16/);
+  it('HandBox draws a lit glass card: a brighter top rim, a soft lift only for sheet-sized cards (v0.7.6.3)', () => {
+    const k = src('ui/kit.tsx');
+    expect(k).toContain("const lift = shadow && !bare && !mark && Math.min(sz.w, sz.h) >= 64");
+    expect(k).toContain('borderTopColor: mark || bare ? ring :');
+  });
+  it('the navigator is transparent, so the sky behind it shows (v0.7.6.3)', () => {
+    expect(src('navigation/Book.tsx')).not.toContain('backgroundColor: c.paper');
   });
   it('the nav becomes the glass island', () => {
     expect(src('navigation/Book.tsx')).toContain("sky ? { borderRadius: 28");

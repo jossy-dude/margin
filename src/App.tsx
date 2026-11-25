@@ -47,6 +47,8 @@ import { RingingPill } from './ui/RingingPill';
 import { fontsEmbedded } from './services/native';
 
 const Book = createBookNavigator();
+/* Dev-only, web-only: the visual harness (tools/shot.mjs) sets skins and data through this. Never in a phone build. */
+if (__DEV__ && Platform.OS === 'web') (globalThis as Record<string, unknown>).__store = { set, getState, act };
 
 /** One page boundary per screen, built once at module scope so each `component` identity is stable —
  *  a wrapper created inside `Shell`'s render would remount the whole page on every render, and
