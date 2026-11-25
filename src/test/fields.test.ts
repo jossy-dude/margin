@@ -170,3 +170,35 @@ describe('Slider', () => {
     expect(seen).toEqual([90]);
   });
 });
+
+/* v0.7.7.1 (SPEC §4): the teacher's count digit ran into the box's right edge in the Notebook skins. The digits
+   now sit 12 dp inside the box in a printed numeral face, centred alone or right-aligned against a unit, and the
+   box is as wide as the longest value it can hold (never under 64 dp). */
+describe('NumberField room for its digits (0.7.7.1)', () => {
+  const { numberWidth } = jest.requireActual<typeof import('../ui/fields')>('../ui/fields') as typeof import('../ui/fields');
+  const style = (r: TestRenderer.ReactTestRenderer, id: string) => {
+    const n = r.root.findAll((x) => x.props?.testID === id && typeof x.props?.onChangeText === 'function')[0] as unknown as { props: { style: unknown } };
+    return Object.assign({}, ...([n.props.style].flat(3).filter(Boolean) as object[])) as Record<string, unknown>;
+  };
+  it('centres a bare number with 12 dp each side, never in the hand face', async () => {
+    const r = await mount(React.createElement(NumberField, { label: 'teacher', value: 7, min: 0, max: 99, emptyLabel: '–', onChange: () => {} }));
+    const s = style(r, 'num-teacher');
+    expect(s.textAlign).toBe('center');
+    expect(s.paddingHorizontal).toBe(12);
+    expect(s.includeFontPadding).toBe(false);
+    expect(String(s.fontFamily)).not.toMatch(/Caveat/);
+  });
+  it('right-aligns against a unit with 12 dp on the left and 4 on the right', async () => {
+    const r = await mount(React.createElement(NumberField, { label: 'credits', value: 3, min: 0, max: 12, unit: 'cr', onChange: () => {} }));
+    const s = style(r, 'num-credits');
+    expect(s.textAlign).toBe('right');
+    expect(s.paddingLeft).toBe(12);
+    expect(s.paddingRight).toBe(4);
+  });
+  it('sizes the box from the longest value, at least 64 dp, 3 dp more for a slanting face', () => {
+    expect(numberWidth(0, 9, 0, undefined, 12, false)).toBe(64);
+    expect(numberWidth(0, 99, 0, undefined, 15, false)).toBe(74);
+    expect(numberWidth(-20, 20, 1, 'pts', 15, false)).toBeGreaterThan(numberWidth(-20, 20, 0, 'pts', 15, false));
+    expect(numberWidth(0, 99, 0, undefined, 15, true)).toBe(77);
+  });
+});

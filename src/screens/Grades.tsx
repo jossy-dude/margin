@@ -50,13 +50,13 @@ function AttendanceGrid({ course }: { course: Course }) {
         </HStrip>)}
       <Row style={{ gap: 12 }}>{[['✓', 'present', c.ink], ['L', 'late entry', c.warn], ['✕', 'absent', c.bad], ['S', 'sick', c.bad], ['–', 'cancelled', c.mut]].map(([g, l, col]) => <Txt key={l} f="serif" s={13.5} c="mut"><Txt f="marker" s={14} c={col}>{g}</Txt> {l}</Txt>)}</Row>
       {/* The teacher's own count, typed in: it can differ from the marks above, and it is the one that counts. */}
-      <Row style={{ gap: 10, marginTop: 4 }}>
-        <View style={{ flex: 1 }}>
+      <Row style={{ gap: 10, marginTop: 4, flexWrap: 'nowrap' }}>
+        <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
           <Txt f="bold" s={16}>Teacher&apos;s count</Txt>
-          <Txt f="serif" s={13.5} c="mut">{teacher === undefined ? `Not set · marked here: ${rate.absent}` : `${teacher} absent · marked here: ${rate.absent}`}</Txt>
+          <Txt f="serif" s={13.5} c="mut" numberOfLines={2}>{teacher === undefined ? `Not set · marked here: ${rate.absent}` : `${teacher} absent · marked here: ${rate.absent}`}</Txt>
         </View>
         {/* typed, not stepped (C8, R7): empty = not set, so the rate marked here is used */}
-        <NumberField label={`Teacher's absence count for ${course.name}`} value={teacher ?? null} min={0} max={99} emptyLabel="–" width={88}
+        <NumberField label={`Teacher's absence count for ${course.name}`} value={teacher ?? null} min={0} max={99} emptyLabel="–"
           onChange={(v) => { if (v === null) { act.setSettings({ teacherAbsent: Object.fromEntries(Object.entries(teacherAbsent ?? {}).filter(([k]) => k !== course.id)) }); } else setTeacher(v); }} />
       </Row>
     </View>

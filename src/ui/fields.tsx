@@ -25,13 +25,23 @@ import { FS } from './fit';
 
 /** A box is as wide as its longest value, not as wide as the row: a typed field that fills the sheet reads as a text box. */
 const MIN_W = 96;
+/** v0.7.7.1: a number box is never narrower than this, whatever it holds. */
+const NUM_MIN_W = 64;
+/** The number box's inner room: the box's own 10 dp each side plus the input's 12 dp each side. */
+const NUM_PAD = 2 * 10 + 2 * 12;
+/** A number field's width from what it can hold: its longest value in the numeral face, plus its unit. */
+export function numberWidth(min: number, max: number, decimals: number, unit: string | undefined, digitW: number, slant: boolean): number {
+  const chars = Math.max(String(Math.trunc(max)).length, String(Math.trunc(min)).length) + (decimals > 0 ? decimals + 1 : 0);
+  const unitW = unit ? Math.ceil(unit.length * 7.5) + 6 : 0;
+  return Math.max(NUM_MIN_W, Math.ceil(NUM_PAD + chars * digitW + unitW + (slant ? 3 : 0)));
+}
 
 /** The hand-cut box every field sits in. Its edge takes the accent while the field has focus. */
-function Box({ seed, focus, width, children }: { seed: string; focus: boolean; width?: number; children: React.ReactNode }) {
+function Box({ seed, focus, width, children, gap = 6 }: { seed: string; focus: boolean; width?: number; children: React.ReactNode; gap?: number }) {
   const { c } = useTheme();
   return (
     <HandBox seed={`fld-${seed}`} shadow={false} corners={RS} stroke={focus ? c.acc : undefined} sw={focus ? 2 : 1.6}
-      style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', width: width ?? MIN_W, minHeight: 50, paddingHorizontal: 10, gap: 6 }}>
+      style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', width: width ?? MIN_W, minHeight: 50, paddingHorizontal: 10, gap }}>
       {children}
     </HandBox>
   );
@@ -57,9 +67,11 @@ export interface NumberFieldProps {
   label: string;
   width?: number;
 }
-/** A real numeric input: the number pad, a unit beside it, the value clamped into range on commit. */
+/** A real numeric input: the number pad, a unit beside it, the value clamped into range on commit.
+ *  v0.7.7.1 (SPEC §4): the digits are the look's printed numeral face (`num`), padded 12 dp inside the box,
+ *  centred alone or right-aligned against their unit, and the box is as wide as the longest value it can hold. */
 export function NumberField({ value, onChange, min, max, decimals = 0, unit, emptyLabel, label, width }: NumberFieldProps) {
-  const th = useTheme(), { c } = th, [focus, setFocus] = useState(false);
+  const th = useTheme(), { c } = th, [focus, setFocus] = useState(false), num = th.type.num;
   const shown = value === null ? '' : String(Number(value.toFixed(decimals)));
   const d = useDraft(shown);
   const commit = () => {
@@ -72,15 +84,17 @@ export function NumberField({ value, onChange, min, max, decimals = 0, unit, emp
     if (v !== value) { onChange(v); fx.select(); }
   };
   return (
-    <Box seed={label} focus={focus} width={width ?? (unit ? 112 : MIN_W)}>
+    <Box seed={label} focus={focus} gap={0} width={width ?? numberWidth(min, max, decimals, unit, 24 * num.k * 0.62, !!num.slant)}>
       <TextInput
         value={d.text} onChangeText={d.edit} onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); commit(); }} onSubmitEditing={commit}
         keyboardType={decimals > 0 || min < 0 ? 'numeric' : 'number-pad'} returnKeyType="done" selectTextOnFocus
         placeholder={emptyLabel} placeholderTextColor={c.mut} selectionColor={c.acc} maxLength={8}
         accessibilityLabel={`${label}${value === null ? (emptyLabel ? `, ${emptyLabel}` : '') : `, ${shown}${unit ? ` ${unit}` : ''}`}`} testID={`num-${tid(label)}`}
-        maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0, ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 4, textAlign: 'right' }}
+        maxFontSizeMultiplier={FS} style={[{ flex: 1, minWidth: 0, ...faceOf(th, 'num', 24), fontWeight: num.w, color: c.ink, paddingVertical: 4, includeFontPadding: false },
+          unit ? { textAlign: 'right', paddingLeft: 12, paddingRight: 4 + (num.slant ? 3 : 0) } : { textAlign: 'center', paddingHorizontal: 12 },
+          num.tnum ? { fontVariant: ['tabular-nums'] } : null]}
       />
-      {unit ? <Txt f="serif" s={16} c="mut">{unit}</Txt> : null}
+      {unit ? <Txt f="serif" s={16} c="mut" style={{ paddingLeft: 2 }}>{unit}</Txt> : null}
     </Box>
   );
 }

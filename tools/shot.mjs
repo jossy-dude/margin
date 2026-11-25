@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 const [out = '/tmp/shots', palette = 'daylight', theme = 'light', ...routes] = process.argv.slice(2);
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2 });
-await p.goto('http://localhost:8097', { waitUntil: 'networkidle', timeout: 180000 });
+await p.goto(`http://localhost:${process.env.WEB_PORT ?? 8097}`, { waitUntil: 'networkidle', timeout: 180000 });
 await p.waitForFunction(() => globalThis.__store?.getState().ready, null, { timeout: 180000 });
 await p.evaluate(([palette, theme]) => { const s = globalThis.__store; s.set({ settings: { ...s.getState().settings, onboarded: 999, palette, theme } }); }, [palette, theme]);
 for (const r of routes.length ? routes : ['Today']) {

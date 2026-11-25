@@ -150,23 +150,29 @@ export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', seri
  * Bricolage at the same number reads a size and a half larger. The LINE HEIGHT stays computed from the
  * requested size (see `Txt`), so a re-faced line keeps the exact box it had and no layout moves.
  */
-export type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type' | 'script';
-/** `tnum`: tabular figures, so a ticking number never shifts its neighbours (the plain look's numerals). */
-export interface Face { fam: string; k: number; track: number; tnum?: boolean; w?: '400' | '500' | '600' | '700' }
+/** `num` (v0.7.7.1): typed numbers in fields. A printed numeral face in every look, never the hand: Caveat's
+ *  digits lean past their own box and landed on the field's edge. */
+export type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type' | 'script' | 'num';
+/** `tnum`: tabular figures, so a ticking number never shifts its neighbours (the plain look's numerals).
+ *  `slant`: the face leans right past its advance width; a right-aligned field gives it 3 dp more room. */
+export interface Face { fam: string; k: number; track: number; tnum?: boolean; w?: '400' | '500' | '600' | '700'; slant?: boolean }
 export type TypeMap = Record<FontKey, Face>;
 const INK_TYPE: TypeMap = {
   hand: { fam: FONT.hand, k: 1, track: 0 }, bold: { fam: FONT.handBold, k: 1, track: 0 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
   marker: { fam: FONT.marker, k: 1, track: 0 }, type: { fam: FONT.type, k: 1, track: 0 }, script: { fam: FONT.hand, k: 1, track: 0 },
+  num: { fam: FONT.mono, k: 0.82, track: -0.2 },
 };
 const COLLAGE_TYPE: TypeMap = {
   hand: { fam: FONT.sans, k: 0.84, track: 0 }, bold: { fam: FONT.sansMid, k: 0.84, track: -0.1 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
   marker: { fam: FONT.poster, k: 0.9, track: -0.4 }, type: { fam: FONT.mono, k: 0.86, track: -0.2 }, script: { fam: FONT.hand, k: 1, track: 0 },
+  num: { fam: FONT.type, k: 0.9, track: 0 },
 };
 /** Plain: one grotesque for every role. Asides are the regular weight in the muted ink, not an italic serif,
  *  and nothing is handwritten. Hanken's x-height sits between Caveat's and Bricolage's, hence k ≈ 0.88. */
 const PLAIN_TYPE: TypeMap = {
   hand: { fam: FONT.plain, k: 0.88, track: 0 }, bold: { fam: FONT.plainSemi, k: 0.88, track: -0.1 }, serif: { fam: FONT.plain, k: 0.9, track: 0 }, serifB: { fam: FONT.plainMid, k: 0.9, track: 0 },
   marker: { fam: FONT.wide, k: 0.8, track: -0.6 }, type: { fam: FONT.plainMid, k: 0.9, track: 0, tnum: true }, script: { fam: FONT.plainMid, k: 0.88, track: 0 },
+  num: { fam: FONT.plainSemi, k: 0.9, track: 0, tnum: true },
 };
 /** Daylight: the platform grotesque the v2 Today and Week pages are set in (D-1 names Inter; until its files
  *  ship, the system face at Inter's weights), the italic serif kept for the mascot's voice (D-1 "Voice"), and
@@ -174,6 +180,7 @@ const PLAIN_TYPE: TypeMap = {
 const DAY_TYPE: TypeMap = {
   hand: { fam: '', k: 0.86, track: 0, w: '400' }, bold: { fam: '', k: 0.84, track: 0, w: '600' }, serif: { fam: FONT.serif, k: 0.96, track: 0 }, serifB: { fam: FONT.serifB, k: 0.96, track: 0 },
   marker: { fam: '', k: 0.86, track: -0.35, w: '600' }, type: { fam: '', k: 0.86, track: 0, tnum: true, w: '500' }, script: { fam: '', k: 0.86, track: 0, w: '500' },
+  num: { fam: FONT.plainSemi, k: 0.9, track: 0, tnum: true },
 };
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;

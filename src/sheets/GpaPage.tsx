@@ -63,7 +63,7 @@ export function GpaPage() {
               <Txt f="bold" s={16} numberOfLines={1}>{x.name}</Txt>
               <Txt f="serif" s={13.5} c="mut">{x.pct === null ? 'no marks yet' : `${x.pct.toFixed(0)}%${r ? ` · ${r.letter}` : ''}`}</Txt>
             </View>
-            <NumberField value={credits[x.id] ?? null} onChange={(v) => setCredits(x.id, v)} min={0} max={12} unit="cr" emptyLabel="—" label={`${x.name} credit hours`} width={64} />
+            <NumberField value={credits[x.id] ?? null} onChange={(v) => setCredits(x.id, v)} min={0} max={12} unit="cr" emptyLabel="—" label={`${x.name} credit hours`} />
           </HandBox>
         );
       })}
