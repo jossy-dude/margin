@@ -3,6 +3,8 @@ export { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications
 export { getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
 export { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
 export { cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
+export { getPresentedNotificationsAsync } from 'expo-notifications/build/getPresentedNotificationsAsync';
+export { dismissNotificationAsync } from 'expo-notifications/build/dismissNotificationAsync';
 export { cancelAllScheduledNotificationsAsync } from 'expo-notifications/build/cancelAllScheduledNotificationsAsync';
 export { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 export { getNotificationChannelAsync } from 'expo-notifications/build/getNotificationChannelAsync';

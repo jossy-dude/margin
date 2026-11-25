@@ -119,7 +119,8 @@ export async function status(): Promise<NotifStatus> {
  *  re-derive it — and so it survives a reinstall, when the log is empty and the queue is not. */
 const content = (p: Planned, accent: string) => ({ title: p.title, body: p.body, data: { route: p.route, entityId: p.entityId, kind: p.kind, planned: p.id, at: p.at }, color: accent, categoryIdentifier: planCategory(p.kind) ?? undefined });
 /** Make the OS queue equal the plan. Ids encode entity+minute, so unchanged items are left alone (no flicker, no duplicates). */
-export async function sync(plan: Plan, accent: string): Promise<{ added: number; removed: number; planned: { id: string; kind: string; at: number }[] }> {
+/** `settled`: entity ids that need nothing more (v0.7.6); their reminders already in the shade are taken back. */
+export async function sync(plan: Plan, accent: string, settled?: Set<string>): Promise<{ added: number; removed: number; planned: { id: string; kind: string; at: number }[] }> {
   let added = 0, removed = 0;
   const planned: { id: string; kind: string; at: number }[] = [];
   try {
@@ -129,7 +130,17 @@ export async function sync(plan: Plan, accent: string): Promise<{ added: number;
     const haveIds = new Set(have.map((h) => h.identifier));
     for (const p of plan.items) if (!haveIds.has(p.id)) { await N.scheduleNotificationAsync({ identifier: p.id, content: content(p, accent), trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CH[p.channel] } }); added++; planned.push({ id: p.id, kind: p.kind, at: p.at }); }
   } catch { /* permission missing or module unavailable: surfaced by status() */ }
+  if (settled?.size) await dismissSettled(settled);
   return { added, removed, planned };
+}
+/** v0.7.6: take back reminders already in the shade whose task is done or whose class is already marked. */
+async function dismissSettled(settled: Set<string>) {
+  try {
+    for (const n of await N.getPresentedNotificationsAsync()) {
+      const id = String((n.request.content.data as { entityId?: unknown } | undefined)?.entityId ?? '');
+      if (id && settled.has(id)) await N.dismissNotificationAsync(n.request.identifier);
+    }
+  } catch { /* nothing presented, or no module */ }
 }
 export async function cancelAll() { try { await N.cancelAllScheduledNotificationsAsync(); } catch { /* ignore */ } }
 export async function scheduleFocusEnd(at: number, title: string, body: string) {

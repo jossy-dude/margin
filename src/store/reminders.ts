@@ -1,7 +1,7 @@
 import { Appearance } from 'react-native';
 import type { Settings } from '../domain/types';
 import type { NotifLogRow } from '../data/repository';
-import { planReminders } from '../domain/reminders';
+import { planReminders, settledIds } from '../domain/reminders';
 import { makeTheme } from '../tokens/theme';
 import { recordCrash } from '../services/problems';
 import * as notifs from '../services/notifications';
@@ -69,7 +69,9 @@ export function resync(delay = 700) {
     let perm = await notifs.ensurePermission(false);
     /* No automatic ask (v0.5 C): the system prompt only ever follows its explanation — the onboarding's
        reminders page, or Settings → Reminders → Allow. A planner that was never asked simply plans nothing. */
-    if (perm === 'granted') { const r = await notifs.sync(plan, notifAccent(s.settings)); schedNotifs(r.planned); } else if (!s.settings.notif.enabled) await notifs.cancelAll();
+    if (perm === 'granted') {
+      const r = await notifs.sync(plan, notifAccent(s.settings), settledIds({ now, meetings: s.meetings, attendance: s.attendance, dayMarks: s.dayMarks, tasks: s.tasks, moves: s.settings.moves })); schedNotifs(r.planned);
+    } else if (!s.settings.notif.enabled) await notifs.cancelAll();
     // Only notify subscribers when something visible actually changed — every mutation calls resync(),
     // and most recompute to the same plan (e.g. edits that don't move any reminder).
     const moved: Moved[] = [];

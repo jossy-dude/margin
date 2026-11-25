@@ -201,8 +201,10 @@ export function planReminders(i: PlanInput): Plan {
     // `key` is both the attendance record key and the notification's `entityId`: the Here/Late/Absent
     // button splits it on `|` and writes under it, so any other spelling marks nothing the grid reads.
     const lead = s.courseLead[o.meeting.courseId] ?? s.classLeadMin, key = occKey(ymd(o.date), o.meeting);
+    /* v0.7.6: a class already marked (by hand, or the whole day) asks for nothing: no "in 10 min", no "just ended" */
+    if (e.explicit) continue;
     if (s.classSoon && lead > 0) push({ kind: 'class', at: start - lead * MIN, title: `${name} in ${lead} min`, body: `${roomOf(o.meeting, course, i.variants)}${course?.teacher ? ' · ' + course.teacher : ''} · ${fmtTime(start, i.hour12)}`.replace(/^ · /, ''), channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
-    if (s.classEnded && !i.attendance[key]) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
+    if (s.classEnded) push({ kind: 'ended', at: end, title: `${name} just ended`, body: 'Mark it with the Here, Late or Absent button.', channel: 'classes', route: 'Today', entityId: key }, { skipClass: true, weekendDrops: true });
   }
   // tasks
   for (const t of i.tasks) {
@@ -246,4 +248,15 @@ export function planReminders(i: PlanInput): Plan {
   }
   const seen = new Set<string>(), items = raw.filter((p) => p.at > i.now + 5000 && !seen.has(p.id) && !!seen.add(p.id)).sort((a, b) => a.at - b.at);
   return { items: items.slice(0, cap), deferred: Math.max(0, items.length - cap), dropped };
+}
+
+/** v0.7.6: the reminder targets that need nothing more — done tasks (and their "start" reminders) and classes already
+ *  marked — so a reminder for one of them that is already in the shade can be taken away, not left to nag. */
+export function settledIds(i: Pick<PlanInput, 'now' | 'meetings' | 'attendance' | 'dayMarks' | 'tasks' | 'moves'>): Set<string> {
+  const out = new Set<string>();
+  for (const t of i.tasks) if (t.status === 2) { out.add(t.id); out.add(`${t.id}s`); out.add(`${t.id}b`); }
+  for (const o of occurrencesBetween(startOfDay(i.now) - 2 * 86_400_000, startOfDay(i.now) + 86_400_000, i.meetings, i.moves)) {
+    if (effective(o.date, o.meeting, i.attendance, i.dayMarks, i.now).explicit) out.add(occKey(ymd(o.date), o.meeting));
+  }
+  return out;
 }
