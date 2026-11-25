@@ -108,6 +108,7 @@ export const ELSEWHERE: Record<string, string> = {
   focusPresetMin: 'Focus page: the round length tabs',
   taskFilter: 'To-do page: Open / Done', taskSort: 'To-do page: sort', taskSubject: 'To-do page: subject filter',
   teacherAbsent: 'Grades page: the teacher\'s count per subject',
+  credits: 'Grades → GPA: credit hours per subject', pastGrades: 'Grades → GPA: earlier terms from the transcript',
   reminders: 'reminder rules (R9); their page comes with D-19',
   sky: 'the sky behind the v0.7 pages; Still / Off arrive with the shared sky (U3)',
   moves: 'Week page: a class moved this week only',

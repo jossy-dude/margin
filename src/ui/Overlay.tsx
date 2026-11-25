@@ -10,6 +10,7 @@ import { act, dismissToast, useStore } from '../store/store';
 import { useKeyboardUp } from './keyboard';
 import { CourseSheet, MarkSheet, MeetingSheet, NoticeSheet, StatusSheet, TaskSheet } from '../sheets/forms';
 import { NoticeBoard } from '../sheets/NoticeBoard';
+import { GpaPage } from '../sheets/GpaPage';
 import { SubjectsPage } from '../sheets/SubjectsPage';
 import { PageStack, usePageMotion } from './FullPage';
 import { AddSheet } from '../sheets/AddSheet';
@@ -109,7 +110,7 @@ export function Overlay() {
           `showFab` is the only gate, and it is untouched: it is about *when* the floating chrome must get
           out of the way (a sheet is open, the route is Focus, the keyboard is up — BUG-028). */}
       {/* v0.8: a full page (Subjects, Notice board) sits over the book and under any sheet it opens */}
-      {page ? (page.t === 'notices' ? <NoticeBoard /> : <SubjectsSlot id={page.id} />) : null}
+      {page ? (page.t === 'notices' ? <NoticeBoard /> : page.t === 'gpa' ? <GpaPage /> : <SubjectsSlot id={page.id} />) : null}
       {showFab && (<Fab bottom={ins.bottom} onPress={() => { fx.tap(); act.open({ t: 'add' }); }} />)}
       {sheet && (
         sheet.t === 'add' ? <AddSheet /> : sheet.t === 'task' ? <TaskSheet key={sheet.id ?? sheet.kind ?? 'new'} id={sheet.id} kind={sheet.kind} courseId={sheet.courseId} />

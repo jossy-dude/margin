@@ -120,6 +120,8 @@ export interface NotifSettings {
  * (`Alarm.at`) and predates this, and a list this small needs no migration.
  */
 export interface AlarmRule { id: string; label: string; kind: 'clock' | 'class'; h: number; m: number; days: boolean[]; lead: number; on: boolean; snooze: number; vib: boolean; once?: number }
+/** One finished course from an earlier term (v0.7.6.4): what the transcript says. */
+export interface PastGrade { id: string; term: string; name: string; credits: number; grade: string }
 export interface Settings {
   name: string; theme: 'light' | 'dark' | 'auto'; paper: 'dots' | 'grid' | 'ruled' | 'plain';
   pen: 'denim' | 'warm' | 'graphite' | 'red' | 'blue'; palette: 'collage' | 'plain' | 'refined' | 'original' | 'daylight'; texture: 'grain' | 'none';
@@ -138,6 +140,10 @@ export interface Settings {
   /** Absences as the teacher's register has them, per subject id. Typed in by hand: the register and
    *  the marks made here do not always agree, and the register is the one that counts. Absent = not set. */
   teacherAbsent?: Record<string, number>;
+  /** v0.7.6.4: credit hours per subject id, for the GPA. Absent = not counted until set. */
+  credits?: Record<string, number>;
+  /** v0.7.6.4: results from earlier terms, typed in from the transcript. */
+  pastGrades?: PastGrade[];
   /** The Obsidian vault folder this phone was given (a Storage Access Framework URI). Absent/null = not linked. */
   vaultUri?: string | null;
   /** v0.7 R12: the folder the weekly backup goes to (a Storage Access Framework URI, picked once), and when the last

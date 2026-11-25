@@ -15,7 +15,7 @@ export type SheetSpec =
   | { t: 'settings' } | { t: 'course'; id?: string } | { t: 'meeting'; courseId?: string; id?: string; weekday?: number } | { t: 'mark'; courseId: string; id?: string } | { t: 'notice'; id?: string; courseId?: string | null };
 /** v0.8: a full page over the book (`ui/FullPage.tsx`), under any sheet, so a form opens over it and closing the
  *  form comes back to it. */
-export type PageSpec = { t: 'notices' } | { t: 'subjects'; id?: string };
+export type PageSpec = { t: 'notices' } | { t: 'subjects'; id?: string } | { t: 'gpa' };
 export interface Toast { id: number; text: string; undo?: () => void; kind?: 'success' | 'error' }
 export interface Moved { title: string; at: number; was: number; why: string }
 export interface PlanInfo { count: number; deferred: number; shifted: number; next: Planned | null; at: number; moved: Moved[]; dropped: { id: string; why: string }[] }

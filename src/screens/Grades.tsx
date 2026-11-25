@@ -9,6 +9,7 @@ import { attNews } from './faceNews';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
 import { fx } from '../services/fx';
 import { courseGrade, courseNeeded, letter, partGrades } from '../domain/grades';
+import { cumulative, termGpa } from '../domain/gpa';
 import { roomsLabel } from '../domain/rooms';
 import { effective, nextStatus, occKey, occurrencesBetween, attendanceRate } from '../domain/attendance';
 import { DW, atTime, startOfDay, ymd, fmtDay, fmtTime } from '../domain/time';
@@ -72,6 +73,24 @@ function GoalBar({ total, goal }: { total: number; goal: number | null }) {
   );
 }
 
+/** v0.7.6.4: the GPA at a glance; the page behind it takes credit hours and earlier terms. */
+function GpaCard({ rows }: { rows: { id: string; name: string; pct: number | null }[] }) {
+  const { c } = useTheme(), credits = useStore((s) => s.settings.credits) ?? {}, past = useStore((s) => s.settings.pastGrades) ?? [];
+  const t = termGpa(rows, credits), all = cumulative(past, t.rows), set = t.rows.length > 0 || past.length > 0;
+  return (
+    <Pressable testID="open-gpa" accessibilityRole="button" accessibilityLabel={set ? `GPA ${t.gpa?.toFixed(2) ?? 'not yet'} this term, ${all.gpa?.toFixed(2) ?? 'not yet'} overall. Open` : 'Set credit hours to see your GPA'} onPress={() => act.openPage({ t: 'gpa' })}>
+      <HandBox seed="gpa-card" fill={c.deck} style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        {set ? (<>
+          <View><Txt f="type" s={28} c="deckInk">{t.gpa?.toFixed(2) ?? '—'}</Txt><Txt f="bold" s={13.5} c="deckMut">GPA this term</Txt></View>
+          <View><Txt f="type" s={28} c="deckInk">{all.gpa?.toFixed(2) ?? '—'}</Txt><Txt f="bold" s={13.5} c="deckMut">overall · {all.credits} cr</Txt></View>
+        </>) : <Txt f="bold" s={16} c="deckInk" style={{ flex: 1 }}>Set credit hours to see your GPA</Txt>}
+        <View style={{ flex: 1 }} />
+        <Icon name="chevron" size={20} color={c.deckInk} />
+      </HandBox>
+    </Pressable>
+  );
+}
+
 export function GradesScreen() {
   const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), semesterStart = useStore((s) => s.settings.semesterStart), semesterEnd = useStore((s) => s.settings.semesterEnd), variants = useStore((s) => s.variants);
   const st = { courses, marks, adjusts };
@@ -85,6 +104,7 @@ export function GradesScreen() {
   const face = rows.length === 0 ? null : pageFace('Grades', { hour: new Date().getHours(), atGoal: goals.filter((r) => (r.tot as number) >= (r.course.goal as number)).length, belowGoal: goals.filter((r) => (r.tot as number) < (r.course.goal as number)).length });
   return (
     <Page face={face} title="Grades" sub={avg === null ? 'Add marks to see your average' : `Average ${avg.toFixed(1)}% · ${letter(avg)}`} right={<Row style={{ flexWrap: 'nowrap', gap: 4 }}><Btn small kind="ghost" label="Subjects" testID="open-subjects" a11y="Open the subjects pages" onPress={() => act.openPage({ t: 'subjects' })} /><Btn small kind="ghost" icon="plus" a11y="Add subject" onPress={() => act.open({ t: 'course' })} /></Row>}>
+      {rows.length > 0 && <GpaCard rows={rows.map((r) => ({ id: r.course.id, name: r.course.name, pct: r.tot })).filter((_, i) => !rows[i]!.course.archived)} />}
       {rows.length === 0 && <Empty icon="grad" face={emptyFace('gradesNoSubjects')} text="No subjects yet. Add one to start." />}
       {rows.map(({ course, marks, adj, tot, need, parts, rowsP }) => (
         <HandBox key={course.id} seed={course.id} style={{ padding: 14, gap: 10, marginTop: 8 }}>
