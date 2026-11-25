@@ -110,9 +110,12 @@ const TNUM = { fontVariant: ['tabular-nums' as const] };
 
 export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<ViewStyle>; fill?: string; stroke?: string; seed?: string | number; corners?: Corners; sw?: number; shadow?: boolean; amp?: number; dashed?: boolean;
   /** Collage only: force a surface to be torn (a sheet) or scissor-cut (a control) instead of deciding by size. */
-  cut?: 'torn' | 'cut' }
+  cut?: 'torn' | 'cut';
+  /** Daylight (v0.7.7.3, SPEC §2 E2): this surface floats on a shadow. The caller says so (sheets do); a card does not
+   *  measure itself to decide, so a glass card renders once, with its edge on the first frame. */
+  lift?: boolean }
 /** A card with a hand-cut outline (elliptical corners + wobble) and a hard offset shadow, drawn once per size. */
-export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed, cut }: HandBoxProps) {
+export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed, cut, lift: lifted }: HandBoxProps) {
   const { c, look, dark, sky } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
   /* The collage cuts a surface one of two ways, the way paper actually gets cut: anything big enough to be
      a sheet is TORN (a white core along the tear, no outline), a small control is cut with SCISSORS (a
@@ -133,9 +136,9 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
        the sky on a soft offset shadow, and the corners open to 20. A chip or a day cell stays flat (no lift), and a
        coloured stroke is still a mark. */
     if (sky) {
-      const lift = shadow && !bare && !mark && Math.min(sz.w, sz.h) >= 64, ring = mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule);
+      const lift = !!lifted && shadow && !bare && !mark, ring = mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule);
       return (
-        <View onLayout={onLayout} style={[{ position: 'relative', borderRadius: lift ? 20 : 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: ring,
+        <View style={[{ position: 'relative', borderRadius: corners === RG ? 20 : 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: ring,
           borderTopColor: mark || bare ? ring : dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.95)', borderStyle: dashed ? 'dashed' : 'solid' },
           lift ? { boxShadow: dark ? '0 1px 1px rgba(0,0,0,0.35), 0 10px 26px -10px rgba(0,0,0,0.6)' : '0 1px 1px rgba(17,24,33,0.05), 0 10px 26px -12px rgba(17,24,33,0.22)' } : null, style]}>
           {children}

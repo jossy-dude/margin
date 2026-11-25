@@ -50,7 +50,11 @@ type Nav = TabNavigationState<ParamListBase>;
  *  commit as the navigator with nothing left to catch up. Focus travels to the page as a plain boolean
  *  (`ui/live.ts`) rather than as a store-route subscription, which is what keeps a tap from
  *  re-rendering every mounted page. */
+/*  v0.7.7.3 (SPEC §2 E1): `hiddenPages: 'keep'` parks a hidden page instead: laid out, at opacity 0, out of touch
+ *  and accessibility. Android skips drawing a view at alpha 0, so the overdraw stays away, and a revisit flips one
+ *  opacity instead of rebuilding up to ~750 views. It holds memory, so it is an A/B in Diagnostics until measured. */
 function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
+  const keep = useStore((s) => s.settings.hiddenPages) === 'keep';
   /* v0.7.6: focus travels as a store with a stable identity, flipped AFTER the frame that shows the page, so
      the switch itself re-renders neither page; only the leaves that read it follow (see `ui/live`). */
   const [src] = useState(() => liveSource(on)), [vis] = useState(() => liveSource(on));
@@ -58,7 +62,7 @@ function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
   /* the page's data catches up BEFORE paint, so a page is never shown with what it held while hidden */
   useLayoutEffect(() => { vis.set(on); }, [on, vis]);
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: on ? 2 : 1, display: on ? 'flex' : 'none' }]}>
+    <View pointerEvents={on ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, keep ? { zIndex: on ? 2 : 1, opacity: on ? 1 : 0 } : { zIndex: on ? 2 : 1, display: on ? 'flex' : 'none' }]}>
       <ScreenLive.Provider value={src}><StoreHold.Provider value={vis}><ThemeHold on={on}>{children}</ThemeHold></StoreHold.Provider></ScreenLive.Provider>
     </View>
   );

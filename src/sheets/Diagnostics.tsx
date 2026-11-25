@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import { Clipboard, View } from 'react-native';
-import { Btn, HandBox, Hair, Row, Txt } from '../ui/kit';
+import { Btn, Chip, HandBox, Hair, Row, Txt } from '../ui/kit';
 import { Label } from '../ui/Sheet';
 import { FaceTester } from '../ui/mascot/FaceTester';
 import { Empty } from '../screens/common';
 import { useTheme } from '../ui/theme-context';
-import { getState, toast } from '../store/store';
+import { act, getState, toast, useStore } from '../store/store';
 import { bootMarks } from '../services/bootClock';
 import { appVersion, clearCrashes, formatAllCrashes, formatCrash, groupCrashes, readCrashes, sdkVersion, testCrashReporter, type CrashEntry } from '../services/problems';
 
@@ -26,6 +26,21 @@ const when = (ms: number) => {
   const d = new Date(ms), p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+
+/** v0.7.7.3 (SPEC §2 E1): the hidden-pages A/B, for `tools/phone-perf.sh tour` and `mem` run once each way. */
+function SpeedAB() {
+  const mode = useStore((s) => s.settings.hiddenPages) ?? 'drop';
+  return (
+    <View style={{ gap: 6 }}>
+      <Label>Speed test: hidden pages</Label>
+      <Row>
+        <Chip label="Rebuild on visit" on={mode === 'drop'} onPress={() => act.setSettings({ hiddenPages: 'drop' })} />
+        <Chip label="Keep laid out" on={mode === 'keep'} onPress={() => act.setSettings({ hiddenPages: 'keep' })} />
+      </Row>
+      <Txt f="serif" s={14} c="mut">Keep laid out makes a revisited tab show at once but holds more memory. Restart the app after switching before measuring.</Txt>
+    </View>
+  );
+}
 
 /** Settings → Diagnostics. Read-only apart from Clear: a copy of existing text components, no new UI language. */
 export function DiagnosticsPage() {
@@ -55,6 +70,8 @@ export function DiagnosticsPage() {
       <Txt f="serif" s={14.5} c="mut">
         “Test the crash reporter” throws a real error and catches it on the spot. It is written to the log below and the app keeps running.
       </Txt>
+      <Hair />
+      <SpeedAB />
       <Hair />
       {list.length === 0 ? <Empty icon="note" text="Nothing has gone wrong. If something does, it lands here." /> : (
         <View style={{ gap: 12 }}>{groupCrashes(list).map(({ entry: e, count, first }) => (

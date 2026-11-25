@@ -142,6 +142,10 @@ export interface Settings {
   teacherAbsent?: Record<string, number>;
   /** v0.7.7.2: subjects whose "Split the lab classes" offer was answered No (D11); it is not asked again. */
   labSplitNo?: string[];
+  /** v0.7.7.3 (SPEC §2 E1), an A/B for the phone: how a page that is not on screen is hidden. `drop` (default) takes it
+   *  out of layout, so a revisit rebuilds its views; `keep` leaves it laid out at opacity 0. Ship `keep` as the default
+   *  only if the A51 shows it costs under +40 MB. */
+  hiddenPages?: 'drop' | 'keep';
   /** v0.7.6.4: credit hours per subject id, for the GPA. Absent = not counted until set. */
   credits?: Record<string, number>;
   /** v0.7.6.4: results from earlier terms, typed in from the transcript. */

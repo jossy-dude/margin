@@ -37,7 +37,11 @@ describe('the page swap is a cut, and costs no animation', () => {
     expect(placed).not.toContain('transform');
     expect(placed).not.toContain('rotate');
     expect(placed).not.toContain('scale');
-    expect(placed).not.toContain('opacity');
+    /* v0.7.7.3 (SPEC §2 E1): the one opacity allowed is the A/B's static park — 1 on screen, 0 hidden, never animated
+       (no withTiming, no Animated), so no frame ever composites a half-transparent page */
+    expect(placed.match(/opacity/g) ?? []).toHaveLength(1);
+    expect(placed).toContain('opacity: on ? 1 : 0');
+    expect(placed).not.toMatch(/withTiming|Animated/);
   });
 
   it('neither is there a shadow overlay to fade, which is what removed the re-rasterised fade', () => {
