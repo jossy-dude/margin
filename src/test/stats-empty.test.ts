@@ -95,7 +95,7 @@ describe('the Stats empty-state hint actually fires (BUG-024)', () => {
     // Rationale (v0.6 Stats): the work sheet always answers ("0 overdue", weekly bars at zero) instead of a placeholder;
     // the attendance sheet says why it is empty instead.
     expect(src).toContain('No class has been held in the last four weeks.');
-    expect(src).toContain('Start a focus session for a subject and it shows up here.');
+    expect(src).toContain('No focus sessions yet.');
     expect(src).not.toContain('st.focus.length === 0 && st.tasks.every');
   });
 });

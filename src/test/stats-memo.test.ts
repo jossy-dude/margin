@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
-import { hydrate, set, stopResync } from '../store/store';
+import { getState, hydrate, set, stopResync } from '../store/store';
 import { StatsScreen } from '../screens/Stats';
 
 /**
@@ -90,23 +90,22 @@ describe('Stats does not re-derive the whole dataset on every render (BUG-014)',
   it('renders the real page, so the counts below are not measuring a blank screen', async () => {
     const s = await mount();
     // Rationale (Stats rebuild): the page is now a report of questions; these two headings prove it rendered.
-    expect(s.json()).toContain('Are you showing up?');
-    expect(s.json()).toContain('Where does your study time go?');
+    expect(s.json()).toContain('"Attendance"');
+    expect(s.json()).toContain('"Study time"');
     for (const name of DATA_ONLY) expect({ name, ran: countsOf()[name]! > 0 }).toEqual({ name, ran: true });
   });
 
   it('a store write it subscribes to, but no chart reads, re-renders it without re-deriving', async () => {
-    // `plan` is read by the Reminders card and by no derivation, so this is a re-render that changes
-    // nothing a chart is built from. Using a field the screen does not subscribe to would prove
-    // nothing: the screen would not have re-rendered at all.
+    // `hour12` is read by the hour ticks and by no derivation (v0.7.6.2: the Reminders line that read `plan` left
+    // Stats), so this is a re-render that changes nothing a chart is built from.
     const s = await mount();
     const before = { ...countsOf() };
     expect(before['gradeBars']).toBeGreaterThan(0); // they did run on mount
 
-    await act(async () => { set({ plan: { count: 7, deferred: 0, shifted: 0, next: null, at: NOW, moved: [], dropped: [] } }); });
+    await act(async () => { set({ settings: { ...getState().settings, hour12: !getState().settings.hour12 } }); });
 
     for (const name of DATA_ONLY) expect({ name, ran: countsOf()[name], before: before[name] }).toEqual({ name, ran: before[name], before: before[name] });
-    expect(s.json()).toContain('7 scheduled'); // …so it really did re-render, and really did show the new value
+    expect(s.json()).toContain('"Attendance"');
   });
 
   it('a plain re-render does not re-derive either', async () => {

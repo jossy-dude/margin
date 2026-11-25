@@ -170,12 +170,6 @@ export function peakHour(h: number[]): number | null {
 }
 /** An hour as an axis tick, in the app's clock: `6 AM` / `6 PM`, or `06:00`. */
 export const hourTick = (h: number, h12: boolean) => (h12 ? `${h % 12 || 12} ${h % 24 < 12 ? 'AM' : 'PM'}` : `${pad(h % 24)}:00`);
-/** How far ahead of a due date something was finished, in words: `under an hour`, `7 h`, `2 days`. */
-export function leadPhrase(hours: number): string {
-  if (hours < 1) return 'under an hour';
-  if (hours < 23.5) return `${Math.round(hours)} h`;
-  return plural(Math.round(hours / 24), 'day');
-}
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 /** `27 Oct`: a day key as a short axis label. */
 export const shortDate = (key: string) => { const d = parseYmd(key); return `${d.getDate()} ${MON[d.getMonth()]}`; };
@@ -209,58 +203,6 @@ export function markScale(values: number[], goal: number | null): { lo: number; 
   return { lo, hi, ticks };
 }
 
-/** Are you showing up? `days` is the window the totals were summed over. */
-export function attendanceLine(t: AttTotals, days = 28): string | null {
-  if (t.held === 0) return null;
-  const span = days % 7 === 0 ? `the last ${plural(days / 7, 'week')}` : `the last ${days} days`;
-  if (t.missed === 0) {
-    const all = t.held === 1 ? 'You were at the one class held' : `You were at all ${t.held} classes`;
-    const late = !t.late ? '' : t.late === t.held ? (t.held === 1 ? ', late' : ', all of them late') : `, ${t.late} of them late`;
-    return `${all} in ${span}${late}.`;
-  }
-  const lead = `You were at ${t.here} of ${plural(t.held, 'class', 'classes')} in ${span}`;
-  return t.worst ? `${lead}; ${t.worst.name} is where you missed most (${t.worst.missed}).` : `${lead}.`;
-}
-/** Are you on top of work? From `onTimeStats`, and how many tasks were finished in the heatmap window. */
-export function tasksLine(ot: ReturnType<typeof onTimeStats>, finished: number): string | null {
-  if (ot.total === 0) return finished ? `${plural(finished, 'task')} finished in the last 15 weeks; none of them had a due date to beat.` : null;
-  const lead = ot.avgLeadHours !== null ? `, by about ${leadPhrase(ot.avgLeadHours)} on average` : '';
-  if (ot.onTime === 0) return ot.total === 1 ? 'The one task with a due date was finished after it.' : `None of the ${ot.total} tasks with a due date were done by it.`;
-  if (ot.late === 0) return ot.total === 1 ? `The one task with a due date beat it${lead}.` : `All ${ot.total} tasks with a due date beat it${lead}.`;
-  return `${ot.onTime} of ${ot.total} tasks beat their due date${lead}.`;
-}
-/** Where does your study time go? `total` is the window's minutes; `bySub` is `focusBySubject` over it. */
-export function focusLine(total: number, bySub: { id: string; name: string; min: number }[]): string | null {
-  if (total <= 0) return null;
-  const top = bySub[0], head = `${fmtDur(total)} of focus in the last 15 weeks`;
-  if (!top || top.min <= 0) return `${head}.`;
-  const where = top.id === '_' ? 'not filed under a subject' : `on ${top.name}`;
-  return bySub.filter((s) => s.min > 0).length === 1 ? `${head}, all of it ${where}.` : `${head}, most of it ${where}.`;
-}
-/** When do you work best? Both peaks arrive already printed in the app's clock. The sentence starts with
- *  the phrase `tools/w4-assert.mjs` 7i looks for, so the 12-hour check keeps finding it. */
-export function hoursLine(focusPeak: string | null, donePeak: string | null): string | null {
-  if (focusPeak && donePeak) return `Focus peaks around ${focusPeak}, and most tasks are finished around ${donePeak}.`;
-  if (focusPeak) return `Focus peaks around ${focusPeak}.`;
-  if (donePeak) return `Most tasks are finished around ${donePeak}.`;
-  return null;
-}
-/** How are your grades? The subject furthest under its goal is named first; otherwise the spread. */
-export function gradesLine(rows: { id: string; name: string; total: number | null; goal: number | null }[]): string | null {
-  const s = rows.filter((r) => r.total !== null).map((r) => ({ ...r, t: Math.round(r.total as number) }));
-  const best = s.reduce<(typeof s)[number] | null>((a, r) => (!a || r.t > a.t ? r : a), null);
-  if (!best) return null;
-  const gap = (r: (typeof s)[number]) => `${(r.goal as number) - r.t} under its goal of ${r.goal}`;
-  if (s.length === 1) {
-    if (best.goal === null) return `${best.name} stands at ${best.t}.`;
-    return best.t < best.goal ? `${best.name} stands at ${best.t}, ${gap(best)}.` : `${best.name} stands at ${best.t}, at or above its goal.`;
-  }
-  const u = s.filter((r) => r.goal !== null && r.t < r.goal).sort((a, b) => ((b.goal as number) - b.t) - ((a.goal as number) - a.t))[0];
-  if (u) return u.id === best.id ? `${best.name} leads at ${best.t}, but is ${gap(best)}.` : `${u.name} is ${gap(u)}; ${best.name} leads at ${best.t}.`;
-  if (s.some((r) => r.goal !== null)) return `Every subject with a goal is at or above it; ${best.name} leads at ${best.t}.`;
-  const low = s.reduce((a, r) => (r.t < a.t ? r : a));
-  return low.t === best.t ? `Every subject stands at ${best.t}.` : `${best.name} leads at ${best.t}; ${low.name} is lowest at ${low.t}.`;
-}
 export interface HeadlineIn {
   focus: { week: number; prev: number; change: number | null };
   done: { week: number };

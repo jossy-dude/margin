@@ -11,7 +11,7 @@ import { act, useStore } from '../store/store';
 import { LiveFace, Page } from './common';
 import * as A from '../domain/analytics';
 import type { ClassMove } from '../domain/moves';
-import { fmtDur, plural, startOfDay } from '../domain/time';
+import { fmtDur, startOfDay } from '../domain/time';
 
 const NO_MOVES: ClassMove[] = [];
 
@@ -29,7 +29,7 @@ const WEEKS = 15;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function StatsScreen() {
-  const variants = useStore((s) => s.variants), moves = useStore((s) => s.settings.moves) ?? NO_MOVES, focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
+  const variants = useStore((s) => s.variants), moves = useStore((s) => s.settings.moves) ?? NO_MOVES, focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), hour12 = useStore((s) => s.settings.hour12);
   const { c, tints } = useTheme(), { width } = useWindowDimensions();
   const now = useLiveNow(60_000), iw = width - 32 - 32, [gc, setGc] = useState<string | null>(null);
   const day = startOfDay(now);
@@ -62,7 +62,7 @@ export function StatsScreen() {
   const graded = gb.filter((g) => g.total !== null);
 
   return (
-    <Page face={nothing ? null : pageFace('Stats', { hour: new Date().getHours() })} title="Stats" sub={nothing ? 'Fills in as you use the app' : 'This week, and the weeks behind it'}>
+    <Page face={nothing ? null : pageFace('Stats', { hour: new Date().getHours() })} title="Stats" sub={nothing ? 'Fills in as you use the app' : undefined}>
       {nothing ? (
         <HandBox seed="stats-empty" fill={c.card} style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <LiveFace name={emptyFace('statsNothingYet') ?? 'wink'} size={64} decorative />
@@ -73,46 +73,42 @@ export function StatsScreen() {
         </HandBox>
       ) : (
         <Headline line={headline} figures={[
-          { k: 'Focus this week', v: fmtDur(wk.week), sub: wk.change === null ? (wk.prev ? undefined : 'nothing last week') : `${wk.change >= 0 ? '+' : '−'}${Math.round(Math.abs(wk.change) * 100)}% on last week` },
-          { k: 'Attendance', v: att.totals.rate === null ? '—' : `${Math.round(att.totals.rate * 100)}%`, sub: att.totals.held ? `${att.totals.here} of ${att.totals.held}, 4 weeks` : 'no classes yet' },
-          { k: 'On time', v: ot.pct === null ? '—' : `${Math.round(ot.pct * 100)}%`, sub: ot.total ? `${ot.onTime} of ${plural(ot.total, 'task')}` : 'no due dates yet' },
+          { k: 'Focus', v: fmtDur(wk.week), sub: wk.change === null ? undefined : `${wk.change >= 0 ? '+' : '−'}${Math.round(Math.abs(wk.change) * 100)}% vs last week` },
+          { k: 'Attendance', v: att.totals.rate === null ? '—' : `${Math.round(att.totals.rate * 100)}%`, sub: att.totals.held ? `${att.totals.here}/${att.totals.held}` : undefined },
+          { k: 'On time', v: ot.pct === null ? '—' : `${Math.round(ot.pct * 100)}%`, sub: ot.total ? `${ot.onTime}/${ot.total}` : undefined },
         ]} />
       )}
 
-      <Sheet i={0} seed="st-att" title="Are you showing up?" line={A.attendanceLine(att.totals, 28)}>
+      <Sheet i={0} seed="st-att" title="Attendance">
         {att.rows.length === 0 ? <Quiet text="No classes in the timetable yet." /> : att.totals.held + att.b.cancelled === 0 ? <Quiet text="No class has been held in the last four weeks." /> : <ShowingUp b={att.b} rows={att.subjects} tint={tint} />}
       </Sheet>
 
-      <Sheet i={1} seed="st-work" title="Are you on top of your work?" line={A.tasksLine(ot, totalDone)}>
+      <Sheet i={1} seed="st-work" title="Work">
         <OnTop now={work} ot={ot} weeks={weekly} weekLabels={weekLabels} streak={ds.current} onOpen={() => act.go('Tasks')} />
       </Sheet>
 
-      <Sheet i={2} seed="st-focus" title="Where does your study time go?" line={A.focusLine(totalMin, bySub)}>
-        {bySub.length ? <SubjectBars w={iw} fmt={fmtDur} rows={bySub.slice(0, 7).map((s) => ({ id: s.id, name: s.id === '_' ? 'Not filed under a subject' : s.name, value: s.min, tint: tint(s.id) }))} /> : <Quiet text="Start a focus session for a subject and it shows up here." />}
+      <Sheet i={2} seed="st-focus" title="Study time">
+        {bySub.length ? <SubjectBars w={iw} fmt={fmtDur} rows={bySub.slice(0, 7).map((s) => ({ id: s.id, name: s.id === '_' ? 'No subject' : s.name, value: s.min, tint: tint(s.id) }))} /> : <Quiet text="No focus sessions yet." />}
         {totalMin ? <CalHeat days={days} values={focusD} w={iw} tone={c.acc} unit=" min of focus" /> : null}
-        {totalMin ? <Figures items={[{ k: 'this week', v: fmtDur(wk.week) }, { k: 'last week', v: fmtDur(wk.prev) }, { k: 'day streak', v: `${fs.current}` }, { k: 'best streak', v: `${fs.best}` }]} /> : null}
+        {totalMin ? <Figures items={[{ k: 'day streak', v: `${fs.current}` }, { k: 'best', v: `${fs.best}` }]} /> : null}
       </Sheet>
 
-      <Sheet i={3} seed="st-hours" title="When do you work best?" line={A.hoursLine(at(fPeak), at(dPeak))}>
-        {fPeak === null && dPeak === null ? <Quiet text="After a few sessions and finished tasks, your best hours show up here." /> : (<>
+      <Sheet i={3} seed="st-hours" title="Best hours">
+        {fPeak === null && dPeak === null ? <Quiet text="Shows after a few sessions." /> : (<>
           {fPeak !== null ? <View style={{ gap: 4 }} accessible accessibilityLabel={`Focus by hour, peak around ${at(fPeak)}`}><Txt f="bold" s={15}>Focus</Txt><HourBars values={fh} w={iw} tone={c.acc} ticks={ticks} /></View> : null}
           {dPeak !== null ? <View style={{ gap: 4 }} accessible accessibilityLabel={`Tasks finished by hour, peak around ${at(dPeak)}`}><Txt f="bold" s={15}>Tasks finished</Txt><HourBars values={hours} w={iw} tone={c.ok} ticks={ticks} /></View> : null}
         </>)}
       </Sheet>
 
-      <Sheet i={4} seed="st-grades" title="How are your grades?" line={A.gradesLine(gb)}>
-        {graded.length ? <SubjectBars w={iw} max={100} fmt={(v) => `${Math.round(v)}`} rows={graded.map((g) => ({ id: g.id, name: g.name, value: g.total as number, tint: tint(g.id), goal: g.goal, note: g.goal != null ? `goal ${g.goal}` : undefined }))} /> : <Quiet text="No marks yet. Add one from the + and it shows up here." />}
+      <Sheet i={4} seed="st-grades" title="Grades">
+        {graded.length ? <SubjectBars w={iw} max={100} fmt={(v) => `${Math.round(v)}`} rows={graded.map((g) => ({ id: g.id, name: g.name, value: g.total as number, tint: tint(g.id), goal: g.goal, note: g.goal != null ? `goal ${g.goal}` : undefined }))} /> : <Quiet text="No marks yet." />}
         {courses.length ? (<>
-          <Txt f="bold" s={17} style={{ marginTop: 4 }}>Mark history</Txt>
+          <Txt f="bold" s={17} style={{ marginTop: 4 }}>History</Txt>
           <HStrip gap={8} bg={c.card}>{courses.map((x) => <Chip key={x.id} label={x.name} small on={gCourse === x.id} onPress={() => setGc(x.id)} />)}</HStrip>
           {series.length ? <MarkLine w={iw} values={series.map((s) => s.score)} labels={series.map((s) => s.name)} scale={scale} goal={gCourseRow?.goal ?? null} /> : <Quiet text={`No scored marks for ${gCourseRow?.name ?? 'this subject'} yet.`} />}
         </>) : null}
       </Sheet>
 
-      <View style={{ paddingHorizontal: 4, gap: 2 }}>
-        <Txt f="bold" s={16}>Reminders</Txt>
-        <Txt f="serif" s={14.5} c="mut">{plan ? `${plan.count} scheduled in the next 14 days${plan.shifted ? ` · ${plan.shifted} moved to stay out of class or quiet hours` : ''}${plan.deferred ? ` · ${plan.deferred} waiting for the queue to free up` : ''}` : 'Not planned yet'}</Txt>
-      </View>
     </Page>
   );
 }

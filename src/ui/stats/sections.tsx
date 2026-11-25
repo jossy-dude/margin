@@ -55,7 +55,7 @@ export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; row
         <Txt f="type" s={46} c={rate !== null && rate < floor ? 'bad' : 'ink'} maxFontSizeMultiplier={1.2} style={{ lineHeight: 52 }}>{pct(rate)}</Txt>
         <View style={{ paddingBottom: 6, flexShrink: 1 }}>
           <Txt f="bold" s={17} maxFontSizeMultiplier={FS}>present</Txt>
-          <Txt f="serif" s={14.5} c="mut" maxFontSizeMultiplier={FS}>{b.present} of {b.held} classes held{b.cancelled ? `, ${b.cancelled} cancelled` : ''}</Txt>
+          <Txt f="serif" s={14.5} c="mut" maxFontSizeMultiplier={FS}>{b.present} of {b.held}{b.cancelled ? ` · ${b.cancelled} cancelled` : ''}</Txt>
         </View>
       </View>
       <View style={{ gap: 8 }}>
@@ -69,13 +69,13 @@ export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; row
       </View>
       {(b.absent > 0 || b.cancelled > 0) && (
         <View style={{ gap: 4 }}>
-          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>Missed, and why</Txt>
+          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>Missed</Txt>
           {b.absent > 0 && <Txt f="hand" s={15.5} maxFontSizeMultiplier={FS}><Txt f="bold" s={15.5} c="bad">Absent </Txt>{whyList(b.why.a, b.absent)}</Txt>}
           {b.cancelled > 0 && <Txt f="hand" s={15.5} maxFontSizeMultiplier={FS}><Txt f="bold" s={15.5} c="mut">Cancelled </Txt>{whyList(b.why.c, b.cancelled)}</Txt>}
         </View>
       )}
       <View style={{ gap: 12 }}>
-        <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>By subject, lowest first</Txt>
+        <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>By subject</Txt>
         {rows.map((r) => {
           const low = r.rate !== null && r.rate < floor;
           return (
@@ -109,7 +109,6 @@ export function ShowingUp({ b, rows, tint, floor = 0.8 }: { b: AttBreakdown; row
             </View>
           );
         })}
-        <Txt f="serif" s={13} c="mut" maxFontSizeMultiplier={FS}>A faint dot is a class that ended without a mark, counted as present; a hollow one was cancelled.</Txt>
       </View>
     </View>
   );
@@ -138,7 +137,7 @@ export function OnTop({ now, ot, weeks, weekLabels, streak, onOpen }: {
       </View>
       {ot.total > 0 && (
         <View style={{ gap: 8 }}>
-          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>Beating due dates</Txt>
+          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>On time</Txt>
           <SplitBar label={`${ot.onTime} on time, ${ot.late} late`} parts={[{ n: ot.onTime, col: c.ok }, { n: ot.late, col: c.bad }]} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 }}>
             <Key col={c.ok} n={ot.onTime} label="on time" />{ot.late ? <Key col={c.bad} n={ot.late} label="late" /> : null}
@@ -148,7 +147,7 @@ export function OnTop({ now, ot, weeks, weekLabels, streak, onOpen }: {
       )}
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>Finished each week</Txt>
+          <Txt f="bold" s={16} maxFontSizeMultiplier={FS}>Done per week</Txt>
           {streak > 1 ? <Txt f="serif" s={14} c="mut" maxFontSizeMultiplier={FS}>{streak}-day streak</Txt> : null}
         </View>
         <View accessible accessibilityRole="image" accessibilityLabel={`Tasks finished per week, oldest first: ${weeks.join(', ')}`} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: H + 18 }}>
