@@ -87,7 +87,7 @@ export class SqliteRepository implements Repository {
        columns and meanings this build does not know. Opening it anyway would read some of its rows as
        corrupt and write the rest back without the new columns. Nothing is changed; the message says what
        to do instead. */
-    if (v > MIGRATIONS.length) throw new Error(`This planner was saved by a newer version of Margin (data version ${v}; this one reads up to ${MIGRATIONS.length}). Nothing was changed — install the newer version to open it.`);
+    if (v > MIGRATIONS.length) throw new Error(`This planner was saved by a newer version of Marrow (data version ${v}; this one reads up to ${MIGRATIONS.length}). Nothing was changed — install the newer version to open it.`);
     for (let n = v; n < MIGRATIONS.length; n++) {
       /* The schema and its version marker commit together. They used to be two separate statements,
          so a kill in between left the tables created and `user_version` at 0 — and because

@@ -327,13 +327,13 @@ describe('parseImport', () => {
       expect(p.snapshot.settings).toEqual({ semesterStart: '2026-09-07', name: 'Sam' });
     });
 
-    it('warns on a key that is not part of a Margin export', () => {
+    it('warns on a key that is not part of a Marrow export', () => {
       const p = parse(json({ app: 'margin', raw: {}, whatever: 1 }));
       expect(p.problems).toEqual([]);
-      expect(p.warnings).toEqual(['"whatever" is not part of a Margin export and was ignored.']);
+      expect(p.warnings).toEqual(['"whatever" is not part of a Marrow export and was ignored.']);
     });
 
-    it('a Margin envelope with no raw is a problem, not an empty import', () => {
+    it('a Marrow envelope with no raw is a problem, not an empty import', () => {
       const p = parse(json({ app: 'margin', Courses: [] }));
       expect(p.problems).toHaveLength(1);
       expect(p.problems[0]).toMatchObject({ where: 'file', field: 'raw' });
@@ -388,7 +388,7 @@ describe('parseImport', () => {
 
     it('a file from another app is named as such and stops there', () => {
       const p = parse(json({ app: 'other', courses: [{ name: 'Maths' }] }));
-      expect(p.problems).toEqual([{ where: 'file', field: 'app', message: 'This is not a Margin file (app is "other").' }]);
+      expect(p.problems).toEqual([{ where: 'file', field: 'app', message: 'This is not a Marrow file (app is "other").' }]);
       expect(p.snapshot).toEqual({});
     });
   });

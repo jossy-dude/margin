@@ -34,7 +34,7 @@ export function ObsidianPage() {
   const refresh = () => setTimeout(() => setSt(syncStatus()), 800);
   const sync = () => { syncNow(); void obsidianNow(); refresh(); };
   const choose = async () => { const picked = await pickVault(); if (picked) { syncConfigure(picked, leafOf(picked)); act.setSettings({ vaultUri: picked }); sync(); } };
-  const pairWith = (t: string) => { const err = syncPair(t); setMsg(err ?? 'Paired. Margin finds the desktop on your Wi-Fi, the hotspot or Tailscale.'); if (!err) setText(''); refresh(); };
+  const pairWith = (t: string) => { const err = syncPair(t); setMsg(err ?? 'Paired. Marrow finds the desktop on your Wi-Fi, the hotspot or Tailscale.'); if (!err) setText(''); refresh(); };
   const scan = async () => { const r = await scanQr(); if (!r) return; if (r.startsWith('error:')) { setMsg(`The scanner is not available (${r.slice(6)}). Paste the text instead.`); return; } pairWith(r); };
   const doAction = (a: Action) => {
     if (a === 'folder') void choose();

@@ -578,7 +578,7 @@ describe('Settings → Data has the import door and the safety-copy row (v0.3.1)
   it('About prints the one version string', async () => {
     const s = await mount();
     await act(async () => { set({ settingsPath: ['about'] }); });
-    expect(s.text()).toContain(`Margin ${APP_VERSION}`);
+    expect(s.text()).toContain(`Marrow ${APP_VERSION}`);
   });
 });
 
@@ -607,7 +607,7 @@ describe('About and Reset are two pages, and the support row is absent until its
 
   it('About says what this is and what this build is, and carries no erase button', async () => {
     const t = (await page(['about'])).text();
-    expect(t).toContain(`Margin ${APP_VERSION}`);
+    expect(t).toContain(`Marrow ${APP_VERSION}`);
     // Rationale (owner's About rewrite, collage pass): new copy — a one-line description, "What it's for",
     // "Why it looks like paper", and "Made by" with Jossy as a signature on its own line.
     expect(t).toContain('A school planner — on paper, in your pocket.');
@@ -626,7 +626,7 @@ describe('About and Reset are two pages, and the support row is absent until its
     expect(t).toContain('Erase everything');
     expect(t).toContain('Erases everything.');
     expect(t).not.toContain('Why it looks like paper');
-    expect(t).not.toContain(`Margin ${APP_VERSION}`); // the version moved off the erase page
+    expect(t).not.toContain(`Marrow ${APP_VERSION}`); // the version moved off the erase page
   });
 
   it('the two-tap guard on Reset survived the move: one tap erases nothing', async () => {
@@ -656,7 +656,7 @@ describe('About and Reset are two pages, and the support row is absent until its
     expect(r.root.findAllByType(Face).map((f) => [f.props.name, f.props.size])).toEqual([['wink', 72]]);
     const t = r.root.findAll((n) => String(n.type) === 'Text').map((n) => String(n.children[0] ?? '')).join(' ');
     expect(t).toContain('A star makes the face smile.');
-    const star = r.root.findAll((n) => n.props.a11y === 'Star Margin on GitHub' && typeof n.props.onPress === 'function')[0]!;
+    const star = r.root.findAll((n) => n.props.a11y === 'Star Marrow on GitHub' && typeof n.props.onPress === 'function')[0]!;
     await act(async () => { star.props.onPress(); });
     expect(r.root.findByType(Face).props.name).toBe('happy');
     expect(r.root.findByType(Face).props.react).toMatchObject({ motion: 'bounce' });
@@ -667,7 +667,7 @@ describe('About and Reset are two pages, and the support row is absent until its
   it('the star button opens the GitHub repository', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const s = await page(['about']);
-    await act(async () => { pressable(s, 'Star Margin on GitHub').onPress(); });
+    await act(async () => { pressable(s, 'Star Marrow on GitHub').onPress(); });
     expect(open).toHaveBeenCalledWith(GITHUB_URL);
     open.mockRestore();
   });

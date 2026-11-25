@@ -156,7 +156,7 @@ object Widgets {
     rv.setViewVisibility(R.id.mg_w_rule, if (rows > 0) View.VISIBLE else View.GONE)
     rv.setViewVisibility(R.id.mg_w_tasks, if (shown.isNotEmpty()) View.VISIBLE else View.GONE)
     rv.setViewVisibility(R.id.mg_w_more, if (rows > 0 && (left > 0 || list.isEmpty())) View.VISIBLE else View.GONE)
-    rv.setTextViewText(R.id.mg_w_more, when { list.isEmpty() -> if (a.writtenAt == 0L) "Open Margin once to fill this in." else "Nothing due. Enjoy it."; else -> "+$left more in To-do" })
+    rv.setTextViewText(R.id.mg_w_more, when { list.isEmpty() -> if (a.writtenAt == 0L) "Open Marrow once to fill this in." else "Nothing due. Enjoy it."; else -> "+$left more in To-do" })
     rv.setOnClickPendingIntent(R.id.mg_w_more, Surfaces.open(c, "marginalia://tasks", 53))
     return rv
   }
@@ -165,8 +165,8 @@ object Widgets {
     val cur = a.current(now); val next = a.next(now); val l = cur ?: next
     val barH = (13 * c.resources.displayMetrics.density).toInt()
     if (l == null) {
-      rv.setTextViewText(R.id.mg_w_state, "MARGIN"); rv.setTextViewText(R.id.mg_w_room, "")
-      rv.setTextViewText(R.id.mg_w_title, if (a.writtenAt == 0L) "Open Margin once" else "No classes coming up")
+      rv.setTextViewText(R.id.mg_w_state, "MARROW"); rv.setTextViewText(R.id.mg_w_room, "")
+      rv.setTextViewText(R.id.mg_w_title, if (a.writtenAt == 0L) "Open Marrow once" else "No classes coming up")
       rv.setViewVisibility(R.id.mg_w_count, View.GONE); rv.setViewVisibility(R.id.mg_w_when, View.GONE); rv.setViewVisibility(R.id.mg_w_bar, View.GONE)
       rv.setViewVisibility(R.id.mg_w_sub, View.GONE); return
     }

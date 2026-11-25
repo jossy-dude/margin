@@ -69,7 +69,7 @@ internal object SyncFiles {
   /** Want what changed there, settle what is the same, leave what changed on both sides to the push (the hub
    *  merges it against the base we send). The cursor moves in sync.db as each change lands. */
   fun onManifest(m: JSONObject) {
-    val v = E.vault() ?: run { E.fail("Pick the vault folder in Settings → Obsidian & sync so Margin can sync it."); return }
+    val v = E.vault() ?: run { E.fail("Pick the vault folder in Settings → Obsidian & sync so Marrow can sync it."); return }
     E.setStage("Comparing files")
     val scanned = refreshLocalSafe(v)
     if (E.hub?.mode == "read-only") {
@@ -492,7 +492,7 @@ internal object SyncFiles {
       val open = app.packageManager.getLaunchIntentForPackage(app.packageName)?.let { android.app.PendingIntent.getActivity(app, HOLD_NOTE, it, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT) }
       val b = if (android.os.Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(app, HOLD_CHANNEL) else android.app.Notification.Builder(app)
       b.setSmallIcon(Live.smallIcon(app)).setContentTitle("Sync stopped: $count files deleted $where")
-        .setContentText("Do you want to sync the deletes? Open Margin → Settings → Obsidian & sync to choose.").setAutoCancel(true)
+        .setContentText("Do you want to sync the deletes? Open Marrow → Settings → Obsidian & sync to choose.").setAutoCancel(true)
       open?.let { b.setContentIntent(it) }
       nm.notify(HOLD_NOTE, b.build())
     } catch (e: Exception) { Log.w(TAG, "hold notification: ${e.message}") }

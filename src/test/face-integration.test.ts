@@ -92,12 +92,12 @@ describe('one face per page', () => {
     expect(topFace(r)).toHaveLength(0);
     await act(async () => { r.unmount(); });
   });
-  it('a To-do with work due today: the top bar is excited at 28 dp, a button TalkBack reads as Margin (U8)', async () => {
+  it('a To-do with work due today: the top bar is excited at 28 dp, a button TalkBack reads as Marrow (U8)', async () => {
     const r = await mount(React.createElement(TasksScreen), [task(1)]);
     expect(faces(r)).toEqual([{ name: 'excited', size: 28 }]);
     const b = topFace(r)[0]!;
     expect(b.props.accessibilityRole).toBe('button');
-    expect(String(b.props.accessibilityLabel)).toMatch(/^Margin, /);
+    expect(String(b.props.accessibilityLabel)).toMatch(/^Marrow, /);
     await act(async () => { r.unmount(); });
   });
 });

@@ -405,12 +405,12 @@ describe('data-layer reliability (F6)', () => {
     expect(err.message).toMatch(/^1000 task rows skipped: .*reminders/);
   });
 
-  it('a database from a newer Margin is refused untouched, with a sentence', async () => {
+  it('a database from a newer Marrow is refused untouched, with a sentence', async () => {
     const { sql, raw } = rawDb(); const r0 = new SqliteRepository(sql, () => NOW, report); await r0.init();
     await r0.upsert('task', task('kept'));
     const newer = (raw.all('PRAGMA user_version') as { user_version: number }[])[0]!.user_version + 1;
     raw.exec(`PRAGMA user_version = ${newer}`);
-    await expect(new SqliteRepository(sql, () => NOW, report).init()).rejects.toThrow(/newer version of Margin.*Nothing was changed/);
+    await expect(new SqliteRepository(sql, () => NOW, report).init()).rejects.toThrow(/newer version of Marrow.*Nothing was changed/);
     expect((raw.all('PRAGMA user_version') as { user_version: number }[])[0]!.user_version).toBe(newer);
     expect(raw.all("SELECT id FROM task WHERE deleted_at IS NULL")).toEqual([{ id: 'kept' }]);
   });

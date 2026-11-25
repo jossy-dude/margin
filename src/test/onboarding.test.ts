@@ -110,7 +110,7 @@ describe('the gate is one number', () => {
 describe('five pages, every one of them reachable and said out loud', () => {
   it('renders all five titles, and a numbered tab for each page', async () => {
     const s = await mount(true);
-    for (const t of ["Hi, I'm Margin.", 'Everything has its place.', 'What should I call you?', 'When does your term run?', 'A nudge before class.']) expect(s.text()).toContain(t);
+    for (const t of ["Hi, I'm Marrow.", 'Everything has its place.', 'What should I call you?', 'When does your term run?', 'A nudge before class.']) expect(s.text()).toContain(t);
     const tabs = s.root.findAll((n) => n.props.accessibilityRole === 'tab' && typeof n.props.onPress === 'function');
     expect(tabs.map((n) => n.props.accessibilityLabel)).toEqual([1, 2, 3, 4, 5].map((i) => `Page ${i} of 5`));
     expect(s.root.findAll((n) => n.props.accessibilityRole === 'header' && typeof n.type === 'string').length).toBeGreaterThanOrEqual(5);
@@ -172,7 +172,7 @@ describe('nothing is written until the end, then all of it in order', () => {
   it('"Bring my data back" (D-22, R11) finishes and opens Import, where a backup, an export or a paste all land', async () => {
     const s = await mount(true);
     /* the tile shows one word; the full sentence is what a screen reader hears */
-    expect(s.root.findAll((n) => n.props.testID === 'door-import')[0]!.props.accessibilityLabel).toBe('Bring my data back. A Margin backup or export, or a JSON or CSV file.');
+    expect(s.root.findAll((n) => n.props.testID === 'door-import')[0]!.props.accessibilityLabel).toBe('Bring my data back. A Marrow backup or export, or a JSON or CSV file.');
     await s.press('door-import');
     await s.press('onboarding-start');
     expect(getState().sheet).toEqual({ t: 'settings' });

@@ -41,7 +41,7 @@ export function buildTables(s: Snapshot, now: number, terms: readonly SemesterRo
     { name: 'Semesters', header: ['name', 'start', 'end', 'state', 'archived'], rows: terms.map((t) => [t.name, t.start, t.end, t.active ? 'current' : 'archived', t.archivedAt ?? '']) },
     { name: 'Settings', header: ['key', 'value'], rows: Object.entries(st).map(([k, v]): Cell[] => [k, typeof v === 'object' ? JSON.stringify(v) : (v as Cell)]) },
   ];
-  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', `Margin ${APP_VERSION}`], ['semester', semesterLabel(s.settings)], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
+  tables.unshift({ name: 'Summary', header: ['item', 'value'], rows: [['exported', isoUtc(now)], ['app', `Marrow ${APP_VERSION}`], ['semester', semesterLabel(s.settings)], ...tables.map((t): Cell[] => [t.name, t.rows.length])] });
   return tables;
 }
 /** `margin/2`: the readable tables (for a person or a spreadsheet), `raw` — the whole snapshot, which

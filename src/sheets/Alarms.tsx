@@ -109,7 +109,7 @@ export function AlarmsPage() {
         <Btn kind="ghost" label="Before class" onPress={() => { setDraft({ ...newAlarm(uid('al'), now), kind: 'class', lead: 60, label: '' }); fx.tap(); }} />
       </Row>
       {has && <AlarmSound />}
-      {has && <Btn kind="ghost" icon="bell" label="Ring a test alarm" onPress={() => { if (!native.ringNow('Test alarm')) toast('The alarm could not start. Check that notifications are allowed for Margin.'); }} />}
+      {has && <Btn kind="ghost" icon="bell" label="Ring a test alarm" onPress={() => { if (!native.ringNow('Test alarm')) toast('The alarm could not start. Check that notifications are allowed for Marrow.'); }} />}
       <Txt f="serif" s={14.5} c="mut">Starts soft and rises to full volume over 45 seconds, even on silent. Either volume key, a double tap on the alarm screen or Silence in the notification stops the sound; it stops by itself after five minutes.</Txt>
     </View>
   );
@@ -130,7 +130,7 @@ function AlarmSound() {
     <View style={{ gap: 6 }}>
       <Label>Alarm sound</Label>
       {playing ? <Btn icon="pause" label="Stop" testID="tone-stop" onPress={stop} /> : null}
-      {[['margin', 'Margin tones'], ['phone', "Phone's tones"]].map(([kind, title]) => {
+      {[['margin', 'Marrow tones'], ['phone', "Phone's tones"]].map(([kind, title]) => {
         const list = tones.filter((t) => (t.kind ?? 'phone') === kind).slice(0, 12);
         return list.length === 0 ? null : (
           <View key={kind} style={{ gap: 6 }}>
@@ -173,14 +173,14 @@ function Note({ text, action, onPress }: { text: string; action: string; onPress
 }
 
 const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
-  { kind: 'board', name: 'Margin', line: 'Next class, today’s timetable and what is due, on one card.' },
+  { kind: 'board', name: 'Marrow', line: 'Next class, today’s timetable and what is due, on one card.' },
 ];
 /** Settings → Widgets: the one widget, what it shows, and a button that asks the launcher to place it. */
 export function WidgetsPage() {
   const { c } = useTheme(), has = native.nativeAvailable();
   return (
     <View style={{ gap: 12 }}>
-      <Txt f="serif" s={16} c="mut">{has ? 'One home screen widget. It updates when Margin is closed.' : 'Widgets need the Android app.'}</Txt>
+      <Txt f="serif" s={16} c="mut">{has ? 'One home screen widget. It updates when Marrow is closed.' : 'Widgets need the Android app.'}</Txt>
       {WIDGETS.map((w) => (
         <HandBox key={w.kind} seed={`wd-${w.kind}`} fill={c.card} style={{ padding: 14, gap: 8 }}>
           <Txt f="bold" s={21}>{w.name}</Txt>

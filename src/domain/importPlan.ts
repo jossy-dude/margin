@@ -64,16 +64,16 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
   }
   const app = parsed.app;
   if (app !== undefined && app !== 'margin') {
-    problem('file', 'app', `This is not a Margin file (app is "${String(app)}").`);
+    problem('file', 'app', `This is not a Marrow file (app is "${String(app)}").`);
     return { snapshot: {}, counts: {}, breakdown: {}, problems, warnings };
   }
   const shapeA = app === 'margin' || (app === undefined && 'raw' in parsed);
 
   if (shapeA) {
-    for (const k of Object.keys(parsed)) if (!A_KEYS.has(k)) warnings.push(`"${k}" is not part of a Margin export and was ignored.`);
+    for (const k of Object.keys(parsed)) if (!A_KEYS.has(k)) warnings.push(`"${k}" is not part of a Marrow export and was ignored.`);
     const raw = parsed.raw;
     if (!isRec(raw)) {
-      problem('file', 'raw', 'This looks like a Margin export, but the "raw" snapshot it should carry is missing.');
+      problem('file', 'raw', 'This looks like a Marrow export, but the "raw" snapshot it should carry is missing.');
       return { snapshot: {}, counts: {}, breakdown: {}, problems, warnings };
     }
     readRaw(raw);

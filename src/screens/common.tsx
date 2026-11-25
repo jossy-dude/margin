@@ -28,7 +28,7 @@ function TopFace({ rest }: { rest: FaceName }) {
   const live = useScreenLive();
   const { face, play } = useFaceMoment(rest, live);
   return (
-    <Pressable testID="top-face" accessibilityRole="button" accessibilityLabel={`Margin, ${FACES[face.name].label}. Tap for a tip`} onPress={() => play('tip')} hitSlop={10}
+    <Pressable testID="top-face" accessibilityRole="button" accessibilityLabel={`Marrow, ${FACES[face.name].label}. Tap for a tip`} onPress={() => play('tip')} hitSlop={10}
       style={{ height: 46, justifyContent: 'center' }}>
       <Face {...face} size={28} awake={live} decorative />
     </Pressable>

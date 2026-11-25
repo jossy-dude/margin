@@ -6,7 +6,7 @@ const base = { paired: true, live: true, obsidian: false, vault: true, lastOk: N
 describe('Obsidian & Sync page', () => {
   it('connected: four devices, the path, up to date', () => {
     const v = syncView(base, NOW, false);
-    expect(v.devices.map((d) => `${d.name}:${d.dot}`)).toEqual(['Margin (this phone):on', 'Obsidian on the phone:off', 'Desktop hub:on', 'Obsidian on the desktop:on']);
+    expect(v.devices.map((d) => `${d.name}:${d.dot}`)).toEqual(['Marrow (this phone):on', 'Obsidian on the phone:off', 'Desktop hub:on', 'Obsidian on the desktop:on']);
     expect(v.connection).toBe('Home Wi-Fi · desktop at 192.168.1.11');
     expect(v.stage?.text).toBe('Up to date · 20:31');
     expect(v.ok).toBe(true);

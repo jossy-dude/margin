@@ -135,7 +135,7 @@ function AutoBackup({ now, h12 }: { now: number; h12: boolean }) {
   const now1 = async () => { setBusy(true); const ok = await act.backupNow(); setBusy(false); toast(ok ? 'Backed up' : 'Could not write to the backup folder', undefined, ok ? 'success' : 'error'); };
   return (<>
     <Txt f="bold" s={19}>{uri ? `Weekly, to ${leafOf(uri) || 'your folder'}` : 'Off'}</Txt>
-    <Txt f="serif" s={14.5} c="mut">{uri ? `${at ? `Last ${fmtWhen(at, now, h12)}. ` : 'Not written yet. '}The newest four are kept.` : 'Pick a folder (Documents/Margin) and a full copy goes there every week. The newest four are kept.'}</Txt>
+    <Txt f="serif" s={14.5} c="mut">{uri ? `${at ? `Last ${fmtWhen(at, now, h12)}. ` : 'Not written yet. '}The newest four are kept.` : 'Pick a folder (Documents/Marrow) and a full copy goes there every week. The newest four are kept.'}</Txt>
     <Row>
       <Btn small icon="export" label={uri ? 'Change folder…' : 'Choose folder…'} disabled={busy} onPress={() => void choose()} />
       {uri ? <Btn small kind="ghost" label="Back up now" disabled={busy} onPress={() => void now1()} /> : null}
@@ -256,7 +256,7 @@ export function SettingsSheet() {
     <Nav icon="note" label="Diagnostics" hint={`${crashes} crash${crashes === 1 ? '' : 'es'} recorded`} to="diagnostics" />
     <Label>About</Label>
     <Nav icon="note" label="Show the introduction again" hint={`${toured(onboarded) ? 'Five short pages' : 'Not seen yet'}`} to="tour" />
-    <Nav icon="book" label="About" hint={`Margin ${APP_VERSION} · paper, ink and no account`} to="about" />
+    <Nav icon="book" label="About" hint={`Marrow ${APP_VERSION} · paper, ink and no account`} to="about" />
     {/* Reset stays last: the only row here that destroys something, never where a thumb lands reaching above it */}
     <Nav icon="trash" label="Reset" hint="Erase everything" to="reset" />
   </>);
@@ -362,7 +362,7 @@ export function SettingsSheet() {
     </HandBox>
     {/* Buttons above the fold: this is a bottom sheet, so anything below them is a scroll away. */}
     <Row>
-      {ns?.permission === 'denied' && !ns.canAskAgain ? <Btn small icon="gear" label="Open phone settings" a11y="Open this phone's app settings, where notifications for Margin can be turned back on" onPress={() => { void Linking.openSettings().catch(() => toast('This phone would not open its settings')); }} />
+      {ns?.permission === 'denied' && !ns.canAskAgain ? <Btn small icon="gear" label="Open phone settings" a11y="Open this phone's app settings, where notifications for Marrow can be turned back on" onPress={() => { void Linking.openSettings().catch(() => toast('This phone would not open its settings')); }} />
         : <Btn small icon="bell" label="Allow notifications" disabled={ns?.permission === 'granted' || ns?.permission === 'unavailable'} a11y={ns?.permission === 'granted' ? 'Allow notifications. Already allowed.' : 'Ask this phone for permission to send notifications'} onPress={async () => { const got = await notifs.ensurePermission(true); await refreshNotifStatus(); toast(got === 'granted' ? 'Allowed.' : got === 'denied' ? 'Blocked. Only the phone&rsquo;s settings can undo that.' : 'The phone has not answered yet.'); }} />}
       <Btn small kind="ghost" label="Rebuild queue" onPress={async () => {
         toast('Rebuilding the reminder queue…');

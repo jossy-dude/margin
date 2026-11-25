@@ -284,7 +284,7 @@ object SyncEngine {
           Log.w(TAG, "hub failed its proof"); store.count("err", 1, "hub failed its proof"); l.close(); dropHub("hub failed its proof"); return
         }
         if (!m.optBoolean("sealed") || m.optInt("seal") != Seal.SEAL_VERSION) {
-          fail("The desktop's bone-syncd is older than this Margin (no seal 2). Update vault-sync on the desktop.")
+          fail("The desktop's bone-syncd is older than this Marrow (no seal 2). Update vault-sync on the desktop.")
           l.close(); dropHub("unsealed"); return
         }
         if (l.pendKey != null) {

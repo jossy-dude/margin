@@ -191,7 +191,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
           <Art name="leaf" w={44} rot={-24} style={{ position: 'absolute', left: 18, top: heroBottom - 150 }} />
           <Art name="leaf-sage" w={38} rot={14} style={{ position: 'absolute', left: 52, top: heroBottom - 134 }} />
         </>, <>
-          <Title>Hi, I&apos;m Margin.</Title>
+          <Title>Hi, I&apos;m Marrow.</Title>
           <Kicker style={{ marginTop: 14 }}>Pick your style</Kicker>
           <StylePicker W={W} value={settings.palette === 'original' ? 'refined' : settings.palette} onChange={(p) => { void act.setSettings({ palette: p }); fx.select(); faceRef.current?.bounce(); }} />
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }} accessibilityRole="radiogroup" accessibilityLabel="Light or dark">
@@ -274,7 +274,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
         <View style={{ flex: 1 }} />
         {page < N - 1
           ? <NextSquare onPress={() => goTo(page + 1)} label={['Next: how it is laid out', 'Next: your name', 'Next: your term', 'Next: reminders'][page]!} />
-          : <Btn kind="ink" label="Start" icon="check" a11y="Start using Margin" testID="onboarding-start" onPress={() => finish(door)} style={{ minWidth: 150 }} />}
+          : <Btn kind="ink" label="Start" icon="check" a11y="Start using Marrow" testID="onboarding-start" onPress={() => finish(door)} style={{ minWidth: 150 }} />}
       </View>
     </Animated.View>
   );
@@ -326,7 +326,7 @@ function NamePaper({ cut, name, onName, onFocus, onBlur, onDone }: { cut: 'ink' 
 }
 
 const DOORS: { id: OnboardDoor; icon: string; title: string; short: string; line: string; tint: 'sky' | 'sage' | 'sand' | 'cream' | 'blush'; first?: boolean; later?: boolean; packs?: boolean }[] = [
-  { id: 'import', icon: 'import', title: 'Bring my data back', short: 'Import', line: 'A Margin backup or export, or a JSON or CSV file.', tint: 'sky' },
+  { id: 'import', icon: 'import', title: 'Bring my data back', short: 'Import', line: 'A Marrow backup or export, or a JSON or CSV file.', tint: 'sky' },
   { id: 'hand', icon: 'pencil', title: 'Set it up by hand', short: 'By hand', line: 'Start empty, add subjects with +.', tint: 'sage', first: true },
   { id: 'sample', icon: 'book', title: 'Look around first', short: 'Sample', line: 'A sample term to try.', tint: 'sand', first: true },
   { id: 'keep', icon: 'check', title: 'Keep my planner as it is', short: 'Keep mine', line: 'Nothing changes.', tint: 'cream', later: true },

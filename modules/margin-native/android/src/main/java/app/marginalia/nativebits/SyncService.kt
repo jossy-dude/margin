@@ -173,7 +173,7 @@ class SyncService : Service() {
     val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
       nm.createNotificationChannel(NotificationChannel(CHANNEL, "Sync with your desktop", NotificationManager.IMPORTANCE_MIN).apply {
-        description = "Keeps Margin ready to sync with Obsidian on your desktop. Silent."; setShowBadge(false)
+        description = "Keeps Marrow ready to sync with Obsidian on your desktop. Silent."; setShowBadge(false)
       })
     }
     val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
@@ -181,7 +181,7 @@ class SyncService : Service() {
     }
     val text = when (SyncEngine.state) { "live" -> if (SyncEngine.live) "Connected to your desktop" else "Looking for your desktop"; "ready" -> "Home network: syncs when you look"; else -> "Waiting for home Wi-Fi or the hotspot" }
     val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
-    return b.setSmallIcon(Live.smallIcon(this)).setColor(getColor(R.color.mg_acc)).setContentTitle("Margin").setContentText(text).setOngoing(true)
+    return b.setSmallIcon(Live.smallIcon(this)).setColor(getColor(R.color.mg_acc)).setContentTitle("Marrow").setContentText(text).setOngoing(true)
       .setContentIntent(open).setShowWhen(false).setCategory(Notification.CATEGORY_SERVICE).build()
   }
   private fun startInForeground() {

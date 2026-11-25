@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { APP_VERSION } from '../domain/version';
+import { APP_NAME, APP_VERSION } from '../domain/version';
 
 /**
  * Over-the-air updates, kept total.
@@ -220,7 +220,7 @@ export async function announceAppliedUpdate(): Promise<string | null> {
     if (!applied) return null;
     const running = updates()?.updateId ?? null;
     if (!running || running !== applied) return null;
-    return `You’re now on Margin ${APP_VERSION}`;
+    return `You’re now on ${APP_NAME} ${APP_VERSION}`;
   } catch { return null; }
 }
 
@@ -238,8 +238,8 @@ export async function consumeAppliedUpdate(): Promise<void> {
  *  the line stays the plain version the app has always printed. */
 export function versionLine(): string {
   const u = updates();
-  if (!u) return `Margin ${APP_VERSION}`;
+  if (!u) return `${APP_NAME} ${APP_VERSION}`;
   const runtime = u.runtimeVersion ?? 'unknown';
   const id = u.updateId;
-  return `Margin ${APP_VERSION} · runtime ${runtime} · ${id ? `update ${id.slice(0, 8)}` : 'built in'}`;
+  return `${APP_NAME} ${APP_VERSION} · runtime ${runtime} · ${id ? `update ${id.slice(0, 8)}` : 'built in'}`;
 }

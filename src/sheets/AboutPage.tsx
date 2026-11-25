@@ -38,17 +38,17 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
     <>
       <View style={{ alignItems: 'center', gap: 2, paddingTop: 4 }}>
         <Face {...face} size={72} />
-        <Txt f="marker" s={34} style={{ textAlign: 'center' }} accessibilityRole="header">Margin</Txt>
+        <Txt f="marker" s={34} style={{ textAlign: 'center' }} accessibilityRole="header">Marrow</Txt>
         <Txt f="serif" s={17} c="mut" style={{ textAlign: 'center' }}>A school planner — on paper, in your pocket.</Txt>
       </View>
 
       <Section title="What it's for">
         <Txt f="hand" s={17.5} style={{ lineHeight: 24 }}>Your brain is for learning, not for remembering room changes.</Txt>
-        <Txt f="serif" s={15.5} c="mut">So Margin keeps your timetable, marks, deadlines and notes on one desk. Everything stays on this phone.</Txt>
+        <Txt f="serif" s={15.5} c="mut">So Marrow keeps your timetable, marks, deadlines and notes on one desk. Everything stays on this phone.</Txt>
       </Section>
 
       <Section title="Why it looks like paper">
-        <Txt f="serif" s={15.5} c="mut">School happens on paper, so Margin looks like it. Pages you enjoy get opened.</Txt>
+        <Txt f="serif" s={15.5} c="mut">School happens on paper, so Marrow looks like it. Pages you enjoy get opened.</Txt>
       </Section>
 
       <Section title="Who made it">
@@ -61,7 +61,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
 
       <Section title="It's open source">
         <Txt f="serif" s={15.5} c="mut">Every line is on GitHub. A star makes the face smile.</Txt>
-        <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Margin on GitHub" onPress={() => { play('starred'); openLink(GITHUB_URL); }} /></Row>
+        <Row><Btn icon="flag" label="Star it on GitHub" a11y="Star Marrow on GitHub" onPress={() => { play('starred'); openLink(GITHUB_URL); }} /></Row>
       </Section>
 
       {support ? (
@@ -73,7 +73,7 @@ export function AboutPage({ supportUrl = SUPPORT_URL }: { supportUrl?: string })
 
       <Hair />
       <Section title="This build">
-        <Txt f="serif" s={15} c="mut">Margin {APP_VERSION} · no account. The network is used only for updates.</Txt>
+        <Txt f="serif" s={15} c="mut">Marrow {APP_VERSION} · no account. The network is used only for updates.</Txt>
       </Section>
       <Section title="Updates">
         {otaAvailable() ? (<>
