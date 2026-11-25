@@ -16,6 +16,13 @@ export function themeFor(s: Parameters<typeof makeTheme>[0], sys: boolean): Them
 
 const Ctx = createContext<Theme>(makeTheme({ theme: 'light', palette: 'refined', pen: 'warm' }, false));
 export const useTheme = () => useContext(Ctx);
+/** A hidden page keeps the skin it was last seen in and takes the new one when it is shown (v0.7.6): a skin change
+ *  re-skinned all five mounted pages at once, about 9 000 component renders, for pages nobody could see. */
+export function ThemeHold({ on, children }: { on: boolean; children: React.ReactNode }) {
+  const t = useContext(Ctx), [held, setHeld] = useState(t);
+  if (on && held !== t) setHeld(t);
+  return <Ctx.Provider value={on ? t : held}>{children}</Ctx.Provider>;
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const sys = useColorScheme() === 'dark', theme = useStore((s) => s.settings.theme), palette = useStore((s) => s.settings.palette), pen = useStore((s) => s.settings.pen);

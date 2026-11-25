@@ -6,8 +6,8 @@ import { DayBar, type AnyBarKind } from '../ui/DayBar';
 import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
 import { handPath } from '../ui/hand';
 import { RunningTimer } from '../ui/RunningTimer';
-import { useNow, useTheme } from '../ui/theme-context';
-import { useScreenLive } from '../ui/live';
+import { useTheme } from '../ui/theme-context';
+import { useLiveNow, useScreenLive } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, nextWhen, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
@@ -267,8 +267,10 @@ function StartCircle({ leftMs, gapMs }: { leftMs: number; gapMs: number }) {
  * same off-screen gate the page applies to its own `useNow` — a hidden
  * screen must not tick fast — so off Today the card drops to the same 60 s the page uses.
  */
-export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, variants, isToday, bar, w, live, hour12, headPad = 0, doneLine }: {
-  periods: Period[]; occ: Occurrence[]; courses: Course[]; variants?: SubjectVariant[]; isToday: boolean; bar: AnyBarKind; w: number; live: boolean;
+/** The clock reads the page's focus itself, so a tab switch re-renders the clock, not Today (v0.7.6). */
+const LiveClockFace = (p: Omit<React.ComponentProps<typeof ClockFace>, 'live'>) => <ClockFace {...p} live={useScreenLive()} />;
+export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses, variants, isToday, bar, w, hour12, headPad = 0, doneLine }: {
+  periods: Period[]; occ: Occurrence[]; courses: Course[]; variants?: SubjectVariant[]; isToday: boolean; bar: AnyBarKind; w: number;
   /** v0.8 U5: the day's attendance in words, shown as the title once its last class is over */
   doneLine?: string;
   /** The user's 12/24-hour choice, for the non-today window the card prints. */
@@ -278,7 +280,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   headPad?: number;
 }) {
   const { c, look } = useTheme();
-  const t = useNow(live ? 1000 : 60_000);
+  const live = useScreenLive(), t = useLiveNow(1000, 60_000);
   /* Which class of a shared slot the card is about (S2). Stored with the slot it belongs to, so when the
      slot changes (the class ends, another day is picked) it falls back to the first without an effect. */
   const [picked, setPicked] = React.useState<{ key: string; i: number } | null>(null);
@@ -427,8 +429,7 @@ export function TodayScreen() {
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
      so a store subscription here would re-render the whole of Today on every tap anywhere in the app —
      including the taps that have nothing to do with it. */
-  const focused = useScreenLive();
-  const { c } = useTheme(), { width } = useWindowDimensions(), now = useNow(focused ? 30_000 : 60_000), today = startOfDay(now);
+  const { c } = useTheme(), { width } = useWindowDimensions(), now = useLiveNow(30_000, 60_000), today = startOfDay(now);
   /* The day block — strip, class list, "Mark day" — is ONE day, chosen by the user and otherwise the
      live today; the title, clock and "in class / next up" line above it stay about now, so they read
      the live day instead. Both come from `dayBlock`, so they cannot drift apart. */
@@ -457,7 +458,7 @@ export function TodayScreen() {
       {periods.length > 0 ? (
         <View style={{ marginTop: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: -26, position: 'relative', zIndex: 2 }}>
-            <View testID="clock-face"><ClockFace size={CLOCK} live={focused} arcs={arcs} /></View>
+            <View testID="clock-face"><LiveClockFace size={CLOCK} arcs={arcs} /></View>
             {/* `paddingBottom` equals the overlap, so the status line's second row clears the card's top
                 edge instead of grazing it. */}
             <View style={{ flex: 1, gap: 4, paddingBottom: 26 }}>
@@ -465,12 +466,12 @@ export function TodayScreen() {
               {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}
             </View>
           </View>
-          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} live={focused} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X}
+          <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} hour12={hour12} headPad={CLOCK + 8 - DECK_PAD_X}
             doneLine={sel === today ? attendanceSummary(classesOn(sel, { now, meetings, courses, variants: variants ?? [], attendance, dayMarks, hour12, moves })) : undefined} />
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          <View testID="clock-face"><ClockFace size={CLOCK} live={focused} arcs={arcs} /></View>
+          <View testID="clock-face"><LiveClockFace size={CLOCK} arcs={arcs} /></View>
           <View style={{ flex: 1, gap: 4 }}>
             <Txt f="serif" s={15} c="mut">{cur ? 'In class' : next ? 'Next up' : todayPeriods.length ? 'All done for today' : 'No classes today'}</Txt>
             {(cur ?? next) && <Txt f="bold" s={19} c="mut">{cur ? `until ${fmtTime(cur.end, hour12)}` : nextWhen(next!.start, now, hour12)}</Txt>}
@@ -513,7 +514,7 @@ export function TodayScreen() {
             keeps `mut`. Pinned by `src/test/color-drift.test.ts` and the table in `src/test/ui.test.ts`. */}
         {pinnedNotices.length === 0 ? <Empty text="Nothing pinned. An exam date, a heads-up: pin it here." /> : (
           <HStrip gap={12} contentStyle={{ paddingTop: 8 }}>
-            {pinnedNotices.map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} live={focused} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
+            {pinnedNotices.map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
           </HStrip>)}
       </Section>
       <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>

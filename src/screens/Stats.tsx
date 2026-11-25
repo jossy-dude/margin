@@ -3,13 +3,12 @@ import { View, useWindowDimensions } from 'react-native';
 import { Chip, HandBox, HStrip, Txt } from '../ui/kit';
 import { CalHeat, Figures, Headline, HourBars, MarkLine, Quiet, Sheet, SubjectBars } from '../ui/stats/parts';
 import { OnTop, ShowingUp } from '../ui/stats/sections';
-import { Face } from '../ui/mascot/Face';
 import { emptyFace, pageFace } from '../ui/mascot/moments';
 import { subjectTint } from '../ui/collage/tint';
-import { useNow, useTheme } from '../ui/theme-context';
-import { useScreenLive } from '../ui/live';
+import { useTheme } from '../ui/theme-context';
+import { useLiveNow } from '../ui/live';
 import { act, useStore } from '../store/store';
-import { Page } from './common';
+import { LiveFace, Page } from './common';
 import * as A from '../domain/analytics';
 import type { ClassMove } from '../domain/moves';
 import { fmtDur, plural, startOfDay } from '../domain/time';
@@ -32,7 +31,7 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 export function StatsScreen() {
   const variants = useStore((s) => s.variants), moves = useStore((s) => s.settings.moves) ?? NO_MOVES, focus = useStore((s) => s.focus), tasks = useStore((s) => s.tasks), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), plan = useStore((s) => s.plan), hour12 = useStore((s) => s.settings.hour12);
   const { c, tints } = useTheme(), { width } = useWindowDimensions();
-  const live = useScreenLive(), now = useNow(live ? 60_000 : 0), iw = width - 32 - 32, [gc, setGc] = useState<string | null>(null);
+  const now = useLiveNow(60_000), iw = width - 32 - 32, [gc, setGc] = useState<string | null>(null);
   const day = startOfDay(now);
   const days = useMemo(() => A.lastDays(WEEKS * 7, day), [day]);
   const focusD = useMemo(() => A.focusMinutesByDay(focus, days), [focus, days]), doneD = useMemo(() => A.doneByDay(tasks, days), [tasks, days]);
@@ -66,7 +65,7 @@ export function StatsScreen() {
     <Page face={nothing ? null : pageFace('Stats', { hour: new Date().getHours() })} title="Stats" sub={nothing ? 'Fills in as you use the app' : 'This week, and the weeks behind it'}>
       {nothing ? (
         <HandBox seed="stats-empty" fill={c.card} style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Face name={emptyFace('statsNothingYet') ?? 'wink'} size={64} awake={live} decorative />
+          <LiveFace name={emptyFace('statsNothingYet') ?? 'wink'} size={64} decorative />
           <View style={{ flex: 1, gap: 4 }}>
             <Txt f="bold" s={20}>Nothing to report — yet</Txt>
             <Txt f="serif" s={15.5} c="mut">{hint ?? 'Mark a class, finish a task or run a focus session, and this page starts telling you how the term is going.'}</Txt>

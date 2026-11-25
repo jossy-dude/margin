@@ -14,7 +14,8 @@ import { NOTE_LEVEL, noteDate } from './notes';
  * the yellow sticky, an urgent one on blush with red tape and a bell that gives a shake now and then.
  * The note itself is written in a hand (`script`): it is something you scribbled, not a form you filled in.
  */
-export function NoteCard({ n, subject, i, now, live, hour12, onPress }: { n: Notice; subject: string | null; i: number; now: number; live: boolean; hour12: boolean; onPress: () => void }) {
+import { useScreenLive } from '../live';
+export function NoteCard({ n, subject, i, now, hour12, onPress }: { n: Notice; subject: string | null; i: number; now: number; hour12: boolean; onPress: () => void }) {
   const { c, tints, look } = useTheme(), lvl = NOTE_LEVEL[n.priority] ?? NOTE_LEVEL[0], urgent = n.priority === 3;
   const bg = n.priority === 0 ? c.card : n.priority === 1 ? tints.sky : n.priority === 2 ? c.hl : tints.blush;
   const date = noteDate(n, now), sameDay = date !== null && startOfDay(date) === startOfDay(now);
@@ -24,7 +25,7 @@ export function NoteCard({ n, subject, i, now, live, hour12, onPress }: { n: Not
       <HandBox seed={n.id} fill={bg} style={{ width: 222, minHeight: 120, padding: 12, paddingTop: 16, gap: 4 }}>
         <Tape w={46} rot={-6} style={{ top: -9, left: 88, ...(urgent ? { opacity: 1 } : null) }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {urgent ? <Shake live={live}><Icon name={lvl.icon} size={16} color={c.bad} sw={2.2} /></Shake> : <Icon name={lvl.icon} size={15} color={c.ink} />}
+          {urgent ? <Shake><Icon name={lvl.icon} size={16} color={c.bad} sw={2.2} /></Shake> : <Icon name={lvl.icon} size={15} color={c.ink} />}
           <Txt f="bold" s={14} c={urgent ? 'bad' : 'ink'} maxFontSizeMultiplier={FS}>{lvl.word}</Txt>
           {/* `mut` fails on the yellow sticky in some palettes (4.02:1), so from Important up the subject is ink. */}
           {subject ? <Txt f="serif" s={13} c={n.priority >= 2 ? c.ink : 'mut'} numberOfLines={1} style={{ flex: 1 }}>· {subject}</Txt> : null}
@@ -37,7 +38,8 @@ export function NoteCard({ n, subject, i, now, live, hour12, onPress }: { n: Not
 }
 
 /** A bell that rings: a quick shake every few seconds, only while the page is on screen. */
-function Shake({ children, live }: { children: React.ReactNode; live: boolean }) {
+function Shake({ children }: { children: React.ReactNode }) {
+  const live = useScreenLive();
   const reduce = useReduceMotion(), r = useSharedValue(0);
   useEffect(() => {
     if (reduce || !live) { cancelAnimation(r); r.set(0); return; }

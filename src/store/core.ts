@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
 import type { AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, Trip, Alarm } from '../domain/types';
 import type { NotifLogRow } from '../data/repository';
 import { withDefaults } from '../domain/defaults';
@@ -37,7 +37,23 @@ const subs = new Set<() => void>();
 export const getState = () => state;
 export const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 export function set(patch: Partial<State> | ((s: State) => Partial<State>)) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; subs.forEach((f) => f()); }
-export function useStore<T>(sel: (s: State) => T): T { return useSyncExternalStore(subscribe, () => sel(state), () => sel(state)); }
+/** A page that is not on screen holds its data (v0.7.6): every write used to re-render every mounted page that read
+ *  the changed slice — ticking one task re-rendered Today, Week, To-do and Stats, 2 300 components. Under a
+ *  `StoreHold` that says hidden, `useStore` keeps answering the value it last drew; the navigator flips the hold
+ *  before the page is painted, and only the components whose slice changed meanwhile re-render then. Sheets,
+ *  the overlay and anything outside a page have no hold and always read live. */
+export type Hold = { get: () => boolean; sub: (f: () => void) => () => void };
+export const StoreHold = createContext<Hold | null>(null);
+export function useStore<T>(sel: (s: State) => T): T {
+  const hold = useContext(StoreHold);
+  const box = useMemo(() => ({ has: false, v: undefined as T }), []);
+  const sub = useCallback((f: () => void) => { const a = subscribe(f), b = hold?.sub(f); return () => { a(); b?.(); }; }, [hold]);
+  const snap = () => {
+    if (hold && !hold.get() && box.has) return box.v;
+    const v = sel(state); box.has = true; box.v = v; return v;
+  };
+  return useSyncExternalStore(sub, snap, snap);
+}
 
 /** Put a snapshot into the store. `keepTimer` is the import path: it must not reset a running focus
  *  round, so the timer write is skipped entirely rather than being recomputed to the same value — a

@@ -74,7 +74,7 @@ describe('the page swap is a cut, and costs no animation', () => {
     // is simply in the tree when focused. This is the payoff of a cut — no pass between the press
     // and the paint just to start something.
     const placed = src.slice(src.indexOf('function Placed({'), src.indexOf('function BookView'));
-    expect(placed).not.toContain('useLayoutEffect');
+    expect(placed.match(/useLayoutEffect\(/g) ?? []).toHaveLength(1); // v0.7.6: only the page's data catching up before paint
     expect(placed).not.toContain('setTimeout');
     expect(placed).not.toContain('setShown');
     expect(placed).not.toContain('useRef');

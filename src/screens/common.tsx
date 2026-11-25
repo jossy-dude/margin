@@ -19,6 +19,9 @@ import { fx } from '../services/fx';
 import { SwipeCard } from '../ui/Swipe';
 import { FS, pageBottomPad } from '../ui/fit';
 
+/** A face that sleeps while its page is hidden, reading the page's focus itself so the page does not re-render. */
+export const LiveFace = (p: Omit<React.ComponentProps<typeof Face>, 'awake'>) => <Face {...p} awake={useScreenLive()} />;
+
 /** The top bar's 28 dp face (DESIGN.md D-21): it rests on the page's face and, while this page is the one on
  *  screen, answers `faceEvent`s. Every route stays mounted, so a hidden page's face neither listens nor blinks. */
 function TopFace({ rest }: { rest: FaceName }) {

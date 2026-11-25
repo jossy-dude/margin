@@ -4,8 +4,8 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, w
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BEAT, Btn, EASE, HandBox, Icon, Row, Txt } from '../ui/kit';
 import { subjectTint } from '../ui/collage/tint';
-import { useNow, useReduceMotion, useTheme } from '../ui/theme-context';
-import { useScreenLive } from '../ui/live';
+import { useReduceMotion, useTheme } from '../ui/theme-context';
+import { useLiveNow } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Page, Section } from './common';
 import { DW, MO, addDays, atTime, fmtTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
@@ -25,7 +25,7 @@ export function WeekScreen() {
   const [draft, setDraft] = useState<MoveDraft | null>(null);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks };
   /* In the collage each class is a slip of its subject's own paper (the colour it has everywhere else). */
-  const { c, look, tints } = useTheme(), reduce = useReduceMotion(), live = useScreenLive(), { width } = useWindowDimensions(), now = useNow(live ? 30_000 : 0), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
+  const { c, look, tints } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useLiveNow(30_000), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
   const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 1.2, H = (end - start) * PX;
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
   const due = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= mon && t.dueAt < mon + 7 * 86_400_000);

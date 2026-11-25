@@ -2,8 +2,8 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import { Pressable, View, type ScrollViewInstance } from 'react-native';
 import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
 import { NumberField } from '../ui/fields';
-import { useNow, useTheme } from '../ui/theme-context';
-import { useScreenLive } from '../ui/live';
+import { useTheme } from '../ui/theme-context';
+import { useLiveNow } from '../ui/live';
 import { act, getState, useStore } from '../store/store';
 import { attNews } from './faceNews';
 import { AttCell, Empty, Page, Section, spokenStatus } from './common';
@@ -19,15 +19,14 @@ import { hexA } from '../tokens/theme';
 import { emptyFace, faceEvent, pageFace } from '../ui/mascot/moments';
 
 function AttendanceGrid({ course }: { course: Course }) {
-  const locked = useStore((s) => s.settings.lockAttendance), moves = useStore((s) => s.settings.moves), settings = useStore((s) => s.settings), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
+  const locked = useStore((s) => s.settings.lockAttendance), moves = useStore((s) => s.settings.moves), semesterStart = useStore((s) => s.settings.semesterStart), teacherAbsent = useStore((s) => s.settings.teacherAbsent), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
   /* The grid's own clock, frozen while this page is not the one on screen (audit M5) — an inferred
      "Here" only appears once a class has ended, so the tick is only useful under the finger. */
-  const live = useScreenLive();
-  const { c } = useTheme(), now = useNow(live ? 60_000 : 0), sem = semesterFirstDay(settings, now);
+  const { c } = useTheme(), now = useLiveNow(60_000), sem = semesterFirstDay({ semesterStart }, now);
   const occ = useMemo(() => occurrencesBetween(sem, startOfDay(now) + 7 * 86_400_000, meetings.filter((m) => m.courseId === course.id), moves ?? []), [sem, now, meetings, course.id, moves]);
   const rate = attendanceRate(occ, attendance, dayMarks, now), pulseKey = Object.keys(attendance).length;
-  const teacher = settings.teacherAbsent?.[course.id];
-  const setTeacher = (n: number) => { fx.select(); act.setSettings({ teacherAbsent: { ...settings.teacherAbsent, [course.id]: Math.max(0, Math.min(99, n)) } }); };
+  const teacher = teacherAbsent?.[course.id];
+  const setTeacher = (n: number) => { fx.select(); act.setSettings({ teacherAbsent: { ...teacherAbsent, [course.id]: Math.max(0, Math.min(99, n)) } }); };
   /* Scroll to the newest cell when the grid's content grows (new class weeks coming into range).
      An inline `ref` callback used to call scrollToEnd on EVERY render of this grid — the ref was
      detached and re-attached each time — which made every store write force a scroll here. */
@@ -57,7 +56,7 @@ function AttendanceGrid({ course }: { course: Course }) {
         </View>
         {/* typed, not stepped (C8, R7): empty = not set, so the rate marked here is used */}
         <NumberField label={`Teacher's absence count for ${course.name}`} value={teacher ?? null} min={0} max={99} emptyLabel="–" width={88}
-          onChange={(v) => { if (v === null) { act.setSettings({ teacherAbsent: Object.fromEntries(Object.entries(settings.teacherAbsent ?? {}).filter(([k]) => k !== course.id)) }); } else setTeacher(v); }} />
+          onChange={(v) => { if (v === null) { act.setSettings({ teacherAbsent: Object.fromEntries(Object.entries(teacherAbsent ?? {}).filter(([k]) => k !== course.id)) }); } else setTeacher(v); }} />
       </Row>
     </View>
   );
@@ -74,7 +73,7 @@ function GoalBar({ total, goal }: { total: number; goal: number | null }) {
 }
 
 export function GradesScreen() {
-  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), settings = useStore((s) => s.settings), variants = useStore((s) => s.variants);
+  const courses = useStore((s) => s.courses), marks = useStore((s) => s.marks), adjusts = useStore((s) => s.adjusts), semesterStart = useStore((s) => s.settings.semesterStart), semesterEnd = useStore((s) => s.settings.semesterEnd), variants = useStore((s) => s.variants);
   const st = { courses, marks, adjusts };
   const { c, tints, look } = useTheme();
   const rows = st.courses.map((course) => { const marks = st.marks.filter((m) => m.courseId === course.id).sort((a, b) => a.sort - b.sort), adj = st.adjusts[course.id] ?? 0, parts = (variants ?? []).filter((v) => v.subjectId === course.id).sort((a, b) => a.ord - b.ord), tot = courseGrade(marks, parts, adj);
@@ -114,7 +113,7 @@ export function GradesScreen() {
           </View>
           <AttendanceGrid course={course} />
         </HandBox>))}
-      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel(settings)}. Change in Settings.</Txt></Row></Section>}
+      {rows.length > 0 && <Section title="Semester"><Row><Icon name="clock" size={18} color={c.mut} /><Txt f="serif" s={16} c="mut">Attendance: {semesterLabel({ semesterStart, semesterEnd })}. Change in Settings.</Txt></Row></Section>}
     </Page>
   );
 }

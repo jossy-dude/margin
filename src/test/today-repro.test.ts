@@ -61,7 +61,7 @@ jest.mock('react-native-reanimated', () => {
 });
 
 
-jest.mock('../ui/live', () => ({ useScreenLive: () => true }));
+jest.mock('../ui/live', () => ({ useScreenLive: () => true, useLiveNow: () => Date.now() }));
 
 /** Monday 5 Oct 2026, 10:15 — inside the 10:00 slot. */
 const NOW = new Date(2026, 9, 5, 10, 15).getTime();

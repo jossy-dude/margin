@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Btn, DropChip, Field, Row, Segmented, Txt } from '../ui/kit';
 import { RunningTimer } from '../ui/RunningTimer';
-import { useNow } from '../ui/theme-context';
-import { useScreenLive } from '../ui/live';
+
+import { useLiveNow } from '../ui/live';
 import { act, useStore } from '../store/store';
 import { Empty, Page, TaskCard } from './common';
 import { addDays, startOfDay } from '../domain/time';
@@ -21,8 +21,7 @@ export function TasksScreen() {
      the wall clock twice a minute while it is under your finger — and does not tick at all while it is
      not, because a hidden page re-filtering and re-grouping for nobody is exactly the cost audit M5
      measured (~600 text nodes across the hidden pages every minute). */
-  const live = useScreenLive();
-  const now = useNow(live ? 30_000 : 0), [q, setQ] = useState('');
+  const now = useLiveNow(30_000), [q, setQ] = useState('');
   /* The subject choice is a setting now (BUGS #7: it was component state, reset on every visit). A subject that
      was deleted since reads as "all". */
   const cid: string | null | 'all' = subj === 'personal' ? null : subj && courses.some((c) => c.id === subj) ? subj : 'all';

@@ -344,8 +344,7 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
   });
 
   it('the countdown ticks at 1 Hz only while Today is on screen', () => {
-    expect(src).toContain('const t = useNow(live ? 1000 : 60_000);');
-    expect(src).toContain('live={focused}'); // the navigator's focus context, never a store-route sub
+    expect(src).toContain('const live = useScreenLive(), t = useLiveNow(1000, 60_000);'); // v0.7.6: the card reads focus itself
   });
 
   it('the saved bar setting is not cast to the four legacy kinds it may not be', () => {
@@ -524,7 +523,7 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     // the three lines the clock row is made of, in order. The clock now lives inside the
     // `periods.length > 0` branch and is taped to the deck's corner, so the slice runs to the
     // card it is taped to. There is one face now (v0.7), so it is the `ClockFace` leaf itself.
-    const clock = s.slice(s.indexOf('<ClockFace size={CLOCK}'), s.indexOf('<ActiveCard'));
+    const clock = s.slice(s.indexOf('<LiveClockFace size={CLOCK}'), s.indexOf('<ActiveCard periods'));
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
     // the time line is the one that survives: a wall clock, which the deck's duration is not. W4 threads
     // the user's clock into it and, for the next class, routes through `nextWhen` so a class that is

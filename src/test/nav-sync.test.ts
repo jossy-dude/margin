@@ -107,7 +107,7 @@ describe('Book.tsx wiring — the model above cannot see the file', () => {
     expect(lineWith('toNavigator(')).toContain('useLayoutEffect(');
     expect(lineWith('toStore(')).toContain('useLayoutEffect(');
     expect(lineWith('toStore(')).toContain('}, [cur])');
-    expect(src).not.toContain('useEffect('); // nothing in the navigator waits for paint any more
+    expect(src.match(/useEffect\(/g) ?? []).toHaveLength(1); // only the focus flip waits for paint (v0.7.6: the page shows first)
   });
   it('a tab tap writes the store and moves the navigator in one event, so one render sees both', () => {
     // Both calls sit in the same `onPressIn` handler: React batches them, so the single render they

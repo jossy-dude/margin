@@ -545,7 +545,7 @@ describe('the app\'s own day bar is kept, not replaced', () => {
     // reach the dispatcher as well as the leaf, or the gate is dead code.
     const src = readFileSync(join(__dirname, '../ui/DayBar.tsx'), 'utf8');
     expect(src).toContain('if (!live || reduce) { dayP.set(day); return; }'); // assign, do not tween
-    expect(src).toContain('useNow(live ? 1000 : 60_000)');                    // the instrument tick
+    expect(src).toContain('useNow(live ? 1000 : 60_000)');                  // the instrument tick
     expect(src).toContain('live={live} />');                                  // passed through the dispatcher
   });
 });

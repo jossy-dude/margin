@@ -1,18 +1,19 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { createNavigatorFactory, TabRouter, useNavigationBuilder, type ParamListBase, type TabNavigationState } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HandBox, Icon, Txt } from '../ui/kit';
 import { NavScrap } from '../ui/collage/NavScrap';
-import { useTheme } from '../ui/theme-context';
+import { ThemeHold, useTheme } from '../ui/theme-context';
 import { act, useStore, type RouteName } from '../store/store';
+import { StoreHold } from '../store/core';
 import { hexA } from '../tokens/theme';
 import { SHADOW, V2 } from '../tokens/v2';
 import { FS, NAV_BODY, navInset } from '../ui/fit';
 import { toured } from '../domain/defaults';
 import { TornSheet } from '../ui/collage/Torn';
 import { useKeyboardUp } from '../ui/keyboard';
-import { ScreenLive } from '../ui/live';
+import { ScreenLive, liveSource } from '../ui/live';
 import { toNavigator, toStore } from './sync';
 
 const TABS: { name: RouteName; label: string; icon: string }[] = [{ name: 'Today', label: 'Today', icon: 'today' }, { name: 'Week', label: 'Week', icon: 'week' }, { name: 'Tasks', label: 'To-do', icon: 'tasks' }, { name: 'Grades', label: 'Grades', icon: 'grades' }, { name: 'Stats', label: 'Stats', icon: 'stats' }];
@@ -50,9 +51,15 @@ type Nav = TabNavigationState<ParamListBase>;
  *  (`ui/live.ts`) rather than as a store-route subscription, which is what keeps a tap from
  *  re-rendering every mounted page. */
 function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
+  /* v0.7.6: focus travels as a store with a stable identity, flipped AFTER the frame that shows the page, so
+     the switch itself re-renders neither page; only the leaves that read it follow (see `ui/live`). */
+  const [src] = useState(() => liveSource(on)), [vis] = useState(() => liveSource(on));
+  useEffect(() => { src.set(on); }, [on, src]);
+  /* the page's data catches up BEFORE paint, so a page is never shown with what it held while hidden */
+  useLayoutEffect(() => { vis.set(on); }, [on, vis]);
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: on ? 2 : 1, display: on ? 'flex' : 'none' }]}>
-      <ScreenLive.Provider value={on}>{children}</ScreenLive.Provider>
+      <ScreenLive.Provider value={src}><StoreHold.Provider value={vis}><ThemeHold on={on}>{children}</ThemeHold></StoreHold.Provider></ScreenLive.Provider>
     </View>
   );
 }

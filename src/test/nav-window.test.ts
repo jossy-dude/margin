@@ -30,7 +30,7 @@ describe('book navigator mount policy', () => {
     expect(book).toContain('on={i === state.index}');
     // no `instant` prop: with no drop there is nothing for a second prop to park
     expect(book).not.toContain('instant');
-    expect(book).toContain('<ScreenLive.Provider value={on}>'); // focus travels as a plain boolean
+    expect(book).toContain('<ScreenLive.Provider value={src}>'); // v0.7.6: focus travels as a stable store, flipped after paint
   });
   it('a hidden page is inert to touch and to screen readers, and sits under the focused one', () => {
     expect(book).toContain("pointerEvents={i === state.index ? 'auto' : 'none'}");
@@ -56,11 +56,9 @@ describe('book navigator mount policy', () => {
     // W1/M5: the hidden cadence is now `0`, i.e. FROZEN — `useNow(0)` arms no timer at all, so a
     // hidden page costs no wake-up and no re-render instead of one a minute. The pin moved with the
     // call it pins: 60_000 measured the old behaviour, 0 is the fix.
-    expect(tasks).toContain('const live = useScreenLive();');
-    expect(tasks).toContain('useNow(live ? 30_000 : 0)');
-    expect(week).toContain('live = useScreenLive()');
-    expect(week).toContain('useNow(live ? 30_000 : 0)');
-    // …and the live cadence itself is unchanged, so this is a hidden-page fix and not a general slowdown
+    // v0.7.6: `useLiveNow(live, idle = 0)` — frozen while hidden, and a focus flip no longer re-renders the page
+    expect(tasks).toContain('useLiveNow(30_000)');
+    expect(week).toContain('useLiveNow(30_000)');
     expect(week).not.toContain('useNow(0)');
   });
   it('no screen re-renders on a tap: focus is the context, never a store-route subscription', () => {
@@ -68,7 +66,7 @@ describe('book navigator mount policy', () => {
     // `s.route` before the first moving frame. With all six mounted, the subscription would be at its
     // worst, so the screens that act on `live` read the navigator's context instead.
     for (const src of [today, focus]) expect(src).not.toContain('useStore((s) => s.route)');
-    expect(today).toContain('const focused = useScreenLive();');
+    expect(today).toContain('useLiveNow(30_000, 60_000)');
     expect(focus).toContain('const focused = useScreenLive();');
   });
 });

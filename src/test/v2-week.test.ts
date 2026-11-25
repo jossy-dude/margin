@@ -55,7 +55,7 @@ jest.mock('react-native-reanimated', () => {
   };
   return { ...api, default: api };
 });
-jest.mock('../ui/live', () => ({ useScreenLive: () => true }));
+jest.mock('../ui/live', () => ({ useScreenLive: () => true, useLiveNow: () => Date.now() }));
 
 
 const THU = new Date(2026, 10, 12, 9, 20).getTime(); // Thursday 12 Nov 2026, in Database Systems

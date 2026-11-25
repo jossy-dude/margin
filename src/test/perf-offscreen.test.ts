@@ -87,13 +87,13 @@ describe('the model has not drifted from the file', () => {
     // the three things that used to make it more: no tween, no timer, no read of a shared value
     expect(placedSrc).not.toContain('withTiming');
     expect(placedSrc).not.toContain('setTimeout');
-    expect(placedSrc).not.toContain('useLayoutEffect');
+    expect(placedSrc.match(/useLayoutEffect\(/g) ?? []).toHaveLength(1); // v0.7.6: only the page's data catching up before paint
     // and no `k.get()` to read one with
     expect(placedSrc).not.toContain('.get()');
   });
 
   it('a hidden page is inert to touch and to screen readers, and sits under the focused one', () => {
-    expect(placedSrc).toContain("<ScreenLive.Provider value={on}>");
+    expect(placedSrc).toContain("<ScreenLive.Provider value={src}>");
     expect(src).toContain("pointerEvents={i === state.index ? 'auto' : 'none'}");
     expect(src).toContain("importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}");
   });
