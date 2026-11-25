@@ -208,7 +208,13 @@ export function planReminders(i: PlanInput): Plan {
   }
   // tasks
   for (const t of i.tasks) {
-    if (t.status === 2 || t.dueAt === null) { if (t.status !== 2 && t.startAt) pushStart(t); continue; }
+    if (t.status === 2) continue;
+    if (t.dueAt === null) {
+      /* v0.7.6.5: a task with no due date can still ring at a chosen time ("leave home at 7") */
+      if (s.taskReminders) for (const r of t.reminders) if (r.mode === 'abs' && r.at >= i.now && r.at <= horizon) push({ kind: 'task', at: r.at, title: t.title, body: cn(t.courseId)?.name ?? 'Personal', channel: 'tasks', route: 'Tasks', entityId: t.id }, {});
+      if (t.startAt) pushStart(t);
+      continue;
+    }
     const isExam = t.kind === 'exam', allowed = isExam ? s.examReminders : s.taskReminders, cname = cn(t.courseId)?.name ?? 'Personal';
     if (allowed) for (const r of t.reminders) {
       const at = r.mode === 'abs' ? r.at : t.dueAt - r.minutes * MIN;

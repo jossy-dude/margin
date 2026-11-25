@@ -30,4 +30,9 @@ describe('reminders stop once there is nothing left to do', () => {
     const s = settledIds({ ...base, tasks: [task({ id: 'done', status: 2 }), task({ id: 'open' })], attendance: { [econ]: { key: econ, status: 'p' as const, at: 1, reason: '' } } as never });
     expect([...s].sort()).toEqual(['done', 'doneb', 'dones', econ].sort());
   });
+  it('a task with no due date still rings at a time it was given (v0.7.6.5)', () => {
+    const t = task({ id: 'leave', dueAt: null, reminders: [{ id: 'r', mode: 'abs', at: at(2026, 10, 5, 19, 0), label: 'At a chosen time' }] });
+    const p = planReminders({ ...base, tasks: [t] });
+    expect(p.items.filter((x) => x.entityId === 'leave').map((x) => x.at)).toEqual([at(2026, 10, 5, 19, 0)]);
+  });
 });

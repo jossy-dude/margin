@@ -88,7 +88,9 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
   const flip = (t: string) => setTags((x) => (x.includes(t) ? x.filter((y) => y !== t) : [...x, t]));
   const [title, setTitle] = useState(existing?.title ?? ''), [cid, setCid] = useState<string | null>(existing ? existing.courseId : courseId ?? null);
   const [due, setDue] = useState<number | null>(existing ? existing.dueAt : null), [start, setStart] = useState<number | null>(existing?.startAt ?? null), [est, setEst] = useState(existing?.estimateMin ?? 0), [pri, setPri] = useState<number>(existing?.priority ?? 0);
-  const [notes, setNotes] = useState(existing?.notes ?? ''), [subs, setSubs] = useState(existing?.subtasks ?? []), [ns, setNs] = useState(''), [showStart, setShowStart] = useState(!!existing?.startAt), [custom, setCustom] = useState(60), [addAt, setAddAt] = useState(false), [atV, setAtV] = useState<number | null>(null);
+  const [notes, setNotes] = useState(existing?.notes ?? ''), [subs, setSubs] = useState(existing?.subtasks ?? []), [ns, setNs] = useState(''), [showStart, setShowStart] = useState(!!existing?.startAt), [custom, setCustom] = useState(60), [addAt, setAddAt] = useState(false), [atV, setAtV] = useState<number | null>(null), [addLead, setAddLead] = useState(false);
+  /* More starts open on a task that already uses one of its fields, so nothing set is ever hidden */
+  const [more, setMore] = useState(() => !!existing && (!!existing.startAt || !!existing.estimateMin || !!existing.priority || existing.subtasks.length > 0 || !!existing.notes || (existing.tags ?? []).some((t) => t !== school)));
   const [rem, setRem] = useState<ReminderSpec[]>(existing?.reminders ?? nset.defaultTaskMinutes.map((m) => ({ id: uid('r'), mode: 'before' as const, minutes: m, label: m ? `${fmtDur(m)} before` : 'At due time' })));
   const { closeRef, close } = useSheetClose(), [saveId] = useState(() => existing?.id ?? uid('t')), [submit] = useState(latch);
   /* "You touched it, it's yours": every form save writes `demo: false`, so a sample row the user edits
@@ -103,41 +105,48 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
    *  form instance means even a repeat that got through re-saves this row instead of appending a
    *  second, unrecoverable one. */
   const save = () => submit(() => {
-    const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : [] };
+    const t = { ...draft, id: saveId, title: title.trim(), reminders: due ? rem : rem.filter((r) => r.mode === 'abs') };
     act.saveTask(t); toast(existing ? 'Saved' : `${TAGS.find((x) => x.k === k)?.l ?? 'Task'} added${due ? ` · due ${fmtWhen(due, now, hour12)}` : ''}`, undefined, 'success'); close();
   });
   return (
     <Sheet title={existing ? 'Edit task' : 'New task'} onClose={act.close} maxH={0.93} closeRef={closeRef}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{existing && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete" onPress={() => { act.removeTask(existing.id); close(); }} />}{existing && <Btn kind="ghost" icon="timer" a11y="Focus on this" onPress={() => close(() => act.focusOpen(existing.id))} />}<Btn flex label={existing ? 'Save' : 'Add'} icon="check" disabled={!title.trim()} onPress={save} /></Row>}>
       <Field label="What is it?" placeholder="e.g. Problem set 6" value={title} onChangeText={setTitle} autoFocus={!existing} returnKeyType="done" />
-      {/* tags wrap onto a second line instead of running off the edge (U7) */}
-      <Label>Tags</Label>
-      <Row style={{ flexWrap: 'wrap' }}>
-        <Chip small label={`#${school}`} icon="note" on={tags.includes(school)} onPress={() => flip(school)} />
-        {TAGS.map((x) => <Chip small key={x.k} label={x.l} icon={x.i} on={tags.includes(x.k)} onPress={() => flip(x.k)} />)}
-        {tags.filter((t) => t !== school && !TAGS.some((x) => x.k === t)).map((t) => <Chip small key={t} label={`#${t}`} icon="x" on onPress={() => flip(t)} />)}
-      </Row>
-      <Field placeholder="Another tag" value={tagIn} onChangeText={setTagIn} autoCapitalize="none" returnKeyType="done"
-        onSubmitEditing={() => { const t = tagIn.trim().replace(/^#/, '').replace(/\s+/g, '-').toLocaleLowerCase(); if (t && !tags.includes(t)) setTags((x) => [...x, t]); setTagIn(''); }} />
-      <Label>Subject (optional)</Label><CourseChips value={cid} onChange={setCid} />
+      {/* v0.7.6.5 (the owner: "the add task is cluttered"): what almost every task needs first — when, which subject,
+          when to be reminded — and everything else folded under More. */}
       <Label>Due</Label><WhenPicker value={due} onChange={setDue} now={now} homeAt={nset.homeAt} optional nonePlaceholder="No due date" h12={hour12} />
-      {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <Reveal open><Label>Starts (shows from then)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></Reveal>}
-      <Label>How long will it take?</Label>
-      <DurationField label="effort" value={est || null} onChange={(v) => setEst(v ?? 0)} presets={[15, 30, 45, 60, 90, 120]} min={0} max={720} noneLabel="unknown" />
-      {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now, hour12)} />}
-      {due ? <>
-        <Label>Remind me</Label>
-        <Row>{OFFS.map((o) => <Chip key={o.m} label={o.l} on={has(o.m)} onPress={() => toggleOff(o.m)} small />)}
-          {home && home < due && <Chip label="When I get home" icon="bell" on={hasHome} small onPress={() => setRem((r) => (hasHome ? r.filter((x) => !(x.mode === 'abs' && x.label === 'When I get home')) : [...r, { id: uid('r'), mode: 'abs', at: home, label: 'When I get home' }]))} />}
-          {rem.filter((r) => (r.mode === 'before' && !OFFS.some((o) => o.m === r.minutes)) || (r.mode === 'abs' && r.label !== 'When I get home')).map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now, hour12) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}</Row>
-        <Row><DurationField label="custom lead" value={custom} onChange={(v) => { if (v !== null) setCustom(v); }} presets={[]} min={5} max={10080} /><Btn small kind="ghost" label="+ add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); }} /><Btn small kind="ghost" label="+ at a time" onPress={() => setAddAt(!addAt)} /></Row>
-        {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" h12={hour12} /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
-      </> : <Txt f="serif" s={15} c="mut">Set a due date to choose reminders.</Txt>}
-      <Label>Priority</Label><Row>{PRI.map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
-      <Label>Steps</Label>
-      {subs.map((x) => <Row key={x.id} style={{ flexWrap: 'nowrap' }}><Chip small label={x.t} icon={x.done ? 'check' : undefined} on={x.done} onPress={() => setSubs((s) => s.map((y) => (y.id === x.id ? { ...y, done: !y.done } : y)))} /><Btn small kind="ghost" icon="x" a11y={`Remove ${x.t}`} onPress={() => setSubs((s) => s.filter((y) => y.id !== x.id))} /></Row>)}
-      <Row style={{ flexWrap: 'nowrap' }}><Field style={{ flex: 1 }} placeholder="Add a step" value={ns} onChangeText={setNs} onSubmitEditing={() => { if (ns.trim()) { setSubs((s) => [...s, { id: uid('s'), t: ns.trim(), done: false }]); setNs(''); } }} returnKeyType="done" /></Row>
-      <Field label="Notes" multiline value={notes} onChangeText={setNotes} placeholder="Anything to remember…" />
+      <Label>Subject</Label><CourseChips value={cid} onChange={setCid} />
+      <Label>Remind me</Label>
+      <Row>
+        {due ? OFFS.map((o) => <Chip key={o.m} label={o.l} on={has(o.m)} onPress={() => toggleOff(o.m)} small />) : null}
+        {due && home && home < due ? <Chip label="When I get home" icon="bell" on={hasHome} small onPress={() => setRem((r) => (hasHome ? r.filter((x) => !(x.mode === 'abs' && x.label === 'When I get home')) : [...r, { id: uid('r'), mode: 'abs', at: home, label: 'When I get home' }]))} /> : null}
+        {rem.filter((r) => (r.mode === 'before' && (!due || !OFFS.some((o) => o.m === r.minutes))) || (r.mode === 'abs' && r.label !== 'When I get home')).filter((r) => due || r.mode === 'abs').map((r) => <Chip key={r.id} on small label={r.mode === 'abs' ? fmtWhen(r.at, now, hour12) : r.label} icon="x" onPress={() => setRem((x) => x.filter((y) => y.id !== r.id))} />)}
+        <Chip small icon="plus" label="At a time" on={addAt} onPress={() => setAddAt(!addAt)} />
+        {due ? <Chip small icon="plus" label="Other lead" on={addLead} onPress={() => setAddLead(!addLead)} /> : null}
+      </Row>
+      {addLead && due ? <Reveal open><Row><DurationField label="custom lead" value={custom} onChange={(v) => { if (v !== null) setCustom(v); }} presets={[]} min={5} max={10080} /><Btn small label="Add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); setAddLead(false); }} /></Row></Reveal> : null}
+      {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" h12={hour12} /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
+      <Chip small icon={more ? 'x' : 'plus'} label={more ? 'Less' : 'More: tags, start, effort, priority, steps, notes'} on={more} onPress={() => setMore(!more)} />
+      {more && <Reveal open>
+        <Label>Tags</Label>
+        {/* tags wrap onto a second line instead of running off the edge (U7) */}
+        <Row style={{ flexWrap: 'wrap' }}>
+          <Chip small label={`#${school}`} icon="note" on={tags.includes(school)} onPress={() => flip(school)} />
+          {TAGS.map((x) => <Chip small key={x.k} label={x.l} icon={x.i} on={tags.includes(x.k)} onPress={() => flip(x.k)} />)}
+          {tags.filter((t) => t !== school && !TAGS.some((x) => x.k === t)).map((t) => <Chip small key={t} label={`#${t}`} icon="x" on onPress={() => flip(t)} />)}
+        </Row>
+        <Field placeholder="Another tag" value={tagIn} onChangeText={setTagIn} autoCapitalize="none" returnKeyType="done"
+          onSubmitEditing={() => { const t = tagIn.trim().replace(/^#/, '').replace(/\s+/g, '-').toLocaleLowerCase(); if (t && !tags.includes(t)) setTags((x) => [...x, t]); setTagIn(''); }} />
+        {!showStart ? <Chip label="+ Start date" icon="flag" onPress={() => setShowStart(true)} small /> : <><Label>Starts (shows from then)</Label><WhenPicker value={start} onChange={setStart} now={now} homeAt={nset.homeAt} optional nonePlaceholder="Starts now" h12={hour12} /></>}
+        <Label>How long will it take?</Label>
+        <DurationField label="effort" value={est || null} onChange={(v) => setEst(v ?? 0)} presets={[15, 30, 45, 60, 90, 120]} min={0} max={720} noneLabel="unknown" />
+        {w && <Fit tight={!!w.tight} needMin={w.needMin} freeMin={Math.round(w.freeMin)} startBy={fmtWhen(w.startBy, now, hour12)} />}
+        <Label>Priority</Label><Row>{PRI.map((p, i) => <Chip key={p} label={p} on={pri === i} onPress={() => setPri(i)} small />)}</Row>
+        <Label>Steps</Label>
+        {subs.map((x) => <Row key={x.id} style={{ flexWrap: 'nowrap' }}><Chip small label={x.t} icon={x.done ? 'check' : undefined} on={x.done} onPress={() => setSubs((s) => s.map((y) => (y.id === x.id ? { ...y, done: !y.done } : y)))} /><Btn small kind="ghost" icon="x" a11y={`Remove ${x.t}`} onPress={() => setSubs((s) => s.filter((y) => y.id !== x.id))} /></Row>)}
+        <Row style={{ flexWrap: 'nowrap' }}><Field style={{ flex: 1 }} placeholder="Add a step" value={ns} onChangeText={setNs} onSubmitEditing={() => { if (ns.trim()) { setSubs((s) => [...s, { id: uid('s'), t: ns.trim(), done: false }]); setNs(''); } }} returnKeyType="done" /></Row>
+        <Field label="Notes" multiline value={notes} onChangeText={setNotes} placeholder="Anything to remember…" />
+      </Reveal>}
     </Sheet>
   );
 }
