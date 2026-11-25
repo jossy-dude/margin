@@ -1,11 +1,13 @@
 import { ATT_STATUS, A_KEYS, B_KEYS, Problem, Rec, TASK_KINDS, W, attStatus, bool, clampInt, clock, datasetCounts, dayStatus, derived, entriesOf, int, isRec, isUpcoming, noWhy, nonEmpty, num, parseWhen, roomsIn, sameShape, statusProblem, str, whyIn } from './importShared';
-import type { Alarm, AttRecord, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, Trip } from './types';
+import type { Alarm, AttRecord, ComponentKind, Course, DayMark, FocusSession, Mark, Meeting, Notice, SemesterRow, Settings, Snapshot, SubjectVariant, Task, Trip } from './types';
 import { detectDataset, planCsv } from './importCsv';
 import { parseCsv } from './csv';
 import { isYmd, validRange } from './semester';
 import { occKey } from './attendance';
 import { DEFAULT_SETTINGS } from './defaults';
 import type { ImportOptions, ImportPlan } from './importShared';
+
+const PART_KINDS: readonly ComponentKind[] = ['lecture', 'lab', 'tutorial', 'seminar', 'practical', 'other'];
 export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan {
   const now = opts.now ?? Date.now();
   const problems: Problem[] = [];
@@ -183,13 +185,19 @@ export function parseImport(text: string, opts: ImportOptions = {}): ImportPlan 
     for (const [i, row] of variantList.entries()) {
       const at = `variants[${i}]`;
       if (!isRec(row)) { problem(at, 'row', 'Expected an object.'); continue; }
-      unknownKeys(row, ['id', 'subjectId', 'name', 'room', 'teacher', 'note', 'ord'], at);
+      unknownKeys(row, ['id', 'subjectId', 'name', 'room', 'teacher', 'note', 'ord', 'kind', 'isBase', 'scale', 'weight', 'attGoal'], at);
       const subjectId = nonEmpty(row.subjectId), name = nonEmpty(row.name);
       if (!subjectId || (!courses.has(subjectId) && !existingById.has(subjectId))) { problem(at, 'subjectId', 'A variant needs a subject in this file or on the phone.'); continue; }
       if (!name) { problem(at, 'name', 'A variant needs a name.'); continue; }
       const id = nonEmpty(row.id) ?? derived('variant', `${subjectId}|${name.toLowerCase()}`);
       if (variantRows.has(id)) duplicate('this variant', at);
-      variantRows.set(id, { id, subjectId, name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '', note: str(row.note) ?? '', ord: int(row.ord, i) });
+      /* v0.7.7.2: a part's kind, base flag, scale, share and goal travel too (they were dropped with a warning, so
+         a restored lab lost its share and its own goal). Each is optional, as on a v0.6 row. */
+      const kind = typeof row.kind === 'string' && (PART_KINDS as readonly string[]).includes(row.kind) ? row.kind as ComponentKind : null;
+      const fin = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+      variantRows.set(id, { id, subjectId, name, room: str(row.room) ?? '', teacher: str(row.teacher) ?? '', note: str(row.note) ?? '', ord: int(row.ord, i),
+        ...(kind ? { kind } : {}), ...(row.isBase === true ? { isBase: true } : {}), ...(fin(row.scale) !== null ? { scale: fin(row.scale) } : {}),
+        ...(fin(row.weight) !== null ? { weight: fin(row.weight) } : {}), ...(fin(row.attGoal) !== null ? { attGoal: fin(row.attGoal) } : {}) });
     }
 
     const taskRows = asRows(raw.tasks, 'tasks');

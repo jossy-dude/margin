@@ -43,7 +43,8 @@ function classesOn(day: number, i: AgendaInput): AgendaClass[] {
     const variant = meeting.variantId ? i.variants?.find((v) => v.id === meeting.variantId) : undefined;
     out.push({
       k: occKey(ymd(date), meeting), s: atTime(day, meeting.start), e: occEnd(day, meeting),
-      t: variant?.name ? `${course.name} · ${variant.name}` : course.name,
+      /* v0.7.7.2: the part only when it is not the lecture ("Computer Programming · Lab"), as Today and Week say it */
+      t: variant?.name && !variant.isBase ? `${course.name} · ${variant.name}` : course.name,
       r: roomOf(meeting, course, (i.variants ?? []) as SubjectVariant[]), w: (variant?.teacher || course.teacher || '').trim(),
     });
   }

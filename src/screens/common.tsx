@@ -189,7 +189,8 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   );
 }, (a, b) => a.t === b.t && Math.floor(a.now / 60_000) === Math.floor(b.now / 60_000));
 /** the 28px attendance cell; the hit area is the cell itself because the 3px gutter leaves no room for an honest bigger one */
-export function AttCell({ status, why, inferred, future, locked, onTap, onHold, label, pulse, testID }: { status: AttStatus | null; why?: AttWhy; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string }) {
+/** `dot` (v0.7.7.2): a 6 dp tinted dot in the corner marks a lab class (or any part other than the lecture). */
+export function AttCell({ status, why, inferred, future, locked, onTap, onHold, label, pulse, testID, dot }: { status: AttStatus | null; why?: AttWhy; inferred: boolean; future: boolean; locked: boolean; onTap: () => void; onHold: () => void; label: string; pulse?: number; testID?: string; dot?: string }) {
   const { c } = useTheme(), reduce = useReduceMotion(), sc = useSharedValue(1), sh = useSharedValue(0);
   useEffect(() => { if (pulse && !reduce) sc.value = withSequence(withTiming(1.25, { duration: 90 }), withTiming(1, { duration: 160 })); }, [pulse, reduce, sc]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }, { translateX: sh.value }] })), col = statusColor(status, c, why);
@@ -206,6 +207,7 @@ export function AttCell({ status, why, inferred, future, locked, onTap, onHold, 
       onPressIn={() => { if (!reduce) sc.value = withTiming(0.95, { duration: BEAT, easing: EASE }); }} onPressOut={() => { if (!reduce) sc.value = withSpring(1, { duration: 190, dampingRatio: 0.7 }); }}>
       <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: inferred || future ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
         {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{glyphOf(status, why)}</Txt>}
+        {dot ? <View testID={testID ? `${testID}-dot` : undefined} style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: dot, borderWidth: 1, borderColor: hexA(c.ink, 0.45) }} /> : null}
       </Animated.View>
     </Pressable>
   );

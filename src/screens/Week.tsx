@@ -11,6 +11,7 @@ import { Page, Section } from './common';
 import { DW, MO, addDays, atTime, fmtTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
 import { effective, isCancelled, lanes, occEnd, occKey, occurrencesOn } from '../domain/attendance';
 import { roomOf } from '../domain/rooms';
+import { partLabel } from '../domain/parts';
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
@@ -106,13 +107,13 @@ export function WeekScreen() {
                       label={`${course?.name}, ${DW[i]} ${fmtTime(atTime(date.getTime(), meeting.start), hour12)} to ${fmtTime(occEnd(date.getTime(), meeting), hour12)}${x ? ', cancelled' : ''}`}
                       hint="Tap to mark. Hold and drag to move it."
                       actions={[{ name: 'edit', label: 'Edit class' }]} onAction={(n) => { if (n === 'edit') act.open({ t: 'meeting', id: meeting.id }); }}
-                      onTap={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })}
+                      onTap={() => act.open({ t: 'status', mode: 'class', key, title: [course?.name ?? 'Class', partLabel(meeting.courseId, meeting.variantId, st.variants)].filter(Boolean).join(' · '), date: ymd(date) })}
                       onHold={() => setDraft(draftAt(i, start0, true))} onSlot={() => {}}
                       onDrop={(slot) => { const to = Math.floor(slot / 10_000), st1 = slot % 10_000; setDraft(draftAt(to, st1, to === i && st1 === start0)); }}
                       style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
                       <HandBox seed={key} fill={x ? c.paper : look !== 'ink' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={x ? c.mut : look !== 'ink' ? undefined : c.acc} shadow={look !== 'ink' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, overflow: 'hidden' }}>
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
-                        {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{roomOf(meeting, course, st.variants)}</Txt>}
+                        {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{[partLabel(meeting.courseId, meeting.variantId, st.variants), roomOf(meeting, course, st.variants)].filter(Boolean).join(' · ')}</Txt>}
                       </HandBox>
                     </DragCard>);
                 })}

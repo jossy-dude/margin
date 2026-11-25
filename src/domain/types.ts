@@ -140,6 +140,8 @@ export interface Settings {
   /** Absences as the teacher's register has them, per subject id. Typed in by hand: the register and
    *  the marks made here do not always agree, and the register is the one that counts. Absent = not set. */
   teacherAbsent?: Record<string, number>;
+  /** v0.7.7.2: subjects whose "Split the lab classes" offer was answered No (D11); it is not asked again. */
+  labSplitNo?: string[];
   /** v0.7.6.4: credit hours per subject id, for the GPA. Absent = not counted until set. */
   credits?: Record<string, number>;
   /** v0.7.6.4: results from earlier terms, typed in from the transcript. */

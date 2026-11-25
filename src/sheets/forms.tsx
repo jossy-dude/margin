@@ -9,11 +9,11 @@ import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { WhenPicker, nextHome } from './WhenPicker';
 import { PartsEditor, RoomChips, ScheduleEditor } from './ScheduleEditor';
 import { draftsOf, planSchedule, type SlotDraft } from '../domain/schedule';
-import { hasParts, kindsIn, partDraftsOf, planParts, roomsForParts, type PartDraft } from '../domain/parts';
+import { dayPartsNote, hasParts, kindsIn, partDraftsOf, planParts, roomsForParts, type PartDraft } from '../domain/parts';
 import { NOTE_LEVEL, noteDate } from '../ui/collage/notes';
 import { act, getState, toast, useStore, type SheetSpec } from '../store/store';
 import { ST, CYCLE, WHY, WHY_LABEL } from '../domain/attendance';
-import { DW, fmtDur, fmtWhen, fromMin, hm, uid } from '../domain/time';
+import { DW, fmtDur, fmtWhen, fromMin, hm, uid, weekdayOf } from '../domain/time';
 import { workload } from '../domain/reminders';
 import type { AttStatus, AttWhy, Course, Mark, Meeting, Notice, ReminderSpec, Task, TaskKind } from '../domain/types';
 import { fx } from '../services/fx';
@@ -183,11 +183,14 @@ export function StatusSheet({ spec }: { spec: Extract<SheetSpec, { t: 'status' }
   const { closeRef, close } = useSheetClose();
   const [state, setState] = useState<AttStatus | null>(rec?.status ?? null), [why, setWhy] = useState<AttWhy>(rec?.why ?? ''), [note, setNote] = useState(rec?.reason ?? '');
   const pick = (s: AttStatus) => { setState(s); if (s !== state) setWhy(''); };
+  /* v0.7.7.2: a day mark covers every class that day, a lab included; say so when a subject has both that day */
+  const meetings = useStore((s) => s.meetings), variants = useStore((s) => s.variants);
+  const dayNote = useMemo(() => (isDay ? dayPartsNote(weekdayOf(new Date(`${spec.date}T00:00:00`)), meetings, variants ?? []) : null), [isDay, spec.date, meetings, variants]);
   const save = () => { if (!state) return; if (isDay) act.setDay(spec.date, state, note.trim(), why); else { const news = attNews(spec.key, state, { ...getState(), now: Date.now(), moves: getState().settings.moves }); act.setAtt(spec.key, state, note.trim(), why); if (news) faceEvent(news); } close(); };
   return (
     <Sheet title={spec.title} onClose={act.close} maxH={0.8} closeRef={closeRef}
       footer={<Row style={{ flexWrap: 'nowrap' }}>{rec && <Btn kind="ghost" icon="x" label="Automatic" a11y="Back to automatic" onPress={() => { if (isDay) act.clearDay(spec.date); else act.clearAtt(spec.key); close(); }} />}<Btn flex icon="check" label="Save" disabled={!state} onPress={save} /></Row>}>
-      <Txt f="serif" s={16} c="mut">{isDay ? 'Mark the whole day' : 'How did this class go?'}</Txt>
+      <Txt f="serif" s={16} c="mut">{isDay ? `Mark the whole day${dayNote ? ` · ${dayNote}` : ''}` : 'How did this class go?'}</Txt>
       <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10 }}>
         {CYCLE.map((s) => <StampChoice key={s} s={s} on={state === s} onPress={() => pick(s)} />)}
       </View>

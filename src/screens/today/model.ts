@@ -88,7 +88,7 @@ export function classesOn(day: number, i: Pick<TodayInput, 'now' | 'meetings' | 
     const e = effective(date, m, i.attendance, i.dayMarks, i.now), start = atTime(date.getTime(), m.start), end = occEnd(date.getTime(), m);
     const cancelled = isCancelled(e), live = !cancelled && i.now >= start && i.now < end, over = end <= i.now;
     const bubble: BubbleState = live && !e.explicit ? 'now' : bubbleOf(e.status ? { status: e.status, why: e.why } : null);
-    const name = course?.name ?? 'Class', part = v?.name.trim() ?? '', room = roomOf(m, course, i.variants), teacher = (v?.teacher.trim() || course?.teacher.trim()) ?? '';
+    const name = course?.name ?? 'Class', part = v && !v.isBase ? v.name.trim() : '', room = roomOf(m, course, i.variants), teacher = (v?.teacher.trim() || course?.teacher.trim()) ?? '';
     const range = `${fmtTime(start, i.hour12)}–${fmtTime(end, i.hour12)}`;
     const said = !e.status ? (live ? 'on now' : 'not marked yet') : e.inferred ? 'present, not marked yet' : statusLabel(e.status, e.why).toLowerCase();
     return {

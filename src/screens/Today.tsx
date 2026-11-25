@@ -12,6 +12,7 @@ import { act, useStore } from '../store/store';
 import { Empty, Page, Section, STATUS_GLYPH, TaskCard, statusColor, nextWhen, spokenStatus } from './common';
 import { DW, MO, addDays, atTime, fmtClock, fmtDay, fmtTime, mondayOf, startOfDay, weekdayOf, ymd } from '../domain/time';
 import { roomOf } from '../domain/rooms';
+import { partLabel } from '../domain/parts';
 import { effective, dayBlock, isCancelled, occEnd, occKey, occurrencesOn, ST, type Occurrence, type Period } from '../domain/attendance';
 import { hexA, RS } from '../tokens/theme';
 import { hatch } from '../ui/instruments/hatch';
@@ -500,7 +501,7 @@ export function TodayScreen() {
               <HandBox seed={key} stroke={live ? c.acc : c.ink} sw={live ? 2.4 : 1.6} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 12, opacity: isCancelled(e) ? 0.7 : 1 }}>
                 {/* v0.6: start over end. One line truncated to "08:30–09…" at phone width, hiding the end of the class. */}
                 <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }} accessibilityLabel={range}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={hour12 ? RANGE_SIZE_12 - 2 : RANGE_SIZE_24 - 2} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
-                <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
+                <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[partLabel(meeting.courseId, meeting.variantId, st.variants), roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
                 <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: e.inferred || !e.status ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
               </HandBox>
             </Pressable>);

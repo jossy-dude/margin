@@ -351,6 +351,7 @@ describe('parseImport', () => {
       expect(p.counts).toEqual({
         courses: snap.courses.length, meetings: snap.meetings.length, tasks: snap.tasks.length,
         notices: snap.notices.length, marks: snap.marks.length, focus: snap.focus.length, // v0.5: focus history travels
+        variants: snap.variants!.length, // 0.7.7.2: the demo's DB Lecture + Lab
       });
       // v0.5 D2: the whole settings object travels now (the range plus the person's choices), and focus
       // history is imported rather than warned about.

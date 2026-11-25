@@ -201,7 +201,7 @@ describe.each(factories)('semesters in the repository · %s', (_name, make) => {
     expect(Object.keys(l.attendance)).toEqual(Object.keys(before.attendance)); // the term's history stays
     expect(Object.keys(l.attendance)).toHaveLength(1);
     expect(l.courses.map((c) => c.id)).toEqual(before.courses.map((c) => c.id)); // subjects are not schedule
-    expect(l.variants!.map((v) => v.id)).toEqual(['v1', 'v2']);
+    expect(l.variants!.map((v) => v.id).filter((id) => !id.startsWith('B~'))).toEqual(['v1', 'v2']); // B~base, B~lab: the demo's DB parts (0.7.7.2)
     // the semesters themselves are untouched: a roll-over clears what is taught, not which term it is
     expect(await r.listSemesters()).toHaveLength(1);
     // and every cleared row went through `remove`, so a sync boundary sees the deletion

@@ -1,4 +1,4 @@
-import type { Course, FocusSession, Meeting, Mark, Notice, Snapshot, Task } from '../domain/types';
+import type { Course, FocusSession, Meeting, Mark, Notice, Snapshot, SubjectVariant, Task } from '../domain/types';
 import { addDays, atTime, mondayOf, startOfDay } from '../domain/time';
 import { DEFAULT_SETTINGS } from '../domain/defaults';
 
@@ -21,6 +21,17 @@ export function seedSnapshot(now = Date.now()): Snapshot {
   const mon = mondayOf(now), day = startOfDay(now);
   const courses: Course[] = COURSES.map(([id, name, room, teacher], sort) => ({ id, name, rooms: [room], teacher, goal: null, sort, demo: true }));
   const meetings: Meeting[] = TT.flatMap((pl, weekday) => pl.map(([start, end, courseId]) => ({ id: `m-${weekday}-${start}-${courseId}`, courseId, weekday, start, end, demo: true })));
+  /* v0.7.7.2: parts in the demo, so screenshots and tests see them. Database Systems has a Lecture and a Lab (its
+     Friday class, in LAB201); Computer Programming's Thursday class is in LAB301 with no part, so Grades offers
+     to split it, as it does for the owner's real timetable. */
+  const variants: SubjectVariant[] = [
+    { id: 'B~base', subjectId: 'B', name: 'Lecture', room: 'L-4', teacher: 'Nkemi', note: '', ord: -1, kind: 'lecture', isBase: true, scale: 100, weight: 60, attGoal: null },
+    { id: 'B~lab', subjectId: 'B', name: 'Lab', room: 'LAB201', teacher: 'Abebe', note: '', ord: 0, kind: 'lab', isBase: false, scale: 100, weight: 40, attGoal: null },
+  ];
+  for (const m of meetings) {
+    if (m.courseId === 'B' && m.weekday === 4) { m.variantId = 'B~lab'; m.room = 'LAB201'; }
+    if (m.courseId === 'C' && m.weekday === 3) m.room = 'LAB301';
+  }
   const rem = (id: string) => [{ id: `${id}-r`, mode: 'before' as const, minutes: 60, label: '1 h before' }];
   const mk = (n: number, title: string, c: string | null, d: number, du: string, status: 0 | 1 | 2, est: number | null, kind: Task['kind'] = 'assignment', notes = ''): Task => ({
     id: `seed-task-${n}`, title, courseId: c, kind, dueAt: atTime(addDays(mon, d), du), startAt: null, estimateMin: est, priority: 0, notes, status, createdAt: now - 3 * 86_400_000,
@@ -53,5 +64,5 @@ export function seedSnapshot(now = Date.now()): Snapshot {
        say the same thing about the demo history they say about a real one. */
     focus.push({ id: `demo-focus-${i}`, taskId: null, courseId: c, startedAt: atTime(d, `${String(h).padStart(2, '0')}:05`), endedAt: atTime(d, `${String(h).padStart(2, '0')}:05`) + min * 60_000, focusSec: min * 60, breakSec: min >= 45 ? 300 : 0, overSec: 0, rounds: 1, planMin: min, mode: 'focus', completed: true, demo: true });
   }
-  return { courses, meetings, attendance: {}, dayMarks: {}, tasks, notices, marks, adjusts: {}, focus, trips: [], alarms: [], settings: { ...DEFAULT_SETTINGS, seededAt: now } };
+  return { courses, meetings, variants, attendance: {}, dayMarks: {}, tasks, notices, marks, adjusts: {}, focus, trips: [], alarms: [], settings: { ...DEFAULT_SETTINGS, seededAt: now } };
 }

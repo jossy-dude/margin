@@ -1,5 +1,6 @@
 import type { AttRecord, AttStatus, AttWhy, Course, DayMark, DayStatus, FocusSession, Mark, Meeting, Notice, NotifSettings, Settings, SubjectVariant, Task } from '../../domain/types';
 import { batchOf, duplicateMeeting, emptyRows, makeVariantChange, pkOfRow, removeVariantChange, type Change, type RowSet } from '../../domain/variants';
+import { splitLabChange } from '../../domain/parts';
 import type { EntityName } from '../../data/repository';
 import { statusLabel, whyOf } from '../../domain/attendance';
 import { uid } from '../../domain/time';
@@ -135,10 +136,10 @@ function swap(from: RowSet, to: RowSet) {
     return patch;
   });
 }
-function applyChange(c: Change, said: string) {
+function applyChange(c: Change, said: string, ms?: number) {
   void optimistic(() => swap(c.before, c.after), () => R().commit(batchOf(c.before, c.after)), () => swap(c.after, c.before));
   resync();
-  toast(said, () => { void optimistic(() => swap(c.after, c.before), () => R().commit(batchOf(c.after, c.before)), () => swap(c.before, c.after)); resync(); });
+  toast(said, () => { void optimistic(() => swap(c.after, c.before), () => R().commit(batchOf(c.after, c.before)), () => swap(c.before, c.after)); resync(); }, undefined, ms);
 }
 
 export function saveCourse(c: Course) { void saveRow('courses', 'course', c); resync(); }
@@ -165,6 +166,16 @@ export function makeVariantOf(childId: string, parentId: string) {
   const st = getState(), c = makeVariantChange(st, childId, parentId, uid('v')); if (!c) return;
   applyChange(c, `${st.courses.find((x) => x.id === childId)?.name ?? 'Subject'} is now part of ${st.courses.find((x) => x.id === parentId)?.name ?? 'the subject'}`);
 }
+/** v0.7.7.2 (D11): the subject's lab-room classes become a Lab part, their marks re-keyed with them; Undo for 10 s. */
+export function splitLab(courseId: string) {
+  const st = getState(), c = splitLabChange(st, courseId, uid('v')); if (!c) return;
+  applyChange(c, `${st.courses.find((x) => x.id === courseId)?.name ?? 'Subject'}: Lab tracked separately`, 10_000);
+}
+/** "No" to the split offer, remembered per subject. */
+export function declineLabSplit(courseId: string) {
+  const no = getState().settings.labSplitNo ?? [];
+  if (!no.includes(courseId)) setSettings({ labSplitNo: [...no, courseId] });
+}
 export function removeMeeting(id: string) { removeRow('meetings', 'meeting', id, 'Class removed from the timetable', true); }
 /** A subject goes with its variants, meetings and marks, in ONE repository transaction, so the disk never
  *  holds half a cascade; a refused write brings all of them back on screen, and the undo restores them all. */
@@ -190,7 +201,7 @@ export function removeNotice(id: string) { removeRow('notices', 'notice', id, 'N
 export function addSession(s0: Omit<FocusSession, 'id' | 'demo'>) { const f: FocusSession = { ...s0, id: uid('f'), demo: false }; void saveRow('focus', 'focus', f); }
 
 export const entityActions = {
-  setSettings, setNotif,
+  setSettings, setNotif, splitLab, declineLabSplit,
   saveTask, toggleTask, completeTask, moveTask, toggleSubtask, removeTask,
   setAtt, clearAtt, setDay, clearDay,
   saveCourse, saveMeeting, removeMeeting, removeCourse, saveVariant, removeVariant, makeVariantOf,

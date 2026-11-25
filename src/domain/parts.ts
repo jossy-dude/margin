@@ -1,5 +1,8 @@
-import type { ComponentKind, SubjectVariant } from './types';
+import type { AttRecord, ComponentKind, Course, Meeting, SubjectVariant } from './types';
 import type { SlotDraft } from './schedule';
+import { emptyRows, type Change } from './variants';
+import { occKey, parseOccKey } from './attendance';
+import { weekdayOf } from './time';
 
 /**
  * v0.71: a subject's parts (the lecture, a lab, a tutorial…) as the subject sheet edits them. A lab often has
@@ -75,4 +78,105 @@ export function sharesNote(kinds: readonly string[], drafts: Readonly<Record<str
   const sum = set.reduce((a, x) => a + (x.s ?? 0), 0);
   const line = set.map((x) => `${x.k} ${x.s ?? 0} %`).join(' · ');
   return sum === 100 ? line : `${line} — adds up to ${sum} %, they are scaled to 100.`;
+}
+
+/* ── v0.7.7.2 (SPEC §3): a subject's parts as Grades, Stats, Today and Week read them ──────────────────────── */
+
+/** One part of a subject: the base "Lecture" (classes with no variant id) or one of its variants. */
+export interface Part { id: string; name: string; kind: ComponentKind; isBase: boolean; goal: number; variant: SubjectVariant | null }
+
+/**
+ * The subject's parts, the lecture first: its explicit parts (variants) plus the base part for classes that
+ * carry no variant id. A subject with no variants has exactly one part, the base. A subject whose variants
+ * include no base row still gets a base part when some of its classes have no variant id ("a lab with no base row").
+ */
+export function partsOf(courseId: string, variants: readonly SubjectVariant[], meetings: readonly Pick<Meeting, 'courseId' | 'variantId'>[] = []): Part[] {
+  const mine = variants.filter((v) => v.subjectId === courseId).sort((a, b) => a.ord - b.ord);
+  const goalOf = (v: SubjectVariant | null) => (v?.attGoal && v.attGoal > 0 ? v.attGoal : 80);
+  const baseRow = mine.find((v) => v.isBase) ?? null;
+  const out: Part[] = [];
+  const bareClasses = meetings.some((m) => m.courseId === courseId && !m.variantId);
+  if (baseRow || bareClasses || mine.length === 0) {
+    out.push({ id: baseRow?.id ?? baseIdOf(courseId), name: baseRow?.name || 'Lecture', kind: 'lecture', isBase: true, goal: goalOf(baseRow), variant: baseRow });
+  }
+  for (const v of mine) if (!v.isBase) out.push({ id: v.id, name: v.name, kind: v.kind ?? kindOf(v.name), isBase: false, goal: goalOf(v), variant: v });
+  return out;
+}
+/** True when a class of the part's subject belongs to this part. */
+export const inPart = (part: Pick<Part, 'id' | 'isBase'>, m: Pick<Meeting, 'variantId'>) => (part.isBase ? !m.variantId || m.variantId === part.id : m.variantId === part.id);
+/** Where a part's teacher's count lives in `settings.teacherAbsent`: the lecture keeps the subject's own key, so
+ *  every count typed before parts existed stays on the lecture; any other part is `courseId~variantId`. */
+export const teacherKey = (courseId: string, part: Pick<Part, 'id' | 'isBase'>) => (part.isBase ? courseId : `${courseId}~${part.id}`);
+/** The part a class belongs to, for a label ("DS · Lab"): null for the lecture of a subject that has no other part. */
+export function partLabel(courseId: string, variantId: string | null | undefined, variants: readonly SubjectVariant[]): string | null {
+  if (!variantId) return null;
+  const v = variants.find((x) => x.id === variantId && x.subjectId === courseId);
+  return v && !v.isBase ? v.name : null;
+}
+
+/** A room name that reads as a lab: "LAB301", "LB302", "Lab 2". */
+export const LAB_ROOM = /^(LAB|LB)\s?\d/i;
+/** The class's own room, else the subject's first. */
+const roomOfMeeting = (course: Pick<Course, 'rooms'>, m: Pick<Meeting, 'room'>) => (m.room?.trim() || course.rooms[0] || '').trim();
+
+/**
+ * The "Split the lab classes" offer (D11): a subject with no parts whose classes sit, some of them, in a lab
+ * room. Returns the lab rooms and the classes in them, or null when there is nothing to offer: the subject
+ * already has parts, no class is in a lab room, or every class is (then there is no lecture to split from).
+ */
+export function labSplitOffer(course: Pick<Course, 'id' | 'rooms'>, meetings: readonly Meeting[], variants: readonly SubjectVariant[]): { rooms: string[]; meetingIds: string[] } | null {
+  if (variants.some((v) => v.subjectId === course.id)) return null;
+  const mine = meetings.filter((m) => m.courseId === course.id);
+  const lab = mine.filter((m) => LAB_ROOM.test(roomOfMeeting(course, m)));
+  if (!lab.length || lab.length === mine.length) return null;
+  return { rooms: [...new Set(lab.map((m) => roomOfMeeting(course, m)))], meetingIds: lab.map((m) => m.id) };
+}
+
+/**
+ * Split a subject's lab classes into a Lab part, in one change with one undo:
+ *  - the base part (Lecture) and a Lab part (kind `lab`, the subject's goal) are made;
+ *  - the lab classes point at the Lab part, each keeping the room it was in;
+ *  - their attendance is RE-KEYED (`date|start|courseId` → `date|start|courseId~labId`), so no mark is lost.
+ * Day marks are keyed by date alone and cover every class that day, so they need nothing. The undo is the same
+ * change read backwards, which restores every key byte for byte.
+ */
+export function splitLabChange(s: { courses: readonly Course[]; meetings: readonly Meeting[]; variants: readonly SubjectVariant[]; attendance: Readonly<Record<string, AttRecord>> }, courseId: string, labId: string): Change | null {
+  const course = s.courses.find((c) => c.id === courseId);
+  if (!course) return null;
+  const offer = labSplitOffer(course, s.meetings, s.variants);
+  if (!offer) return null;
+  const before = emptyRows(), after = emptyRows();
+  after.variants.push(
+    { id: baseIdOf(courseId), subjectId: courseId, name: 'Lecture', room: course.rooms.find((r) => !LAB_ROOM.test(r)) ?? '', teacher: course.teacher, note: '', ord: -1, kind: 'lecture', isBase: true, scale: 100, weight: null, attGoal: null },
+    { id: labId, subjectId: courseId, name: 'Lab', room: offer.rooms[0] ?? '', teacher: '', note: '', ord: 0, kind: 'lab', isBase: false, scale: 100, weight: null, attGoal: null },
+  );
+  const ids = new Set(offer.meetingIds);
+  const moved = s.meetings.filter((m) => ids.has(m.id));
+  before.meetings.push(...moved);
+  after.meetings.push(...moved.map((m) => ({ ...m, variantId: labId, room: m.room?.trim() ? m.room : roomOfMeeting(course, m) })));
+  /* every record of a moved class, under the key it had (no variant suffix), moves to the lab's key */
+  const slots = new Set(moved.map((m) => `${m.start}|${courseId}`)), kept = s.meetings.filter((m) => m.courseId === courseId && !ids.has(m.id));
+  for (const r of Object.values(s.attendance)) {
+    const k = parseOccKey(r.key);
+    if (!k || k.courseId !== courseId || k.variantId || !slots.has(`${k.start}|${courseId}`)) continue;
+    /* same start on that weekday; a start no lecture shares counts on any day (a class moved for one week) */
+    const wd = weekdayOf(new Date(`${k.date}T00:00:00`));
+    if (!moved.some((m) => m.start === k.start && m.weekday === wd) && kept.some((m) => m.start === k.start)) continue;
+    before.attendance.push(r);
+    after.attendance.push({ ...r, key: occKey(k.date, { start: k.start, courseId, variantId: labId }) });
+  }
+  return { before, after };
+}
+
+/** "marks Lecture and Lab" (v0.7.7.2): what a whole-day mark covers, said on the Mark day sheet when one of the
+ *  day's subjects has classes in two parts that day. Null when every class that day is a plain lecture. */
+export function dayPartsNote(weekday: number, meetings: readonly Meeting[], variants: readonly SubjectVariant[]): string | null {
+  const names: string[] = [];
+  for (const m of meetings.filter((x) => x.weekday === weekday)) {
+    if (!variants.some((v) => v.subjectId === m.courseId && !v.isBase)) continue;
+    const n = partLabel(m.courseId, m.variantId, variants) ?? 'Lecture';
+    if (!names.includes(n)) names.push(n);
+  }
+  if (names.length < 2) return null;
+  return `marks ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
