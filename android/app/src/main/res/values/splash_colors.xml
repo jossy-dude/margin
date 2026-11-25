@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.7.7: one splash paper per skin (tools/splash-res.py). The *_light/*_dark pairs are for a forced mode. -->
+<resources>
+  <color name="splash_collage_light">#F3EFE7</color>
+  <color name="splash_collage_dark">#1E2125</color>
+  <color name="splash_collage">#F3EFE7</color>
+  <color name="splash_refined_light">#FAF4E6</color>
+  <color name="splash_refined_dark">#3C352C</color>
+  <color name="splash_refined">#FAF4E6</color>
+  <color name="splash_original_light">#FAF5EB</color>
+  <color name="splash_original_dark">#10141A</color>
+  <color name="splash_original">#FAF5EB</color>
+  <color name="splash_plain_light">#F4F3F0</color>
+  <color name="splash_plain_dark">#17181A</color>
+  <color name="splash_plain">#F4F3F0</color>
+  <color name="splash_daylight_light">#DCE8F5</color>
+  <color name="splash_daylight_dark">#141B2E</color>
+  <color name="splash_daylight">#DCE8F5</color>
+</resources>

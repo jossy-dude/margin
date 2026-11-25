@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Before Android 12: the Margin card centred on the paper (values/colors.xml, values-night/colors.xml). -->
+<!-- Before Android 12: the vector M centred on the paper (values/colors.xml, values-night/colors.xml). v0.7.7: no PNG. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
   <item android:drawable="@color/splashscreen_background"/>
-  <item><bitmap android:gravity="center" android:src="@drawable/splashscreen_logo"/></item>
+  <item android:drawable="@drawable/ic_splash_pen" android:gravity="center" android:width="288dp" android:height="288dp"/>
 </layer-list>

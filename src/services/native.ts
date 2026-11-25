@@ -30,6 +30,7 @@ interface MarginNative {
   syncHold(op: string): boolean;
   syncInbox(): string;
   setLook(json: string): boolean;
+  splashDone(): boolean;
   scanQr(): Promise<string>;
   widgetTicks(): string;
   fontsEmbedded(): boolean;
@@ -126,6 +127,8 @@ export const syncInbox = (): { kind: 'bridge' | 'timer'; json: string }[] => par
 
 /* ── the look outside the app (v0.8): splash, widget and alarm page follow the skin ── */
 export const setLook = (look: Record<string, string>) => safe((m) => m.setLook(JSON.stringify(look)), false);
+/** v0.7.7 (SPEC §6): Today's first frame is up, so MainActivity lets the system splash go (2 s failsafe there). */
+export const splashDone = () => safe((m) => m.splashDone(), false);
 /** The APK carries the font files (v0.8 §2.2): no runtime load. False in Expo Go and older builds. */
 export const fontsEmbedded = () => safe((m) => m.fontsEmbedded(), false);
 

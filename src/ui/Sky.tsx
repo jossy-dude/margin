@@ -11,6 +11,9 @@ import { useReduceMotion } from './theme-context';
  * motion). `still` keeps one sky per theme (noon / night); `off` is the flat ground. Drawn as two gradients; the
  * baked WebP skies replace the gradient later without changing this component's contract.
  */
+/* v0.7.7 (SPEC §6): the first sky of a session fades in over 200 ms onto the splash's mid-sky window colour, so
+   Daylight never cuts from flat colour to sky. Later skies (other pages) appear at once. */
+let firstSky = true;
 const minutesNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 export function skyFor(mode: 'live' | 'still' | 'off', scheme: Scheme, minutes: number): SkyKey | null {
   if (mode === 'off') return null;
@@ -37,7 +40,9 @@ export function Sky({ mode, scheme }: { mode: 'live' | 'still' | 'off'; scheme: 
   const [stamp, setStamp] = useState(minutesNow);
   const [prev, setPrev] = useState<SkyKey | null>(null);
   const k = skyFor(mode, scheme, stamp);
-  const fade = useSharedValue(1);
+  const [entering] = useState(() => { const f = firstSky && mode !== 'off'; if (f) firstSky = false; return f; });
+  const fade = useSharedValue(entering && !reduce ? 0 : 1);
+  useEffect(() => { if (entering && !reduce) fade.set(withTiming(1, { duration: 200 })); }, [entering, reduce, fade]);
   useEffect(() => {
     if (mode !== 'live') return;
     let t: ReturnType<typeof setTimeout>;

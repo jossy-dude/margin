@@ -44,7 +44,7 @@ import { configureNotifications } from './services/notifications';
 import { initAudio, preloadAudioSoon } from './services/audio';
 import { mark, reportBoot } from './services/bootClock';
 import { RingingPill } from './ui/RingingPill';
-import { fontsEmbedded } from './services/native';
+import { fontsEmbedded, splashDone } from './services/native';
 
 const Book = createBookNavigator();
 /* Dev-only, web-only: the visual harness (tools/shot.mjs) sets skins and data through this. Never in a phone build. */
@@ -55,13 +55,17 @@ if (__DEV__ && Platform.OS === 'web') (globalThis as Record<string, unknown>).__
  *  `navTree`'s `useMemo(() => …, [])` depends on that identity. A failure is then contained to the page
  *  it happened on instead of replacing the shell (see `ui/ScreenBoundary`). The name is set because a
  *  bare arrow here is anonymous and React DevTools would show six identical `guarded` entries. */
-const guarded = (route: string, C: React.ComponentType) => {
-  const Page = () => <ScreenBoundary route={route}><C /></ScreenBoundary>;
+/*  v0.7.7 (SPEC §2 E7): the screen comes from a getter, read on the page's first render. With Metro's
+ *  `inlineRequires` the import above becomes a `require` inside the getter, so a page's module (Stats, Grades,
+ *  Focus…) only runs when that page is first visited, not before Today's first frame. */
+const guarded = (route: string, get: () => React.ComponentType) => {
+  /* `get()` returns the same module export every time, so this is a stable component, not one made per render */
+  const Page = () => <ScreenBoundary route={route}>{React.createElement(get())}</ScreenBoundary>;
   Page.displayName = `${route}Page`;
   return Page;
 };
-const TodayGuarded = guarded('Today', TodayScreen), WeekGuarded = guarded('Week', WeekScreen), TasksGuarded = guarded('Tasks', TasksScreen);
-const GradesGuarded = guarded('Grades', GradesScreen), StatsGuarded = guarded('Stats', StatsScreen), FocusGuarded = guarded('Focus', FocusScreen);
+const TodayGuarded = guarded('Today', () => TodayScreen), WeekGuarded = guarded('Week', () => WeekScreen), TasksGuarded = guarded('Tasks', () => TasksScreen);
+const GradesGuarded = guarded('Grades', () => GradesScreen), StatsGuarded = guarded('Stats', () => StatsScreen), FocusGuarded = guarded('Focus', () => FocusScreen);
 
 /** Exported only so `test/ota-loop` can draw the real shell and see the update sentence on screen. */
 export function Shell() {
@@ -187,7 +191,7 @@ function Gate() {
      (the field is deliberately absent from `DEFAULT_SETTINGS`, so there is nothing persisted to read). */
   const launched = useRef(false), firstRun = useRef<boolean | null>(null);
   useEffect(() => { if (toured(onboarded)) launched.current = true; }, [onboarded]);
-  useEffect(() => { if (ready && !error) requestAnimationFrame(() => { mark('frame'); reportBoot(); afterFirstFrame(); }); }, [ready, error]);
+  useEffect(() => { if (ready && !error) requestAnimationFrame(() => { mark('frame'); splashDone(); reportBoot(); afterFirstFrame(); }); else if (error) splashDone(); }, [ready, error]);
   if (!ready) return <Splash />;
   if (error) return <Fatal message={error} />;
   // The tour COVERS the shell rather than replacing it, because it now runs the shell's own controls: the

@@ -94,6 +94,8 @@ class MarginNativeModule : Module() {
       val keys = o.keys(); while (keys.hasNext()) { val k = keys.next(); e.putString(k, o.optString(k)) }
       e.apply(); Surfaces.refresh(context); true
     }
+    /** v0.7.7: Today's first frame is up; MainActivity lets the system splash go (SPEC §6). */
+    Function("splashDone") { Splash.done = true; true }
     /** True when the APK carries the fonts (assets/fonts), so JS need not load them at start-up. */
     Function("fontsEmbedded") { try { (context.assets.list("fonts") ?: emptyArray()).any { it.startsWith("Caveat_500Medium") } } catch (e: Exception) { false } }
 

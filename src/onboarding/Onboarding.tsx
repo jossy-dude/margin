@@ -264,7 +264,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
 
       {/* The masthead and the way out. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 24, right: 14, top: ins.top + 14, flexDirection: 'row', alignItems: 'center' }}>
-        <Txt f="type" s={13} c="mut" maxFontSizeMultiplier={FS} style={{ letterSpacing: 4, flex: 1 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">MARGIN</Txt>
+        <Txt f="type" s={13} c="mut" maxFontSizeMultiplier={FS} style={{ letterSpacing: 4, flex: 1 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">MARROW</Txt>
         {page < N - 1 && <Pressable testID="onboarding-skip" accessibilityRole="button" accessibilityLabel="Skip the introduction" onPress={() => finish(skipDoor)} hitSlop={10} style={{ paddingHorizontal: 10, minHeight: 44, justifyContent: 'center' }}><Txt f="bold" s={16} c="mut" maxFontSizeMultiplier={FS}>Skip</Txt></Pressable>}
       </View>
 
