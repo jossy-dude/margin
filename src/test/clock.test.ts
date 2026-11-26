@@ -19,11 +19,10 @@ describe('the face', () => {
     expect(Object.keys(faces)).not.toContain('faceById');
     expect(readFileSync(join(__dirname, '..', 'sheets', 'Settings.tsx'), 'utf8')).not.toMatch(/Clock face|ui\/clock/);
   });
-  it('marks twelve hours — a double baton at twelve, batons at the quarters, dots between — and no numerals', () => {
+  it('marks twelve hours: Roman numerals at the quarters (v0.7.8.12, owner\'s ask 8), dots between', () => {
     const d = dialSvg(pal(false));
-    expect(d).not.toMatch(/<text/);
-    expect((d.match(/stroke-width="4\.4"/g) ?? []).length).toBe(2);
-    expect((d.match(/stroke-width="4\.8"/g) ?? []).length).toBe(3);
+    expect([...d.matchAll(/<text[^>]*>([^<]+)<\/text>/g)].map((m) => m[1])).toEqual(['XII', 'III', 'VI', 'IX']);
+    expect(d).not.toMatch(/stroke-width="4\.[48]"/);
     expect((d.match(/<circle cx="[-\d.]+" cy="[-\d.]+" r="2\.6"/g) ?? []).length).toBe(8);
   });
   it('draws today\'s classes on the rim, the finished ones faded, and nothing when the day is empty', () => {

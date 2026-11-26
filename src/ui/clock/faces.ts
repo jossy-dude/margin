@@ -44,9 +44,11 @@ const each = (n: number, fn: (i: number) => string) => Array.from({ length: n },
 const svg = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200">${body}</svg>`;
 /** A stroke width in dial units that never draws thinner than ~0.6 dp at `px`. */
 const sw = (px: number, u: number) => f1(Math.max(u, 120 / px));
-const tick = (r1: number, r2: number, i: number, n: number, stroke: string, w: number, cap = '') => { const [x1, y1] = P(r1, i, n), [x2, y2] = P(r2, i, n); return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${w}"${cap}/>`; };
 
 export const CASE_R = 92;
+/** The quarter numerals, from twelve round. */
+export const ROMAN = ['XII', 'III', 'VI', 'IX'] as const;
+const ROMAN_SIZE = 16;
 const DIAL_R = 81, RIM_R = 86.5, GRID = 18;
 
 /** Today's classes as highlighter strokes on the rim. The dial is twelve hours round, so 08:00 and 20:00 share a place. */
@@ -58,7 +60,7 @@ export function rimArcs(arcs: Arc[], pal: Pal): string {
 }
 
 /**
- * The dial: a kraft-paper bezel with a stitched seam, a graph-paper face, chunky quarter batons and
+ * The dial: a kraft-paper bezel with a stitched seam, a graph-paper face, Roman numerals at the quarters and
  * dots for the other hours. Nothing on it turns; the hands are separate documents.
  */
 export function dialSvg(pal: Pal, px = 200, arcs: Arc[] = []): string {
@@ -69,9 +71,9 @@ export function dialSvg(pal: Pal, px = 200, arcs: Arc[] = []): string {
     const o = (k - Math.floor(DIAL_R / GRID)) * GRID, h = f1(Math.sqrt(DIAL_R * DIAL_R - o * o) - 1), w = sw(px, 0.7);
     return `<line x1="${o}" y1="${-h}" x2="${o}" y2="${h}" stroke="${mut}" stroke-opacity="0.28" stroke-width="${w}"/><line x1="${-h}" y1="${o}" x2="${h}" y2="${o}" stroke="${mut}" stroke-opacity="0.28" stroke-width="${w}"/>`;
   });
+  /* v0.7.8.12 (owner's ask 8): Roman numerals at the quarters, short and compact; a dot for every other hour. */
   const batons = each(12, (i) => {
-    if (i === 0) return `<line x1="-4" y1="-76" x2="-4" y2="-62" stroke="${ink}" stroke-width="4.4" stroke-linecap="round"/><line x1="4" y1="-76" x2="4" y2="-62" stroke="${ink}" stroke-width="4.4" stroke-linecap="round"/>`;
-    if (i % 3 === 0) return tick(62, 76, i, 12, ink, 4.8, ' stroke-linecap="round"');
+    if (i % 3 === 0) { const [x, y] = P(66, i); return `<text x="${x}" y="${f1(y + 5.6)}" text-anchor="middle" font-family="serif" font-weight="700" font-size="${ROMAN_SIZE}" letter-spacing="-0.6" fill="${ink}">${ROMAN[i / 3]}</text>`; }
     const [x, y] = P(72, i); return `<circle cx="${x}" cy="${y}" r="2.6" fill="${ink}"/>`;
   });
   return svg(`${defs}<circle cy="3.5" r="${CASE_R + 7}" fill="url(#mcs)"/>` +
