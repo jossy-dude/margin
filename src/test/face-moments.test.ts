@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 /**
  * v0.7 U7 — where the face reacts (`ui/mascot/moments.ts`): the D-21 "Used for" column, the one-face rule, the
  * top-bar faces of each page, and `useFaceMoment` holding a reaction and letting it go.
@@ -136,5 +138,21 @@ describe('useFaceMoment', () => {
     act(() => { r!.unmount(); }); r = null;
     expect(jest.getTimerCount()).toBe(0); // the hold timer went with it
     expect(() => act(() => faceEvent('markedPresent'))).not.toThrow();
+  });
+});
+
+describe('v0.7.8.16 (owner\'s ask 5): the face answers more of what you do', () => {
+  const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
+  it('the last open task finished is its own laugh', () => {
+    expect(MOMENTS.allDone).toEqual({ face: 'laugh', motion: 'bounce', holdMs: 4000 });
+    expect(read('screens/common.tsx')).toContain("? 'taskDone' : 'allDone'");
+  });
+  it('a new subject, a new class, a pinned notice and a saved alarm each get a face', () => {
+    const f = read('sheets/forms.tsx');
+    for (const k of ["faceEvent('subjectAdded')", "faceEvent('classAdded')", "faceEvent('noticePinned')"]) expect(f).toContain(k);
+    expect(read('sheets/Alarms.tsx')).toContain("faceEvent('alarmSet')");
+  });
+  it('an empty Week shows the sleepy face with one action', () => {
+    expect(read('screens/Week.tsx')).toContain("<Empty face={emptyFace('weekNoClasses')}");
   });
 });

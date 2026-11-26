@@ -229,6 +229,7 @@ export function CourseSheet({ id }: { id?: string }) {
     plan.meetings.forEach((m) => { const was = getState().meetings.find((x) => x.id === m.id); if (!was || was.weekday !== m.weekday || was.start !== m.start || was.end !== m.end || (was.room ?? null) !== m.room || (was.variantId ?? null) !== m.variantId) act.saveMeeting(m); });
     plan.removed.forEach((mid) => act.removeMeeting(mid));
     if (plan.problems.length) toast(plan.problems[0]!);
+    if (!c0) faceEvent('subjectAdded');
     close();
   });
   return (
@@ -262,6 +263,7 @@ export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?
     const ok = act.saveMeeting({ id: saveId, courseId: cid as string, weekday: wd, start: fromMin(a), end: fromMin(b), demo: false, variantId: m0 && m0.courseId === cid ? m0.variantId ?? null : null, room: r || null });
     if (!ok) return;
     if (course && r && !course.rooms.some((x) => x.toLocaleLowerCase() === r.toLocaleLowerCase())) act.saveCourse({ ...course, rooms: [...course.rooms, r], demo: false });
+    if (!m0) faceEvent('classAdded');
     close();
   });
   return (
@@ -310,7 +312,7 @@ export function NoticeSheet({ id, courseId }: { id?: string; courseId?: string |
   const homeAt = useStore((s) => s.settings.notif.homeAt), hour12 = useStore((s) => s.settings.hour12);
   const save = () => submit(() => {
     const n: Notice = { id: saveId, courseId: cid, text: text.trim(), dueAt: when, priority: pri as Notice['priority'], demo: false, pinned, archived: n0?.archived ?? false, remind: when ? remind : null };
-    act.saveNotice(n); fx.tap(); close();
+    act.saveNotice(n); fx.tap(); if (pinned && !n0?.pinned) faceEvent('noticePinned'); close();
   });
   return (
     <Sheet title={n0 ? 'Edit notice' : 'New notice'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{n0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete notice" onPress={() => { act.removeNotice(n0.id); close(); }} />}<Btn flex label={pinned ? 'Pin it' : 'Save'} icon="check" disabled={!text.trim()} onPress={save} /></Row>}>

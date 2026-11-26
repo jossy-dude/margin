@@ -9,7 +9,7 @@ import { FACES, type FaceName } from '../ui/mascot/faces';
 import { faceEvent, useFaceMoment } from '../ui/mascot/moments';
 import { useScreenLive } from '../ui/live';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
-import { act, useStore } from '../store/store';
+import { act, getState, useStore } from '../store/store';
 import { subjectTint } from '../ui/collage/tint';
 import { addDays, fmtDur, fmtTime, startOfDay, doneLine } from '../domain/time';
 import type { AttStatus, AttWhy, Task } from '../domain/types';
@@ -179,9 +179,11 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), notif = useStore((s) => s.settings.notif), h12 = useStore((s) => s.settings.hour12);
   const open = () => act.open({ t: 'task', id: t.id });
   /* finishing a task is news for the page's face (D-21); reopening one is not */
-  const finish = () => { const was = t.status === 2; act.toggleTask(t.id); if (!was) faceEvent('taskDone'); };
+  /* v0.7.8.16: finishing the last open task is its own moment */
+  const doneFace = () => faceEvent(getState().tasks.some((x) => x.id !== t.id && x.status !== 2 && !x.demo) ? 'taskDone' : 'allDone');
+  const finish = () => { const was = t.status === 2; act.toggleTask(t.id); if (!was) doneFace(); };
   /* a swipe finishes with an Undo (R3), like a swipe to delete; the checkbox is its own undo */
-  const swiped = () => { const was = t.status === 2; act.completeTask(t.id); if (!was) faceEvent('taskDone'); };
+  const swiped = () => { const was = t.status === 2; act.completeTask(t.id); if (!was) doneFace(); };
   const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && !t.planned && t.dueAt !== null && t.dueAt < now, soon = !done && !t.planned && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
   return (

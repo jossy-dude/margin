@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, View, type ImageSourcePropType } from 'react-native';
+import { faceEvent } from '../ui/mascot/moments';
 import { Btn, Chip, DayRow, Field, HandBox, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, TimeField } from '../ui/fields';
 import { Label } from '../ui/Sheet';
@@ -91,7 +92,7 @@ export function AlarmsPage() {
         <Toggle label="Vibrate" value={draft.vib} onChange={(v) => patch({ vib: v })} />
         <Row style={{ gap: 10 }}>
           <Btn flex label={isNew ? 'Add alarm' : 'Save'} icon="check" disabled={draft.kind === 'class' && !draft.days.some(Boolean)} onPress={() => {
-            act.saveAlarm({ ...draft, on: true }); fx.done(); setDraft(null); setSure(false);
+            act.saveAlarm({ ...draft, on: true }); fx.done(); faceEvent('alarmSet'); setDraft(null); setSure(false);
             /* test report #1: without notifications a ringing alarm had no screen and could not be stopped */
             void notifs.ensurePermission(true).then((p) => { if (p !== 'granted' && p !== 'unavailable') toast('Allow notifications so a ringing alarm shows its Stop screen.'); });
           }} />

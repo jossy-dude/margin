@@ -7,7 +7,7 @@ import { subjectTint } from '../ui/collage/tint';
 import { useReduceMotion, useTheme } from '../ui/theme-context';
 import { useLiveNow } from '../ui/live';
 import { act, useStore } from '../store/store';
-import { Page, Section } from './common';
+import { Empty, Page, Section } from './common';
 import { DW, MO, addDays, atTime, fmtTime, hm, mondayOf, startOfDay, ymd } from '../domain/time';
 import { effective, isCancelled, lanes, occEnd, occKey, occurrencesOn } from '../domain/attendance';
 import { roomOf } from '../domain/rooms';
@@ -15,7 +15,7 @@ import { partLabel } from '../domain/parts';
 import { hexA } from '../tokens/theme';
 import { hourTop } from '../ui/fit';
 import { fx } from '../services/fx';
-import { pageFace } from '../ui/mascot/moments';
+import { emptyFace, pageFace } from '../ui/mascot/moments';
 import { shownDays, SNAP } from './week/model';
 import { DragCard } from '../ui/DragCard';
 import { MoveSheet, type MoveDraft } from './week/MoveSheet';
@@ -62,6 +62,8 @@ export function WeekScreen() {
     <View style={{ flex: 1 }}>
     <Page face={pageFace('Week', { hour: new Date(now).getHours() })} title="Week" sub={off === 0 ? `This week · ${label}` : off > 0 ? `${off} week${off > 1 ? 's' : ''} ahead` : `${-off} week${off < -1 ? 's' : ''} ago`}
       right={<Row style={{ gap: 4, flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="back" a11y="Previous week" onPress={() => { setOff(off - 1); fx.swipe(); }} />{off !== 0 ? <Btn small kind="ghost" label="Today" onPress={() => setOff(0)} /> : null}<Btn small kind="ghost" icon="chevron" a11y="Next week" onPress={() => { setOff(off + 1); fx.swipe(); }} /></Row>}>
+      {/* v0.7.8.16 (owner's ask 5): an empty week gets the sleepy face and one action, not a blank grid */}
+      {st.meetings.length === 0 ? <Empty face={emptyFace('weekNoClasses')} text="No timetable yet. Add your first class and the week fills in." action={{ label: 'Add a class', onPress: () => act.open({ t: 'meeting' }) }} /> : null}
       <Animated.View style={turned}>
       <HandBox seed="wk" style={{ padding: 0 }} sw={1.8}>
         <View style={{ flexDirection: 'row', paddingLeft: tw }}>{cols.map((i) => { const d = DW[i] as string, day = addDays(mon, i), today = day === startOfDay(now); return <View key={d} style={{ width: cw, alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1.4, borderColor: c.rule }}><Txt f="serif" s={12.5} c={today ? 'acc' : 'mut'}>{d}</Txt><Txt f="marker" s={17} c={today ? 'acc' : 'ink'}>{new Date(day).getDate()}</Txt></View>; })}</View>

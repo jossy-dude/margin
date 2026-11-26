@@ -53,6 +53,12 @@ export const MOMENTS = {
   remindersOn: { face: 'happy', motion: 'bounce', holdMs: HOLD },
   starred: { face: 'happy', motion: 'bounce', holdMs: HOLD },
   tip: { face: 'wink', holdMs: LINGER }, // tapping the top bar face: a tip of the day in a small bubble
+  /* v0.7.8.16 (owner's ask 5): the face answers more of what you do */
+  allDone: { face: 'laugh', motion: 'bounce', holdMs: LINGER }, // the last open task, finished
+  subjectAdded: { face: 'excited', holdMs: HOLD }, // a new subject
+  classAdded: { face: 'happy', motion: 'bounce', holdMs: HOLD }, // a class on the timetable
+  noticePinned: { face: 'wink', holdMs: HOLD }, // a notice pinned to Today
+  alarmSet: { face: 'content', slowBlink: true, holdMs: HOLD }, // an alarm saved: sleep well
 } as const satisfies Record<string, Moment>;
 export type FaceEvent = keyof typeof MOMENTS;
 export const FACE_EVENTS = Object.keys(MOMENTS) as FaceEvent[];
