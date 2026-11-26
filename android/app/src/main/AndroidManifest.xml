@@ -23,7 +23,7 @@
       <data android:scheme="https"/>
     </intent>
   </queries>
-  <application android:name=".MainApplication" android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="@xml/backup_rules" android:theme="@style/AppTheme" android:supportsRtl="true" android:usesCleartextTraffic="true" android:enableOnBackInvokedCallback="false">
+  <application android:name=".MainApplication" android:label="${appLabel}" android:icon="@mipmap/ic_marrow_paper" android:roundIcon="@mipmap/ic_marrow_paper" android:allowBackup="true" android:dataExtractionRules="@xml/data_extraction_rules" android:fullBackupContent="@xml/backup_rules" android:theme="@style/AppTheme" android:supportsRtl="true" android:usesCleartextTraffic="true" android:enableOnBackInvokedCallback="false">
     <!-- v0.9 (WS3). Uninstalling is the one action that deletes the planner, and Android has no dialog an
          app can raise to keep its data — so survival is Auto Backup, declared here. `allowBackup="true"`
          alone is not enough: it inherits the platform default, which backs up "everything not obviously
@@ -60,10 +60,6 @@
     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
-        <action android:name="android.intent.action.MAIN"/>
-        <category android:name="android.intent.category.LAUNCHER"/>
-      </intent-filter>
-      <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
@@ -71,5 +67,31 @@
         <data android:scheme="exp+marginalia"/>
       </intent-filter>
     </activity>
+    <!-- v0.7.8.13 (owner's ask 4): the launcher entry is one of these aliases, so Settings → Look & feel → App icon can
+         switch it (AppIcons.kt enables one and disables the rest). Paper is on out of the box. -->
+    <activity-alias android:name=".IconPaper" android:targetActivity=".MainActivity" android:enabled="true" android:exported="true" android:icon="@mipmap/ic_marrow_paper" android:roundIcon="@mipmap/ic_marrow_paper" android:label="${appLabel}">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconDenim" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_marrow_denim" android:roundIcon="@mipmap/ic_marrow_denim" android:label="${appLabel}">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconInk" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_marrow_ink" android:roundIcon="@mipmap/ic_marrow_ink" android:label="${appLabel}">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconSky" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_marrow_sky" android:roundIcon="@mipmap/ic_marrow_sky" android:label="${appLabel}">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
   </application>
 </manifest>

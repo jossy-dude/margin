@@ -111,6 +111,7 @@ export const ELSEWHERE: Record<string, string> = {
   teacherAbsent: 'Grades page: the teacher\'s count per subject',
   hiddenPages: 'Settings → Diagnostics: the speed A/B for hidden pages',
   widgetColors: 'Settings → Widgets: Skin or Phone colours',
+  appIcon: 'Settings → Look & feel → App icon: Paper, Denim, Ink, Sky or Match my skin',
   labSplitNo: 'Grades page: the "No" on a subject\'s "Track the lab separately?" offer',
   credits: 'Grades → GPA: credit hours per subject', pastGrades: 'Grades → GPA: earlier terms from the transcript',
   reminders: 'reminder rules (R9); their page comes with D-19',

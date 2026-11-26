@@ -70,6 +70,8 @@ class MarginNativeModule : Module() {
     /** Send the phone's changes now (and connect first if needed); v0.7.1. */
     Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncFiles.scanNow(); true }
     Function("syncClearErrors") { SyncEngine.init(context); SyncEngine.clearErrors(); true }
+    Function("setAppIcon") { name: String -> AppIcons.set(context, name) }
+    Function("appIcon") { AppIcons.current(context) }
     Function("planTaskRings") { json: String -> TaskRings.plan(context, json); true }
     Function("syncDismissError") { at: Double -> SyncEngine.init(context); SyncEngine.dismissError(at.toLong()); true }
     Function("syncClashDone") { at: Double -> SyncEngine.init(context); SyncEngine.clashDone(at.toLong()); true }

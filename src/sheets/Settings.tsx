@@ -37,6 +37,7 @@ import { APP_VERSION } from '../domain/version';
 import { AboutPage } from './AboutPage';
 import { AlarmsPage, WidgetsPage } from './Alarms';
 import { ObsidianPage } from './Obsidian';
+import { AppIconPicker } from './settings/AppIconPicker';
 import { ProblemsPage } from './Problems';
 import type { Settings } from '../domain/types';
 
@@ -268,6 +269,7 @@ export function SettingsSheet() {
         want the paper (smooth stock, rounded cards, one calm typeface); Notebook is the original hand-drawn look. */}
     <Label>Style</Label><Seg value={s.palette === 'original' ? 'refined' : s.palette} opts={[['collage', 'Collage'], ['plain', 'Plain'], ['refined', 'Notebook'], ['daylight', 'Daylight']]} onChange={(v) => { set({ palette: v as Settings['palette'] }); fx.select(); }} />
     <Txt f="serif" s={15} c="mut">{s.palette === 'daylight' ? 'Daylight: glass over the sky of the hour.' : s.palette === 'plain' ? 'Plain: smooth paper, rounded cards.' : s.palette === 'collage' ? 'Collage: torn paper, cut-out shapes.' : 'Notebook: hand-drawn, ruled paper.'}</Txt>
+    <Label>App icon</Label><AppIconPicker />
     <Nav icon="palette" label="Theme & palette" hint={`${s.theme} · motion ${s.reduceMotion}`} to="theme" /><Nav icon="note" label="Paper & texture" hint={`${s.paper} · ${s.texture}`} to="paper" /><Nav icon="stats" label="Progress bar" hint={BAR_KINDS.find((b) => b.id === bar)?.n ?? INSTRUMENTS.find((i) => i.id === bar)?.n ?? BAR_KINDS[0]?.n} to="bar" /><Nav icon="pencil" label="Accent pen" hint={s.pen} to="pen" />
     {/* The clock format lives here with the other display choices, and the switch is stated as the
         24-hour clock because that is what is true out of the box: it ships ON, so the app a new user

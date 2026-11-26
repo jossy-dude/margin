@@ -5,7 +5,8 @@ import { nextSkyChange, skyFor, type SkyKey } from '../tokens/v2';
 import { NOW } from '../tokens/skins/daylight';
 import { widgetBar } from '../tokens/widget';
 import { useStore } from '../store/store';
-import { setLook } from '../services/native';
+import { appIconNow, setAppIcon, setLook } from '../services/native';
+import { iconFor } from '../domain/appIcon';
 
 /* v0.8 §2.1: one Theme object per skin × mode × pen, made once and kept, so switching back to a skin hands every
    leaf the SAME object (a memoised row with unchanged props does not re-render) and costs no allocation. */
@@ -66,6 +67,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       barLight: widgetBar(sky ? NOW.light : p.light.acc, p.light.deck, p.light.deckInk, sky), barDark: widgetBar(sky ? NOW.dark : p.dark.acc, p.dark.deck, p.dark.deckInk, sky),
       badLight: p.light.bad, badDark: p.dark.bad, sky: skyMode, widget: widgetColors });
   }, [theme, palette, now, skyMode, widgetColors]);
+  /* v0.7.8.13 (owner's ask 4): the launcher icon follows the choice, or the look; switched only when it differs, since
+     some launchers redraw the home screen when an alias flips. */
+  const appIcon = useStore((s) => s.settings.appIcon);
+  useEffect(() => {
+    const want = iconFor(appIcon, palette, now.dark), have = appIconNow();
+    if (have !== null && have !== want) setAppIcon(want);
+  }, [appIcon, palette, now.dark]);
   return <Ctx.Provider value={t}>{children}</Ctx.Provider>;
 }
 /** The OS "remove animations" switch combined with the in-app override. */

@@ -30,6 +30,8 @@ interface MarginNative {
   syncClearErrors(): boolean;
   syncDismissError(at: number): boolean;
   planTaskRings(json: string): boolean;
+  setAppIcon(name: string): boolean;
+  appIcon(): string;
   syncClashDone(at: number): boolean;
   syncHold(op: string): boolean;
   syncInbox(): string;
@@ -128,6 +130,9 @@ export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
 /** Hide one card on the "What went wrong" page (a clash you have looked at). */
 export const syncDismissError = (at: number) => safe((m) => m.syncDismissError(at), false);
+/** v0.7.8.13: the launcher icon (an activity-alias). `appIcon()` is the one on now, null without the native half. */
+export const setAppIcon = (name: string) => safe((m) => m.setAppIcon(name), false);
+export const appIconNow = (): string | null => safe<string | null>((m) => m.appIcon(), null);
 /** v0.7.8.4: task and exam reminders ring natively (Done and Snooze work with Marrow closed). False = not in this
  *  build: the caller schedules them through expo-notifications as before. */
 export const planTaskRings = (rings: { id: string; at: number; title: string; body: string; task: string }[]) => safe((m) => m.planTaskRings(JSON.stringify(rings)), false);
