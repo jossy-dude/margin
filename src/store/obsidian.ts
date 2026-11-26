@@ -23,8 +23,8 @@ import { timerActions } from './actions/timer';
 import { buildEnvelope, prioToBone } from '../domain/bridge';
 import { effective, isCancelled as occCancelled } from '../domain/attendance';
 import {
-  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, hmOf, isCancelled, isDone, newLine,
-  parseLine, parseNote, patchLine, replaceLine, subjectTag, tracked, ymdOf, type LinePatch,
+  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, hmOf, isDone, isOpen, lineIndexOf, newLine,
+  parseLine, parseNote, patchLine, replaceLine, subjectTag, tracked, withTasksHead, ymdOf, type LinePatch,
 } from '../domain/vaultTasks';
 import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
 import { startOfDay } from '../domain/time';
@@ -163,12 +163,14 @@ function diff(raw: string, w: LinePatch): LinePatch | null {
   const cur = parseLine(raw);
   if (!cur) return null;
   const out: LinePatch = {};
-  const curOpen = !isDone(cur.status) && !isCancelled(cur.status);
+  // B4: `~` failed and `»` forwarded are closed, and read back as cancelled: Marrow never rewrites them as `-`
+  const curOpen = isOpen(cur.status);
   if (w.status === ' ' && !curOpen) out.status = ' ';
   if (w.status === 'x' && !isDone(cur.status)) out.status = 'x';
-  if (w.status === '-' && !isCancelled(cur.status)) out.status = '-';
+  if (w.status === '-' && (curOpen || isDone(cur.status))) out.status = '-';
   if (out.status) out.today = w.today;
-  if ((w.due ?? null) !== (cur.due ?? cur.scheduled ?? null)) out.due = w.due;
+  // B5: a ⏳-only line is re-dated on its ⏳; it never gains a 📅
+  if ((w.due ?? null) !== (cur.due ?? cur.scheduled ?? null)) { if (cur.due === null && cur.scheduled !== null && w.due !== null) out.scheduled = w.due; else out.due = w.due; }
   if ((w.time ?? null) !== (cur.time ?? null)) out.time = w.time;
   if (w.prio !== undefined && w.prio !== cur.prio) out.prio = w.prio;
   if (w.title !== undefined && w.title !== cur.title) out.title = w.title;
@@ -189,8 +191,9 @@ async function editNote(p: string, change: (text: string) => string | null): Pro
   for (let i = 0; i < 2; i++) {
     const cur = await textOf(p);
     if (!cur) return false;
-    const next = change(cur.text);
+    let next = change(cur.text);
     if (next === null || next === cur.text) return true;
+    if (p === TASKS_NOTE) next = withTasksHead(next); // B7
     const r = await vaultEdit(p, cur.h, next);
     if (r.startsWith('ok:')) { const c = await load(); c.known[p] = r.slice(3); for (const t of parseNote(next, p)) if (t.blockId && c.lines[t.blockId]) c.lines[t.blockId] = { p, raw: t.raw }; return true; }
     if (r === 'deferred' || r.startsWith('error:')) return false;
@@ -255,7 +258,8 @@ async function pushOut(): Promise<void> {
     if (line) {
       const d = diff(line.raw, wanted(t, line.p === TASKS_NOTE));
       if (!d) continue;
-      if (!(await editNote(line.p, (txt) => { const i = txt.split('\n').findIndex((l) => l.endsWith(`^${bid}`)); if (i < 0) return null; return replaceLine(txt, bid, patchLine(txt.split('\n')[i]!, d)); }))) failed.push(id);
+      // B6: the line is found by ID_RE, as the parser finds it (a trailing space no longer hides it)
+      if (!(await editNote(line.p, (txt) => { const ls = txt.split('\n'), i = lineIndexOf(ls, bid); if (i < 0) return null; return replaceLine(txt, bid, patchLine(ls[i]!, d)); }))) failed.push(id);
       continue;
     }
     // a new school task: one line in Margin/Tasks.md, with the subject's tag and its kind tags

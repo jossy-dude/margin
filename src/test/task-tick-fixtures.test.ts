@@ -38,6 +38,9 @@ const CASES: [string, string][] = [
   ['- [ ] Ends in CR ^cr\r', 'CRLF note: JS leaves a line with \\r unchanged'],
   ['- [ ] 日本語のタスク 📅 2026-11-29 ^jp', 'non-Latin title'],
 ];
+/* v0.7.8.2 (SPEC §9 Tests): the shared real-vault lines run here too, so Kotlin ticks each of them as JS does */
+const VAULT_LINES = readFileSync(join(__dirname, 'fixtures', 'vault-lines.md'), 'utf8').split('\n').filter((l) => l.trim());
+CASES.push(...VAULT_LINES.map((l, i): [string, string] => [l, `vault-lines.md:${i + 1}`]));
 
 type Fx = { line: string; today: string; want: string; why: string };
 const make = (): Fx[] => CASES.map(([line, why]) => ({ line, today: TODAY, want: patchLine(line, { status: 'x', today: TODAY }), why }));

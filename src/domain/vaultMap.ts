@@ -2,7 +2,7 @@
  *  fields only Margin has (notes, reminders, subtasks, estimate) survive an edit made in Obsidian. */
 import { prioFromBone } from './bridge';
 import { atTime, startOfDay } from './time';
-import { isCancelled, isDone, kindTagsOf, subjectTag, type VaultTask } from './vaultTasks';
+import { isDone, isOpen, kindTagsOf, subjectTag, type VaultTask } from './vaultTasks';
 import type { Course, Task, TaskKind } from './types';
 
 const norm = (t: string) => t.replace(/^#/, '').toLocaleLowerCase();
@@ -14,7 +14,8 @@ export function taskFromLine(t: VaultTask, prev: Task | undefined, courses: read
   for (const x of t.tags) if (ownSet.has(norm(x)) && !tags.includes(norm(x))) tags.push(norm(x));
   const kinds = kindTagsOf(tags);
   const at = (d: string | null, time: string | null, dflt: string) => (d ? atTime(startOfDay(new Date(`${d}T12:00:00`).getTime()), time ?? dflt) : null);
-  const done = isDone(t.status) || isCancelled(t.status);
+  // B4: every closed character counts (`~` failed, `»` forwarded too); only `x` is done, the rest read as cancelled
+  const done = !isOpen(t.status), cancelled = done && !isDone(t.status);
   const id = prev?.id ?? `ob-${t.blockId}`;
   return {
     id, title: t.title || prev?.title || '(untitled)', courseId: course?.id ?? prev?.courseId ?? null,
@@ -27,6 +28,8 @@ export function taskFromLine(t: VaultTask, prev: Task | undefined, courses: read
     reminders: prev?.reminders ?? (t.due && t.time ? [{ id: `${id}-r0`, mode: 'before' as const, minutes: 0, label: '' }] : []),
     subtasks: prev?.subtasks ?? [], demo: false, ord: prev?.ord ?? null,
     origin: prev ? prev.origin ?? null : 'obsidian', extId: t.blockId, extPath: t.path,
-    tags, important: t.status === '!', cancelled: isCancelled(t.status),
+    tags, important: t.status === '!', cancelled,
+    // B5: a line with only ⏳ is planned for that day, not due on it
+    ...(t.due === null && t.scheduled !== null ? { planned: true } : {}),
   };
 }

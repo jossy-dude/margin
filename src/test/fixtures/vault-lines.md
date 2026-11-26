@@ -1,0 +1,40 @@
+- [ ] Quiz:lab do all worksheets #school #Computer-Programming ➕ 2026-11-24 📅 2026-11-25 ⏰ 19:00-19:30 ^tmwueni361uuc
+- [x] Plan and execute ,review other examples and more ➕ 2026-11-25 📅 2026-11-25 ⏰ 15:15-17:15 ✅ 2026-11-25
+- [ ] Plan and execute the week 📅 2026-11-25 ⏰ 15:15-16:45
+- [ ] Quiz: DB lab do second quiz under 45m practive 10% mark #school #Database-Systems ⏫ 📅 2026-11-30 ⏰ 09:00 ➕ 2026-11-24 ^tmwuekayz2yk
+- [x] Read db system and write a note #Database-Systems ⏫ 📅 2026-11-03 ⏰ 09:00 ✅ 2026-11-19 ^tmw06ghpk1n5
+- [ ] Do exerise the rest 🔼 ⏰ 09:00 📅 2026-11-23 ^tmwkb5hva1owa
+- [ ] Read DB note and do exersies #school 🔺 ➕ 2026-11-08 📅 2026-11-08 ⏱ 76m ^m5icxy0
+- [-] Claude: make a DB Lab 3 practice note (Q1–Q5 with try/hint/answer, every query run in SQLite) #school ➕ 2026-11-13 ❌ 2026-11-14 ^mr5p6kbrs
+- [!] For db exam look at cardinality and aggrigation for mid exam #school 🔽 🔁 every day ➕ 2026-11-10 ^mr5owizgj
+- [ ] Water the plants 🔁 every week 📅 2026-11-26 ^wp1
+- [ ] Pay rent 🔁 every month on the 1st 📅 2026-12-01
+- [ ] Finish all CP exercises, as promised in class #school ⏫ ➕ 2026-11-09 ⏳ 2026-11-10 📅 2026-11-12 ^ml7g70s
+- [ ] Revise chapter 4 #school ⏳ 2026-11-28 ^rev4
+- [ ] Sketch the poster ⏳ 2026-11-29
+- [~] Morning run 📅 2026-11-24 ⏰ 06:30-07:00
+- [~] Call the bank #life 📅 2026-11-24 ⏰ 10:00 ^cb1
+- [»] Draft the essay 📅 2026-11-24 ⏰ 14:00-15:30 → 2026-11-26 14:00
+- [»] Tidy the desk 📅 2026-11-23 → 2026-11-25
+- [>] Finish building a desktop version for School Planner v2
+- [/] Started the lab write-up #school 📅 2026-11-27 ^lw1
+- [?] Ask about the make-up quiz #school 📅 2026-11-28
+- [*] Starred idea for the club 📅 2026-12-02
+	- [ ] Do the second half and check the outputs #school 📅 2026-11-12 ^mxv1h29
+	- [x] Do the first half #school 📅 2026-11-11 ✅ 2026-11-13 ^mmd3ys0
+    - [ ] Four-space nested step 📅 2026-11-27 ⏰ 08:00 ^n4s
+		- [ ] Two tabs deep #school 📅 2026-11-27 ^tt2
+- [x] Clean you fucking laptop ✅ 2026-11-17 ^tmwj267741nw
+- [x] Setup a media system to write about movies, books, games,anime and more ⏫ 📅 2026-10-15 ✅ 2026-11-08 ⏱ 15m
+- [x] Create a USD account either dashen or CBE📅 2026-10-22 ✅ 2026-11-14
+- [ ] Jobicy AI Trainers Network application: Claude drafts the profile text, I submit ⏫ ➕ 2026-11-13 📅 2026-11-28
+- [ ] Add the vault SSH key to GitHub as a write deploy key 🔺 ➕ 2026-11-13 📅 2026-11-19
+- [ ] make a pipline to execute this automatically 📅 2026-11-25 ⏰ 18:45
+- [ ] Trailing spaces after the id #school 📅 2026-11-27 ^ts1   
+- [ ] Trailing spaces, no id 📅 2026-11-27   
+- [ ] Selector on the date 📅️ 2026-11-27 ⏰️ 09:30 ^vs1
+- [ ] Selector on done ✅️ 2026-11-01 ^vs2
+- [ ] 日本語のタスク #school 📅 2026-11-29 ^jp1
+- [ ] Problem set 5 #school #Database-Systems 🛫 2026-11-20 ⏳ 2026-11-21 📅 2026-11-22 ⏰ 23:59 ⏱ 1h30m ➕ 2026-11-19 ^ps5
+- [ ] Late-night block 📅 2026-11-27 ⏰ 23:00-23:45
+- [ ] Single-digit hour 📅 2026-11-27 ⏰ 9:05 ^sd1

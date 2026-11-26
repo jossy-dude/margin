@@ -130,5 +130,245 @@
   "today": "2026-11-26",
   "want": "- [x] 日本語のタスク 📅 2026-11-29 ✅ 2026-11-26 ^jp",
   "why": "non-Latin title"
+ },
+ {
+  "line": "- [ ] Quiz:lab do all worksheets #school #Computer-Programming ➕ 2026-11-24 📅 2026-11-25 ⏰ 19:00-19:30 ^tmwueni361uuc",
+  "today": "2026-11-26",
+  "want": "- [x] Quiz:lab do all worksheets #school #Computer-Programming ➕ 2026-11-24 📅 2026-11-25 ⏰ 19:00-19:30 ✅ 2026-11-26 ^tmwueni361uuc",
+  "why": "vault-lines.md:1"
+ },
+ {
+  "line": "- [x] Plan and execute ,review other examples and more ➕ 2026-11-25 📅 2026-11-25 ⏰ 15:15-17:15 ✅ 2026-11-25",
+  "today": "2026-11-26",
+  "want": "- [x] Plan and execute ,review other examples and more ➕ 2026-11-25 📅 2026-11-25 ⏰ 15:15-17:15 ✅ 2026-11-25",
+  "why": "vault-lines.md:2"
+ },
+ {
+  "line": "- [ ] Plan and execute the week 📅 2026-11-25 ⏰ 15:15-16:45",
+  "today": "2026-11-26",
+  "want": "- [x] Plan and execute the week 📅 2026-11-25 ⏰ 15:15-16:45 ✅ 2026-11-26",
+  "why": "vault-lines.md:3"
+ },
+ {
+  "line": "- [ ] Quiz: DB lab do second quiz under 45m practive 10% mark #school #Database-Systems ⏫ 📅 2026-11-30 ⏰ 09:00 ➕ 2026-11-24 ^tmwuekayz2yk",
+  "today": "2026-11-26",
+  "want": "- [x] Quiz: DB lab do second quiz under 45m practive 10% mark #school #Database-Systems ⏫ 📅 2026-11-30 ⏰ 09:00 ➕ 2026-11-24 ✅ 2026-11-26 ^tmwuekayz2yk",
+  "why": "vault-lines.md:4"
+ },
+ {
+  "line": "- [x] Read db system and write a note #Database-Systems ⏫ 📅 2026-11-03 ⏰ 09:00 ✅ 2026-11-19 ^tmw06ghpk1n5",
+  "today": "2026-11-26",
+  "want": "- [x] Read db system and write a note #Database-Systems ⏫ 📅 2026-11-03 ⏰ 09:00 ✅ 2026-11-19 ^tmw06ghpk1n5",
+  "why": "vault-lines.md:5"
+ },
+ {
+  "line": "- [ ] Do exerise the rest 🔼 ⏰ 09:00 📅 2026-11-23 ^tmwkb5hva1owa",
+  "today": "2026-11-26",
+  "want": "- [x] Do exerise the rest 🔼 ⏰ 09:00 📅 2026-11-23 ✅ 2026-11-26 ^tmwkb5hva1owa",
+  "why": "vault-lines.md:6"
+ },
+ {
+  "line": "- [ ] Read DB note and do exersies #school 🔺 ➕ 2026-11-08 📅 2026-11-08 ⏱ 76m ^m5icxy0",
+  "today": "2026-11-26",
+  "want": "- [x] Read DB note and do exersies #school 🔺 ➕ 2026-11-08 📅 2026-11-08 ⏱ 76m ✅ 2026-11-26 ^m5icxy0",
+  "why": "vault-lines.md:7"
+ },
+ {
+  "line": "- [-] Claude: make a DB Lab 3 practice note (Q1–Q5 with try/hint/answer, every query run in SQLite) #school ➕ 2026-11-13 ❌ 2026-11-14 ^mr5p6kbrs",
+  "today": "2026-11-26",
+  "want": "- [x] Claude: make a DB Lab 3 practice note (Q1–Q5 with try/hint/answer, every query run in SQLite) #school ➕ 2026-11-13 ✅ 2026-11-26 ^mr5p6kbrs",
+  "why": "vault-lines.md:8"
+ },
+ {
+  "line": "- [!] For db exam look at cardinality and aggrigation for mid exam #school 🔽 🔁 every day ➕ 2026-11-10 ^mr5owizgj",
+  "today": "2026-11-26",
+  "want": "- [x] For db exam look at cardinality and aggrigation for mid exam #school 🔽 🔁 every day ➕ 2026-11-10 ✅ 2026-11-26 ^mr5owizgj",
+  "why": "vault-lines.md:9"
+ },
+ {
+  "line": "- [ ] Water the plants 🔁 every week 📅 2026-11-26 ^wp1",
+  "today": "2026-11-26",
+  "want": "- [x] Water the plants 🔁 every week 📅 2026-11-26 ✅ 2026-11-26 ^wp1",
+  "why": "vault-lines.md:10"
+ },
+ {
+  "line": "- [ ] Pay rent 🔁 every month on the 1st 📅 2026-12-01",
+  "today": "2026-11-26",
+  "want": "- [x] Pay rent 🔁 every month on the 1st 📅 2026-12-01 ✅ 2026-11-26",
+  "why": "vault-lines.md:11"
+ },
+ {
+  "line": "- [ ] Finish all CP exercises, as promised in class #school ⏫ ➕ 2026-11-09 ⏳ 2026-11-10 📅 2026-11-12 ^ml7g70s",
+  "today": "2026-11-26",
+  "want": "- [x] Finish all CP exercises, as promised in class #school ⏫ ➕ 2026-11-09 ⏳ 2026-11-10 📅 2026-11-12 ✅ 2026-11-26 ^ml7g70s",
+  "why": "vault-lines.md:12"
+ },
+ {
+  "line": "- [ ] Revise chapter 4 #school ⏳ 2026-11-28 ^rev4",
+  "today": "2026-11-26",
+  "want": "- [x] Revise chapter 4 #school ⏳ 2026-11-28 ✅ 2026-11-26 ^rev4",
+  "why": "vault-lines.md:13"
+ },
+ {
+  "line": "- [ ] Sketch the poster ⏳ 2026-11-29",
+  "today": "2026-11-26",
+  "want": "- [x] Sketch the poster ⏳ 2026-11-29 ✅ 2026-11-26",
+  "why": "vault-lines.md:14"
+ },
+ {
+  "line": "- [~] Morning run 📅 2026-11-24 ⏰ 06:30-07:00",
+  "today": "2026-11-26",
+  "want": "- [x] Morning run 📅 2026-11-24 ⏰ 06:30-07:00 ✅ 2026-11-26",
+  "why": "vault-lines.md:15"
+ },
+ {
+  "line": "- [~] Call the bank #life 📅 2026-11-24 ⏰ 10:00 ^cb1",
+  "today": "2026-11-26",
+  "want": "- [x] Call the bank #life 📅 2026-11-24 ⏰ 10:00 ✅ 2026-11-26 ^cb1",
+  "why": "vault-lines.md:16"
+ },
+ {
+  "line": "- [»] Draft the essay 📅 2026-11-24 ⏰ 14:00-15:30 → 2026-11-26 14:00",
+  "today": "2026-11-26",
+  "want": "- [x] Draft the essay 📅 2026-11-24 ⏰ 14:00-15:30 → 2026-11-26 14:00 ✅ 2026-11-26",
+  "why": "vault-lines.md:17"
+ },
+ {
+  "line": "- [»] Tidy the desk 📅 2026-11-23 → 2026-11-25",
+  "today": "2026-11-26",
+  "want": "- [x] Tidy the desk 📅 2026-11-23 → 2026-11-25 ✅ 2026-11-26",
+  "why": "vault-lines.md:18"
+ },
+ {
+  "line": "- [>] Finish building a desktop version for School Planner v2",
+  "today": "2026-11-26",
+  "want": "- [x] Finish building a desktop version for School Planner v2 ✅ 2026-11-26",
+  "why": "vault-lines.md:19"
+ },
+ {
+  "line": "- [/] Started the lab write-up #school 📅 2026-11-27 ^lw1",
+  "today": "2026-11-26",
+  "want": "- [x] Started the lab write-up #school 📅 2026-11-27 ✅ 2026-11-26 ^lw1",
+  "why": "vault-lines.md:20"
+ },
+ {
+  "line": "- [?] Ask about the make-up quiz #school 📅 2026-11-28",
+  "today": "2026-11-26",
+  "want": "- [x] Ask about the make-up quiz #school 📅 2026-11-28 ✅ 2026-11-26",
+  "why": "vault-lines.md:21"
+ },
+ {
+  "line": "- [*] Starred idea for the club 📅 2026-12-02",
+  "today": "2026-11-26",
+  "want": "- [x] Starred idea for the club 📅 2026-12-02 ✅ 2026-11-26",
+  "why": "vault-lines.md:22"
+ },
+ {
+  "line": "\t- [ ] Do the second half and check the outputs #school 📅 2026-11-12 ^mxv1h29",
+  "today": "2026-11-26",
+  "want": "\t- [x] Do the second half and check the outputs #school 📅 2026-11-12 ✅ 2026-11-26 ^mxv1h29",
+  "why": "vault-lines.md:23"
+ },
+ {
+  "line": "\t- [x] Do the first half #school 📅 2026-11-11 ✅ 2026-11-13 ^mmd3ys0",
+  "today": "2026-11-26",
+  "want": "\t- [x] Do the first half #school 📅 2026-11-11 ✅ 2026-11-13 ^mmd3ys0",
+  "why": "vault-lines.md:24"
+ },
+ {
+  "line": "    - [ ] Four-space nested step 📅 2026-11-27 ⏰ 08:00 ^n4s",
+  "today": "2026-11-26",
+  "want": "    - [x] Four-space nested step 📅 2026-11-27 ⏰ 08:00 ✅ 2026-11-26 ^n4s",
+  "why": "vault-lines.md:25"
+ },
+ {
+  "line": "\t\t- [ ] Two tabs deep #school 📅 2026-11-27 ^tt2",
+  "today": "2026-11-26",
+  "want": "\t\t- [x] Two tabs deep #school 📅 2026-11-27 ✅ 2026-11-26 ^tt2",
+  "why": "vault-lines.md:26"
+ },
+ {
+  "line": "- [x] Clean you fucking laptop ✅ 2026-11-17 ^tmwj267741nw",
+  "today": "2026-11-26",
+  "want": "- [x] Clean you fucking laptop ✅ 2026-11-17 ^tmwj267741nw",
+  "why": "vault-lines.md:27"
+ },
+ {
+  "line": "- [x] Setup a media system to write about movies, books, games,anime and more ⏫ 📅 2026-10-15 ✅ 2026-11-08 ⏱ 15m",
+  "today": "2026-11-26",
+  "want": "- [x] Setup a media system to write about movies, books, games,anime and more ⏫ 📅 2026-10-15 ✅ 2026-11-08 ⏱ 15m",
+  "why": "vault-lines.md:28"
+ },
+ {
+  "line": "- [x] Create a USD account either dashen or CBE📅 2026-10-22 ✅ 2026-11-14",
+  "today": "2026-11-26",
+  "want": "- [x] Create a USD account either dashen or CBE📅 2026-10-22 ✅ 2026-11-14",
+  "why": "vault-lines.md:29"
+ },
+ {
+  "line": "- [ ] Jobicy AI Trainers Network application: Claude drafts the profile text, I submit ⏫ ➕ 2026-11-13 📅 2026-11-28",
+  "today": "2026-11-26",
+  "want": "- [x] Jobicy AI Trainers Network application: Claude drafts the profile text, I submit ⏫ ➕ 2026-11-13 📅 2026-11-28 ✅ 2026-11-26",
+  "why": "vault-lines.md:30"
+ },
+ {
+  "line": "- [ ] Add the vault SSH key to GitHub as a write deploy key 🔺 ➕ 2026-11-13 📅 2026-11-19",
+  "today": "2026-11-26",
+  "want": "- [x] Add the vault SSH key to GitHub as a write deploy key 🔺 ➕ 2026-11-13 📅 2026-11-19 ✅ 2026-11-26",
+  "why": "vault-lines.md:31"
+ },
+ {
+  "line": "- [ ] make a pipline to execute this automatically 📅 2026-11-25 ⏰ 18:45",
+  "today": "2026-11-26",
+  "want": "- [x] make a pipline to execute this automatically 📅 2026-11-25 ⏰ 18:45 ✅ 2026-11-26",
+  "why": "vault-lines.md:32"
+ },
+ {
+  "line": "- [ ] Trailing spaces after the id #school 📅 2026-11-27 ^ts1   ",
+  "today": "2026-11-26",
+  "want": "- [x] Trailing spaces after the id #school 📅 2026-11-27 ✅ 2026-11-26 ^ts1",
+  "why": "vault-lines.md:33"
+ },
+ {
+  "line": "- [ ] Trailing spaces, no id 📅 2026-11-27   ",
+  "today": "2026-11-26",
+  "want": "- [x] Trailing spaces, no id 📅 2026-11-27 ✅ 2026-11-26",
+  "why": "vault-lines.md:34"
+ },
+ {
+  "line": "- [ ] Selector on the date 📅️ 2026-11-27 ⏰️ 09:30 ^vs1",
+  "today": "2026-11-26",
+  "want": "- [x] Selector on the date 📅️ 2026-11-27 ⏰️ 09:30 ✅ 2026-11-26 ^vs1",
+  "why": "vault-lines.md:35"
+ },
+ {
+  "line": "- [ ] Selector on done ✅️ 2026-11-01 ^vs2",
+  "today": "2026-11-26",
+  "want": "- [x] Selector on done ✅️ 2026-11-01 ^vs2",
+  "why": "vault-lines.md:36"
+ },
+ {
+  "line": "- [ ] 日本語のタスク #school 📅 2026-11-29 ^jp1",
+  "today": "2026-11-26",
+  "want": "- [x] 日本語のタスク #school 📅 2026-11-29 ✅ 2026-11-26 ^jp1",
+  "why": "vault-lines.md:37"
+ },
+ {
+  "line": "- [ ] Problem set 5 #school #Database-Systems 🛫 2026-11-20 ⏳ 2026-11-21 📅 2026-11-22 ⏰ 23:59 ⏱ 1h30m ➕ 2026-11-19 ^ps5",
+  "today": "2026-11-26",
+  "want": "- [x] Problem set 5 #school #Database-Systems 🛫 2026-11-20 ⏳ 2026-11-21 📅 2026-11-22 ⏰ 23:59 ⏱ 1h30m ➕ 2026-11-19 ✅ 2026-11-26 ^ps5",
+  "why": "vault-lines.md:38"
+ },
+ {
+  "line": "- [ ] Late-night block 📅 2026-11-27 ⏰ 23:00-23:45",
+  "today": "2026-11-26",
+  "want": "- [x] Late-night block 📅 2026-11-27 ⏰ 23:00-23:45 ✅ 2026-11-26",
+  "why": "vault-lines.md:39"
+ },
+ {
+  "line": "- [ ] Single-digit hour 📅 2026-11-27 ⏰ 9:05 ^sd1",
+  "today": "2026-11-26",
+  "want": "- [x] Single-digit hour 📅 2026-11-27 ⏰ 9:05 ✅ 2026-11-26 ^sd1",
+  "why": "vault-lines.md:40"
  }
 ]

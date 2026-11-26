@@ -62,8 +62,11 @@ export interface Task {
   tags?: string[] | null;
   /** `- [!]` in Obsidian. */
   important?: boolean | null;
-  /** `- [-]` in Obsidian: done without being done (status 2, shown struck through). */
+  /** `- [-]` in Obsidian: done without being done (status 2, shown struck through). Also bone-calendar's `~` failed
+   *  and `»` forwarded (v0.7.8.2). */
   cancelled?: boolean | null;
+  /** v0.7.8.2 (B5): the vault line has only ⏳: `dueAt` is the day it is planned for, not a deadline. */
+  planned?: boolean | null;
 }
 /** A notice (v0.8 §3.2, was "Note"): a pinned reminder for the future self. The date is optional (migration 8):
  *  a dated one counts down and can remind (`remind` = minutes before; absent = no reminder). */

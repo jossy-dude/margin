@@ -182,13 +182,13 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
   const finish = () => { const was = t.status === 2; act.toggleTask(t.id); if (!was) faceEvent('taskDone'); };
   /* a swipe finishes with an Undo (R3), like a swipe to delete; the checkbox is its own undo */
   const swiped = () => { const was = t.status === 2; act.completeTask(t.id); if (!was) faceEvent('taskDone'); };
-  const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && t.dueAt !== null && t.dueAt < now, soon = !done && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
+  const course = courses.find((x) => x.id === t.courseId), done = t.status === 2, late = !done && !t.planned && t.dueAt !== null && t.dueAt < now, soon = !done && !t.planned && t.dueAt !== null && t.dueAt - now < 6 * 3_600_000 && !late;
   const w = !done && t.estimateMin && t.dueAt ? workload(t, { now, meetings, attendance, dayMarks, settings: notif }) : null, sd = t.subtasks.filter((x) => x.done).length;
   return (
     <SwipeCard onComplete={swiped} onDelete={() => act.removeTask(t.id)} onOpen={open} doneLabel={done ? 'Reopen' : 'Done'}>
       <Pressable onPress={() => { fx.tap(); open(); }} onLongPress={() => act.focusOpen(t.id)} delayLongPress={450} android_ripple={{ color: hexA(c.ink, 0.12) }}
         onPressIn={() => press.set(reduce ? 1 : withTiming(0.97, { duration: BEAT, easing: EASE }))} onPressOut={() => press.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
-        accessibilityRole="button" accessibilityLabel={`${t.title}, ${KIND_TAG[t.kind].label.toLowerCase()}${course ? ', ' + course.name : ''}${t.dueAt ? ', due ' + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
+        accessibilityRole="button" accessibilityLabel={`${t.title}, ${KIND_TAG[t.kind].label.toLowerCase()}${course ? ', ' + course.name : ''}${t.dueAt ? (t.planned ? ', planned for ' : ', due ') + relDue(t.dueAt, now, h12) : ''}${done ? ', done' : ''}`} accessibilityHint="Opens it. Long press starts a focus session.">
         <Animated.View style={[face, { marginTop: 8 }]}>
           {/* A project is bigger than one sheet: a second one peeks out behind it. */}
           {t.kind === 'project' && !done ? <HandBox seed={`${t.id}-under`} fill={tints.sage} style={{ position: 'absolute', left: 6, right: -3, top: 5, bottom: -5, transform: [{ rotate: '1.2deg' }] }} /> : null}
@@ -207,7 +207,7 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
             <Txt f="bold" s={22} style={done ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{t.title}</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 2 }}>
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}><Icon name={KIND_ICON[t.kind]} size={15} color={c.mut} /><Txt f="serif" s={15} c="mut">{course?.name ?? 'Personal'}</Txt></View>
-              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? doneLine(t.dueAt, t.completedAt) : relDue(t.dueAt, now, h12)}</Txt>}
+              {t.dueAt !== null && <Txt f="bold" s={17} c={late ? 'bad' : soon ? 'warn' : 'mut'}>{done && t.completedAt ? doneLine(t.dueAt, t.completedAt) : t.planned ? `Planned · ${relDue(t.dueAt, now, h12)}` : relDue(t.dueAt, now, h12)}</Txt>}
               {t.estimateMin ? <Txt f="serif" s={15} c="mut">~{fmtDur(t.estimateMin)}</Txt> : null}
               {/* The step count is a control, not a label: it used to be the one chip on the card that
                   could not be tapped, so ticking a step meant opening the sheet. Tap ticks the next

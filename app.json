@@ -2,7 +2,7 @@
   "expo": {
     "name": "Marrow",
     "slug": "marginalia",
-    "version": "0.7.8.1",
+    "version": "0.7.8.2",
     "runtimeVersion": { "policy": "appVersion" },
     "updates": {
       "url": "https://u.expo.dev/a1177786-3b71-4f60-89b5-30fc633d3534",

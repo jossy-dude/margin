@@ -37,7 +37,8 @@ export interface VaultTask {
   /** Tags as written, without '#', in order. */
   tags: string[];
   blockId: string | null;
-  due: string | null; time: string | null; scheduled: string | null; start: string | null; created: string | null;
+  /** `time` is the start; `timeEnd` the end of a `⏰ 15:15-16:45` range (bone-calendar's blocks), kept whole (B1). */
+  due: string | null; time: string | null; timeEnd: string | null; scheduled: string | null; start: string | null; created: string | null;
   doneOn: string | null; cancelledOn: string | null;
   /** Bone's 0–5 scale (0 none). */
   prio: number; estimateMin: number | null;
@@ -47,6 +48,11 @@ export interface VaultTask {
 
 export const isDone = (s: string) => s === 'x' || s === 'X';
 export const isCancelled = (s: string) => s === '-';
+/** bone-tasks' open characters. Anything else is closed: `x` done, `-` cancelled, and bone-calendar's `~` failed and
+ *  `»` forwarded (v0.7.8.2, B4: those showed as open). */
+export const OPEN_CH = ' /?!>*';
+export const isOpen = (s: string) => OPEN_CH.includes(s);
+const TIME_RE = /⏰\uFE0F?\s*(\d{1,2}):(\d{2})(?:\s*-\s*(\d{1,2}):(\d{2}))?/u;
 
 /** One line, or null when it is not a task. */
 export function parseLine(raw: string, path = '', line = 0): VaultTask | null {
@@ -60,14 +66,14 @@ export function parseLine(raw: string, path = '', line = 0): VaultTask | null {
   const tags = [...body.matchAll(TAG_RE)].map((x) => x[2]!);
   const title = head.replace(TAG_RE, '$1').replace(/\s{2,}/g, ' ').trim();
   const get = (e: string) => DATE(e).exec(body)?.[1] ?? null;
-  const time = /⏰️?\s*(\d{1,2}):(\d{2})/u.exec(body);
+  const time = TIME_RE.exec(body);
   const est = /⏱️?\s*(?:(\d+)h)?\s*(?:(\d+)m)?/u.exec(body);
   const estMin = est && (est[1] || est[2]) ? (Number(est[1] ?? 0) * 60 + Number(est[2] ?? 0)) : null;
   const prio = (body.match(/[🔺⏫🔼🔽⏬]/u) ?? [])[0];
   const recur = /🔁️?\s*([^⏫🔼🔽🔺⏬📅⏳🛫➕✅❌⏰⏱^]+)/u.exec(body)?.[1]?.trim() ?? null;
   return {
     path, line, raw, status, title, tags, blockId,
-    due: get('📅'), time: time ? `${pad(Number(time[1]))}:${time[2]}` : null, scheduled: get('⏳'), start: get('🛫'), created: get('➕'),
+    due: get('📅'), time: time ? `${pad(Number(time[1]))}:${time[2]}` : null, timeEnd: time?.[3] ? `${pad(Number(time[3]))}:${time[4]}` : null, scheduled: get('⏳'), start: get('🛫'), created: get('➕'),
     doneOn: get('✅'), cancelledOn: get('❌'), prio: prio ? PRIO_OF[prio] ?? 0 : 0, estimateMin: estMin, recur,
   };
 }
@@ -115,6 +121,8 @@ export const blockIdOf = (id: string) => id.replace(/[^\w-]/g, '-');
 export interface LinePatch {
   status?: ' ' | 'x' | '-';
   due?: string | null; time?: string | null;
+  /** ⏳: a line with only a scheduled date is re-dated here, not given a 📅 (B5) */
+  scheduled?: string | null;
   prio?: number;
   title?: string;
   /** today, for ✅ / ❌ dates */
@@ -134,6 +142,22 @@ function appendField(s: string, f: string) {
   return `${s.replace(/\s+$/, '')} ${f}`;
 }
 
+/** ⏰ as a whole field: a range keeps its length when its start moves, and goes whole when the time is removed (B1:
+ *  re-timing `⏰ 15:15-16:45` used to leave `-16:45` behind). */
+function setTime(s: string, t: string | null): string {
+  const m = TIME_RE.exec(s);
+  if (t === null) return m ? s.replace(new RegExp(`\\s*${TIME_RE.source}`, 'u'), '') : s;
+  if (!m) return appendField(s, `⏰ ${t}`);
+  let v = t;
+  const st = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (m[3] && st) {
+    const len = Number(m[3]) * 60 + Number(m[4]) - (Number(m[1]) * 60 + Number(m[2]));
+    const end = Number(st[1]) * 60 + Number(st[2]) + len;
+    if (len > 0 && end < 24 * 60) v = `${t}-${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
+  }
+  return s.replace(TIME_RE, `⏰ ${v}`);
+}
+
 /** Margin's change applied to one line, field by field. Unknown text and characters stay as they were. */
 export function patchLine(raw: string, p: LinePatch): string {
   const m = LINE_RE.exec(raw);
@@ -150,7 +174,8 @@ export function patchLine(raw: string, p: LinePatch): string {
     else { body = dropField(dropField(body, '✅', '\\d{4}-\\d{2}-\\d{2}'), '❌', '\\d{4}-\\d{2}-\\d{2}'); }
   }
   if (p.due !== undefined) body = setField(body, '📅', p.due, '\\d{4}-\\d{2}-\\d{2}');
-  if (p.time !== undefined) body = setField(body, '⏰', p.time, '\\d{1,2}:\\d{2}');
+  if (p.scheduled !== undefined) body = setField(body, '⏳', p.scheduled, '\\d{4}-\\d{2}-\\d{2}');
+  if (p.time !== undefined) body = setTime(body, p.time);
   if (p.prio !== undefined) {
     const cur = (body.match(/[🔺⏫🔼🔽⏬]/u) ?? [])[0];
     const next = PRIO_EMOJI[p.prio] ?? null;
@@ -185,9 +210,11 @@ export function newLine(t: NewLine): string {
 }
 
 /* ── whole-note edits ────────────────────────────────────────────────────────────────────────── */
+/** The line that carries `^blockId`, by the parser's own ID_RE (trailing spaces allowed: B6), or -1. */
+export const lineIndexOf = (lines: readonly string[], blockId: string) => lines.findIndex((l) => ID_RE.exec(l)?.[1] === blockId);
 /** The note with the line of `blockId` replaced (or removed with `next === null`). Unchanged when not found. */
 export function replaceLine(text: string, blockId: string, next: string | null): string {
-  const lines = text.split('\n'), i = lines.findIndex((l) => ID_RE.exec(l)?.[1] === blockId);
+  const lines = text.split('\n'), i = lineIndexOf(lines, blockId);
   if (i < 0) return text;
   if (next === null) lines.splice(i, 1); else lines[i] = next;
   return lines.join('\n');
@@ -196,6 +223,21 @@ export function replaceLine(text: string, blockId: string, next: string | null):
 export function appendLine(text: string, line: string): string {
   if (!text.trim()) return `${line}\n`;
   return `${text.replace(/\n*$/, '\n')}${line}\n`;
+}
+/** B7: `Margin/Tasks.md` keeps `margin: tasks` in its front matter. Restored on Margin's next write, keeping any
+ *  other front matter (Obsidian's `created:`). A note without front matter gets it at the top. */
+export function withTasksHead(text: string): string {
+  if (!text.trim()) return text;
+  const lines = text.split('\n');
+  if (lines[0]?.trim() === '---') {
+    const end = lines.indexOf('---', 1);
+    if (end > 0) {
+      if (lines.slice(1, end).some((l) => /^margin:\s*tasks\s*$/.test(l))) return text;
+      lines.splice(1, 0, 'margin: tasks');
+      return lines.join('\n');
+    }
+  }
+  return `---\nmargin: tasks\n---\n${text}`;
 }
 export const TASKS_NOTE_HEAD = '---\nmargin: tasks\n---\n# School tasks\n\n> Tasks made in Margin. Tick, re-date or edit them here or in Margin; both stay in step.\n\n';
 

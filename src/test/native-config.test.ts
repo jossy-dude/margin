@@ -251,12 +251,12 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
-  it('ships as 0.7.8.1, version code 29', () => {
+  it('ships as 0.7.8.2, version code 30', () => {
     // 0.7.8: Sync: Excalidraw class, error codes, What went wrong. 0.7.7.9 was version code 27.
-    expect(appJson.expo.version).toBe('0.7.8.1');
-    expect(gradle).toMatch(/versionCode 29\b/);
-    expect(gradle).toContain('versionName "0.7.8.1"');
-    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.8.1</string>');
+    expect(appJson.expo.version).toBe('0.7.8.2');
+    expect(gradle).toMatch(/versionCode 30\b/);
+    expect(gradle).toContain('versionName "0.7.8.2"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.8.2</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {
