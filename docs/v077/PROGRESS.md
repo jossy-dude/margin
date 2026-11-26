@@ -37,13 +37,14 @@ the owner (no phone was on adb during the build).
 | 0.7.8.17 | done (owner's ask 7): every Style has its own onboarding scene, drawn in its world (`src/onboarding/Scenes.tsx`): Notebook in pencil on the ruled page (a sketched horizon, a sun in outline with rays, a doodled paper plane), Plain in flat soft shapes (a sun disc, rolling bands, a floating planner card with its tick), Daylight in its own light (a sun that climbs from dawn to noon across the five pages, its glow, glassy clouds; the moon at night). Hero pages draw it above their sheet, clear of Skip and the face; the three inner pages, whose words fill the top, in the free band above the pager (they had nothing before). Collage keeps its cut-paper art. The onboarding's section headings are sentence-case bold instead of letter-spaced uppercase | replay the tour in each Style, light and dark: each page has its scene, nothing sits behind the words, the sun moves page to page in Daylight |
 | 0.7.8.18 | done (owner's ask 11, final polish; dark sweep of Today, Week, To-do and Grades in all four skins on web): the page header is two rows (§7.3): the title on one line beside only the face and a 48 dp gear ("Grades" wrapped to "Grad / es" in Plain), the subtitle on its own 14 sp line with the page's actions at its end; Week's "+ Class" moved to the left of its row, clear of the floating +. Seen and left for the phone: the Notebook deck headline fits by `adjustsFontSizeToFit`, which Android honours and web does not | every page's header in each skin at 1.0× and 1.3× text: one-line title, actions on the second row; Week's + Class tappable at rest |
 ## Owner's new asks (2026-11-26), queued after the spec's build order, each its own release
-1. **Alarm as a real alarm**: only Volume Down stops it (Volume Up must not); a touch-first alarm setup page.
-2. **Touch-first UI overhaul** (/impeccable, UI engineering, frontend design): every sheet (task, subject, mark, Add, alarm) rebuilt mobile-native for big fingers: fewer fields per screen, 48 dp targets, no crowding; less text, more icons and compact layout everywhere.
-3. **Settings long pages** (Data & export) open at the top, not scrolled to the bottom; pages compact and less wordy.
-4. **App icon**: a better icon, plus Settings → icon choice (or follow the skin) via Android activity-aliases.
-5. **Mascot everywhere**: more places, reactions and animations so the app feels alive (research mascot patterns first).
-6. **Widget previews inside the app**: see each widget before adding it (with the Glance widgets, 0.7.7.7–.9).
-7. **Onboarding rebuilt**: the theme picker gives every skin its own proper scene, not just Collage.
-8. **Roman numerals on the clock faces**: short, compact, minimal.
-9. **Notice board ↔ Obsidian calendar**: Marrow's notices on bone-calendar's month view as a board; active classes and notifications sent to Obsidian too.
+1. **Done in 0.7.8.9:** **Alarm as a real alarm**: only Volume Down stops it (Volume Up must not); a touch-first alarm setup page.
+2. **Done in 0.7.8.15:** **Touch-first UI overhaul** (/impeccable, UI engineering, frontend design): every sheet (task, subject, mark, Add, alarm) rebuilt mobile-native for big fingers: fewer fields per screen, 48 dp targets, no crowding; less text, more icons and compact layout everywhere.
+3. **Done in 0.7.8.10:** **Settings long pages** (Data & export) open at the top, not scrolled to the bottom; pages compact and less wordy.
+4. **Done in 0.7.8.13:** **App icon**: a better icon, plus Settings → icon choice (or follow the skin) via Android activity-aliases.
+5. **Done in 0.7.8.16:** **Mascot everywhere**: more places, reactions and animations so the app feels alive (research mascot patterns first).
+6. **Done in 0.7.8.11:** **Widget previews inside the app**: see each widget before adding it (with the Glance widgets, 0.7.7.7–.9).
+7. **Done in 0.7.8.17:** **Onboarding rebuilt**: the theme picker gives every skin its own proper scene, not just Collage.
+8. **Done in 0.7.8.12:** **Roman numerals on the clock faces**: short, compact, minimal.
+9. **Done in 0.7.8.14:** **Notice board ↔ Obsidian calendar**: Marrow's notices on bone-calendar's month view as a board; active classes and notifications sent to Obsidian too.
 10. Lab/lecture split attendance and grades: done in 0.7.7.2 (Lecture | Lab switch, per-part teacher's count; grades already weight parts).
+11. **Done in 0.7.8.18:** final polish (dark sweep in all skins; two-row headers).
