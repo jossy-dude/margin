@@ -476,6 +476,22 @@ export function dueGroups(tasks: readonly Task[], now: number) {
   };
 }
 
+/**
+ * v0.7.8.2+ (SPEC §7.4, D13): Today shows at most three tasks that need you, then "All tasks (n)". To-do is the
+ * list; Today only points at it. Late ones come first; more than three late collapse into one line, so the three
+ * places go to what is due today and next. (Every Life task reaches the phone from 0.7.8.3: without the cap, Today
+ * would grow by each of them.)
+ */
+export const TODAY_CAP = 3;
+export function needsYou(tasks: readonly Task[], now: number, cap = TODAY_CAP) {
+  const g = dueGroups(tasks, now);
+  const late = tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt < now).sort((a, b) => (a.dueAt as number) - (b.dueAt as number));
+  const ahead = [...g.today, ...tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= addDays(startOfDay(now), 1)).sort((a, b) => (a.dueAt as number) - (b.dueAt as number))];
+  const lateLine = late.length > cap ? { n: late.length, oldest: late[0]!.title } : null;
+  const items = lateLine ? ahead.slice(0, cap) : [...late, ...ahead].slice(0, cap);
+  return { items, lateLine, all: tasks.filter((t) => t.status !== 2).length, empty: g.empty };
+}
+
 export function TodayScreen() {
   /* Narrow selectors: each slice subscribes on its own, so toast/timer/sheet/plan writes no longer
      re-render this whole page — only the slices it actually reads. Settings are read field by field
@@ -503,7 +519,7 @@ export function TodayScreen() {
   const who = name.trim();
   /* "Due" (S2): what is late, what is due today, then the next three — grouped, so a long overdue tail
      cannot push today's work off the page. Overdue is capped at five with a pointer to the rest. */
-  const due = dueGroups(st.tasks, now);
+  const due = needsYou(st.tasks, now);
   const dayMark = st.dayMarks[selDate];
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
@@ -578,13 +594,12 @@ export function TodayScreen() {
             {pinnedNotices.map((n, i) => <NoteCard key={n.id} n={n} i={i} now={now} hour12={hour12} subject={st.courses.find((x) => x.id === n.courseId)?.name ?? null} onPress={() => act.open({ t: 'notice', id: n.id })} />)}
           </HStrip>)}
       </Section>
-      <Section title="Due" right={<Btn small kind="ghost" label="All tasks" onPress={() => act.go('Tasks')} />}>
+      <Section title="Needs you">
         {due.empty ? <Empty icon="tasks" text="Nothing due. Nice. Tap + when something is set." /> : <>
-          {due.overdue.length > 0 && <><Txt f="bold" s={18} c="bad" accessibilityRole="header">Overdue</Txt>{due.overdue.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
-            {due.moreOverdue > 0 && <Btn small kind="ghost" label={`${due.moreOverdue} more overdue`} onPress={() => act.go('Tasks')} />}</>}
-          {due.today.length > 0 && <><Txt f="bold" s={18} accessibilityRole="header">Due today</Txt>{due.today.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</>}
-          {due.next.length > 0 && <><Txt f="bold" s={18} c="mut" accessibilityRole="header">Coming up</Txt>{due.next.map((t) => <TaskCard key={t.id} t={t} now={now} />)}</>}
+          {due.lateLine ? <Btn kind="ghost" icon="tasks" label={`${due.lateLine.n} overdue · oldest: ${due.lateLine.oldest}`} testID="today-late-line" a11y={`${due.lateLine.n} tasks overdue. Opens To-do.`} onPress={() => act.go('Tasks')} /> : null}
+          {due.items.map((t) => <TaskCard key={t.id} t={t} now={now} />)}
         </>}
+        {due.all > 0 ? <Btn small kind="ghost" label={`All tasks (${due.all})`} testID="today-all-tasks" onPress={() => act.go('Tasks')} /> : null}
       </Section>
     </Page>
   );

@@ -12,7 +12,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
 import { dayBlock, lanes } from '../domain/attendance';
 import type { Course, Meeting } from '../domain/types';
-import { deckOf, dueGroups, headingSize, TodayScreen } from '../screens/Today';
+import { deckOf, dueGroups, headingSize, needsYou, TodayScreen } from '../screens/Today';
 import { hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -165,5 +165,18 @@ describe('S2 pieces', () => {
     expect(g.today.map((x) => x.id)).toEqual(['today']);
     expect(g.next.map((x) => x.id)).toEqual(['d1', 'd2', 'd3']);
     expect(dueGroups([], NOW).empty).toBe(true);
+  });
+  it('D13: Needs you is at most three, late first; more than three late is one line; All tasks counts every open one', () => {
+    const t = (id: string, dueAt: number | null, status: 0 | 2 = 0) => ({ id, title: id, courseId: null, kind: 'assignment' as const, dueAt, startAt: null, estimateMin: null, priority: 0 as const, notes: '', status, createdAt: 0, completedAt: null, reminders: [], subtasks: [], demo: false });
+    const H = 3_600_000;
+    const many = [...Array.from({ length: 7 }, (_, i) => t(`late${i}`, NOW - (i + 1) * H)), t('today', NOW + 2 * H), t('done', NOW + H, 2), t('nodate', null), t('d1', NOW + 30 * H), t('d2', NOW + 50 * H), t('d3', NOW + 70 * H)];
+    const g = needsYou(many, NOW);
+    expect(g.lateLine).toEqual({ n: 7, oldest: 'late6' });
+    expect(g.items.map((x) => x.id)).toEqual(['today', 'd1', 'd2']);
+    expect(g.all).toBe(12);
+    const few = needsYou([t('late0', NOW - H), t('today', NOW + 2 * H), t('d1', NOW + 30 * H), t('d2', NOW + 50 * H)], NOW);
+    expect(few.lateLine).toBeNull();
+    expect(few.items.map((x) => x.id)).toEqual(['late0', 'today', 'd1']);
+    expect(needsYou([], NOW).empty).toBe(true);
   });
 });
