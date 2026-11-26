@@ -50,6 +50,8 @@
 
     <!-- Alarms: the moment, the ringing, and the full-screen answer. -->
     <receiver android:name="app.marginalia.nativebits.AlarmReceiver" android:exported="false"/>
+    <!-- v0.7.8.4 (SPEC §9.9): task reminders ring natively, with Done and Snooze 10 min that need no JS -->
+    <receiver android:name="app.marginalia.nativebits.TaskRingReceiver" android:exported="false"/>
     <receiver android:name="app.marginalia.nativebits.SnoozeCancelReceiver" android:exported="false"/>
     <service android:name="app.marginalia.nativebits.AlarmService" android:exported="false" android:foregroundServiceType="systemExempted"/>
     <activity android:name="app.marginalia.nativebits.AlarmActivity" android:exported="false"

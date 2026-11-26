@@ -69,6 +69,7 @@ class TickReceiver : BroadcastReceiver() {
     val act = intent.action ?: return
     if (act == Intent.ACTION_BOOT_COMPLETED || act == Intent.ACTION_TIME_CHANGED || act == Intent.ACTION_TIMEZONE_CHANGED || act == Intent.ACTION_MY_PACKAGE_REPLACED) {
       try { AlarmClock.arm(context.applicationContext) } catch (e: Exception) { }
+      try { TaskRings.rearm(context.applicationContext) } catch (e: Exception) { }
     }
   }
 }

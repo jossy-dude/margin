@@ -15,6 +15,14 @@ import { parseOccKey } from './attendance';
 
 /** Category ids must not contain `:` or `-` or the native side may not match them. */
 export const CAT_ATT = 'mgatt', CAT_TASK = 'mgtask';
+/**
+ * v0.7.8.4 (SPEC §9.9): task and exam reminders go to the native ring (TaskRings.kt), whose Done and Snooze 10 min
+ * work with Marrow closed. `task` is the task id Done ticks; a notice's exam ring (`n-…`) has only Snooze.
+ */
+export function nativeRing(p: { id: string; kind: string; at: number; title: string; body: string; entityId: string }): { id: string; at: number; title: string; body: string; task: string } | null {
+  if (p.kind !== 'task' && p.kind !== 'exam') return null;
+  return { id: p.id, at: p.at, title: p.title, body: p.body, task: p.entityId.startsWith('n-') ? '' : p.entityId };
+}
 export interface ButtonDef { identifier: string; buttonTitle: string }
 export const NOTIF_CATEGORIES: { identifier: string; actions: ButtonDef[] }[] = [
   { identifier: CAT_ATT, actions: [{ identifier: 'att.here', buttonTitle: 'Present' }, { identifier: 'att.late', buttonTitle: 'Late' }, { identifier: 'att.absent', buttonTitle: 'Absent' }] },

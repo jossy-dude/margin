@@ -7,4 +7,4 @@
 /** The app's name on screen (v0.7.6.1: Margin → Marrow — it lives inside the Bone vault and keeps the M). Internal
  *  identifiers (package, `app: 'margin'` in exports, the vault's `Margin/` notes and `.margin/`) keep the old name. */
 export const APP_NAME = 'Marrow';
-export const APP_VERSION = '0.7.8.3';
+export const APP_VERSION = '0.7.8.4';

@@ -19,7 +19,7 @@ export const EXCLUDED_DIRS = ['Conflicts/', 'Templates/', '.trash/'];
 export const GENERATED = ['Margin/Timetable.md', 'Margin/Subjects.md', 'Margin/Notices.md'];
 export const TASKS_NOTE = 'Margin/Tasks.md';
 
-const FIELD = '⏫🔼🔽🔺⏬📅⏳🛫➕✅❌⏰⏱🔁';
+const FIELD = '⏫🔼🔽🔺⏬📅⏳🛫➕✅❌⏰⏱🔁🔔';
 const FIELD_RE = new RegExp(`[${FIELD}]`, 'u');
 const LINE_RE = /^(\s*)([-*+]|\d+[.)])\s+\[(.)\]\s?(.*)$/u;
 const ID_RE = /\s\^([\w-]+)\s*$/;
@@ -44,6 +44,31 @@ export interface VaultTask {
   prio: number; estimateMin: number | null;
   /** 🔁 rule text, kept untouched (read-only in Margin). */
   recur: string | null;
+  /** v0.7.8.4 (SPEC §9.3): the extra rings of `🔔 -1h, -10m, 07:30, 2026-11-27 07:30`, in order; [] with no 🔔. */
+  rings: Ring[];
+}
+
+/** One item of a `🔔` list: before ⏰ (or before 09:00 on the due day), a time on the due day, or a date and time. */
+export type Ring = { kind: 'before'; min: number } | { kind: 'at'; hm: string } | { kind: 'on'; date: string; hm: string };
+const RING_ITEM = '(?:-\\d+[mhd]|\\d{4}-\\d{2}-\\d{2}\\s+\\d{1,2}:\\d{2}|\\d{1,2}:\\d{2})';
+const BELL_RE = new RegExp(`🔔\\uFE0F?\\s*(${RING_ITEM}(?:\\s*,\\s*${RING_ITEM})*)`, 'u');
+/** The `🔔` list as rings; items it cannot read are left out (and left in the line). */
+export function parseRings(list: string): Ring[] {
+  const out: Ring[] = [];
+  for (const raw of list.split(',')) {
+    const x = raw.trim();
+    let m = /^-(\d+)([mhd])$/.exec(x);
+    if (m) { out.push({ kind: 'before', min: Number(m[1]) * (m[2] === 'd' ? 1440 : m[2] === 'h' ? 60 : 1) }); continue; }
+    m = /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/.exec(x);
+    if (m) { out.push({ kind: 'on', date: m[1]!, hm: `${pad(Number(m[2]))}:${m[3]}` }); continue; }
+    m = /^(\d{1,2}):(\d{2})$/.exec(x);
+    if (m) out.push({ kind: 'at', hm: `${pad(Number(m[1]))}:${m[2]}` });
+  }
+  return out;
+}
+/** Rings as a `🔔` list, in the shortest unit: -1d, -2h, -10m, 07:30, 2026-11-27 07:30. */
+export function bellOf(rings: readonly Ring[]): string {
+  return rings.map((r) => (r.kind === 'before' ? (r.min % 1440 === 0 ? `-${r.min / 1440}d` : r.min % 60 === 0 ? `-${r.min / 60}h` : `-${r.min}m`) : r.kind === 'at' ? r.hm : `${r.date} ${r.hm}`)).join(', ');
 }
 
 export const isDone = (s: string) => s === 'x' || s === 'X';
@@ -70,11 +95,12 @@ export function parseLine(raw: string, path = '', line = 0): VaultTask | null {
   const est = /⏱️?\s*(?:(\d+)h)?\s*(?:(\d+)m)?/u.exec(body);
   const estMin = est && (est[1] || est[2]) ? (Number(est[1] ?? 0) * 60 + Number(est[2] ?? 0)) : null;
   const prio = (body.match(/[🔺⏫🔼🔽⏬]/u) ?? [])[0];
-  const recur = /🔁️?\s*([^⏫🔼🔽🔺⏬📅⏳🛫➕✅❌⏰⏱^]+)/u.exec(body)?.[1]?.trim() ?? null;
+  const recur = /🔁️?\s*([^⏫🔼🔽🔺⏬📅⏳🛫➕✅❌⏰⏱🔔^]+)/u.exec(body)?.[1]?.trim() ?? null;
+  const bell = BELL_RE.exec(body)?.[1];
   return {
     path, line, raw, status, title, tags, blockId,
     due: get('📅'), time: time ? `${pad(Number(time[1]))}:${time[2]}` : null, timeEnd: time?.[3] ? `${pad(Number(time[3]))}:${time[4]}` : null, scheduled: get('⏳'), start: get('🛫'), created: get('➕'),
-    doneOn: get('✅'), cancelledOn: get('❌'), prio: prio ? PRIO_OF[prio] ?? 0 : 0, estimateMin: estMin, recur,
+    doneOn: get('✅'), cancelledOn: get('❌'), prio: prio ? PRIO_OF[prio] ?? 0 : 0, estimateMin: estMin, recur, rings: bell ? parseRings(bell) : [],
   };
 }
 
@@ -127,6 +153,8 @@ export interface LinePatch {
   title?: string;
   /** today, for ✅ / ❌ dates */
   today?: string;
+  /** v0.7.8.4: the `🔔` list (bellOf), or null to remove it */
+  bell?: string | null;
 }
 const dropField = (s: string, e: string, val: string) => s.replace(new RegExp(`\\s*${e}\\uFE0F?\\s*${val}`, 'u'), '');
 const setField = (s: string, e: string, val: string | null, re: string) => {
@@ -176,6 +204,7 @@ export function patchLine(raw: string, p: LinePatch): string {
   if (p.due !== undefined) body = setField(body, '📅', p.due, '\\d{4}-\\d{2}-\\d{2}');
   if (p.scheduled !== undefined) body = setField(body, '⏳', p.scheduled, '\\d{4}-\\d{2}-\\d{2}');
   if (p.time !== undefined) body = setTime(body, p.time);
+  if (p.bell !== undefined) body = p.bell === null || p.bell === '' ? body.replace(new RegExp(`\\s*${BELL_RE.source}`, 'u'), '') : BELL_RE.test(body) ? body.replace(BELL_RE, `🔔 ${p.bell}`) : appendField(body, `🔔 ${p.bell}`);
   if (p.prio !== undefined) {
     const cur = (body.match(/[🔺⏫🔼🔽⏬]/u) ?? [])[0];
     const next = PRIO_EMOJI[p.prio] ?? null;
@@ -194,7 +223,7 @@ export function patchLine(raw: string, p: LinePatch): string {
 }
 
 /** A task Margin made, as a new line for `Margin/Tasks.md`. */
-export interface NewLine { title: string; tags: string[]; due: string | null; time: string | null; prio: number; estimateMin: number | null; created: string; blockId: string; done?: boolean; doneOn?: string | null }
+export interface NewLine { title: string; tags: string[]; due: string | null; time: string | null; prio: number; estimateMin: number | null; created: string; blockId: string; done?: boolean; doneOn?: string | null; bell?: string }
 export function newLine(t: NewLine): string {
   const parts = [`- [${t.done ? 'x' : ' '}] ${t.title.replace(/\s+/g, ' ').trim()}`];
   const seen = new Set<string>();
@@ -202,6 +231,7 @@ export function newLine(t: NewLine): string {
   if (PRIO_EMOJI[t.prio]) parts.push(PRIO_EMOJI[t.prio]!);
   if (t.due) parts.push(`📅 ${t.due}`);
   if (t.time) parts.push(`⏰ ${t.time}`);
+  if (t.bell) parts.push(`🔔 ${t.bell}`);
   if (t.estimateMin) parts.push(`⏱ ${t.estimateMin}m`);
   parts.push(`➕ ${t.created}`);
   if (t.done && t.doneOn) parts.push(`✅ ${t.doneOn}`);

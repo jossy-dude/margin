@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import * as N from './notifApi';
 import type { Plan, Planned } from '../domain/reminders';
-import { DEFAULT_ACTION, NOTIF_CATEGORIES, onceGuard, planCategory, responseKey, resolveAction, type ChannelVisibility, type Opened } from '../domain/notifActions';
+import { DEFAULT_ACTION, NOTIF_CATEGORIES, nativeRing, onceGuard, planCategory, responseKey, resolveAction, type ChannelVisibility, type Opened } from '../domain/notifActions';
+import { planTaskRings } from './native';
 
 export interface NotifStatus { permission: 'granted' | 'denied' | 'undetermined' | 'unavailable'; scheduled: number; next: number | null; canAskAgain: boolean; queueRead: boolean; platform: string;
   /** D4 read-back: what this phone's own `classes` channel does with text on the lock screen, or null
@@ -118,6 +119,10 @@ export async function status(): Promise<NotifStatus> {
 /** `at` rides along so the delivery log knows when the reminder was *for* without the store having to
  *  re-derive it — and so it survives a reinstall, when the log is empty and the queue is not. */
 const content = (p: Planned, accent: string) => ({ title: p.title, body: p.body, data: { route: p.route, entityId: p.entityId, kind: p.kind, planned: p.id, at: p.at }, color: accent, categoryIdentifier: planCategory(p.kind) ?? undefined });
+/** v0.7.8.4 (D6): the task rings this phone rings itself, for `.margin/margin.json`; bone-tasks on the desktop skips
+ *  its pop-up for each of them. Empty when the phone does not ring tasks (no native ring, reminders off). */
+let phoneRings: { t: string; at: number }[] = [];
+export const phoneRingsNow = () => phoneRings;
 /** Make the OS queue equal the plan. Ids encode entity+minute, so unchanged items are left alone (no flicker, no duplicates). */
 /** `settled`: entity ids that need nothing more (v0.7.6); their reminders already in the shade are taken back. */
 export async function sync(plan: Plan, accent: string, settled?: Set<string>): Promise<{ added: number; removed: number; planned: { id: string; kind: string; at: number }[] }> {
@@ -125,10 +130,16 @@ export async function sync(plan: Plan, accent: string, settled?: Set<string>): P
   const planned: { id: string; kind: string; at: number }[] = [];
   try {
     await setUp;
-    const have = (await N.getAllScheduledNotificationsAsync()).filter((x) => !RESERVED.has(x.identifier)), want = new Map(plan.items.map((p) => [p.id, p]));
+    // v0.7.8.4: task and exam rings go native when this build has it; expo keeps the rest (and all of them without it)
+    const rings = plan.items.map(nativeRing).filter((x): x is NonNullable<typeof x> => x !== null);
+    const native = Platform.OS === 'android' && planTaskRings(rings);
+    phoneRings = native ? rings.map((r) => ({ t: r.title, at: r.at })) : [];
+    const items = native ? plan.items.filter((p) => !nativeRing(p)) : plan.items;
+    if (native) for (const r of rings) planned.push({ id: r.id, kind: 'task', at: r.at });
+    const have = (await N.getAllScheduledNotificationsAsync()).filter((x) => !RESERVED.has(x.identifier)), want = new Map(items.map((p) => [p.id, p]));
     for (const h of have) if (!want.has(h.identifier)) { await N.cancelScheduledNotificationAsync(h.identifier); removed++; }
     const haveIds = new Set(have.map((h) => h.identifier));
-    for (const p of plan.items) if (!haveIds.has(p.id)) { await N.scheduleNotificationAsync({ identifier: p.id, content: content(p, accent), trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CH[p.channel] } }); added++; planned.push({ id: p.id, kind: p.kind, at: p.at }); }
+    for (const p of items) if (!haveIds.has(p.id)) { await N.scheduleNotificationAsync({ identifier: p.id, content: content(p, accent), trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CH[p.channel] } }); added++; planned.push({ id: p.id, kind: p.kind, at: p.at }); }
   } catch { /* permission missing or module unavailable: surfaced by status() */ }
   if (settled?.size) await dismissSettled(settled);
   return { added, removed, planned };
@@ -142,7 +153,7 @@ async function dismissSettled(settled: Set<string>) {
     }
   } catch { /* nothing presented, or no module */ }
 }
-export async function cancelAll() { try { await N.cancelAllScheduledNotificationsAsync(); } catch { /* ignore */ } }
+export async function cancelAll() { planTaskRings([]); phoneRings = []; try { await N.cancelAllScheduledNotificationsAsync(); } catch { /* ignore */ } }
 export async function scheduleFocusEnd(at: number, title: string, body: string) {
   try { await N.cancelScheduledNotificationAsync('focus-end'); if (at > Date.now() + 1500) await N.scheduleNotificationAsync({ identifier: 'focus-end', content: { title, body, data: { route: 'Today', kind: 'focus' } }, trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(at), channelId: CH.focus } }); } catch { /* ignore */ }
 }

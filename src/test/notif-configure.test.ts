@@ -40,6 +40,7 @@ jest.mock('../services/notifApi', () => ({
   addNotificationReceivedListener: () => ({ remove: () => undefined }),
 }));
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+jest.mock('../services/native', () => ({ planTaskRings: () => false }));
 
 /** `configured` is module state, so every scenario needs its own copy of the module. `isolateModules`
  *  rather than `resetModules`, so the rest of jest's own setup is not re-required with it. */

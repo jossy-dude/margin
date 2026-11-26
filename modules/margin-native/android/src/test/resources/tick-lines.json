@@ -370,5 +370,23 @@
   "today": "2026-11-26",
   "want": "- [x] Single-digit hour 📅 2026-11-27 ⏰ 9:05 ✅ 2026-11-26 ^sd1",
   "why": "vault-lines.md:40"
+ },
+ {
+  "line": "- [ ] Lab report #Database-Systems 📅 2026-11-27 ⏰ 15:15-16:45 🔔 -1h, -10m, 07:30 ^m1a2b",
+  "today": "2026-11-26",
+  "want": "- [x] Lab report #Database-Systems 📅 2026-11-27 ⏰ 15:15-16:45 🔔 -1h, -10m, 07:30 ✅ 2026-11-26 ^m1a2b",
+  "why": "vault-lines.md:41"
+ },
+ {
+  "line": "- [ ] Test 📅 2026-11-27 ⏰ 09:00 🔔 -10m",
+  "today": "2026-11-26",
+  "want": "- [x] Test 📅 2026-11-27 ⏰ 09:00 🔔 -10m ✅ 2026-11-26",
+  "why": "vault-lines.md:42"
+ },
+ {
+  "line": "- [ ] Pay the fee 📅 2026-11-28 🔔 -1d, 2026-11-27 18:00",
+  "today": "2026-11-26",
+  "want": "- [x] Pay the fee 📅 2026-11-28 🔔 -1d, 2026-11-27 18:00 ✅ 2026-11-26",
+  "why": "vault-lines.md:43"
  }
 ]

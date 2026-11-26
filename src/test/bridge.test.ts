@@ -46,8 +46,10 @@ describe('a vault line becomes a Margin task', () => {
   });
   it('Margin-only fields survive an edit made in Obsidian', () => {
     const mine = task({ id: 't1', extId: 't1' });
-    const next = taskFromLine(line('- [x] ER diagram #Database ⏫ 📅 2026-11-12 ⏰ 17:00 ✅ 2026-11-09 ^t1'), mine, courses, ['#school'], NOW);
-    expect(next).toMatchObject({ id: 't1', status: 2, reminders: mine.reminders, estimateMin: 60, notes: 'chapter 4', createdAt: mine.createdAt });
+    const next = taskFromLine(line('- [x] ER diagram #Database ⏫ 📅 2026-11-12 ⏰ 17:00 🔔 -1h ✅ 2026-11-09 ^t1'), mine, courses, ['#school'], NOW);
+    expect(next).toMatchObject({ id: 't1', status: 2, estimateMin: 60, notes: 'chapter 4', createdAt: mine.createdAt });
+    // v0.7.8.4 (B2): reminders are not Margin-only any more: they come from ⏰ + 🔔, which Marrow writes first
+    expect(next.reminders.map((r) => (r.mode === 'before' ? r.minutes : -1))).toEqual([0, 60]);
     expect(next.subtasks[0]!.id).toBe('s1');
   });
   it('kind tags become the kind; a cancelled line is done and marked cancelled', () => {

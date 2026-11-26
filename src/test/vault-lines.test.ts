@@ -6,8 +6,8 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { isOpen, lineIndexOf, parseLine, patchLine, replaceLine, withTasksHead, type LinePatch } from '../domain/vaultTasks';
-import { taskFromLine } from '../domain/vaultMap';
+import { bellOf, isOpen, lineIndexOf, parseLine, patchLine, replaceLine, withTasksHead, type LinePatch } from '../domain/vaultTasks';
+import { bellFor, lineRingTimes, taskFromLine } from '../domain/vaultMap';
 
 const LINES = readFileSync(join(__dirname, 'fixtures', 'vault-lines.md'), 'utf8').split('\n').filter((l) => l.trim());
 const CLOSED = new Set(['x', 'X', '-', '~', '»']);
@@ -106,5 +106,44 @@ describe('B7: Margin/Tasks.md keeps margin: tasks', () => {
   it('an empty note stays empty (the head is written with the first line)', () => { expect(withTasksHead('')).toBe(''); });
   it('every write to Margin/Tasks.md goes through it', () => {
     expect(readFileSync(join(__dirname, '..', 'store', 'obsidian.ts'), 'utf8')).toContain('if (p === TASKS_NOTE) next = withTasksHead(next); // B7');
+  });
+});
+
+describe('🔔: one reminder grammar (v0.7.8.4, SPEC §9.3, B2, B8)', () => {
+  const at = (d: string, hm: string) => new Date(`${d}T${hm}:00`).getTime();
+  const map = (raw: string) => taskFromLine(parseLine(raw, 'Daily/x.md')!, undefined, [], ['#school'], 0);
+  it('parses the list; the title stops before it', () => {
+    const t = parseLine('- [ ] Lab report #Database-Systems 📅 2026-11-27 ⏰ 15:15-16:45 🔔 -1h, -10m, 07:30, 2026-11-26 20:00 ^m1a2b')!;
+    expect(t.title).toBe('Lab report');
+    expect(t.rings).toEqual([{ kind: 'before', min: 60 }, { kind: 'before', min: 10 }, { kind: 'at', hm: '07:30' }, { kind: 'on', date: '2026-11-26', hm: '20:00' }]);
+    expect(bellOf(t.rings)).toBe('-1h, -10m, 07:30, 2026-11-26 20:00');
+  });
+  it('the 08:50 test: ⏰ 09:00 🔔 -10m rings at 09:00 and 08:50', () => {
+    const t = map('- [ ] Test 📅 2026-11-27 ⏰ 09:00 🔔 -10m');
+    const due = t.dueAt!;
+    expect(t.reminders.map((r) => (r.mode === 'abs' ? r.at : due - r.minutes * 60_000))).toEqual([at('2026-11-27', '09:00'), at('2026-11-27', '08:50')]);
+  });
+  it('with no ⏰, -1d is before 09:00 on the due day; a full date is that time', () => {
+    const t = map('- [ ] Pay the fee 📅 2026-11-28 🔔 -1d, 2026-11-27 18:00');
+    expect(t.reminders.map((r) => (r.mode === 'abs' ? r.at : -1))).toEqual([at('2026-11-27', '09:00'), at('2026-11-27', '18:00')]);
+  });
+  it('no 🔔 and no ⏰: nothing rings', () => { expect(map('- [ ] Quiet 📅 2026-11-28').reminders).toEqual([]); });
+  it('B2: the line wins over what Marrow had (a ring removed in Obsidian stops)', () => {
+    const prev = map('- [ ] Test 📅 2026-11-27 ⏰ 09:00 🔔 -10m');
+    expect(taskFromLine(parseLine('- [ ] Test 📅 2026-11-27 ⏰ 09:00', 'Daily/x.md')!, prev, [], ['#school'], 0).reminders).toHaveLength(1);
+  });
+  it('writes, replaces and removes the list', () => {
+    expect(patchLine('- [ ] A 📅 2026-11-27 ⏰ 09:00 ^a', { bell: '-10m' })).toBe('- [ ] A 📅 2026-11-27 ⏰ 09:00 🔔 -10m ^a');
+    expect(patchLine('- [ ] A 📅 2026-11-27 ⏰ 09:00 🔔 -10m ^a', { bell: '-1h, 07:30' })).toBe('- [ ] A 📅 2026-11-27 ⏰ 09:00 🔔 -1h, 07:30 ^a');
+    expect(patchLine('- [ ] A 📅 2026-11-27 ⏰ 09:00 🔔 -10m ^a', { bell: null })).toBe('- [ ] A 📅 2026-11-27 ⏰ 09:00 ^a');
+  });
+  it('Marrow\'s reminders as 🔔: the ⏰ ring is the ⏰ itself; -N only with a ⏰', () => {
+    const due = at('2026-11-27', '09:00');
+    expect(bellFor({ dueAt: due, reminders: [{ id: 'a', mode: 'before', minutes: 0, label: '' }, { id: 'b', mode: 'before', minutes: 10, label: '' }, { id: 'c', mode: 'abs', at: at('2026-11-27', '07:30'), label: '' }] }, '09:00')).toBe('-10m, 07:30');
+    expect(bellFor({ dueAt: at('2026-11-28', '23:59'), reminders: [{ id: 'a', mode: 'before', minutes: 1440, label: '' }] }, null)).toBe('2026-11-27 23:59');
+  });
+  it('a line whose words already mean the task\'s rings is not rewritten', () => {
+    const t = map('- [ ] Pay the fee 📅 2026-11-28 🔔 -1d');
+    expect(lineRingTimes(parseLine('- [ ] Pay the fee 📅 2026-11-28 🔔 -1d')!)).toEqual(t.reminders.map((r) => (r.mode === 'abs' ? r.at : 0)));
   });
 });

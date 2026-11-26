@@ -17,6 +17,7 @@ import { db, R } from './persist';
 import { resync } from './reminders';
 import { faceEvent } from '../ui/mascot/moments';
 import { recordCrash } from '../services/problems';
+import { phoneRingsNow } from '../services/notifications';
 import { whenIdle } from '../services/idle';
 import { onSyncEvent, syncStart, syncInbox, vaultChanges, vaultEdit, vaultFiles, type VaultFile } from '../services/native';
 import { timerActions } from './actions/timer';
@@ -28,7 +29,7 @@ import {
 } from '../domain/vaultTasks';
 import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
 import { startOfDay } from '../domain/time';
-import { taskFromLine } from '../domain/vaultMap';
+import { bellFor, lineRingTimes, ringTimes, taskFromLine } from '../domain/vaultMap';
 import type { Course, Task } from '../domain/types';
 
 
@@ -161,7 +162,7 @@ function wanted(t: Task, inTasksNote: boolean): LinePatch {
   return p;
 }
 /** Only what differs from the line, so a line Margin did not change is left byte for byte. */
-function diff(raw: string, w: LinePatch): LinePatch | null {
+function diff(raw: string, w: LinePatch, task?: Task): LinePatch | null {
   const cur = parseLine(raw);
   if (!cur) return null;
   const out: LinePatch = {};
@@ -176,6 +177,11 @@ function diff(raw: string, w: LinePatch): LinePatch | null {
   if ((w.time ?? null) !== (cur.time ?? null)) out.time = w.time;
   if (w.prio !== undefined && w.prio !== cur.prio) out.prio = w.prio;
   if (w.title !== undefined && w.title !== cur.title) out.title = w.title;
+  // B8: the rings, compared as instants (the line's words win when they mean the same times)
+  if (task) {
+    const want = ringTimes({ reminders: task.reminders, dueAt: task.dueAt }), have = lineRingTimes(out.due !== undefined || out.time !== undefined || out.scheduled !== undefined ? parseLine(patchLine(raw, out))! : cur);
+    if (want.join(',') !== have.join(',')) out.bell = bellFor(task, w.time ?? null) || null;
+  }
   return Object.keys(out).length ? out : null;
 }
 /** Does a Margin task go to the vault? Its tags carry a tracked tag (the Task form has #school on by default). */
@@ -214,7 +220,7 @@ async function appendToTasksNote(t: Task, stamp: Task[]): Promise<boolean> {
   const course = s.courses.find((x) => x.id === t.courseId);
   const w = wanted(t, true);
   const tags = [...new Set([...(t.tags ?? []).map(norm), ...(course ? [subjectTag(course).replace(/^#/, '')] : [])])];
-  const ln = newLine({ title: t.title, tags, due: w.due ?? null, time: w.time ?? null, prio: w.prio ?? 0, estimateMin: t.estimateMin, created: ymdOf(t.createdAt), blockId: blockIdOf(t.id), done: t.status === 2, doneOn: t.completedAt ? ymdOf(t.completedAt) : null });
+  const ln = newLine({ title: t.title, tags, due: w.due ?? null, time: w.time ?? null, prio: w.prio ?? 0, estimateMin: t.estimateMin, created: ymdOf(t.createdAt), blockId: blockIdOf(t.id), done: t.status === 2, doneOn: t.completedAt ? ymdOf(t.completedAt) : null, bell: bellFor(t, w.time ?? null) });
   const ok = await editNote(TASKS_NOTE, (txt) => (txt.includes(`^${blockIdOf(t.id)}`) ? null : appendLine(txt || TASKS_NOTE_HEAD, ln)));
   if (!ok) return false;
   c.lines[blockIdOf(t.id)] = { p: TASKS_NOTE, raw: ln };
@@ -258,7 +264,7 @@ async function pushOut(): Promise<void> {
       continue;
     }
     if (line) {
-      const d = diff(line.raw, wanted(t, line.p === TASKS_NOTE));
+      const d = diff(line.raw, wanted(t, line.p === TASKS_NOTE), t);
       if (!d) continue;
       // B6: the line is found by ID_RE, as the parser finds it (a trailing space no longer hides it)
       // a Life line gets its key as its ^id with this first change (§9.2), so it is found the same way from now on
@@ -297,6 +303,9 @@ async function writeGenerated() {
     trackedTags: trackedTags(s.courses).slice(0, (s.settings.trackedTags?.length || 1)),
     subjects: s.courses.filter((x) => !x.demo && !x.archived).map((x) => ({ id: x.id, name: x.name, tag: subjectTag(x), color: x.color ?? null })),
     now: nowClass, next: nextClass,
+    // D6 (v0.7.8.4): the task rings the phone rings in the next two days, stamped with the day so the desktop knows
+    // it is fresh (< 1 day); bone-tasks skips its own pop-up for each. Digests stay on the desktop.
+    phoneRingsDay: ymdOf(now), phoneRings: phoneRingsNow().filter((r) => r.at > now && r.at < now + 2 * 86_400_000),
   };
   const out: [string, string][] = [
     ['Margin/Timetable.md', timetableNote(env.events)],

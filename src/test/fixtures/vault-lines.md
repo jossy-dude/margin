@@ -38,3 +38,6 @@
 - [ ] Problem set 5 #school #Database-Systems 🛫 2026-11-20 ⏳ 2026-11-21 📅 2026-11-22 ⏰ 23:59 ⏱ 1h30m ➕ 2026-11-19 ^ps5
 - [ ] Late-night block 📅 2026-11-27 ⏰ 23:00-23:45
 - [ ] Single-digit hour 📅 2026-11-27 ⏰ 9:05 ^sd1
+- [ ] Lab report #Database-Systems 📅 2026-11-27 ⏰ 15:15-16:45 🔔 -1h, -10m, 07:30 ^m1a2b
+- [ ] Test 📅 2026-11-27 ⏰ 09:00 🔔 -10m
+- [ ] Pay the fee 📅 2026-11-28 🔔 -1d, 2026-11-27 18:00
