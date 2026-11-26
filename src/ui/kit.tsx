@@ -4,7 +4,7 @@ import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedSt
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, TAPE, PAPER, hexA, type Colors, type FontKey, type TypeMap } from '../tokens/theme';
 import { handPathCached, hashSeed, tornPathsCached, tornTape, type Corners } from './hand';
-import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
+import { FADE_START, FS, STRIP_FADE, stripHasMore } from './fit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
 
@@ -520,3 +520,23 @@ export function Tape({ w = 62, rot = -4, style, testID }: { w?: number; rot?: nu
   );
 }
 export const Hair = () => { const { c } = useTheme(); return <View style={{ height: 1.4, backgroundColor: c.rule, marginVertical: 8 }} />; };
+
+/**
+ * v0.7.8.15 (owner's ask 2): the seven weekdays as one row of equal cells, so Sunday never wraps onto a line of its
+ * own (seven 40 dp chips need ~410 dp; the sheet has ~380). Each cell is 44 dp tall with 2 dp of slop: 48 to the
+ * finger. `on[i]` marks a day; `onPress(i)` is the caller's (one day for a class, several for an alarm).
+ */
+export function DayRow({ on, onPress, label = 'Days' }: { on: readonly boolean[]; onPress: (i: number) => void; label?: string }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={label}>
+      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
+        <Pressable key={d} testID={`day-${d.toLowerCase()}`} accessibilityRole="checkbox" accessibilityState={{ checked: !!on[i] }} accessibilityLabel={d}
+          onPress={() => { fx.select(); onPress(i); }} hitSlop={{ top: 2, bottom: 2 }}
+          style={{ flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on[i] ? c.acc : 'transparent', borderWidth: on[i] ? 0 : 1.3, borderColor: hexA(c.ink, 0.35) }}>
+          <Txt f="bold" s={16} c={on[i] ? 'onAcc' : 'ink'} maxFontSizeMultiplier={FS}>{d}</Txt>
+        </Pressable>
+      ))}
+    </View>
+  );
+}

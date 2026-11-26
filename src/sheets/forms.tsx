@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { Btn, Chip, EASE, Field, HandBox, HStrip, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
+import { Btn, Chip, DayRow, EASE, Field, HandBox, HStrip, Reveal, Row, STEP, Toggle, Txt, Hair } from '../ui/kit';
 import { DurationField, NumberField, TimeField } from '../ui/fields';
 import { Label, Sheet, useSheetClose } from '../ui/Sheet';
 import { latch } from '../ui/latch';
@@ -126,7 +126,8 @@ export function TaskSheet({ id, kind, courseId }: { id?: string; kind?: TaskKind
       </Row>
       {addLead && due ? <Reveal open><Row><DurationField label="custom lead" value={custom} onChange={(v) => { if (v !== null) setCustom(v); }} presets={[]} min={5} max={10080} /><Btn small label="Add" onPress={() => { if (!has(custom)) setRem((r) => [...r, { id: uid('r'), mode: 'before', minutes: custom, label: `${fmtDur(custom)} before` }]); setAddLead(false); }} /></Row></Reveal> : null}
       {addAt && <Reveal open><WhenPicker value={atV} onChange={setAtV} now={now} homeAt={nset.homeAt} nonePlaceholder="Pick a time" h12={hour12} /><Btn small label="Add this reminder" disabled={!atV} onPress={() => { if (atV) { setRem((r) => [...r, { id: uid('r'), mode: 'abs', at: atV, label: 'At a chosen time' }]); setAtV(null); setAddAt(false); } }} /></Reveal>}
-      <Chip small icon={more ? 'x' : 'plus'} label={more ? 'Less' : 'More: tags, start, effort, priority, steps, notes'} on={more} onPress={() => setMore(!more)} />
+      {/* v0.7.8.15 (owner's ask 2): less text: what is folded shows the moment it opens */}
+      <Chip small icon={more ? 'x' : 'plus'} label={more ? 'Less' : 'More details'} on={more} onPress={() => setMore(!more)} />
       {more && <Reveal open>
         <Label>Tags</Label>
         {/* tags wrap onto a second line instead of running off the edge (U7) */}
@@ -237,7 +238,10 @@ export function CourseSheet({ id }: { id?: string }) {
       <Label>When it meets, every week</Label>
       <ScheduleEditor rows={rows} onChange={setRows} rooms={rooms} hour12={hour12} parts={parts} />
       {hasParts(rows) ? <><Label>Lecture and lab</Label><PartsEditor kinds={kinds} drafts={parts} onChange={setParts} /></> : null}
-      <Label>Grade goal</Label><NumberField label="goal" value={goal || null} onChange={(v) => setGoal(v ?? 0)} min={0} max={100} decimals={1} unit="%" emptyLabel="none" />
+      <Label>Grade goal</Label>
+      {/* v0.7.8.15: the usual goals are one tap; the field takes anything else */}
+      <Row>{[0, 60, 70, 80, 90].map((g) => <Chip key={g} small label={g ? `${g}%` : 'None'} on={(goal || 0) === g} onPress={() => setGoal(g)} />)}</Row>
+      <NumberField label="goal" value={goal || null} onChange={(v) => setGoal(v ?? 0)} min={0} max={100} decimals={1} unit="%" emptyLabel="none" />
     </Sheet>
   );
 }
@@ -264,8 +268,10 @@ export function MeetingSheet({ id, courseId, weekday }: { id?: string; courseId?
     <Sheet title={m0 ? 'Edit class' : 'Add class'} onClose={act.close} closeRef={closeRef} footer={<Row style={{ flexWrap: 'nowrap' }}>{m0 && <Btn kind="ghost" icon="trash" label="Delete" a11y="Delete class" onPress={() => { act.removeMeeting(m0.id); close(); }} />}<Btn flex label="Save" icon="check" disabled={bad} onPress={save} /></Row>}>
       <Label>Subject</Label><CourseChips value={cid} onChange={setCid} none={null} />
       <Field label="Room" value={room} onChangeText={setRoom} placeholder="e.g. B-12" />
-      <Label>Day</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} on={wd === i} onPress={() => setWd(i)} small />)}</Row>
+      <Label>Day</Label><DayRow label="Day" on={DW.map((_, i) => wd === i)} onPress={setWd} />
       <Label>Starts</Label><TimeField label="start" value={a} min={0} max={1435} hour12={hour12} onChange={(v) => { setA(v); if (b <= v) setB(Math.min(1435, v + 50)); }} />
+      {/* v0.7.8.15: how long, in one tap; the end field stays for an odd length */}
+      <Label>Length</Label><Row>{[50, 60, 90, 120, 180].map((d) => <Chip key={d} small label={d < 60 ? `${d} min` : d % 60 ? `${Math.floor(d / 60)} h ${d % 60}` : `${d / 60} h`} on={b - a === d} onPress={() => setB(Math.min(1435, a + d))} />)}</Row>
       <Label>Ends</Label><TimeField label="end" value={b} min={0} max={1435} hour12={hour12} onChange={setB} />
       {b <= a && <Txt f="bold" s={17} c="bad">The class has to end after it starts.</Txt>}
     </Sheet>
@@ -285,7 +291,9 @@ export function MarkSheet({ courseId, id }: { courseId: string; id?: string }) {
       <Field label="What was it?" value={name} onChangeText={setName} autoFocus={!m0} placeholder="e.g. Quiz 3" />
       <Toggle label="Already marked" value={has} onChange={setHas} />
       {has && <><Label>Score</Label><NumberField label="score" value={score} onChange={(v) => setScore(v ?? 0)} min={0} max={100} decimals={1} unit="%" /></>}
-      <Label>Weight in the final grade</Label><NumberField label="weight" value={weight} onChange={(v) => setWeight(v ?? 0)} min={0} max={100} decimals={1} unit="%" />
+      <Label>Weight in the final grade</Label>
+      <Row>{[5, 10, 15, 20, 30, 40].map((x) => <Chip key={x} small label={`${x}%`} on={weight === x} onPress={() => setWeight(x)} />)}</Row>
+      <NumberField label="weight" value={weight} onChange={(v) => setWeight(v ?? 0)} min={0} max={100} decimals={1} unit="%" />
       <Toggle label="Counts toward the total" value={on} onChange={setOn} />
     </Sheet>
   );

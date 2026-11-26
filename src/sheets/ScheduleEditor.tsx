@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Chip, Field, HandBox, Icon, Txt, faceOf } from '../ui/kit';
+import { Chip, DayRow, Field, HandBox, Icon, Txt, faceOf } from '../ui/kit';
 import { NumberField, TimeField } from '../ui/fields';
 import { blankPart, sharesNote, type PartDraft } from '../domain/parts';
 import { useTheme } from '../ui/theme-context';
@@ -37,7 +37,7 @@ export function PartsEditor({ kinds, drafts, onChange }: { kinds: string[]; draf
     <View style={{ gap: 10 }}>
       {kinds.map((k, i) => { const d = drafts[k.toLocaleLowerCase()] ?? blankPart(), name = kindLabel(k); return (
         <HandBox key={k || 'lecture'} seed={`part-${k}`} fill={i % 2 ? tints.sky : tints.cream} cut="torn" style={{ padding: 12, gap: 6 }}>
-          <Txt f="type" s={13} c="mut" style={{ letterSpacing: 1.6 }}>{name.toUpperCase()}</Txt>
+          <Txt f="bold" s={16}>{name}</Txt>
           {k ? <><Field label={`${name} teacher`} value={d.teacher} onChangeText={(t) => set(k, { teacher: t })} placeholder="Same as the subject" />
             <Field label={`${name} room`} value={d.room} onChangeText={(t) => set(k, { room: t })} placeholder="e.g. Lab 2" /></> : null}
           <Field label="Group / section no." value={d.group} onChangeText={(t) => set(k, { group: t })} placeholder="e.g. G3" />
@@ -65,12 +65,10 @@ export function ScheduleEditor({ rows, onChange, rooms, hour12, parts }: { rows:
       {rows.map((r, i) => (
         <HandBox key={r.key} seed={`slot-${r.key}`} fill={i % 2 ? tints.sky : tints.cream} cut="torn" style={{ padding: 12, gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Txt f="type" s={13} c="mut" style={{ flex: 1, letterSpacing: 1.6 }}>{`CLASS ${i + 1}`}</Txt>
+            <Txt f="bold" s={16} style={{ flex: 1 }}>{`Class ${i + 1}`}</Txt>
             <Pressable accessibilityRole="button" accessibilityLabel={`Remove class ${i + 1}`} hitSlop={8} onPress={() => { fx.undone(); onChange(rows.filter((x) => x.key !== r.key)); }} style={{ width: 36, height: 30, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={18} color={c.mut} /></Pressable>
           </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }} accessibilityRole="radiogroup" accessibilityLabel="Day">
-            {DW.map((d, wd) => <Chip key={d} small label={d} on={r.weekday === wd} onPress={() => set(r.key, { weekday: wd })} />)}
-          </View>
+          <DayRow label="Day" on={DW.map((_, wd) => r.weekday === wd)} onPress={(wd) => set(r.key, { weekday: wd })} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={{ flex: 1 }}><TimeField label={`class ${i + 1} start`} value={r.start} hour12={hour12} ruler={false} onChange={(v) => set(r.key, { start: v, end: r.end <= v ? Math.min(1435, v + 50) : r.end })} /></View>
             <Txt f="bold" s={20} c="mut">–</Txt>

@@ -57,8 +57,8 @@ export function AddSheet() {
   return (
     <Sheet title="Add" onClose={act.close} maxH={0.86} closeRef={closeRef}>
       {/* ── the subject, first ── */}
-      <View style={{ gap: 6 }}>
-        <Txt f="type" s={12} c="mut" maxFontSizeMultiplier={FS} style={{ letterSpacing: 2.2 }}>FOR</Txt>
+      {/* v0.7.8.15: no "FOR" kicker; the tabs say what they are, and TalkBack hears it from the group */}
+      <View style={{ gap: 6 }} accessible={false} accessibilityLabel="Which subject it is for">
         {none ? (
           <HandBox seed="add-none" fill={hexA(c.acc, 0.1)} stroke={c.acc} sw={1.6} style={{ padding: 12, gap: 4 }}>
             <Txt f="bold" s={17}>No subjects yet</Txt>
@@ -78,7 +78,7 @@ export function AddSheet() {
         <HandBox seed="add-why" fill={c.card} stroke={c.bad} sw={1.6} style={{ padding: 12, gap: 8 }} >
           <Txt f="bold" s={17} accessibilityLiveRegion="polite">{why === 'Class' ? 'A class' : 'A mark'} needs a subject first</Txt>
           <Txt f="serif" s={14.5} c="mut">Make the subject, then tap + again.</Txt>
-          <Pressable accessibilityRole="button" accessibilityLabel="New subject" onPress={() => { fx.page(); close(() => act.open({ t: 'course' })); }} style={{ alignSelf: 'flex-start' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="New subject" hitSlop={4} onPress={() => { fx.page(); close(() => act.open({ t: 'course' })); }} style={{ alignSelf: 'flex-start' }}>
             <HandBox seed="add-why-go" fill={c.deck} cut="cut" style={{ minHeight: 40, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="plus" size={16} color={c.deckInk} /><Txt f="bold" s={17} c="deckInk">New subject</Txt></HandBox>
           </Pressable>
         </HandBox>
@@ -99,7 +99,7 @@ function SubjectTab({ label, on, tint, now, onPress }: { label: string; on: bool
   const { c } = useTheme(), [aIn, aLift] = usePressIn(() => { fx.select(); onPress(); });
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={now ? `${label}, the class you are in` : label} onPressIn={aIn} onPress={aLift} hitSlop={4}>
-      <HandBox seed={`tab-${label}`} fill={on ? c.ink : tint} cut="cut" shadow={on} style={{ minHeight: 38, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 220 }}>
+      <HandBox seed={`tab-${label}`} fill={on ? c.ink : tint} cut="cut" shadow={on} style={{ minHeight: 40, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 220 }}>
         {now ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: on ? c.paper : c.bad }} /> : null}
         <Txt f="bold" s={16.5} c={on ? 'paper' : 'ink'} numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt>
       </HandBox>

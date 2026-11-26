@@ -387,7 +387,9 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           </View>)}
           {/* On a narrow phone with two classes in the slot, the tabs below already say it; the header
               line would only be clipped to "+…". */}
-          {!(many && w < 300) && <Txt f="serif" s={14} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>}
+          {/* v0.7.8.15 (§7.5): after the last class the pill already says "Done for today"; "Day complete" beside it only
+              repeated it, cut to "Day co…" */}
+          {!(many && w < 300) && d.word !== 'Done for today' && <Txt f="serif" s={14} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>}
         </View>
         {/* `.tg span > .R` … and the room code beside it. */}
         {room !== '' && (
@@ -500,8 +502,8 @@ function PlanBlock({ task, now, hour12, vault }: { task: Task; now: number; hour
   return (
     <Pressable accessibilityRole="link" accessibilityLabel={`${task.title}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${state}. Opens the note in Obsidian.`}
       testID="plan-block" onPress={() => { if (task.extPath) void Linking.openURL(obsidianLink(vault, task.extPath)).catch(() => {}); }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 12, minHeight: 48, borderLeftWidth: 3, borderLeftColor: live ? c.acc : off ? c.bad : c.rule, opacity: done ? 0.7 : 1 }}>
-        <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }}><Txt f="type" s={15} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={13} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 12, minHeight: 48, opacity: done ? 0.7 : 1 }}>
+        <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }}><Txt f="type" s={15} c={live ? 'acc' : 'ink'} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={13} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
         <Txt f="serif" s={17} numberOfLines={2} style={[{ flex: 1, minWidth: 0 }, done ? { textDecorationLine: 'line-through', color: c.mut } : null]}>{task.title}</Txt>
         <Icon name={off ? 'x' : done ? 'check' : 'note'} size={18} color={off ? c.bad : c.mut} />
       </View>

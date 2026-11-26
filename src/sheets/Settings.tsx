@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
-import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
+import { Btn, Chip, DayRow, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, Slider, TimeField } from '../ui/fields';
 import { SettingsSearch } from './settings/SettingsSearch';
 import { Label } from '../ui/Sheet';
@@ -17,7 +17,7 @@ import { FS } from '../ui/fit';
 import { act, getState, notificationAccent, refreshNotifStatus, resync, snapshotOf, toast, useStore } from '../store/store';
 import { SOUND_GROUPS, TOUR_VERSION, toured } from '../domain/defaults';
 import { PACKS } from '../domain/packs';
-import { DW, fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
+import { fmtDur, fmtHM, fmtTime, fmtWhen, fromMin, hm, relFire } from '../domain/time';
 import { nudgeWord } from '../domain/timer';
 import { EXACT_ALARM_UNKNOWN, lockTextLine, logState, nextRingLine, noModuleNote, NO_MODULE_HINT, PERMISSION, statusHint, KIND_WORD, testTarget } from '../domain/notifActions';
 import type { NotifLogRow } from '../data/repository';
@@ -333,7 +333,7 @@ export function SettingsSheet() {
     <Label>Default reminder for new tasks</Label><Row>{[0, 30, 60, 120, 1440].map((m) => <Chip key={m} small label={m ? `${fmtDur(m)} before` : 'At due'} on={n.defaultTaskMinutes.includes(m)} onPress={() => act.setNotif({ defaultTaskMinutes: n.defaultTaskMinutes.includes(m) ? n.defaultTaskMinutes.filter((x) => x !== m) : [...n.defaultTaskMinutes, m] })} />)}</Row>
   </>);
   if (page === 'nhours') body = (<>
-    <Label>Active days</Label><Row>{DW.map((d, i) => <Chip key={d} label={d} small on={n.activeDays[i]} onPress={() => act.setNotif({ activeDays: n.activeDays.map((x, j) => (j === i ? !x : x)) })} />)}</Row>
+    <Label>Active days</Label><DayRow label="Active days" on={n.activeDays} onPress={(i) => act.setNotif({ activeDays: n.activeDays.map((x, j) => (j === i ? !x : x)) })} />
     <MinStep label="Active from" value={n.activeFrom} onChange={(v) => act.setNotif({ activeFrom: v })} /><MinStep label="Active until" value={n.activeTo} onChange={(v) => act.setNotif({ activeTo: v })} />
     <Toggle label="Quiet hours" hint="Nothing rings; deadline reminders move earlier" value={n.quietEnabled} onChange={(v) => act.setNotif({ quietEnabled: v })} />
     {n.quietEnabled && <><MinStep label="Quiet from" value={n.quietFrom} onChange={(v) => act.setNotif({ quietFrom: v })} /><MinStep label="Quiet until" value={n.quietTo} onChange={(v) => act.setNotif({ quietTo: v })} /></>}

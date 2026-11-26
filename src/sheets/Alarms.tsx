@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, View, type ImageSourcePropType } from 'react-native';
-import { Btn, Chip, Field, HandBox, Row, Toggle, Txt } from '../ui/kit';
+import { Btn, Chip, DayRow, Field, HandBox, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, TimeField } from '../ui/fields';
 import { Label } from '../ui/Sheet';
 import { useNow, useTheme } from '../ui/theme-context';
@@ -81,7 +81,7 @@ export function AlarmsPage() {
         <View style={{ gap: 6 }}>
           <Label>{draft.kind === 'class' ? 'On these days' : 'Repeat'}</Label>
           <Row>{DAY_SETS.map(([label, set]) => <Chip key={label} small label={label} on={draft.days.every((x, i) => !!x === set[i])} onPress={() => { patch({ days: [...set] }); fx.select(); }} />)}</Row>
-          <Row>{DW.map((d, i) => <Chip key={d} small label={d} on={!!draft.days[i]} onPress={() => { patch({ days: draft.days.map((x, j) => (j === i ? !x : x)) }); fx.select(); }} />)}</Row>
+          <DayRow label="Repeat on" on={draft.days} onPress={(i) => patch({ days: draft.days.map((x, j) => (j === i ? !x : x)) })} />
           <Txt f="serif" s={15} c="mut">
             {draft.kind === 'class' && !draft.days.some(Boolean) ? 'Pick at least one day.' : rings ? `${once ? 'Rings once' : 'Next'}: ${fmtWhen(rings, now, h12)} · ${relFire(rings, now)}` : draft.kind === 'class' ? 'No class on those days soon.' : 'Pick a time.'}
           </Txt>
