@@ -45,6 +45,9 @@ function soundVolOf(v: Partial<Record<string, number>> | undefined): Record<Soun
 
 export const withDefaults = (s: Partial<Settings>): Settings => ({
   ...DEFAULT_SETTINGS, ...s, ...lookUpgrade(s),
+  /* D14 (v0.7.8.6+): Notebook is one skin. "Original" was Refined with a cooler desk and nothing else; a phone that
+     chose it reads as Notebook (refined), rewritten on the next save. */
+  ...(s.palette === 'original' ? { palette: 'refined' as const } : {}),
   /* BUGS #7: "All" is gone (done tasks are an archive, not a mode of the list). A stored 'all' reads as 'open';
      the KV row is rewritten on the next save, so no SQL migration. */
   taskFilter: (s.taskFilter as string) === 'done' ? 'done' : 'open',
