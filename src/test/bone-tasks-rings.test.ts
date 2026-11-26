@@ -16,7 +16,6 @@ const LINES = readFileSync(join(__dirname, 'fixtures', 'vault-lines.md'), 'utf8'
 there('bone-tasks rings like Marrow', () => {
   const src = existsSync(MAIN) ? readFileSync(MAIN, 'utf8') : '';
   const block = src.slice(src.indexOf('/* rings:start'), src.indexOf('/* rings:end */'));
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const bt = new Function(`${block}; return { parseRings, ringTimes, phoneRings, BELL_RE };`)() as {
     parseRings: (l: string) => unknown[]; ringTimes: (t: object) => number[]; phoneRings: (s: unknown, t: string, ms: number, d: string) => boolean; BELL_RE: RegExp;
   };

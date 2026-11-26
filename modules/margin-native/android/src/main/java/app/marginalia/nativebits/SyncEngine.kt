@@ -71,7 +71,7 @@ object SyncEngine {
   /**
    * v0.7.8.1 (SPEC §8 G4): the phone's last 200 sync events, as `.margin/sync-log.phone.json` in the vault, so the
    * PC can read what happened here. At most once a minute and only when something new happened. The class rule
-   * `single:phone **/*.phone.json` sends it to the desktop, one way.
+   * `single:phone` rule for `*.phone.json` files sends it to the desktop, one way.
    */
   internal const val LOG_PATH = ".margin/sync-log.phone.json"
   private const val LOG_MS = 60_000L
