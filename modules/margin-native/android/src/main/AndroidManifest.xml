@@ -34,7 +34,7 @@
     </receiver>
 
     <!-- v0.7.7.7 (SPEC §5): the home-screen widgets, in Jetpack Glance. Now (2×1) and Class (4×1 to 4×3, 0.7.7.8);
-         Tasks follows. BoardWidget is the old widget's one-release stub (D4): a placed copy says "Replaced". -->
+         Tasks (4×2 to 4×4, 0.7.7.9), ticked natively by TaskTick. BoardWidget is the old widget's one-release stub (D4): a placed copy says "Replaced". -->
     <receiver android:name="app.marginalia.nativebits.NowWidgetReceiver" android:exported="false" android:label="@string/mg_widget_now_name">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_now"/>
@@ -42,6 +42,10 @@
     <receiver android:name="app.marginalia.nativebits.ClassWidgetReceiver" android:exported="false" android:label="@string/mg_widget_class_name">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_class"/>
+    </receiver>
+    <receiver android:name="app.marginalia.nativebits.TasksWidgetReceiver" android:exported="false" android:label="@string/mg_widget_tasks_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_tasks"/>
     </receiver>
     <receiver android:name="app.marginalia.nativebits.BoardWidget" android:exported="false" android:label="@string/mg_widget_board_name">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>

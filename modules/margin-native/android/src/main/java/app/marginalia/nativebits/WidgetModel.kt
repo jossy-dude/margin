@@ -85,6 +85,10 @@ object WidgetModel {
     h < 190f -> ClassLayout(state = true, place = true, footer = true, task = false, big = true)
     else -> ClassLayout(state = true, place = true, footer = true, task = true, big = true)
   }
+  /** Tasks: the rows that fit under the 32 dp header (padding 28, gap 4, 48 dp a row), one to four. */
+  fun taskRows(h: Float): Int = ((h - 28f - 32f - 4f) / 48f).toInt().coerceIn(1, 4)
+  const val NOTHING_DUE = "Nothing due. Enjoy it."
+
   /** Now (2×1) stacks state, name, countdown and bar once there is room (≈ 97 dp); below that, the name over a row of
    *  bar (or "Next · 10:55") and countdown (≈ 64 dp). */
   fun nowStacked(h: Float): Boolean = h >= 100f

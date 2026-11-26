@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.7.7.9 (SPEC §5): Tasks. 4×2 by default (one row), 4×3 two, 4×4 four; most urgent first, ticked right there. No
+     timer: an agenda change or a tick redraws it. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="250dp" android:minHeight="110dp"
+  android:minResizeWidth="180dp" android:minResizeHeight="110dp"
+  android:targetCellWidth="4" android:targetCellHeight="2"
+  android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
+  android:updatePeriodMillis="0"
+  android:initialLayout="@layout/glance_default_loading_layout"
+  android:previewImage="@drawable/mg_preview_tasks"
+  android:description="@string/mg_widget_tasks_desc"/>

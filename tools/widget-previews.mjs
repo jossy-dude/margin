@@ -1,8 +1,8 @@
 // v0.7.7.8 (SPEC §5): the widget picker's previews. The A51 is Android 13 and Glance's generated previews need 15, so
 // each widget gets a static previewImage at its default size, drawn from the same numbers as Widgets.kt (padding,
 // sizes, weights, bar) in the default skin's deck colours, at xxhdpi (3×).
-//   node tools/widget-previews.mjs   → modules/margin-native/…/res/drawable-nodpi/mg_preview_{now,class}.png
-//                                      docs/v077/widgets/{now,class}.png
+//   node tools/widget-previews.mjs   → modules/margin-native/…/res/drawable-nodpi/mg_preview_{now,class,tasks}.png
+//                                      docs/v077/widgets/{now,class,tasks}.png
 import { chromium } from 'playwright';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
@@ -40,6 +40,22 @@ const WIDGETS = {
         <div style="${chrono(28)}">24:13</div>
       </div>
       <div style="height:8px"></div>${bar(6, 0.5)}`,
+  },
+  /* Tasks, 4×2 (250×110 dp): the header ("To do · 3" and "+") and one row (WidgetModel.taskRows(110) = 1) */
+  tasks: {
+    w: 250, h: 110, pad: 14, html: `
+      <div style="display:flex;align-items:center;height:32px">
+        <div style="flex:1;${t(16, K.ink, 500)}">To do · 3</div>
+        <div style="width:48px;height:32px;border-radius:16px;background:${K.bar};color:${K.deck};font-size:20px;font-weight:500;display:flex;align-items:center;justify-content:center">+</div>
+      </div>
+      <div style="height:4px"></div>
+      <div style="display:flex;align-items:center;height:48px;gap:8px">
+        <div style="width:18px;height:18px;border:2px solid ${K.mut};border-radius:3px;margin:0 3px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="${t(16, K.ink)}">Problem set 5</div>
+          <div style="${t(12, '#F4998A')}">Late · Tue 23:59</div>
+        </div>
+      </div>`,
   },
 };
 

@@ -58,6 +58,12 @@ describe('the classes', () => {
 });
 
 describe('the tasks', () => {
+  it('carry their note line (block id and path) for the widget\'s native tick, only when they live in a note (v0.7.7.9)', () => {
+    const inNote = { ...task('n1', at(9, 12)), extId: 'ps5', extPath: 'School/Week 12.md' };
+    const a = buildAgenda(input({ tasks: [inNote, task('own', at(9, 13))] }));
+    expect(a.tasks.find((t) => t.id === 'n1')).toMatchObject({ b: 'ps5', n: 'School/Week 12.md' });
+    expect(a.tasks.find((t) => t.id === 'own')).not.toHaveProperty('b');
+  });
   it('are the open ones that have a due date, soonest first, capped', () => {
     const tasks = [task('late', at(8, 12)), task('done', at(9, 12), 2), task('none', null), task('soon', at(9, 18)), ...Array.from({ length: 14 }, (_, i) => task(`x${i}`, at(20, 10 + i % 10, i)))];
     const a = buildAgenda(input({ tasks }));

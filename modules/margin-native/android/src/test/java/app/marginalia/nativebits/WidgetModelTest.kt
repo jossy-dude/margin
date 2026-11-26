@@ -115,6 +115,14 @@ class WidgetModelTest {
     assertFalse(WidgetModel.nowStacked(70f)); assertTrue(WidgetModel.nowStacked(110f))
   }
 
+  @Test fun taskRowsFitUnderTheHeader() {
+    assertEquals(1, WidgetModel.taskRows(110f)) // 4×2
+    assertEquals(2, WidgetModel.taskRows(170f)) // 4×3
+    assertEquals(4, WidgetModel.taskRows(260f)) // 4×4
+    assertEquals(4, WidgetModel.taskRows(600f))
+    assertEquals(1, WidgetModel.taskRows(40f))
+  }
+
   @Test fun skyFollowsTheAppsKeyframes() {
     assertEquals("night", WidgetModel.skyAt(4 * 60 + 59))
     assertEquals("dawn", WidgetModel.skyAt(5 * 60))

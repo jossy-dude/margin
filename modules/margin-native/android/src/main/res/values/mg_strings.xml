@@ -4,6 +4,8 @@
   <string name="mg_widget_now_desc">The class on now or next, counting down.</string>
   <string name="mg_widget_class_name">Class</string>
   <string name="mg_widget_class_desc">The class on now or next, its room and what comes after.</string>
+  <string name="mg_widget_tasks_name">Tasks</string>
+  <string name="mg_widget_tasks_desc">What is due, most urgent first. Tick it there.</string>
   <string name="mg_widget_board_name">Marrow (old)</string>
   <string name="mg_widget_board_desc">Replaced by the new widgets.</string>
   <string name="mg_add_task">Add a task</string>

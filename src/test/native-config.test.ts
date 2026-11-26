@@ -251,12 +251,12 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
-  it('ships as 0.7.7.8, version code 26', () => {
-    // 0.7.7.8: Now and Class widgets. 0.7.7.7 was version code 25.
-    expect(appJson.expo.version).toBe('0.7.7.8');
-    expect(gradle).toMatch(/versionCode 26\b/);
-    expect(gradle).toContain('versionName "0.7.7.8"');
-    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.7.8</string>');
+  it('ships as 0.7.7.9, version code 27', () => {
+    // 0.7.7.9: Tasks widget with a native tick. 0.7.7.8 was version code 26.
+    expect(appJson.expo.version).toBe('0.7.7.9');
+    expect(gradle).toMatch(/versionCode 27\b/);
+    expect(gradle).toContain('versionName "0.7.7.9"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.7.9</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {

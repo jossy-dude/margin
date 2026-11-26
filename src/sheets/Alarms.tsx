@@ -175,6 +175,7 @@ function Note({ text, action, onPress }: { text: string; action: string; onPress
 const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
   { kind: 'now', name: 'Now', line: 'The class on now or next, counting down. 2×1.' },
   { kind: 'class', name: 'Class', line: 'Adds the room and what comes after; at 4×3, the task that most needs you. 4×1 to 4×3.' },
+  { kind: 'tasks', name: 'Tasks', line: 'What is due, most urgent first. Tick it there, even with Marrow closed. 4×2 to 4×4.' },
 ];
 /** Settings → Widgets (v0.7.7.8): each widget with a button that asks the launcher to place it, and D3's colours. */
 export function WidgetsPage() {

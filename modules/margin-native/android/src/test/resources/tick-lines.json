@@ -1,0 +1,134 @@
+[
+ {
+  "line": "- [ ] Read chapter 7 📅 2026-11-27 ^r7",
+  "today": "2026-11-26",
+  "want": "- [x] Read chapter 7 📅 2026-11-27 ✅ 2026-11-26 ^r7",
+  "why": "plain open line with a block id"
+ },
+ {
+  "line": "- [ ] Read chapter 7",
+  "today": "2026-11-26",
+  "want": "- [x] Read chapter 7 ✅ 2026-11-26",
+  "why": "no block id: ✅ goes at the end"
+ },
+ {
+  "line": "- [ ] Problem set 5 #school #Database-Systems ⏫ 📅 2026-11-28 ⏰ 23:59 ➕ 2026-11-20 ^ps5   ",
+  "today": "2026-11-26",
+  "want": "- [x] Problem set 5 #school #Database-Systems ⏫ 📅 2026-11-28 ⏰ 23:59 ➕ 2026-11-20 ✅ 2026-11-26 ^ps5",
+  "why": "fields and trailing spaces"
+ },
+ {
+  "line": "- [-] Quiz 3 📅 2026-11-25 ❌ 2026-11-24 ^q3",
+  "today": "2026-11-26",
+  "want": "- [x] Quiz 3 📅 2026-11-25 ✅ 2026-11-26 ^q3",
+  "why": "cancelled: ❌ leaves, ✅ comes"
+ },
+ {
+  "line": "- [ ] Lab report 📅 2026-11-26 ✅ 2026-11-25 ^lr",
+  "today": "2026-11-26",
+  "want": "- [x] Lab report 📅 2026-11-26 ✅ 2026-11-25 ^lr",
+  "why": "stale ✅ already there: not doubled"
+ },
+ {
+  "line": "- [x] Done already ✅ 2026-11-20 ^d1",
+  "today": "2026-11-26",
+  "want": "- [x] Done already ✅ 2026-11-20 ^d1",
+  "why": "already done: unchanged"
+ },
+ {
+  "line": "- [X] Done with capital X ^d2",
+  "today": "2026-11-26",
+  "want": "- [X] Done with capital X ^d2",
+  "why": "capital X counts as done"
+ },
+ {
+  "line": "- [/] Started essay 📅 2026-11-30 ^es",
+  "today": "2026-11-26",
+  "want": "- [x] Started essay 📅 2026-11-30 ✅ 2026-11-26 ^es",
+  "why": "started: becomes done"
+ },
+ {
+  "line": "- [!] Important thing ^im",
+  "today": "2026-11-26",
+  "want": "- [x] Important thing ✅ 2026-11-26 ^im",
+  "why": "important: becomes done"
+ },
+ {
+  "line": "  - [ ] Nested sub-task ^sub",
+  "today": "2026-11-26",
+  "want": "  - [x] Nested sub-task ✅ 2026-11-26 ^sub",
+  "why": "indented"
+ },
+ {
+  "line": "\t- [ ] Tab-indented ^tab",
+  "today": "2026-11-26",
+  "want": "\t- [x] Tab-indented ✅ 2026-11-26 ^tab",
+  "why": "tab indent"
+ },
+ {
+  "line": "* [ ] Star bullet ^st",
+  "today": "2026-11-26",
+  "want": "* [x] Star bullet ✅ 2026-11-26 ^st",
+  "why": "star bullet"
+ },
+ {
+  "line": "1. [ ] Numbered ^n1",
+  "today": "2026-11-26",
+  "want": "1. [x] Numbered ✅ 2026-11-26 ^n1",
+  "why": "numbered list"
+ },
+ {
+  "line": "- [ ]No space after the box ^ns",
+  "today": "2026-11-26",
+  "want": "- [x] No space after the box ✅ 2026-11-26 ^ns",
+  "why": "no space after ]"
+ },
+ {
+  "line": "- [ ]  Two spaces after the box ^two",
+  "today": "2026-11-26",
+  "want": "- [x]  Two spaces after the box ✅ 2026-11-26 ^two",
+  "why": "two spaces after ]"
+ },
+ {
+  "line": "- [ ] Water plants 🔁 every week 📅 2026-11-26 ^wp",
+  "today": "2026-11-26",
+  "want": "- [x] Water plants 🔁 every week 📅 2026-11-26 ✅ 2026-11-26 ^wp",
+  "why": "recurring (the next occurrence is 0.7.8.5)"
+ },
+ {
+  "line": "- [ ] Emoji with selector ✅️ 2026-11-01 ^vs",
+  "today": "2026-11-26",
+  "want": "- [x] Emoji with selector ✅️ 2026-11-01 ^vs",
+  "why": "variation selector on ✅"
+ },
+ {
+  "line": "- [ ] Cancel date with selector ❌️ 2026-11-01 ^vx",
+  "today": "2026-11-26",
+  "want": "- [x] Cancel date with selector ✅ 2026-11-26 ^vx",
+  "why": "variation selector on ❌"
+ },
+ {
+  "line": "- [ ] No-break space before id ^nb",
+  "today": "2026-11-26",
+  "want": "- [x] No-break space before id ✅ 2026-11-26 ^nb",
+  "why": "NBSP before the block id"
+ },
+ {
+  "line": "Not a task at all",
+  "today": "2026-11-26",
+  "want": "Not a task at all",
+  "why": "not a task: unchanged"
+ },
+ {
+  "line": "- [ ] Ends in CR ^cr\r",
+  "today": "2026-11-26",
+  "want": "- [ ] Ends in CR ^cr\r",
+  "why": "CRLF note: JS leaves a line with \\r unchanged"
+ },
+ {
+  "line": "- [ ] 日本語のタスク 📅 2026-11-29 ^jp",
+  "today": "2026-11-26",
+  "want": "- [x] 日本語のタスク 📅 2026-11-29 ✅ 2026-11-26 ^jp",
+  "why": "non-Latin title"
+ }
+]

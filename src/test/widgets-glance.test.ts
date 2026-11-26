@@ -50,7 +50,13 @@ describe('the widgets in the manifest', () => {
     expect(xml).toContain('android:targetCellHeight="2"');
     expect(xml).toContain('android:updatePeriodMillis="0"');
   });
-  it.each([['mg_widget_now.xml', 'mg_preview_now'], ['mg_widget_class.xml', 'mg_preview_class']])('%s has a static preview that exists (%s)', (f, img) => {
+  it('declares Tasks (4×2 by default, up to 4×4)', () => {
+    expect(manifest).toContain('app.marginalia.nativebits.TasksWidgetReceiver');
+    const xml = read(MAIN, 'res', 'xml', 'mg_widget_tasks.xml');
+    expect(xml).toContain('android:targetCellHeight="2"');
+    expect(xml).toContain('android:updatePeriodMillis="0"');
+  });
+  it.each([['mg_widget_now.xml', 'mg_preview_now'], ['mg_widget_class.xml', 'mg_preview_class'], ['mg_widget_tasks.xml', 'mg_preview_tasks']])('%s has a static preview that exists (%s)', (f, img) => {
     expect(read(MAIN, 'res', 'xml', f)).toContain(`android:previewImage="@drawable/${img}"`);
     expect(existsSync(join(MAIN, 'res', 'drawable-nodpi', `${img}.png`))).toBe(true);
   });
@@ -110,7 +116,7 @@ describe('Widgets.kt', () => {
     expect(read(MAIN, 'res', 'values-v31', 'mg_dimens.xml')).toContain('@android:dimen/system_app_widget_background_radius');
   });
   it('pins only kinds it knows', () => {
-    expect(w).toContain('mapOf("now" to NowWidgetReceiver::class.java, "class" to ClassWidgetReceiver::class.java)');
+    expect(w).toContain('"now" to NowWidgetReceiver::class.java, "class" to ClassWidgetReceiver::class.java, "tasks" to TasksWidgetReceiver::class.java');
   });
   it('running sessions recompose from fresh data: a version flow, not Glance state (v0.7.7.8)', () => {
     expect(w).toContain('val version = MutableStateFlow(0L)');
@@ -144,4 +150,30 @@ describe('widgetBar: the bar shows on the widget surface (v0.7.7.8)', () => {
     expect(widgetBar('#8A4B27', '#2A241C', '#FAF4E6', false)).toBe('#FAF4E6');
   });
   it('an accent with 3:1 on the deck stays', () => { expect(widgetBar('#9BBBE0', '#17181A', '#ECEBE7', false)).toBe('#9BBBE0'); });
+});
+
+describe('the native tick (v0.7.7.9, SPEC §5 "Tick from the widget")', () => {
+  const w = read(KT, 'Widgets.kt'), tt = read(KT, 'TaskTick.kt');
+  it('a check box runs TickAction with the task id; the row strikes for 1.5 s, then leaves', () => {
+    expect(w).toContain('onCheckedChange = actionRunCallback<TickAction>(actionParametersOf(TickAction.ID to t.id))');
+    expect(w).toContain('Widgets.ticking[id] = System.currentTimeMillis()');
+    expect(w).toContain('delay(1500)');
+    expect(w).toContain('strike = struck');
+  });
+  it('TaskTick records for JS, marks the database row done, and patches the note through vaultEdit', () => {
+    expect(tt).toContain('WidgetTicks.add(app, id)');
+    expect(tt).toContain('File(File(c.filesDir, "SQLite"), "marginalia.db")');
+    expect(tt).toContain('"id = ? AND (status IS NULL OR status <> 2)"');
+    expect(tt).toContain('SyncLocal.vaultEdit(path, Seal.hash(cur.toByteArray()), next)');
+  });
+  it('the database name and folder are what JS opens (expo-sqlite: files/SQLite)', () => {
+    expect(readFileSync(join(__dirname, '..', 'data', 'sqliteExpo.ts'), 'utf8')).toContain("openDatabaseAsync('marginalia.db')");
+  });
+  it('rows and the Class widget skip ticks JS has not taken, except the ones still striking', () => {
+    expect(w).toContain('WidgetTicks.pending(c) - Widgets.ticking.keys');
+  });
+  it('a 48 dp "+" opens Add task; the header counts instead of a "+N more" line', () => {
+    expect(w).toContain('"marrow://add/task"');
+    expect(w).toContain('"To do · ${all.size}"');
+  });
 });
