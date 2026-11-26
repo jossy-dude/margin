@@ -15,7 +15,7 @@ export const SPECS: Record<EntityName, Spec> = {
   meeting: { table: 'meeting', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('courseId', 'text'), f('weekday', 'int'), f('start', 'text', false, 'start_t'), f('end', 'text', false, 'end_t'), f('demo', 'bool'), f('variantId', 'text', true, 'variant_id'), f('room', 'text', true)] },
   attendance: { table: 'attendance', pk: 'key', pkProp: 'key', fields: [f('key', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
   dayMark: { table: 'day_mark', pk: 'date', pkProp: 'date', fields: [f('date', 'text'), f('status', 'text'), f('at', 'int'), f('reason', 'text'), o('why')] },
-  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath'), o('ord', 'real'), o('tags', 'json'), o('important', 'bool'), o('cancelled', 'bool'), o('planned', 'bool')] },
+  task: { table: 'task', pk: 'id', pkProp: 'id', fields: [f('id', 'text'), f('title', 'text'), f('courseId', 'text', true), f('kind', 'text'), f('dueAt', 'int', true), f('startAt', 'int', true), f('estimateMin', 'int', true), f('priority', 'int'), f('notes', 'text'), f('status', 'int'), f('createdAt', 'int'), f('completedAt', 'int', true), f('reminders', 'json'), f('subtasks', 'json'), f('demo', 'bool'), o('origin'), o('extId'), o('extPath'), o('ord', 'real'), o('tags', 'json'), o('important', 'bool'), o('cancelled', 'bool'), o('planned', 'bool'), o('endAt', 'int')] },
   /* No `read` field: the flag was written and never read anywhere, so the object, the export column
      and this mapping all dropped it. The `is_read` column stays in the table (an old migration is
      never edited) and is simply no longer bound — nullable, so puts leave it NULL and loads ignore it. */
@@ -167,6 +167,8 @@ export const MIGRATIONS: string[] = [
    CREATE INDEX IF NOT EXISTS idx_task_path ON task(ext_path);`,
   /* Migration 9 (v0.7.8.2, SPEC §9.6 B5): a vault line with only ⏳ is "planned for" its day, not due on it. */
   `ALTER TABLE task ADD COLUMN planned INTEGER;`,
+  /* Migration 10 (v0.7.8.5, SPEC §9.11): the end of a `⏰ 15:15-16:45` block, so Today draws it between classes. */
+  `ALTER TABLE task ADD COLUMN end_at INTEGER;`,
 ];
 
 /** Old letter → v0.6 state + why (the same table `domain/attendance.ts` `legacyStatus` reads). */

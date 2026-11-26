@@ -68,5 +68,7 @@ export function taskFromLine(t: VaultTask, prev: Task | undefined, courses: read
     tags, important: t.status === '!', cancelled,
     // B5: a line with only ⏳ is planned for that day, not due on it
     ...(t.due === null && t.scheduled !== null ? { planned: true } : {}),
+    // §9.11: a range is a block on Today's timeline
+    ...(t.timeEnd && (t.due ?? t.scheduled) ? { endAt: at(t.due ?? t.scheduled, t.timeEnd, t.timeEnd) } : {}),
   };
 }

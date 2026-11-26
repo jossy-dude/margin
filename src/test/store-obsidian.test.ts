@@ -63,6 +63,21 @@ describe('the vault through the store', () => {
     await refreshVault();
     expect(getState().tasks.filter((x) => x.origin === 'obsidian').map((x) => [x.title, x.status])).toEqual([['Call the bank', 2]]);
   });
+  it('D12: ticking a 🔁 line from Marrow writes the next occurrence above it, which arrives as a new task', async () => {
+    await fresh();
+    vault.set('W.md', '- [ ] Water plants #school 🔁 every week 📅 2026-11-26 ^wp\n');
+    await refreshVault();
+    const t = getState().tasks.find((x) => x.extId === 'wp')!;
+    act.saveTask({ ...t, status: 2, completedAt: NOW });
+    await settle(); await obsidianNow();
+    const lines = vault.get('W.md')!.split('\n');
+    expect(lines[0]).toMatch(/^- \[ \] Water plants #school 🔁 every week 📅 2026-12-03( \^m\w+)?$/);
+    expect(lines[1]).toBe('- [x] Water plants #school 🔁 every week 📅 2026-11-26 ✅ 2026-11-20 ^wp');
+    await refreshVault();
+    const open = getState().tasks.filter((x) => x.title === 'Water plants' && x.status !== 2);
+    expect(open).toHaveLength(1);
+    expect(open[0]!.extId).not.toBe('wp');
+  });
   it('a failed (~) day-plan block reads as closed', async () => {
     await fresh();
     vault.set('Plan.md', '- [~] Morning run 📅 2026-11-24 ⏰ 06:30-07:00\n');

@@ -67,6 +67,8 @@ export interface Task {
   cancelled?: boolean | null;
   /** v0.7.8.2 (B5): the vault line has only ⏳: `dueAt` is the day it is planned for, not a deadline. */
   planned?: boolean | null;
+  /** v0.7.8.5 (§9.11): the end of a `⏰ 15:15-16:45` range (a bone-calendar block); `dueAt` is its start. */
+  endAt?: number | null;
 }
 /** A notice (v0.8 §3.2, was "Note"): a pinned reminder for the future self. The date is optional (migration 8):
  *  a dated one counts down and can remind (`remind` = minutes before; absent = no reminder). */

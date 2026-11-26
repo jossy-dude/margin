@@ -9,13 +9,11 @@ import { leafOf, pickVault } from '../services/vaultFiles';
 import { onSyncEvent, syncClearErrors, syncConfigure, syncDismissError, syncForget, syncNow, syncStatus, type SyncStatus } from '../services/native';
 import { problemGroups, syncView, type Problem } from '../domain/syncView';
 import { fmtTime } from '../domain/time';
+import { obsidianLink } from '../domain/obsidianLink';
 
 const UPDATE = 'On the desktop: cd ~/Documents/Projects/tools/vault-sync && git pull, then systemctl --user restart bone-syncd. Margin Bridge updates itself by sync.';
 const HUB = 'On the desktop: systemctl --user enable --now bone-syncd. Then the computer and the phone on the same Wi-Fi (or the phone\'s hotspot, or Tailscale).';
 
-/** obsidian://open for a file in the synced vault (a Conflicts/ note, a dated copy, a file too big to sync). */
-export const obsidianLink = (vault: string | null | undefined, file: string) =>
-  `obsidian://open?${vault ? `vault=${encodeURIComponent(vault)}&` : ''}file=${encodeURIComponent(file)}`;
 
 /**
  * Settings → Obsidian & sync → What went wrong (v0.7.8, SPEC §8 G3). One card per problem: its code, the plain

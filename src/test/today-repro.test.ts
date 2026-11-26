@@ -12,7 +12,9 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { MemoryRepository } from '../data/memory';
 import { dayBlock, lanes } from '../domain/attendance';
 import type { Course, Meeting } from '../domain/types';
-import { deckOf, dueGroups, headingSize, needsYou, TodayScreen } from '../screens/Today';
+import { dayRows, deckOf, dueGroups, headingSize, needsYou, planBlocks, TodayScreen } from '../screens/Today';
+import { taskFromLine } from '../domain/vaultMap';
+import { parseLine } from '../domain/vaultTasks';
 import { hydrate, stopResync } from '../store/store';
 
 jest.mock('expo-audio', () => ({ createAudioPlayer: () => ({ play: () => {}, seekTo: () => {}, remove: () => {} }), setAudioModeAsync: async () => {} }));
@@ -178,5 +180,18 @@ describe('S2 pieces', () => {
     expect(few.lateLine).toBeNull();
     expect(few.items.map((x) => x.id)).toEqual(['late0', 'today', 'd1']);
     expect(needsYou([], NOW).empty).toBe(true);
+  });
+  it('§9.11: day-plan blocks (a ⏰ range from a note) sit between the classes, by start; failed ones are not open', () => {
+    const day = new Date(2026, 10, 25).getTime();
+    const mk = (raw: string) => taskFromLine(parseLine(raw, 'Daily/Nov 25.md')!, undefined, [], ['#school'], 0);
+    const a = mk('- [ ] Plan and execute 📅 2026-11-25 ⏰ 15:15-16:45'), f = mk('- [~] Morning run 📅 2026-11-25 ⏰ 06:30-07:00');
+    expect(a.endAt).toBe(new Date(2026, 10, 25, 16, 45).getTime());
+    expect(f).toMatchObject({ status: 2, cancelled: true });
+    const single = mk('- [ ] Just a time 📅 2026-11-25 ⏰ 09:00');
+    expect(single.endAt).toBeUndefined();
+    const bl = planBlocks([a, f, single], day);
+    expect(bl.map((x) => x.title)).toEqual(['Morning run', 'Plan and execute']);
+    const m = (start: string) => ({ date: new Date(day), meeting: { id: start, courseId: 'c', weekday: 2, start, end: '10:00', demo: false } });
+    expect(dayRows([m('09:00'), m('16:00')], bl).map((r) => (r.t === 'class' ? r.o.meeting.start : r.task.title))).toEqual(['Morning run', '09:00', 'Plan and execute', '16:00']);
   });
 });

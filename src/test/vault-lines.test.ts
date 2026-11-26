@@ -4,9 +4,10 @@
  * variation selectors. Each line is parsed and has every field Marrow owns patched; the line stays byte for byte
  * the same outside the patched field. The same lines are ticked by Kotlin through `tick-lines.json`.
  */
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { bellOf, isOpen, lineIndexOf, parseLine, patchLine, replaceLine, withTasksHead, type LinePatch } from '../domain/vaultTasks';
+import { homedir } from 'os';
+import { bellOf, isOpen, keysOf, lineIndexOf, nextOccurrence, nextRecurrence, parseLine, patchLine, replaceLine, withTasksHead, type LinePatch } from '../domain/vaultTasks';
 import { bellFor, lineRingTimes, taskFromLine } from '../domain/vaultMap';
 
 const LINES = readFileSync(join(__dirname, 'fixtures', 'vault-lines.md'), 'utf8').split('\n').filter((l) => l.trim());
@@ -145,5 +146,33 @@ describe('🔔: one reminder grammar (v0.7.8.4, SPEC §9.3, B2, B8)', () => {
   it('a line whose words already mean the task\'s rings is not rewritten', () => {
     const t = map('- [ ] Pay the fee 📅 2026-11-28 🔔 -1d');
     expect(lineRingTimes(parseLine('- [ ] Pay the fee 📅 2026-11-28 🔔 -1d')!)).toEqual(t.reminders.map((r) => (r.mode === 'abs' ? r.at : 0)));
+  });
+});
+
+describe('🔁 both ways (v0.7.8.5, SPEC §9.5, B3, D12)', () => {
+  it.each([
+    ['every day', '2026-11-26', '2026-11-27'], ['daily', '2026-11-30', '2026-12-01'],
+    ['every weekday', '2026-11-27', '2026-11-30'], ['every week', '2026-11-26', '2026-12-03'],
+    ['every month', '2026-01-31', '2026-02-28'], ['every year', '2028-02-29', '2029-02-28'],
+    ['every 2 weeks', '2026-11-26', '2026-12-10'], ['every 3 days', '2026-11-30', '2026-12-03'], ['every 2 months', '2026-12-15', '2027-02-15'],
+  ])('%s from %s → %s', (rule, from, want) => { expect(nextRecurrence(rule, from)).toBe(want); });
+  it('an unknown rule gives nothing', () => { expect(nextRecurrence('every full moon', '2026-11-26')).toBeNull(); });
+  it('the next occurrence: open, 📅 moved, 🛫 moved with it, no ✅, no ^id', () => {
+    expect(nextOccurrence('- [ ] Water 🔁 every week 🛫 2026-11-24 📅 2026-11-26 ^w1', '2026-11-26')).toBe('- [ ] Water 🔁 every week 🛫 2026-12-01 📅 2026-12-03');
+  });
+  it('a late one counts from today', () => {
+    expect(nextOccurrence('- [ ] Pay rent 🔁 every month 📅 2026-10-01', '2026-11-26')).toBe('- [ ] Pay rent 🔁 every month 📅 2026-12-26');
+  });
+  it('the done line keeps the key; its keyless twin gets the next number, not the same key', () => {
+    const k = [...keysOf('- [ ] Water 🔁 every week 📅 2026-12-03\n- [x] Water 🔁 every week 📅 2026-11-26 ✅ 2026-11-26 ^lfabc\n', 'x.md').keys()];
+    expect(k[0]).toBe('lfabc');
+    expect(k[1]).not.toBe('lfabc');
+  });
+  it('bone-tasks no longer copies the ^id to the next occurrence', () => {
+    const p = join(homedir(), 'Documents', 'Obsidian_Vault', '𐂯Bone𐂯', '.obsidian', 'plugins', 'bone-tasks', 'main.js');
+    if (existsSync(p)) expect(readFileSync(p, 'utf8')).toContain('n = n.replace(/\\s\\^[\\w-]+\\s*$/, "");');
+  });
+  it('the native tick leaves 🔁 lines to JS', () => {
+    expect(readFileSync(join(__dirname, '..', '..', 'modules', 'margin-native', 'android', 'src', 'main', 'java', 'app', 'marginalia', 'nativebits', 'TaskTick.kt'), 'utf8')).toContain('if (lines[i].contains("🔁")) return null');
   });
 });

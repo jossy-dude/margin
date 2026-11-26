@@ -49,11 +49,13 @@ object TaskTick {
     return "$indent$bullet [$status] ${body.replace(TRAILING, "")}"
   }
 
-  /** The note with the line of `blockId` ticked, or null when the line isn't there or nothing changes. */
+  /** The note with the line of `blockId` ticked, or null when the line isn't there, nothing changes, or it repeats. */
   fun inNote(text: String, blockId: String, today: String): String? {
     val lines = text.split("\n").toMutableList()
     val i = lines.indexOfFirst { ID.find(it)?.groupValues?.get(1) == blockId }
     if (i < 0) return null
+    // v0.7.8.5 (D12): a 🔁 line is left to JS, which ticks it AND writes its next occurrence above it
+    if (lines[i].contains("🔁")) return null
     val next = done(lines[i], today)
     if (next == lines[i]) return null
     lines[i] = next

@@ -308,12 +308,15 @@ const coreOf = (t: VaultTask) => `${t.title}|${t.tags.map(norm).sort().join(' ')
 export const lifeKey = (path: string, t: VaultTask, n = 0) => `lf${fnv(`${path}\n${coreOf(t)}`)}${n ? `-${n}` : ''}`;
 /** Every line of a note by its key: its `^id`, or its Life key when it has none. */
 export function keysOf(text: string, path: string): Map<string, VaultTask> {
-  const out = new Map<string, VaultTask>(), seen = new Map<string, number>();
-  for (const t of parseNote(text, path)) {
-    if (t.blockId) { out.set(t.blockId, t); continue; }
-    const base = lifeKey(path, t), n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    out.set(n ? lifeKey(path, t, n) : base, t);
+  const out = new Map<string, VaultTask>(), all = parseNote(text, path);
+  // a ^id is taken first, so a keyless twin (a 🔁 line's next occurrence, written above the done one that now carries
+  // the key as its ^id) gets the next free number instead of the same key
+  for (const t of all) if (t.blockId) out.set(t.blockId, t);
+  for (const t of all) {
+    if (t.blockId) continue;
+    let n = 0, k = lifeKey(path, t);
+    while (out.has(k)) k = lifeKey(path, t, ++n);
+    out.set(k, t);
   }
   return out;
 }
@@ -323,6 +326,42 @@ export function findLine(text: string, path: string, key: string): number {
   if (i >= 0 || !key.startsWith('lf')) return i;
   return keysOf(text, path).get(key)?.line ?? -1;
 }
+/* ── recurrence (v0.7.8.5, SPEC §9.5, B3, D12): bone-tasks' `nextRecurrence`, ported ───────────── */
+const ymdParts = (d: string) => d.split('-').map(Number) as [number, number, number];
+const ymdStr = (dt: Date) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+/** The day after `from` that a `🔁` rule lands on (every day / weekday / week / month / year / N units), or null. */
+export function nextRecurrence(rule: string, from: string): string | null {
+  const r = rule.toLowerCase().trim(), [y, m, d] = ymdParts(from), dt = new Date(y, m - 1, d, 12);
+  const addMonths = (n: number) => { const day = dt.getDate(); dt.setDate(1); dt.setMonth(dt.getMonth() + n); dt.setDate(Math.min(day, new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate())); };
+  let k: RegExpExecArray | null;
+  if (/^every day$|^daily$/.test(r)) dt.setDate(dt.getDate() + 1);
+  else if (/^every weekday$/.test(r)) { do dt.setDate(dt.getDate() + 1); while (dt.getDay() === 0 || dt.getDay() === 6); }
+  else if (/^every week$|^weekly$/.test(r)) dt.setDate(dt.getDate() + 7);
+  else if (/^every month$|^monthly$/.test(r)) addMonths(1);
+  else if (/^every year$|^yearly$/.test(r)) addMonths(12);
+  else if ((k = /^every (\d+) (day|week|month|year)s?$/.exec(r))) {
+    const n = Number(k[1]);
+    if (k[2] === 'day') dt.setDate(dt.getDate() + n); else if (k[2] === 'week') dt.setDate(dt.getDate() + 7 * n); else addMonths(k[2] === 'month' ? n : 12 * n);
+  } else return null;
+  return ymdStr(dt);
+}
+/** The open line that follows a `🔁` line ticked done, as bone-tasks writes it: open box, no ✅, 📅 on the next day
+ *  (counted from the due day, or today when that has passed), 🛫 moved with it, and no `^id` (B3: the done line keeps
+ *  it). Null when the line has no rule Marrow can read. */
+export function nextOccurrence(raw: string, today: string): string | null {
+  const t = parseLine(raw);
+  if (!t?.recur) return null;
+  const base = t.due && t.due >= today ? t.due : today, nx = nextRecurrence(t.recur, base);
+  if (!nx) return null;
+  let n = patchLine(raw, { status: ' ', due: nx });
+  if (t.start && t.due) {
+    const gap = Math.round((new Date(`${t.due}T12:00:00`).getTime() - new Date(`${t.start}T12:00:00`).getTime()) / 86_400_000);
+    const st = new Date(`${nx}T12:00:00`); st.setDate(st.getDate() - gap);
+    n = n.replace(/🛫\uFE0F?\s*\d{4}-\d{2}-\d{2}/u, `🛫 ${ymdStr(st)}`);
+  }
+  return n.replace(ID_RE, '');
+}
+
 /** The first change Marrow makes to a Life line also gives it its key as a `^id`. */
 export const withId = (line: string, key: string) => (ID_RE.test(line) ? line : `${line.replace(/\s+$/, '')} ^${key}`);
 

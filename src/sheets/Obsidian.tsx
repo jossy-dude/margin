@@ -7,7 +7,7 @@ import { obsidianNow, obsidianStatus, onObsidian } from '../store/obsidian';
 import { leafOf, pickVault, vaultAvailable } from '../services/vaultFiles';
 import { nativeAvailable, onSyncEvent, scanQr, syncClashDone, syncClearErrors, syncConfigure, syncEvents, syncForget, syncHold, syncNow, syncPair, syncStatus, type SyncStatus } from '../services/native';
 import { clashNote, syncView, type Action } from '../domain/syncView';
-import { obsidianLink } from './Problems';
+import { obsidianLink } from '../domain/obsidianLink';
 import { holdQuestion } from '../domain/syncHold';
 import { DEFAULT_TRACKED } from '../domain/vaultTasks';
 import { fmtTime } from '../domain/time';

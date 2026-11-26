@@ -31,4 +31,8 @@ class TaskTickTest {
     assertNull(TaskTick.inNote(note, "missing", "2026-11-26"))
     assertNull(TaskTick.inNote("- [x] Done ✅ 2026-11-01 ^d", "d", "2026-11-26"))
   }
+
+  @Test fun aRepeatingLineIsLeftToJs() {
+    assertNull(TaskTick.inNote("- [ ] Water 🔁 every week 📅 2026-11-26 ^w", "w", "2026-11-26"))
+  }
 }

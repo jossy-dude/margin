@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { V2 } from '../tokens/v2';
 import { DAY_INK } from '../tokens/skins/daylight';
@@ -22,7 +22,9 @@ import { waitPeriod } from '../ui/instruments/time';
 import { NoteCard } from '../ui/collage/NoteCard';
 import { noticeOrder } from '../domain/vaultNotes';
 import { FS } from '../ui/fit';
-import type { Course, SubjectVariant, Task } from '../domain/types';
+import type { Course, Meeting, SubjectVariant, Task } from '../domain/types';
+import { obsidianLink } from '../domain/obsidianLink';
+import { leafOf } from '../services/vaultFiles';
 import { fx } from '../services/fx';
 import { attendanceSummary, classesOn } from './today/model';
 
@@ -476,6 +478,35 @@ export function dueGroups(tasks: readonly Task[], now: number) {
   };
 }
 
+/** v0.7.8.5 (SPEC §9.11, D7): the day plan's blocks on a day, by start: tasks from a note with a `⏰` range. */
+export function planBlocks(tasks: readonly Task[], day: number): Task[] {
+  const end = addDays(day, 1);
+  return tasks.filter((t) => t.extPath && t.endAt != null && t.dueAt !== null && t.dueAt >= day && t.dueAt < end).sort((a, b) => (a.dueAt as number) - (b.dueAt as number));
+}
+type DayRow = { t: 'class'; at: number; o: { date: Date; meeting: Meeting } } | { t: 'block'; at: number; task: Task };
+/** Classes and blocks in one timeline, by start time (a class first when both start together). */
+export function dayRows(occ: readonly { date: Date; meeting: Meeting }[], blocks: readonly Task[]): DayRow[] {
+  const rows: DayRow[] = [...occ.map((o) => ({ t: 'class' as const, at: atTime(o.date.getTime(), o.meeting.start), o })), ...blocks.map((task) => ({ t: 'block' as const, at: task.dueAt as number, task }))];
+  return rows.sort((a, b) => a.at - b.at || (a.t === 'class' ? -1 : 1));
+}
+/** One block, read-only (D7): its time, its title, and its state as the note says (open, finished, failed or
+ *  cancelled). A tap opens its note in Obsidian. */
+function PlanBlock({ task, now, hour12, vault }: { task: Task; now: number; hour12: boolean; vault: string | null }) {
+  const { c } = useTheme();
+  const a = task.dueAt as number, b = task.endAt as number, done = task.status === 2, off = done && !!task.cancelled, live = !done && now >= a && now < b;
+  const state = off ? 'not done' : done ? 'finished' : live ? 'now' : 'planned';
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={`${task.title}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${state}. Opens the note in Obsidian.`}
+      testID="plan-block" onPress={() => { if (task.extPath) void Linking.openURL(obsidianLink(vault, task.extPath)).catch(() => {}); }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 12, minHeight: 48, borderLeftWidth: 3, borderLeftColor: live ? c.acc : off ? c.bad : c.rule, opacity: done ? 0.7 : 1 }}>
+        <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }}><Txt f="type" s={15} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={13} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
+        <Txt f="serif" s={17} numberOfLines={2} style={[{ flex: 1, minWidth: 0 }, done ? { textDecorationLine: 'line-through', color: c.mut } : null]}>{task.title}</Txt>
+        <Icon name={off ? 'x' : done ? 'check' : 'note'} size={18} color={off ? c.bad : c.mut} />
+      </View>
+    </Pressable>
+  );
+}
+
 /**
  * v0.7.8.2+ (SPEC §7.4, D13): Today shows at most three tasks that need you, then "All tasks (n)". To-do is the
  * list; Today only points at it. Late ones come first; more than three late collapse into one line, so the three
@@ -497,7 +528,7 @@ export function TodayScreen() {
      re-render this whole page — only the slices it actually reads. Settings are read field by field
      (`name`, `bar`). `st` is rebuilt locally each render. */
   const name = useStore((s) => s.settings.name), bar = useStore((s) => s.settings.bar), hour12 = useStore((s) => s.settings.hour12), meetings = useStore((s) => s.meetings), courses = useStore((s) => s.courses), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks), tasks = useStore((s) => s.tasks), notices = useStore((s) => s.notices);
-  const moves = useStore((s) => s.settings.moves);
+  const moves = useStore((s) => s.settings.moves), vaultUri = useStore((s) => s.settings.vaultUri);
   const pinnedNotices = React.useMemo(() => noticeOrder(notices).filter((n) => n.pinned !== false), [notices]);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks, notices };
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
@@ -520,6 +551,8 @@ export function TodayScreen() {
   /* "Due" (S2): what is late, what is due today, then the next three — grouped, so a long overdue tail
      cannot push today's work off the page. Overdue is capped at five with a pointer to the rest. */
   const due = needsYou(st.tasks, now);
+  // §9.11: the day plan's timed blocks (bone-calendar `⏰ 15:15-16:45` lines), between the classes
+  const blocks = planBlocks(st.tasks, sel), vaultName = leafOf(vaultUri ?? '') || null;
   const dayMark = st.dayMarks[selDate];
   return (
     <Page title={fmtDay(today, now) === 'Today' ? `${DW[weekdayOf(new Date(now))]} ${new Date(now).getDate()} ${MO[new Date(now).getMonth()]?.slice(0, 3)}` : ''} sub={who ? `${hello}, ${who}` : hello}
@@ -570,7 +603,9 @@ export function TodayScreen() {
         </View>
       </Section>
       <Section title={fmtDay(sel, now)}>
-        {selOcc.length === 0 ? <Empty icon="today" text="No classes. Add one from the + button." /> : selOcc.map(({ date, meeting }) => {
+        {selOcc.length === 0 && blocks.length === 0 ? <Empty icon="today" text="No classes. Add one from the + button." /> : dayRows(selOcc, blocks).map((row) => {
+          if (row.t === 'block') return <PlanBlock key={row.task.id} task={row.task} now={now} hour12={hour12} vault={vaultName} />;
+          const { date, meeting } = row.o;
           const course = st.courses.find((x) => x.id === meeting.courseId), e = effective(date, meeting, st.attendance, st.dayMarks, now), a = atTime(date.getTime(), meeting.start), b = occEnd(date.getTime(), meeting), live = now >= a && now < b && !isCancelled(e), key = occKey(ymd(date), meeting), col = statusColor(e.status, c), range = `${fmtTime(a, hour12)}–${fmtTime(b, hour12)}`;
           return (
             <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${course?.name}, ${fmtTime(a, hour12)} to ${fmtTime(b, hour12)}, ${spokenStatus(e)}. Opens attendance.`} onPress={() => act.open({ t: 'status', mode: 'class', key, title: course?.name ?? 'Class', date: ymd(date) })} onLongPress={() => act.open({ t: 'meeting', id: meeting.id })}>

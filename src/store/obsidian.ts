@@ -24,7 +24,7 @@ import { timerActions } from './actions/timer';
 import { buildEnvelope, prioToBone } from '../domain/bridge';
 import { effective, isCancelled as occCancelled } from '../domain/attendance';
 import {
-  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, findLine, hmOf, isDone, isLifeLine, isOpen, keysOf, newLine,
+  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, findLine, nextOccurrence, hmOf, isDone, isLifeLine, isOpen, keysOf, newLine,
   parseLine, parseNote, patchLine, subjectTag, tracked, withId, withTasksHead, ymdOf, type LinePatch,
 } from '../domain/vaultTasks';
 import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
@@ -268,7 +268,18 @@ async function pushOut(): Promise<void> {
       if (!d) continue;
       // B6: the line is found by ID_RE, as the parser finds it (a trailing space no longer hides it)
       // a Life line gets its key as its ^id with this first change (§9.2), so it is found the same way from now on
-      if (!(await editNote(line.p, (txt) => { const ls = txt.split('\n'), i = findLine(txt, line.p, bid); if (i < 0) return null; ls[i] = withId(patchLine(ls[i]!, d), bid); return ls.join('\n'); }))) failed.push(id);
+      // D12: ticking a 🔁 line from the phone writes its next occurrence above it, as bone-tasks does
+      let added = false;
+      if (!(await editNote(line.p, (txt) => {
+        const ls = txt.split('\n'), i = findLine(txt, line.p, bid);
+        if (i < 0) return null;
+        const old = ls[i]!, next = d.status === 'x' && !isDone(parseLine(old)?.status ?? ' ') ? nextOccurrence(old, ymdOf(Date.now())) : null;
+        ls[i] = withId(patchLine(old, d), bid);
+        if (next) { ls.splice(i, 0, next); added = true; }
+        return ls.join('\n');
+      }))) failed.push(id);
+      // the new line is in no task yet: the next read takes the note again instead of trusting its hash
+      else if (added) delete c.known[line.p];
       continue;
     }
     // a new school task: one line in Margin/Tasks.md, with the subject's tag and its kind tags
