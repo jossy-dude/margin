@@ -16,12 +16,12 @@ import { NOTE_LEVEL, noteDate } from './notes';
  */
 import { useScreenLive } from '../live';
 export function NoteCard({ n, subject, i, now, hour12, onPress }: { n: Notice; subject: string | null; i: number; now: number; hour12: boolean; onPress: () => void }) {
-  const { c, tints, look } = useTheme(), lvl = NOTE_LEVEL[n.priority] ?? NOTE_LEVEL[0], urgent = n.priority === 3;
+  const { c, tints, skin } = useTheme(), lvl = NOTE_LEVEL[n.priority] ?? NOTE_LEVEL[0], urgent = n.priority === 3;
   const bg = n.priority === 0 ? c.card : n.priority === 1 ? tints.sky : n.priority === 2 ? c.hl : tints.blush;
   const date = noteDate(n, now), sameDay = date !== null && startOfDay(date) === startOfDay(now);
   const when = date === null ? null : sameDay ? (new Date(date).getHours() || new Date(date).getMinutes() ? `today ${fmtTime(date, hour12)}` : 'today') : fmtDay(date, now);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${lvl.word}: ${n.text}${subject ? `, ${subject}` : ''}${when ? `, for ${when}` : ''}`} onPress={onPress} style={look === 'plain' ? undefined : { transform: [{ rotate: `${(i % 3 - 1) * 1.6}deg` }] }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${lvl.word}: ${n.text}${subject ? `, ${subject}` : ''}${when ? `, for ${when}` : ''}`} onPress={onPress} style={(skin.surface.edge === 'hairline' || skin.surface.edge === 'glass') ? undefined : { transform: [{ rotate: `${(i % 3 - 1) * 1.6}deg` }] }}>
       <HandBox seed={n.id} fill={bg} style={{ width: 222, minHeight: 120, padding: 12, paddingTop: 16, gap: 4 }}>
         <Tape w={46} rot={-6} style={{ top: -9, left: 88, ...(urgent ? { opacity: 1 } : null) }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

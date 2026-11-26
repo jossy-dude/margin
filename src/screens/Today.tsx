@@ -317,10 +317,10 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
    *  corner and the state pill has to start clear of it. */
   headPad?: number;
 }) {
-  const { c, look, skin, dark } = useTheme();
+  const { c, skin, dark } = useTheme();
   /* v0.7.7.5 (SPEC §1): Daylight's instruments — a 56 dp ring clock inside the deck, a 6 dp capsule for progress,
      no dashed rule, no tilt, and the state pill in amber only while a class is on */
-  const ring = skin?.instruments.clock === 'ring', capsule = skin?.instruments.bar === 'capsule';
+  const ring = skin.instruments.clock === 'ring', capsule = skin.instruments.bar === 'capsule';
   /* v0.7.7.4 (SPEC §2 E5): the card follows the minute (classes start and end on one); the ticking digits and the
      start disc are leaves with their own 1 Hz clocks */
   const live = useScreenLive(), t = useLiveNow(60_000, 60_000);
@@ -358,7 +358,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
   const shown = soon ? [waitPeriod(d.period!.start, gapMs, `until ${d.period!.label}`)] : barPeriods;
   return (
     <HandBox seed="deck" fill={c.deck} stroke={c.deck} sw={2} amp={1.1} style={{ paddingTop: 15, paddingBottom: 14, paddingHorizontal: DECK_PAD_X }}>
-      {look !== 'plain' && <SlabHatch ink={c.deckInk} />}
+      {skin.instruments.hatch && <SlabHatch ink={c.deckInk} />}
       {/* `.tg` — the state word is the card's own ink inverted back out, as the reference's `.tg b` is:
           the one place inside the slab that is lighter than the slab, so it reads first. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: headPad }}>
@@ -371,7 +371,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
             `minWidth: 0` and the subtitle's own `flexShrink: 1` stay, so a larger system font still
             truncates gracefully instead of pushing the room tag off the card. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-          {skin ? (
+          {ring ? (
             <View style={{ borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3, backgroundColor: d.state === 'live' ? skin.ink.now : skin.ink.deckInk }}>
               <Txt f="bold" s={18} maxFontSizeMultiplier={FS} style={{ color: d.state === 'live' ? V2[dark ? 'dark' : 'light'].onNow : DAY_INK.light.ink }}>{d.word}</Txt>
             </View>
@@ -401,7 +401,8 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           card is therefore about 20 px taller than the reference's, all of it in this row. */}
       {/* S2: the name is as large as fits in two lines (`headingSize`), so a long name steps down instead of
           being cut after two lines at full size. */}
-      <Txt f="marker" s={headingSize(title, w)} numberOfLines={2} style={{ color: c.deckInk, marginTop: 8, marginBottom: many ? 4 : 6 }}>{title}</Txt>
+      {/* v0.7.7.6 (B4): the day's summary ("3 classes · all present") shrinks to one line instead of wrapping; a class name keeps two */}
+      <Txt f="marker" s={headingSize(title, w)} numberOfLines={d.period ? 2 : 1} adjustsFontSizeToFit={!d.period} minimumFontScale={0.6} style={{ color: c.deckInk, marginTop: 8, marginBottom: many ? 4 : 6 }}>{title}</Txt>
       {/* Two classes in one slot (S2, the owner's O4 case): a paper tab for each, in the deck's own inks.
           The chosen one is filled; the card's countdown, room, bar and "After" follow it. */}
       {many && (
@@ -450,7 +451,7 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
         </View>
       )}
       {capsule
-        ? <CapsuleBar frac={d.period ? (soon ? 1 - Math.max(0, d.period.start - t) / gapMs : (t - d.period.start) / Math.max(1, d.period.end - d.period.start)) : isToday && d.total > 0 ? 1 : 0} track={hexA(c.deckInk, 0.2)} fill={d.state === 'live' && skin ? skin.ink.now : c.acc} />
+        ? <CapsuleBar frac={d.period ? (soon ? 1 - Math.max(0, d.period.start - t) / gapMs : (t - d.period.start) / Math.max(1, d.period.end - d.period.start)) : isToday && d.total > 0 ? 1 : 0} track={hexA(c.deckInk, 0.2)} fill={d.state === 'live' ? skin.ink.now : c.acc} />
         : <DayBar kind={bar} periods={shown} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />}
       {/* `.aft` — a dashed rule, then what the day does next (Daylight: a hairline, no dashes). */}
       <View style={{ marginTop: 10, borderTopWidth: capsule ? StyleSheet.hairlineWidth : 2.5, borderStyle: capsule ? 'solid' : 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
@@ -512,7 +513,7 @@ export function TodayScreen() {
           plus a gap, so the state pill starts clear of the bezel — the gap is 8, trimmed from 14 when
           the header's widest state (`First class · Period 1 of 4 · B-12`) clipped without it. On a day
           with nothing on it there is no card to attach to, so the clock stands alone with its status line. */}
-      {periods.length > 0 && skin?.instruments.clock === 'ring' ? (
+      {periods.length > 0 && skin.instruments.clock === 'ring' ? (
         <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} hour12={hour12}
           doneLine={sel === today ? attendanceSummary(classesOn(sel, { now, meetings, courses, variants: variants ?? [], attendance, dayMarks, hour12, moves })) : undefined} />
       ) : periods.length > 0 ? (
@@ -561,7 +562,7 @@ export function TodayScreen() {
                 {/* v0.6: start over end. One line truncated to "08:30–09…" at phone width, hiding the end of the class. */}
                 <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }} accessibilityLabel={range}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={hour12 ? RANGE_SIZE_12 - 2 : RANGE_SIZE_24 - 2} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
                 <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[partLabel(meeting.courseId, meeting.variantId, st.variants), roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
-                <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: (e.inferred || !e.status) && !skin ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
+                <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: (e.inferred || !e.status) && skin.instruments.check === 'dashed' ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
               </HandBox>
             </Pressable>);
         })}

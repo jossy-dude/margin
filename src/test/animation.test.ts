@@ -241,7 +241,7 @@ describe('reduce-motion collapses every new animation', () => {
 describe('nothing animates while off-screen', () => {
   it('the page placement, the crumple and the sheet are all still gated by reduce-motion', () => {
     expect(swipe).toContain('duration: reduce ? 180 : 1100');
-    expect(sheet).toContain('y.set(reduce ? 0 : skin?.motion.sheet === \'glass\' ? withSpring(0,'); // v0.7.7.5: a glass sheet springs; both gated
+    expect(sheet).toContain('y.set(reduce ? 0 : skin.motion.sheet === \'glass\' ? withSpring(0,'); // v0.7.7.5: a glass sheet springs; both gated
   });
 });
 
@@ -367,7 +367,7 @@ describe('re-entrancy retargets rather than snaps', () => {
     // The photograph and the crumple are gone; the grain is one seeded SVG pattern, so there is no
     // full-screen bitmap to hold mounted and nothing to cross-fade between.
     expect(paperBg).not.toMatch(/require\(|<Image|expo-asset/);
-    expect(paperBg).toContain("{look !== 'plain' && (");
+    expect(paperBg).toContain("{skin.ground.grain && ("); // v0.7.7.6: the skin's ground, not the look's name
     expect(paperBg).toContain('<Pattern id={gid}');
   });
 });

@@ -46,7 +46,7 @@ describe('Daylight on the theme', () => {
     const t = makeTheme({ theme: 'light', palette: 'daylight', pen: 'warm' } as never, false, 'dusk');
     expect(t.c.acc).toBe(DAY_ACCENT.light.dusk);
     expect(t.c.card).toBe(daylightSkin('light', 'dusk').surface.fill);
-    expect(t.skin?.instruments).toEqual({ clock: 'ring', bar: 'capsule', check: 'round', tag: 'capsule', field: 'box', addTile: 'pane', mascot: false });
+    expect(t.skin.instruments).toEqual({ clock: 'ring', bar: 'capsule', check: 'round', tag: 'capsule', field: 'box', addTile: 'pane', mascot: false, tape: false, subjectMark: 'dot', overdue: 'bar', hatch: false });
   });
   it('sets every role in Hanken Grotesk, with no italic face', () => {
     const t = makeTheme({ theme: 'light', palette: 'daylight', pen: 'denim' } as never, false);

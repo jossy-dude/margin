@@ -1,5 +1,9 @@
 import type { Settings } from '../domain/types';
-import type { Face, Skin } from './skins/types';
+import type { Face, Skin, SkinId, SkinInks } from './skins/types';
+import { collageSkin } from './skins/collage';
+import { refinedSkin } from './skins/refined';
+import { originalSkin } from './skins/original';
+import { plainSkin } from './skins/plain';
 import { DAY_FACES, daylightSkin, type SkyKey } from './skins/daylight';
 
 /** Single source of colour truth. `refined` = the cream/warm pass; `original` = v10's oklch tokens converted to sRGB. */
@@ -193,7 +197,7 @@ export const RS = { h: [30, 12, 26, 10], v: [10, 24, 12, 30] } as const;
 export type Look = 'ink' | 'collage' | 'plain';
 /** `sky`: Daylight. The look is still `plain` (rounded, no drawing), but the page is the sky and a card is glass.
  *  `skin` (v0.7.7.5): the skin object; Daylight has one now, the paper skins get theirs in release B. */
-export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints; sky?: boolean; skin?: Skin }
+export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints; sky?: boolean; skin: Skin }
 /** `skyKey`: the sky on screen (Daylight's panes and accent follow it); ignored by the other skins. */
 export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean, skyKey: SkyKey = 'noon'): Theme {
   const dark = s.theme === 'auto' ? systemDark : s.theme === 'dark', mode = dark ? 'dark' : 'light';
@@ -206,7 +210,11 @@ export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, system
       deck: k.deck, deckInk: k.deckInk, deckMut: k.deckMut, slab: k.deck, slabInk: k.deckInk, slabMut: k.deckMut, rule: skin.surface.ring };
     return { c, dark, font: FONT, look, type: DAY_TYPE, tints: TINTS[mode], sky, skin };
   }
-  const acc = (PENS[s.pen] ?? PENS.denim)[mode];
-  return { c: { ...base, acc }, dark, font: FONT, look, type: look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode], sky };
+  const acc = (PENS[s.pen] ?? PENS.denim)[mode], c = { ...base, acc };
+  /* v0.7.7.6 (SPEC §1 B): every skin is one object now; components read its fields, never the look's name */
+  const id = pal as Exclude<SkinId, 'daylight'>, skin = PAPER_SKINS[id](c);
+  return { c, dark, font: FONT, look, type: PAPER_TYPE[id], tints: TINTS[mode], sky, skin };
 }
+const PAPER_SKINS: Record<Exclude<SkinId, 'daylight'>, (k: SkinInks) => Skin> = { collage: collageSkin, refined: refinedSkin, original: originalSkin, plain: plainSkin };
+const PAPER_TYPE: Record<Exclude<SkinId, 'daylight'>, TypeMap> = { collage: COLLAGE_TYPE, refined: INK_TYPE, original: INK_TYPE, plain: PLAIN_TYPE };
 export const hexA = (hex: string, a: number) => `${hex.slice(0, 7)}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

@@ -375,12 +375,12 @@ function StylePicker({ W, value, onChange }: { W: number; value: Settings['palet
 function StyleCard({ id, label, w, on, onPress }: { id: Settings['palette']; label: string; w: number; on: boolean; onPress: () => void }) {
   const { c } = useTheme(), s = useStore((st) => st.settings), sys = useColorScheme() === 'dark';
   const p = makeTheme({ theme: s.theme, palette: id, pen: s.pen }, sys), sc = p.dark ? 'dark' as const : 'light' as const, day = id === 'daylight';
-  const r = p.look === 'plain' ? 12 : p.look === 'collage' ? 2 : 5, line = day ? V2[sc].ink3 : hexA(p.c.ink, 0.28);
+  const r = p.skin.surface.edge === 'hairline' || p.skin.surface.edge === 'glass' ? 12 : p.skin.surface.edge === 'torn' ? 2 : 5, line = day ? V2[sc].ink3 : hexA(p.c.ink, 0.28);
   return (
     <Pressable testID={`style-${id}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${label} style`} onPress={onPress}
       style={{ width: w, height: 112, borderRadius: r + 6, overflow: 'hidden', borderWidth: on ? 2.5 : 1, borderColor: on ? c.acc : hexA(c.ink, 0.18), backgroundColor: day ? DAY_SKY[sc].noon[1] : p.c.paper }}>
       {day ? <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 56, backgroundColor: DAY_SKY[sc].noon[0] }} /> : null}
-      <View style={{ margin: 10, marginBottom: 0, padding: 8, gap: 5, borderRadius: r, backgroundColor: day ? V2[sc].glassStrong : p.c.card, borderWidth: p.look === 'ink' ? 1.4 : 0, borderColor: p.c.ink, transform: [{ rotate: p.look === 'collage' ? '-1.5deg' : '0deg' }] }}>
+      <View style={{ margin: 10, marginBottom: 0, padding: 8, gap: 5, borderRadius: r, backgroundColor: day ? V2[sc].glassStrong : p.c.card, borderWidth: p.skin.surface.edge === 'hand' ? 1.4 : 0, borderColor: p.c.ink, transform: [{ rotate: p.skin.surface.edge === 'torn' ? '-1.5deg' : '0deg' }] }}>
         <View style={{ width: 28, height: 6, borderRadius: 3, backgroundColor: day ? V2[sc].now : p.c.acc }} />
         <View style={{ width: '82%', height: 4, borderRadius: 2, backgroundColor: line }} />
         <View style={{ width: '56%', height: 4, borderRadius: 2, backgroundColor: line }} />
@@ -394,7 +394,7 @@ function StyleCard({ id, label, w, on, onPress }: { id: Settings['palette']; lab
 /** What Jot stands in front of on the two hero pages, per Style: the collage has its hills and sun; Plain a
  *  soft disc of colour, Notebook a pencilled ring, Daylight a pool of light in its sky. */
 function Halo({ cx, cy, r }: { cx: number; cy: number; r: number }) {
-  const { c, look, tints, dark } = useTheme(), day = useStore((s) => s.settings.palette === 'daylight');
+  const { c, skin, tints, dark } = useTheme(), day = skin.surface.edge === 'glass', smooth = skin.surface.edge === 'hairline';
   const size = r * 2.6, half = size / 2;
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: cx - half, top: cy - half, width: size, height: size }}>
@@ -402,7 +402,7 @@ function Halo({ cx, cy, r }: { cx: number; cy: number; r: number }) {
         {day ? <>
           <Circle cx={half} cy={half} r={r * 1.25} fill={dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.35)'} />
           <Circle cx={half} cy={half} r={r} fill={dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.55)'} />
-        </> : look === 'plain' ? <>
+        </> : smooth ? <>
           <Circle cx={half + r * 0.55} cy={half - r * 0.5} r={r * 0.42} fill={hexA(tints.sand, 0.9)} />
           <Circle cx={half} cy={half} r={r} fill={hexA(tints.sky, 0.85)} />
         </> : <>
@@ -416,12 +416,12 @@ function Halo({ cx, cy, r }: { cx: number; cy: number; r: number }) {
 
 /** The sheet the hero pages' words sit on, per Style: torn paper, a rounded card, a ruled page, or glass. */
 function Sheet({ i, children }: { i: number; children: React.ReactNode }) {
-  const { c, look, dark } = useTheme(), day = useStore((s) => s.settings.palette === 'daylight');
-  if (look === 'collage' && !day) return <TornSheet seed={`ob-sheet-${i}`} style={{ flexGrow: 1 }}>{children}</TornSheet>;
+  const { c, skin, dark } = useTheme(), day = skin.surface.edge === 'glass';
+  if (skin.surface.edge === 'torn') return <TornSheet seed={`ob-sheet-${i}`} style={{ flexGrow: 1 }}>{children}</TornSheet>;
   const sc = dark ? 'dark' : 'light';
   const st = day
     ? { backgroundColor: V2[sc].glassStrong, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: StyleSheet.hairlineWidth, borderColor: V2[sc].ring }
-    : look === 'plain'
+    : skin.surface.edge === 'hairline'
       ? { backgroundColor: c.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }
       : { backgroundColor: c.card, borderTopLeftRadius: 6, borderTopRightRadius: 6, borderTopWidth: 1.6, borderColor: c.ink };
   return <View style={[{ flexGrow: 1 }, st]}>{children}</View>;

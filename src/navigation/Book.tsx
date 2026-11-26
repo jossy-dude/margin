@@ -69,7 +69,7 @@ function Placed({ children, on }: { children: React.ReactNode; on: boolean }) {
 }
 function BookView({ initialRouteName, children, screenOptions, id }: { initialRouteName?: string; children: React.ReactNode; screenOptions?: object; id?: string }) {
   const { state, descriptors, navigation, NavigationContent } = useNavigationBuilder(TabRouter, { initialRouteName, children, screenOptions, id } as never) as unknown as { state: Nav; descriptors: Record<string, { render: () => React.ReactNode }>; navigation: { navigate: (n: never) => void }; NavigationContent: React.ComponentType<{ children: React.ReactNode }> };
-  const route = useStore((s) => s.route), { c, look, tints, sky, dark } = useTheme(), ins = useSafeAreaInsets(), [navW, setNavW] = useState(0);
+  const route = useStore((s) => s.route), { c, tints, skin, dark } = useTheme(), glass = skin.surface.edge === 'glass', ins = useSafeAreaInsets(), [navW, setNavW] = useState(0);
   /* The tour points at three of the five tabs — it rings the Week tab, then the To-do tab, then the
      Grades tab as the stand-in for the two that read the marks back. Three slots and one lookup is the
      whole of the tour's footprint in this file; the other two tabs are never pointed at. */
@@ -125,7 +125,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
             grades 756). The trade against the ~20 full-screen fills a stacked set of pages would cost
             every frame is deliberate; see the `Placed` note above. */}
         {state.routes.map((r, i) => (<Placed key={r.key} on={i === state.index}><View style={{ flex: 1 }} pointerEvents={i === state.index ? 'auto' : 'none'} accessibilityElementsHidden={i !== state.index} importantForAccessibility={i === state.index ? 'yes' : 'no-hide-descendants'}>{seen.current.has(r.key) ? descriptors[r.key]?.render() : null}</View></Placed>))}
-        {!hideNav && (look === 'collage' ? (
+        {!hideNav && (skin.surface.edge === 'torn' ? (
           /* The collage's nav: a strip of kraft paper torn across the foot of the page, the way the
              reference closes its page; the page you are on is a cream scrap laid on the strip. */
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 999 }}>
@@ -143,11 +143,11 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
         ) : (
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: navInset(ins.bottom), paddingHorizontal: 12, zIndex: 999 }}>
             {/* Daylight: the nav island (D-10) — a strong-glass pill with a shadow, the current tab in a quiet `fill` capsule. */}
-            <HandBox seed="nav" fill={sky ? V2[dark ? 'dark' : 'light'].glassStrong : c.card} sw={2} amp={1.6} style={[{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }, sky ? { borderRadius: 28, boxShadow: `0 8px 24px ${hexA(SHADOW, 0.14)}` } : null]}>
+            <HandBox seed="nav" fill={glass ? V2[dark ? 'dark' : 'light'].glassStrong : c.card} sw={2} amp={1.6} style={[{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }, glass ? { borderRadius: 28, boxShadow: `0 8px 24px ${hexA(SHADOW, 0.14)}` } : null]}>
               {TABS.map((t) => { const on = cur === t.name; return (
                 <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? (sky ? hexA(c.acc, 0.16) : hexA(c.acc, 0.2)) : 'transparent', borderWidth: on && !sky ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on && !sky ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
-                  <Txt f="bold" s={14.5} c={sky ? (on ? 'ink' : 'mut') : on ? 'acc' : 'mut'}>{t.label}</Txt>
+                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? (glass ? hexA(c.acc, 0.16) : hexA(c.acc, 0.2)) : 'transparent', borderWidth: on && !glass ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on && !glass ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
+                  <Txt f="bold" s={14.5} c={glass ? (on ? 'ink' : 'mut') : on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}
             </HandBox>
           </View>))}

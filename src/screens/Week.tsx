@@ -26,7 +26,7 @@ export function WeekScreen() {
   const [draft, setDraft] = useState<MoveDraft | null>(null);
   const st = { meetings, courses, variants, attendance, dayMarks, tasks };
   /* In the collage each class is a slip of its subject's own paper (the colour it has everywhere else). */
-  const { c, look, tints, skin } = useTheme(), reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useLiveNow(30_000), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
+  const { c, tints, skin } = useTheme(), glass = skin.surface.edge === 'glass', hand = skin.surface.edge === 'hand', reduce = useReduceMotion(), { width } = useWindowDimensions(), now = useLiveNow(30_000), [off, setOff] = useState(0), mon = addDays(mondayOf(now), off * 7);
   const start = Math.min(8 * 60, ...st.meetings.map((m) => Math.floor(hm(m.start) / 60) * 60)), end = Math.max(16 * 60, ...st.meetings.map((m) => Math.ceil(hm(m.end) / 60) * 60)), PX = 1.2, H = (end - start) * PX;
   const wkEnd = addDays(mon, 6), label = `${new Date(mon).getDate()} ${MO[new Date(mon).getMonth()]?.slice(0, 3)} – ${new Date(wkEnd).getDate()} ${MO[new Date(wkEnd).getMonth()]?.slice(0, 3)}`;
   const due = st.tasks.filter((t) => t.status !== 2 && t.dueAt !== null && t.dueAt >= mon && t.dueAt < mon + 7 * 86_400_000);
@@ -73,7 +73,7 @@ export function WeekScreen() {
           <Svg width={gw} height={H} style={{ position: 'absolute' }}>
             {hours.map((h, i) => <Line key={h} x1={tw - 4} x2={gw} y1={i * 60 * PX + 0.5} y2={i * 60 * PX + 0.5} stroke={c.dot} strokeWidth={1} />)}
             {/* v0.7.7.5: Daylight has no graph paper — hour rules only, no day columns */}
-            {!skin && cols.map((_, j) => <Line key={j} x1={tw + j * cw} x2={tw + j * cw} y1={0} y2={H} stroke={c.dot} strokeWidth={1} />)}
+            {!glass && cols.map((_, j) => <Line key={j} x1={tw + j * cw} x2={tw + j * cw} y1={0} y2={H} stroke={c.dot} strokeWidth={1} />)}
             {off === 0 && nowY > 0 && nowY < H && <Line x1={tw - 4} x2={gw} y1={nowY} y2={nowY} stroke={c.acc} strokeWidth={2} />}
             {off === 0 && nowY > 0 && nowY < H && <Rect x={tw - 8} y={nowY - 3} width={6} height={6} rx={3} fill={c.acc} />}
           </Svg>
@@ -112,15 +112,15 @@ export function WeekScreen() {
                       onHold={() => setDraft(draftAt(i, start0, true))} onSlot={() => {}}
                       onDrop={(slot) => { const to = Math.floor(slot / 10_000), st1 = slot % 10_000; setDraft(draftAt(to, st1, to === i && st1 === start0)); }}
                       style={{ position: 'absolute', left: 2 + ((cw - 4) / (lay[oi]?.of ?? 1)) * (lay[oi]?.lane ?? 0), width: (cw - 4) / (lay[oi]?.of ?? 1) - ((lay[oi]?.of ?? 1) > 1 ? 1 : 0), top, height: Math.max(20, h - 2) }}>
-                      <HandBox seed={key} fill={skin ? c.card : x ? c.paper : look !== 'ink' && course ? subjectTint(course.id, tints) : hexA(c.acc, 0.2)} stroke={skin ? undefined : x ? c.mut : look !== 'ink' ? undefined : c.acc} shadow={!skin && look !== 'ink' && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, paddingLeft: skin ? 6 : 2, overflow: 'hidden', opacity: skin && x ? 0.55 : 1 }}>
+                      <HandBox seed={key} fill={glass ? c.card : x ? c.paper : course ? (hand ? hexA(subjectTint(course.id, tints), 0.35) : subjectTint(course.id, tints)) : hexA(c.acc, 0.2)} stroke={glass ? undefined : x ? c.mut : hand ? c.ink : undefined} shadow={!glass && !hand && !x} sw={1.4} corners={{ h: [8, 4, 8, 4], v: [4, 8, 4, 8] }} style={{ flex: 1, padding: 2, paddingLeft: glass ? 6 : 2, overflow: 'hidden', opacity: glass && x ? 0.55 : 1 }}>
                         {/* v0.7.7.5: in Daylight a class is a glass pane with its subject's colour as a 3 dp bar, not a pastel paper block */}
-                        {skin && course ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: subjectTint(course.id, tints) }} /> : null}
+                        {glass && course ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: subjectTint(course.id, tints) }} /> : null}
                         <Txt f="bold" s={13} style={x ? { textDecorationLine: 'line-through', color: c.mut } : undefined} numberOfLines={2}>{course?.name.split(' ').map((w) => w[0]).join('').slice(0, 3)}</Txt>
                         {h > 38 && <Txt f="serif" s={10.5} c="mut" numberOfLines={1}>{[partLabel(meeting.courseId, meeting.variantId, st.variants), roomOf(meeting, course, st.variants)].filter(Boolean).join(' · ')}</Txt>}
                       </HandBox>
                     </DragCard>);
                 })}
-                {due.filter((t) => t.dueAt !== null && startOfDay(t.dueAt) === day).map((t) => <View key={t.id} accessible accessibilityLabel={`Due: ${t.title}`} style={{ position: 'absolute', right: 2, top: Math.max(0, Math.min(H - 12, (new Date(t.dueAt as number).getHours() * 60 + new Date(t.dueAt as number).getMinutes() - start) * PX)) }}>{skin ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.bad, marginTop: 3 }} /> : <Icon name="flag" size={12} color={c.bad} sw={2.4} />}</View>)}
+                {due.filter((t) => t.dueAt !== null && startOfDay(t.dueAt) === day).map((t) => <View key={t.id} accessible accessibilityLabel={`Due: ${t.title}`} style={{ position: 'absolute', right: 2, top: Math.max(0, Math.min(H - 12, (new Date(t.dueAt as number).getHours() * 60 + new Date(t.dueAt as number).getMinutes() - start) * PX)) }}>{glass ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.bad, marginTop: 3 }} /> : <Icon name="flag" size={12} color={c.bad} sw={2.4} />}</View>)}
               </View>);
           })}
         </View>

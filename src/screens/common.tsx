@@ -76,7 +76,7 @@ function PageHeader({ title, sub, right, face }: { title: string; sub?: string; 
           {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
               word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
           <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
-          {face && (skin?.instruments.mascot ?? true) ? <TopFace rest={face} /> : null}
+          {face && skin.instruments.mascot ? <TopFace rest={face} /> : null}
           {right}
           <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
             onPressIn={() => gp.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => gp.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
@@ -95,7 +95,7 @@ export const Section = ({ title, right, children }: { title: string; right?: Rea
  *  Daylight it is a glass pane, not a dashed outline. */
 export function Empty({ text, icon = 'note', face, action }: { text: string; icon?: string; face?: FaceName | null; action?: { label: string; onPress: () => void } }) {
   const live = useScreenLive(), { c, skin } = useTheme();
-  const box = skin ? { fill: c.card, dashed: false } : { fill: 'transparent', dashed: true };
+  const box = skin.surface.edge === 'glass' ? { fill: c.card, dashed: false } : { fill: 'transparent', dashed: true };
   const btn = action ? <Btn small icon="plus" label={action.label} onPress={action.onPress} /> : null;
   if (face) return (
     <HandBox seed={text} shadow={false} dashed={box.dashed} fill={box.fill} style={{ padding: 14, gap: 10 }}>
@@ -147,7 +147,7 @@ function KindTag({ kind, seed, tint }: { kind: Task['kind']; seed: string; tint?
   const { c, tints, skin } = useTheme(), k = KIND_TAG[kind], bg = k.tint === 'hl' ? c.hl : k.tint === 'card' ? c.card : tints[k.tint];
   const tilt = (seed.charCodeAt(seed.length - 1) % 2 ? 2.4 : -2.4);
   /* v0.7.7.5 (SPEC §1): Daylight's tag is a capsule in the subject's tint at 14 %, 12 sp, upright — not a sticker */
-  if (skin?.instruments.tag === 'capsule') return (
+  if (skin.instruments.tag === 'capsule') return (
     <View pointerEvents="none" style={{ position: 'absolute', top: 10, right: 12, height: 22, borderRadius: 11, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: hexA(tint ?? bg, 0.14), borderWidth: StyleSheet.hairlineWidth, borderColor: hexA(tint ?? bg, 0.5) }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Icon name={KIND_ICON[kind]} size={12} color={c.mut} sw={2} />
       <Txt f="bold" s={12} c="mut" maxFontSizeMultiplier={FS}>{k.label}</Txt>
@@ -168,7 +168,7 @@ function KindTag({ kind, seed, tint }: { kind: Task['kind']; seed: string; tint?
  *  tour's swipe step points at — handed by To-do and deliberately not by Today, so the ring lands on a row
  *  of the page the user is actually looking at. */
 export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now: number }) {
-  const { c, tints, skin } = useTheme();
+  const { c, tints, skin } = useTheme(), bar = skin.instruments.overdue === 'bar';
   const reduce = useReduceMotion(), press = useSharedValue(1), check = useSharedValue(1);
   /* Press feedback on the card itself: the ripple is real but invisible — HandBox paints an opaque
      fill straight over it — so without the dip the only cue that a tap registered was the sheet opening.
@@ -192,14 +192,14 @@ export const TaskCard = React.memo(function TaskCard({ t, now }: { t: Task; now:
         <Animated.View style={[face, { marginTop: 8 }]}>
           {/* A project is bigger than one sheet: a second one peeks out behind it. */}
           {t.kind === 'project' && !done ? <HandBox seed={`${t.id}-under`} fill={tints.sage} style={{ position: 'absolute', left: 6, right: -3, top: 5, bottom: -5, transform: [{ rotate: '1.2deg' }] }} /> : null}
-          <HandBox seed={t.id} fill={done ? (skin ? c.card : c.paper) : c.card} stroke={skin ? undefined : late ? c.bad : c.ink} style={{ paddingLeft: 52, paddingRight: skin ? 96 : 12, paddingVertical: 11, minHeight: 66, opacity: done ? 0.78 : 1, overflow: skin ? 'hidden' : undefined }}>
+          <HandBox seed={t.id} fill={done ? (bar ? c.card : c.paper) : c.card} stroke={bar ? undefined : late ? c.bad : c.ink} style={{ paddingLeft: 52, paddingRight: bar ? 96 : 12, paddingVertical: 11, minHeight: 66, opacity: done ? 0.78 : 1, overflow: bar ? 'hidden' : undefined }}>
             {/* v0.7.7.5: Daylight marks an overdue card with a 3 dp red bar on its left, not a red outline all round */}
-            {skin && late ? <View testID="late-bar" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: c.bad }} /> : null}
+            {bar && late ? <View testID="late-bar" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: c.bad }} /> : null}
             <KindTag kind={t.kind} seed={t.id} tint={course ? subjectTint(course.id, tints) : undefined} />
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel={`Mark ${t.title} ${done ? 'not done' : 'done'}`} onPress={finish} hitSlop={6} style={{ position: 'absolute', left: 4, top: 0, bottom: 0, width: 46, alignItems: 'center', justifyContent: 'center' }}
               onPressIn={() => check.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => check.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
               {/* An exam's box is round, like the stamp it will get; everything else is a square box. */}
-              {skin?.instruments.check === 'round'
+              {skin.instruments.check === 'round'
                 /* v0.7.7.5: Daylight's check box — 24 dp, radius 7, 1.5 dp; done = accent fill and a white check, upright */
                 ? <Animated.View style={[{ width: 24, height: 24, borderRadius: t.kind === 'exam' ? 12 : 7, borderWidth: 1.5, borderColor: done ? c.acc : c.mut, backgroundColor: done ? c.acc : 'transparent', alignItems: 'center', justifyContent: 'center' }, box]}>{done && <Icon name="check" size={16} color={c.onAcc} sw={2.6} />}</Animated.View>
                 : <Animated.View style={[{ width: 28, height: 28, borderRadius: t.kind === 'exam' ? 14 : 7, borderWidth: 2, borderColor: c.ink, backgroundColor: done ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-3deg' }] }, box]}>{done && <Icon name="check" size={20} color={c.card} sw={2.6} />}</Animated.View>}
@@ -244,7 +244,7 @@ export function AttCell({ status, why, inferred, future, locked, onTap, onHold, 
     <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={locked ? 'Locked. Unlock the grid to change.' : inferred || !status ? 'Tap to mark. After that, long press to change.' : 'Long press to change.'}
       onPress={() => { if (locked) return deny(); if (!status || inferred) onTap(); else deny(); }} onLongPress={() => { if (locked) return deny(); onHold(); }} delayLongPress={380} hitSlop={{ top: 6, bottom: 6, left: 1, right: 1 }}
       onPressIn={() => { if (!reduce) sc.value = withTiming(0.95, { duration: BEAT, easing: EASE }); }} onPressOut={() => { if (!reduce) sc.value = withSpring(1, { duration: 190, dampingRatio: 0.7 }); }}>
-      <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: (inferred || future) && !skin ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
+      <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: (inferred || future) && skin.instruments.check === 'dashed' ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
         {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{glyphOf(status, why)}</Txt>}
         {dot ? <View testID={testID ? `${testID}-dot` : undefined} style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: dot, borderWidth: 1, borderColor: hexA(c.ink, 0.45) }} /> : null}
       </Animated.View>

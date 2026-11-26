@@ -131,18 +131,18 @@ export interface HandBoxProps { children?: React.ReactNode; style?: StyleProp<Vi
   lift?: boolean }
 /** A card with a hand-cut outline (elliptical corners + wobble) and a hard offset shadow, drawn once per size. */
 export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG, sw = 1.6, shadow = true, amp = 1.1, dashed, cut, lift: lifted }: HandBoxProps) {
-  const { c, look, dark, sky } = useTheme(), [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
+  const { c, dark, skin } = useTheme(), edge = skin.surface.edge, [sz, setSz] = useState({ w: 0, h: 0 }), sd = useMemo(() => (typeof seed === 'number' ? seed : hashSeed(seed)), [seed]);
   /* The collage cuts a surface one of two ways, the way paper actually gets cut: anything big enough to be
      a sheet is TORN (a white core along the tear, no outline), a small control is cut with SCISSORS (a
      smooth pill with a faint hand). `cut` overrides the size rule. */
-  const collage = look === 'collage', mode = collage ? cut ?? (Math.min(sz.w, sz.h) >= 64 && !dashed && fill !== 'transparent' ? 'torn' : 'cut') : null;
+  const collage = edge === 'torn', mode = collage ? cut ?? (Math.min(sz.w, sz.h) >= 64 && !dashed && fill !== 'transparent' ? 'torn' : 'cut') : null;
   /* Scissors round a WIDE control into a pill (a button, a chip); a squarer box (a timetable block, a day
      cell, a check box) only has its corners softened, or it turns into a bubble. */
   const pillR = sz.w >= sz.h * 1.6 ? Math.min(sz.h / 2, 22) : Math.min(8, sz.h / 4, sz.w / 4), pill = useMemo(() => ({ h: [pillR, pillR, pillR, pillR], v: [pillR, pillR, pillR, pillR] }), [pillR]);
   const d = useMemo(() => (mode === 'torn' ? '' : handPath(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
   const torn = useMemo(() => (mode === 'torn' ? tornPaths(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
   const onLayout = (e: { nativeEvent: { layout: { width: number; height: number } } }) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); };
-  if (look === 'plain') {
+  if (edge === 'hairline' || edge === 'glass') {
     /* Plain: no drawing at all — a rounded view, a hairline, a soft native shadow. A coloured stroke is still a
        mark (selection, live, late) and keeps its weight; a ghost or dashed box keeps a visible outline. */
     const bare = fill === 'transparent' || dashed, mark = stroke && stroke !== c.ink ? stroke : null;
@@ -150,7 +150,7 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
        top edge catches the light (a brighter rim than the other three sides), a sheet-sized card floats a little over
        the sky on a soft offset shadow, and the corners open to 20. A chip or a day cell stays flat (no lift), and a
        coloured stroke is still a mark. */
-    if (sky) {
+    if (edge === 'glass') {
       const lift = !!lifted && shadow && !bare && !mark, ring = mark ?? (bare ? hexA(c.ink, dashed ? 0.4 : 0.3) : c.rule);
       return (
         <View style={[{ position: 'relative', borderRadius: corners === RG ? 20 : 14, backgroundColor: bare ? 'transparent' : fill ?? c.card, borderWidth: mark ? sw : StyleSheet.hairlineWidth, borderColor: ring,
@@ -418,11 +418,11 @@ export function Field({ label, style, multiline, ...p }: TextInputProps & { labe
     <View style={style as StyleProp<ViewStyle>}>
       {label ? <Txt f="serif" s={14.5} c="mut" style={{ marginBottom: 2 }}>{label}</Txt> : null}
       <TextInput {...p} testID={tid(label ?? p.placeholder)} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
-        style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', ...(th.skin?.instruments.field === 'box'
+        style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', ...(th.skin.instruments.field === 'box'
           /* v0.7.7.5: Daylight's field is a box — 14 radius, a hairline, the strong glass — not a hand-ruled underline */
           ? { borderRadius: 14, borderWidth: focus ? 1.5 : StyleSheet.hairlineWidth, borderColor: focus ? c.acc : hexA(c.ink, 0.25), backgroundColor: th.skin.surface.fillStrong, paddingHorizontal: 12, ...faceOf(th, 'hand', 20) }
           : { borderBottomWidth: 1.4, borderBottomColor: c.ink }) }} />
-      {th.skin?.instruments.field === 'box' ? null : <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />}
+      {th.skin.instruments.field === 'box' ? null : <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />}
     </View>
   );
 }
@@ -506,9 +506,9 @@ export function HStrip({ children, gap = 8, bg, style, contentStyle, onContentSi
  * a given strip tears the same way every render.
  */
 export function Tape({ w = 62, rot = -4, style, testID }: { w?: number; rot?: number; style?: StyleProp<ViewStyle>; testID?: string }) {
-  const { dark, look } = useTheme(), T = dark ? TAPE.dark : TAPE.light, H = 20;
+  const { dark, skin } = useTheme(), T = dark ? TAPE.dark : TAPE.light, H = 20;
   const d = useMemo(() => tornTape(w, H, hashSeed(`tape${w}:${rot}`)), [w, rot]);
-  if (look === 'plain') return null; // smooth stock: nothing is taped down
+  if (!skin.instruments.tape) return null; // smooth stock: nothing is taped down
   return (
     <View testID={testID} pointerEvents="none" style={[{ position: 'absolute', width: w, height: H, transform: [{ rotate: `${rot}deg` }], zIndex: 3 }, style]}>
       <Svg width={w + 2} height={H + 3} style={{ position: 'absolute', left: 0, top: 0 }}>

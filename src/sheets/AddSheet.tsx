@@ -111,7 +111,7 @@ function SubjectTab({ label, on, tint, now, onPress }: { label: string; on: bool
 function SlipCard({ slip, i, bg, ink, sub, locked, pulse, onPress }: { slip: Slip; i: number; bg: string; ink: string; sub: string; locked: boolean; pulse: boolean; onPress: () => void }) {
   const { c, tints, skin } = useTheme(), reduce = useReduceMotion(), deal = useSharedValue(reduce ? 1 : 0), lift = useSharedValue(0), shake = useSharedValue(0);
   /* v0.7.7.5: Daylight's tiles are glass panes with an icon — upright, no tape, no index-card rule */
-  const pane = skin?.instruments.addTile === 'pane', rot = pane ? 0 : (i % 2 ? 1 : -1) * (0.8 + (i % 3) * 0.5);
+  const pane = skin.instruments.addTile === 'pane', rot = pane ? 0 : (i % 2 ? 1 : -1) * (0.8 + (i % 3) * 0.5);
   useEffect(() => { if (!reduce) deal.set(withDelay(40 + i * 38, withSpring(1, { duration: 460, dampingRatio: 0.74 }))); }, [reduce, i, deal]);
   useEffect(() => { if (pulse && !reduce) shake.set(withSequence(withTiming(1, { duration: 60 }), withTiming(-1, { duration: 90 }), withTiming(0.6, { duration: 80 }), withSpring(0, { duration: 220 }))); }, [pulse, reduce, shake]);
   const st = useAnimatedStyle(() => ({ transform: [
@@ -142,8 +142,8 @@ function FocusStrip({ label, onPress }: { label: string; onPress: () => void }) 
   const { c, tints, skin } = useTheme(), [aIn, aLift] = usePressIn(onPress);
   return (
     <Pressable testID="add-focus" accessibilityRole="button" accessibilityLabel="Start a focus session" accessibilityHint={label} onPressIn={aIn} onPress={aLift} style={{ marginTop: 4 }}>
-      <HandBox seed="add-focus" fill={skin ? c.card : tints.kraft} cut="torn" style={{ minHeight: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: skin ? c.acc : c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={21} color={skin ? c.onAcc : c.paper} /></View>
+      <HandBox seed="add-focus" fill={skin.instruments.addTile === 'pane' ? c.card : tints.kraft} cut="torn" style={{ minHeight: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: skin.instruments.addTile === 'pane' ? c.acc : c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={21} color={skin.instruments.addTile === 'pane' ? c.onAcc : c.paper} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Txt f="bold" s={19} numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt>
           <Txt f="serif" s={13.5} c="ink" style={{ opacity: 0.75 }} maxFontSizeMultiplier={FS}>A quiet timer for study</Txt>

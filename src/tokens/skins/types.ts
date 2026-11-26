@@ -24,6 +24,14 @@ export interface Skin {
   instruments: {
     clock: 'paper' | 'ring'; bar: 'hatch' | 'capsule'; check: 'dashed' | 'round'; tag: 'sticker' | 'capsule';
     field: 'hand' | 'box'; addTile: 'note' | 'pane'; mascot: boolean;
+    /** v0.7.7.6: tape strips on paper; a subject marked by a paper tab or a dot; overdue as an outline or a left bar;
+     *  the deck's slab hatch */
+    tape: boolean; subjectMark: 'tab' | 'dot'; overdue: 'outline' | 'bar'; hatch: boolean;
   };
   motion: { pressMs: number; pressScale: number; sheet: 'paper' | 'glass' };
 }
+
+/** The colours a paper skin is built from: its palette's roles (tokens/theme.ts passes them in, so no skin file
+ *  imports the theme). */
+export interface SkinInks { card: string; paper: string; ink: string; mut: string; acc: string; onAcc: string; rule: string; shadow: string;
+  deck: string; deckInk: string; deckMut: string; ok: string; warn: string; bad: string }

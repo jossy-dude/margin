@@ -20,22 +20,24 @@ const RULED = 28;
  * mounted copies sharing a literal id resolve each other's `url(#…)`.
  */
 export function PaperBg({ card = false }: { card?: boolean }) {
-  const { sky } = useTheme(), skyMode = useStore((s) => s.settings.sky);
+  const { skin } = useTheme(), skyMode = useStore((s) => s.settings.sky);
   /* Daylight has no paper: a page is the sky of the hour, a sheet is strong glass (D-3, D-17). */
-  if (sky) return <DayGround card={card} mode={skyMode} />;
+  if (skin.ground.kind === 'sky') return <DayGround card={card} mode={skyMode} />;
   return <Paper card={card} />;
 }
 
 function DayGround({ card, mode }: { card: boolean; mode: 'live' | 'still' | 'off' }) {
   const { dark, skin } = useTheme(), scheme = dark ? 'dark' as const : 'light' as const;
   /* a sheet is strong glass (0.94): it hides the page behind it (v0.7.7.5, the task sheet bled through at 0.88) */
-  if (card) return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: skin?.surface.fillStrong ?? V2[scheme].glassStrong }]} /></>;
+  if (card) return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: skin.surface.fillStrong }]} /></>;
   return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><Sky mode={mode} scheme={scheme} /></>;
 }
 
 function Paper({ card }: { card: boolean }) {
-  const { c, dark, look } = useTheme(), reduce = useReduceMotion(), paper = useStore((s) => s.settings.paper), setTex = useStore((s) => s.settings.texture);
-  const on = look === 'plain' ? 0 : grainOn(setTex);
+  const { c, dark, skin } = useTheme(), reduce = useReduceMotion(), setPaper = useStore((s) => s.settings.paper), setTex = useStore((s) => s.settings.texture);
+  /* v0.7.7.6 (B1): the skin decides whether there is ruling at all — Plain has none, whatever the paper setting says */
+  const paper = skin.ground.ruling === 'none' ? 'plain' : setPaper;
+  const on = skin.ground.grain ? grainOn(setTex) : 0;
   const id = useId();
   const gid = `${id}g`;
   const rule = useSharedValue(1), grain = useSharedValue(on);
@@ -61,11 +63,12 @@ function Paper({ card }: { card: boolean }) {
               {paper === 'ruled' && <Pattern id={id} width={RULED} height={RULED} patternUnits="userSpaceOnUse"><Line x1={0} y1={RULED - 0.5} x2={RULED} y2={RULED - 0.5} stroke={c.dot} strokeWidth={1} /></Pattern>}
             </Defs>
             <Rect width="100%" height="100%" fill={`url(#${id})`} />
-            {paper === 'ruled' && <Line x1={46} y1={0} x2={46} y2="100%" stroke={dark ? MARGIN.dark : MARGIN.light} strokeOpacity={dark ? 0.45 : 0.5} strokeWidth={1.2} />}
+            {/* v0.7.7.6: the red margin line sits inside the 16 dp gutter, so it never runs through a heading or the search field */}
+            {paper === 'ruled' && skin.ground.margin && <Line x1={10} y1={0} x2={10} y2="100%" stroke={dark ? MARGIN.dark : MARGIN.light} strokeOpacity={dark ? 0.45 : 0.5} strokeWidth={1.2} />}
           </Svg>
         </Animated.View>
       )}
-      {look !== 'plain' && (
+      {skin.ground.grain && (
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, grainStyle]}>
           <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
             <Defs>

@@ -73,7 +73,7 @@ export function daylightSkin(scheme: Scheme, sky: SkyKey): Skin {
       deckInk: dark ? '#ECEEF1' : '#F4F7FB', deckMut: dark ? '#B5BBC4' : '#C3CBD7', deckRim: dark ? '#FFFFFF38' : null,
       ok: dark ? '#5CC48A' : '#287A4E', warn: dark ? '#E0A64A' : '#8A5A12', bad: dark ? '#F2768A' : '#B8304A',
     },
-    instruments: { clock: 'ring', bar: 'capsule', check: 'round', tag: 'capsule', field: 'box', addTile: 'pane', mascot: false },
+    instruments: { clock: 'ring', bar: 'capsule', check: 'round', tag: 'capsule', field: 'box', addTile: 'pane', mascot: false, tape: false, subjectMark: 'dot', overdue: 'bar', hatch: false },
     motion: { pressMs: 120, pressScale: 0.97, sheet: 'glass' },
   };
 }

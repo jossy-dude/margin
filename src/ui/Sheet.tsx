@@ -69,7 +69,7 @@ const TOP = { h: [34, 26, 0, 0], v: [34, 26, 0, 0] } as const;
  *  live callback. `scrollKey` keys the ScrollView, so a sheet that swaps sub-pages (Settings) opens
  *  each page at the top instead of inheriting the last page's scroll position. */
 export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = false, back, closeRef, scrollKey }: { title?: string; onClose: () => void; children: React.ReactNode; maxH?: number; footer?: React.ReactNode; peek?: boolean; back?: (() => void) | null; closeRef?: React.RefObject<SheetCloser | null>; scrollKey?: string }) {
-  const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c, look, skin } = useTheme(), reduce = useReduceMotion();
+  const { height: H } = useWindowDimensions(), ins = useSafeAreaInsets(), { c, skin } = useTheme(), reduce = useReduceMotion();
   const variant = useSheetVariant(), panel = variant === 'panel';
   /** One value, two distances. A sheet's travel is the window's own height; a panel's is its own width
    *  (`PANEL_W`). Normalising the travel to 0..1 rather than branching the style keeps the close path
@@ -85,7 +85,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
      frame after. The press-to-first-moving-frame gap on the sheet path was that dead frame plus the
      form's own mount cost; the mount cost is unavoidable (the form must exist to be seen), the frame is not. */
   /* v0.7.7.5: a glass sheet rises on a spring (damping 24, stiffness 300); the paper sheets keep their eased slide */
-  useLayoutEffect(() => { y.set(reduce ? 0 : skin?.motion.sheet === 'glass' ? withSpring(0, { damping: 24, stiffness: 300, mass: 1 }) : withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) })); fx.page(); }, [y, reduce, skin]);
+  useLayoutEffect(() => { y.set(reduce ? 0 : skin.motion.sheet === 'glass' ? withSpring(0, { damping: 24, stiffness: 300, mass: 1 }) : withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) })); fx.page(); }, [y, reduce, skin]);
   useEffect(() => { const a = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates.height)), b = Keyboard.addListener('keyboardDidHide', () => setKb(0)); return () => { a.remove(); b.remove(); }; }, []);
   /** Android lifts the window for the keyboard in one of two ways: `adjustResize` shrinks the root view,
       `adjustPan` / edge-to-edge leaves it alone and covers it. `restH` is the tallest the sheet host has
@@ -142,7 +142,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
   const sheetStyle = useAnimatedStyle(() => ({ transform: panel ? [{ translateX: interpolate(y.get(), [0, 1], [PANEL_W, 0], 'clamp') }] : [{ translateY: y.get() }] }));
   /* Daylight's scrim is the skin's tinted one (rgba(10,16,28,0.38) / rgba(0,0,0,0.5)) at full strength, not black at 0.42
      over a pastel sky, which read as dirty grey (critique A4) */
-  const dimMax = skin ? 1 : 0.42, scrim = skin?.surface.scrim ?? c.shadow;
+  const dimMax = 1, scrim = skin.surface.scrim; // paper skins: their shadow at 0.42, as before
   const dim = useAnimatedStyle(() => ({ opacity: panel ? interpolate(y.get(), [0, 1], [peek ? 0.12 : dimMax, 0], 'clamp') : interpolate(y.get(), [0, H], [peek ? 0.12 : dimMax, 0], 'clamp') }));
   return (
     <>
@@ -185,7 +185,7 @@ export function Sheet({ title, onClose, children, maxH = 0.88, footer, peek = fa
           </Animated.View>
         ) : (
         <Animated.View importantForAccessibility={gone ? 'no-hide-descendants' : 'yes'} pointerEvents={gone ? 'none' : 'auto'} style={[{ position: 'absolute', left: 0, right: 0, bottom, maxHeight: cap }, sheetStyle]}>
-          <Surface collage={look === 'collage'} plain={look === 'plain'} glass={!!skin} cap={cap} ink={c.ink}>
+          <Surface collage={skin.surface.edge === 'torn'} plain={skin.surface.edge === 'hairline'} glass={skin.surface.edge === 'glass'} cap={cap} ink={c.ink}>
             <PaperBg card />
             <GestureDetector gesture={pan}>
               <View style={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 6 }} accessible accessibilityRole="header" accessibilityLabel={title}>

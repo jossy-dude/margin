@@ -42,9 +42,9 @@ describe('Daylight reaches every screen', () => {
   const src = (p: string) => readFileSync(join(__dirname, '..', ...p.split('/')), 'utf8');
   it('PaperBg draws the sky for pages and strong glass for sheets', () => {
     const s = src('ui/PaperBg.tsx');
-    expect(s).toContain('if (sky) return <DayGround');
+    expect(s).toContain("if (skin.ground.kind === 'sky') return <DayGround"); // v0.7.7.6: the skin's ground says so
     expect(s).toContain('<Sky mode={mode} scheme={scheme} />');
-    expect(s).toContain('V2[scheme].glassStrong');
+    expect(s).toContain('backgroundColor: skin.surface.fillStrong'); // v0.7.7.6: the skin's strong glass (0.94)
   });
   it('HandBox draws a lit glass card: a brighter top rim, a lift only where the caller asks (v0.7.6.3, v0.7.7.3)', () => {
     const k = src('ui/kit.tsx');
@@ -58,6 +58,6 @@ describe('Daylight reaches every screen', () => {
     expect(src('navigation/Book.tsx')).not.toContain('backgroundColor: c.paper');
   });
   it('the nav becomes the glass island', () => {
-    expect(src('navigation/Book.tsx')).toContain("sky ? { borderRadius: 28");
+    expect(src('navigation/Book.tsx')).toContain("glass ? { borderRadius: 28");
   });
 });

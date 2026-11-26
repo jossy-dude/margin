@@ -385,7 +385,7 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
 
   it('a class title is capped at two lines, like every other course name on the page', () => {
     // v0.5 S2: still two lines, now at the largest size that fits them (32 down to 20, `headingSize`).
-    expect(src).toContain('<Txt f="marker" s={headingSize(title, w)} numberOfLines={2}');
+    expect(src).toContain('<Txt f="marker" s={headingSize(title, w)} numberOfLines={d.period ? 2 : 1}'); // v0.7.7.6: a class name 2, the day summary 1
   });
 
   it("the midnight rule is NOT re-implemented in the view — it is the domain's, once", () => {
