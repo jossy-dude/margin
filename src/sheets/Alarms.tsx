@@ -33,6 +33,13 @@ export const alarmTitle = (r: AlarmRule, h12: boolean) => (r.kind === 'class' ? 
  * class is cancelled or the day starts later. The phone rings them from its own alarm clock; the app does not
  * need to be open.
  */
+/* v0.7.8.9: one-tap answers on the setup page */
+const QUICK_TIMES: readonly (readonly [number, number])[] = [[6, 0], [6, 30], [7, 0], [7, 30], [8, 0]];
+const LEADS = [30, 45, 60, 90, 120] as const;
+const SNOOZES = [5, 10, 15] as const;
+const DAY_SETS: readonly (readonly [string, readonly boolean[]])[] = [['Weekdays', [true, true, true, true, true, false, false]], ['Every day', [true, true, true, true, true, true, true]], ['Weekend', [false, false, false, false, false, true, true]]];
+const fmtClockHM = (h: number, m: number, h12: boolean) => (h12 ? `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}` : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+
 export function AlarmsPage() {
   const { c } = useTheme(), now = useNow(30_000);
   const settings = useStore((s) => s.settings), courses = useStore((s) => s.courses), meetings = useStore((s) => s.meetings), variants = useStore((s) => s.variants), attendance = useStore((s) => s.attendance), dayMarks = useStore((s) => s.dayMarks);
@@ -53,21 +60,34 @@ export function AlarmsPage() {
           <Chip small label="At a time" on={draft.kind === 'clock'} onPress={() => { patch({ kind: 'clock' }); fx.select(); }} />
           <Chip small label="Before my first class" on={draft.kind === 'class'} onPress={() => { patch({ kind: 'class', days: draft.days.some(Boolean) ? draft.days : [true, true, true, true, true, true, true] }); fx.select(); }} />
         </Row>
+        {/* v0.7.8.9 (owner's ask 1): touch first. The common answers are one tap (a time, a lead, the days, the snooze);
+            the exact field stays for anything else. */}
         {draft.kind === 'clock'
-          ? <View style={{ gap: 4 }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS}>Rings at</Txt><TimeField label="Alarm time" value={draft.h * 60 + draft.m} hour12={h12} onChange={(v) => patch({ h: Math.floor(v / 60), m: v % 60 })} /></View>
-          : <>
-            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0 }}>Before the first class</Txt><NumberField label="Minutes before the first class" value={draft.lead} min={5} max={240} unit="min" onChange={(v) => patch({ lead: v ?? 60 })} /></Row>
+          ? <View style={{ gap: 8 }}>
+            <Txt f="bold" s={20} maxFontSizeMultiplier={FS}>Rings at</Txt>
+            <Row style={{ flexWrap: 'nowrap', gap: 10, alignItems: 'center' }}>
+              <Btn kind="ghost" label="−5" a11y="Five minutes earlier" onPress={() => { const v = (draft.h * 60 + draft.m + 1435) % 1440; patch({ h: Math.floor(v / 60), m: v % 60 }); fx.select(); }} />
+              <View style={{ flex: 1, alignItems: 'center' }}><TimeField label="Alarm time" value={draft.h * 60 + draft.m} hour12={h12} onChange={(v) => patch({ h: Math.floor(v / 60), m: v % 60 })} /></View>
+              <Btn kind="ghost" label="+5" a11y="Five minutes later" onPress={() => { const v = (draft.h * 60 + draft.m + 5) % 1440; patch({ h: Math.floor(v / 60), m: v % 60 }); fx.select(); }} />
+            </Row>
+            <Row>{QUICK_TIMES.map(([h, m]) => <Chip key={`${h}${m}`} small label={fmtClockHM(h, m, h12)} on={draft.h === h && draft.m === m} onPress={() => { patch({ h, m }); fx.select(); }} />)}</Row>
+          </View>
+          : <View style={{ gap: 8 }}>
+            <Txt f="bold" s={20} maxFontSizeMultiplier={FS}>Before the first class</Txt>
+            <Row>{LEADS.map((n) => <Chip key={n} small label={n < 60 ? `${n} min` : n % 60 ? `${Math.floor(n / 60)} h ${n % 60}` : `${n / 60} h`} on={draft.lead === n} onPress={() => { patch({ lead: n }); fx.select(); }} />)}</Row>
+            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Txt f="serif" s={15} c="mut" style={{ flex: 1, minWidth: 0 }}>Or exactly</Txt><NumberField label="Minutes before the first class" value={draft.lead} min={5} max={240} unit="min" onChange={(v) => patch({ lead: v ?? 60 })} /></Row>
             <Txt f="serif" s={15} c="mut">Follows your timetable. Class changes move it.</Txt>
-          </>}
+          </View>}
         <View style={{ gap: 6 }}>
           <Label>{draft.kind === 'class' ? 'On these days' : 'Repeat'}</Label>
+          <Row>{DAY_SETS.map(([label, set]) => <Chip key={label} small label={label} on={draft.days.every((x, i) => !!x === set[i])} onPress={() => { patch({ days: [...set] }); fx.select(); }} />)}</Row>
           <Row>{DW.map((d, i) => <Chip key={d} small label={d} on={!!draft.days[i]} onPress={() => { patch({ days: draft.days.map((x, j) => (j === i ? !x : x)) }); fx.select(); }} />)}</Row>
           <Txt f="serif" s={15} c="mut">
             {draft.kind === 'class' && !draft.days.some(Boolean) ? 'Pick at least one day.' : rings ? `${once ? 'Rings once' : 'Next'}: ${fmtWhen(rings, now, h12)} · ${relFire(rings, now)}` : draft.kind === 'class' ? 'No class on those days soon.' : 'Pick a time.'}
           </Txt>
         </View>
         <Field label="Label" placeholder={draft.kind === 'class' ? 'Wake up for class' : 'Wake up'} value={draft.label} onChangeText={(v) => patch({ label: v })} maxLength={40} returnKeyType="done" />
-        <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ flex: 1, minWidth: 0 }}>Snooze</Txt><NumberField label="Snooze length" value={draft.snooze} min={1} max={30} unit="min" onChange={(v) => patch({ snooze: v ?? 10 })} /></Row>
+        <View style={{ gap: 6 }}><Label>Snooze</Label><Row>{SNOOZES.map((n) => <Chip key={n} small label={`${n} min`} on={draft.snooze === n} onPress={() => { patch({ snooze: n }); fx.select(); }} />)}</Row></View>
         <Toggle label="Vibrate" value={draft.vib} onChange={(v) => patch({ vib: v })} />
         <Row style={{ gap: 10 }}>
           <Btn flex label={isNew ? 'Add alarm' : 'Save'} icon="check" disabled={draft.kind === 'class' && !draft.days.some(Boolean)} onPress={() => {
@@ -110,7 +130,7 @@ export function AlarmsPage() {
       </Row>
       {has && <AlarmSound />}
       {has && <Btn kind="ghost" icon="bell" label="Ring a test alarm" onPress={() => { if (!native.ringNow('Test alarm')) toast('The alarm could not start. Check that notifications are allowed for Marrow.'); }} />}
-      <Txt f="serif" s={14.5} c="mut">Starts soft and rises to full volume over 45 seconds, even on silent. Either volume key, a double tap on the alarm screen or Silence in the notification stops the sound; it stops by itself after five minutes.</Txt>
+      <Txt f="serif" s={14.5} c="mut">A real alarm: it starts soft and rises to full volume over 45 seconds, even on silent. Only Volume Down stops it; Volume Up and taps do nothing. Snooze is the big button. It gives up by itself after five minutes.</Txt>
     </View>
   );
 }

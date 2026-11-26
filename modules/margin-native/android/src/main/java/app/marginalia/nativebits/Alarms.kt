@@ -1,8 +1,6 @@
 package app.marginalia.nativebits
 
-import android.os.SystemClock
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.KeyguardManager
@@ -308,7 +306,6 @@ class AlarmService : Service() {
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     val full = PendingIntent.getActivity(this, 63, Intent(this, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION).putExtra("id", id).putExtra("label", label).putExtra("snooze", snoozeMin), flags)
     val snooze = PendingIntent.getService(this, 64, Intent(this, AlarmService::class.java).setAction(ACTION_SNOOZE), flags)
-    val dismiss = PendingIntent.getService(this, 65, Intent(this, AlarmService::class.java).setAction(ACTION_DISMISS), flags)
     val b = builder(this, CHANNEL_RING)
       .setSmallIcon(Live.smallIcon(this))
       .setContentTitle(if (label.isNotEmpty()) label else "Alarm")
@@ -320,9 +317,8 @@ class AlarmService : Service() {
       .setColor(getColor(R.color.mg_acc))
       .setContentIntent(full)
       .setFullScreenIntent(full, true)
-      .addAction(Notification.Action.Builder(null, "Silence", PendingIntent.getService(this, 66, Intent(this, AlarmService::class.java).setAction(ACTION_SILENCE), flags)).build())
+      // v0.7.8.9: Snooze only; stopping is Volume Down on the alarm screen
       .addAction(Notification.Action.Builder(null, "Snooze $snoozeMin min", snooze).build())
-      .addAction(Notification.Action.Builder(null, "Dismiss", dismiss).build())
     if (Build.VERSION.SDK_INT < 26) {
       @Suppress("DEPRECATION")
       b.setPriority(Notification.PRIORITY_MAX)
@@ -452,7 +448,11 @@ class AlarmActivity : Activity() {
     val snoozeBtn = findViewById<TextView>(R.id.mg_al_snooze)
     snoozeBtn.text = "Snooze $snooze min"
     snoozeBtn.setOnClickListener { answer(AlarmService.ACTION_SNOOZE) }
-    findViewById<TextView>(R.id.mg_al_dismiss).setOnClickListener { dismissHappy() }
+    // only Volume Down stops a real alarm; the old Dismiss button is its instruction now (a test ring still taps off)
+    findViewById<TextView>(R.id.mg_al_dismiss).apply {
+      text = if (intent.getStringExtra("id") == "preview") "Tap to stop the test" else "Press Volume Down to stop"
+      if (intent.getStringExtra("id") == "preview") setOnClickListener { dismissHappy() } else { isClickable = false; isFocusable = false }
+    }
     enter()
     val filter = IntentFilter(AlarmService.ACTION_DONE)
     if (Build.VERSION.SDK_INT >= 33) {
@@ -535,26 +535,21 @@ class AlarmActivity : Activity() {
     super.onDestroy()
   }
 
-  /** N6: either volume key silences the alarm (it still waits for Snooze or Dismiss). */
+  /**
+   * v0.7.8.9 (owner's ask 1): a real alarm. Only Volume Down stops it; Volume Up and Mute do nothing (they are
+   * swallowed, so the alarm stream is not turned down either), and no tap on the screen silences it any more. Snooze
+   * stays a big button. A test ring (`preview`) still ends with a tap, so trying a sound is quick.
+   */
   override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE) {
-      silence(); return true
+    when (keyCode) {
+      KeyEvent.KEYCODE_VOLUME_DOWN -> { dismissHappy(); return true }
+      KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_MUTE -> return true
     }
     return super.onKeyDown(keyCode, event)
   }
-  private var lastTap = 0L
-  /** N6: a double tap anywhere on the alarm screen silences it. */
-  override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-    if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-      val now = SystemClock.uptimeMillis()
-      if (now - lastTap < 350) silence()
-      lastTap = now
-    }
-    return super.dispatchTouchEvent(ev)
-  }
-  private fun silence() {
-    try { startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_SILENCE)) } catch (e: Exception) { }
-    if (intent.getStringExtra("id") == "preview") finish()
+  override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+    if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE) return true
+    return super.onKeyUp(keyCode, event)
   }
   /** A test ring ends when you leave its screen; a real alarm keeps ringing until it is answered. */
   override fun onUserLeaveHint() {
