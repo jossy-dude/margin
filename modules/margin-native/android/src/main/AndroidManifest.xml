@@ -33,13 +33,16 @@
       </intent-filter>
     </receiver>
 
-    <!-- The home-screen widget. -->
+    <!-- v0.7.7.7 (SPEC §5): the home-screen widgets, in Jetpack Glance. Now (2×1) proves the build; Class and Tasks
+         follow. BoardWidget is the old widget's one-release stub (D4): a placed copy says "Replaced". -->
+    <receiver android:name="app.marginalia.nativebits.NowWidgetReceiver" android:exported="false" android:label="@string/mg_widget_now_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_now"/>
+    </receiver>
     <receiver android:name="app.marginalia.nativebits.BoardWidget" android:exported="false" android:label="@string/mg_widget_board_name">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/mg_widget_board"/>
     </receiver>
-    <!-- v0.8: a task ticked on the widget (Android 12+ checkbox); Margin's JS applies it on its next start. -->
-    <receiver android:name="app.marginalia.nativebits.WidgetTickReceiver" android:exported="false"/>
 
     <!-- Alarms: the moment, the ringing, and the full-screen answer. -->
     <receiver android:name="app.marginalia.nativebits.AlarmReceiver" android:exported="false"/>

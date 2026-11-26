@@ -251,12 +251,12 @@ describeIfNative('v0.5 release engineering (R1)', () => {
 
   /* Rationale (v0.7, N1): new native code (the sync service) means a new runtime; app.json, the shipped gradle
      file and the runtime string move together (RELEASING.md §4). */
-  it('ships as 0.7.7.6, version code 24', () => {
-    // 0.7.7.6: every skin on the Skin object. 0.7.7.5 was version code 23.
-    expect(appJson.expo.version).toBe('0.7.7.6');
-    expect(gradle).toMatch(/versionCode 24\b/);
-    expect(gradle).toContain('versionName "0.7.7.6"');
-    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.7.6</string>');
+  it('ships as 0.7.7.7, version code 25', () => {
+    // 0.7.7.7: Glance toolchain, the old widget deleted, an empty Now widget. 0.7.7.6 was version code 24.
+    expect(appJson.expo.version).toBe('0.7.7.7');
+    expect(gradle).toMatch(/versionCode 25\b/);
+    expect(gradle).toContain('versionName "0.7.7.7"');
+    expect(readFileSync(join(ANDROID, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8')).toContain('>0.7.7.7</string>');
   });
 
   it('asks for no legacy storage and no draw-over-apps — and strips them if a library merges them in', () => {

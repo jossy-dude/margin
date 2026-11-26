@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="mg_widget_board_name">Marrow</string>
-  <string name="mg_widget_board_desc">The class on now or next, and what is due.</string>
+  <string name="mg_widget_now_name">Now</string>
+  <string name="mg_widget_now_desc">The class on now or next.</string>
+  <string name="mg_widget_board_name">Marrow (old)</string>
+  <string name="mg_widget_board_desc">Replaced by the new widgets.</string>
   <string name="mg_add_task">Add a task</string>
   <string name="mg_alarm_dismiss">Dismiss</string>
 </resources>

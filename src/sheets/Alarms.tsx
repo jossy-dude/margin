@@ -173,7 +173,7 @@ function Note({ text, action, onPress }: { text: string; action: string; onPress
 }
 
 const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
-  { kind: 'board', name: 'Marrow', line: 'Next class, today’s timetable and what is due, on one card.' },
+  { kind: 'now', name: 'Now', line: 'The class on now or next. 2×1.' },
 ];
 /** Settings → Widgets: the one widget, what it shows, and a button that asks the launcher to place it. */
 export function WidgetsPage() {
@@ -185,7 +185,7 @@ export function WidgetsPage() {
         <HandBox key={w.kind} seed={`wd-${w.kind}`} fill={c.card} style={{ padding: 14, gap: 8 }}>
           <Txt f="bold" s={21}>{w.name}</Txt>
           <Txt f="serif" s={15} c="mut">{w.line}</Txt>
-          {has && <Btn small kind="ink" icon="plus" label="Add to home screen" a11y={`Add the ${w.name} widget to the home screen`} onPress={() => { if (!native.pinWidget(w.kind)) toast('Long-press your home screen, choose Widgets, then Margin.'); }} />}
+          {has && <Btn small kind="ink" icon="plus" label="Add to home screen" a11y={`Add the ${w.name} widget to the home screen`} onPress={() => { if (!native.pinWidget(w.kind)) toast('Long-press your home screen, choose Widgets, then Marrow.'); }} />}
         </HandBox>
       ))}
       <Txt f="serif" s={14.5} c="mut">Or long-press the home screen, then Widgets.</Txt>

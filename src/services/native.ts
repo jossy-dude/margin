@@ -78,7 +78,7 @@ export const ringNow = (label: string) => safe((m) => m.ringNow(label), false);
 export const openAlarmSettings = (kind: 'exact' | 'fullscreen' | 'app') => safe((m) => m.openAlarmSettings(kind), false);
 /** Task ids ticked on the home-screen widget since the last call (v0.8 §4.3). */
 export const widgetTicks = (): string[] => parse<string[]>(safe<string | null>((m) => m.widgetTicks(), null)) ?? [];
-export type WidgetKind = 'board';
+export type WidgetKind = 'now'; // v0.7.7.7: Glance; 'class' and 'tasks' arrive at 0.7.7.8–.9
 /** Ask the launcher to add one of Margin's widgets. False when this launcher cannot be asked. */
 export const pinWidget = (kind: WidgetKind) => safe((m) => m.pinWidget(kind), false);
 

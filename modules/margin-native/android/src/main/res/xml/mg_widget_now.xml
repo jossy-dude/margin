@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.7.7.7 (SPEC §5): Now, 2×1. The class on now or next (filled in at 0.7.7.8). No timer: TICK at class
+     boundaries and data changes redraw it. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="110dp" android:minHeight="50dp"
+  android:minResizeWidth="110dp" android:minResizeHeight="40dp"
+  android:targetCellWidth="2" android:targetCellHeight="1"
+  android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
+  android:updatePeriodMillis="0"
+  android:initialLayout="@layout/glance_default_loading_layout"
+  android:description="@string/mg_widget_now_desc"/>

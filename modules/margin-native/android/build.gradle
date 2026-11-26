@@ -1,7 +1,18 @@
-plugins {
-  id 'com.android.library'
-  id 'expo-module-gradle-plugin'
+// v0.7.7.7 (SPEC §5): the widgets are Jetpack Glance, which needs the Compose compiler. Its Gradle plugin goes on the
+// classpath at the project's own Kotlin version (the root's `kotlinVersion`, set by expo-root-project), the same way
+// expo-modules-core adds it.
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath("org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin:${kotlinVersion}")
+  }
 }
+
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 group = 'app.marginalia'
 version = '0.7.0'
@@ -11,6 +22,9 @@ android {
   defaultConfig {
     versionCode 1
     versionName "0.7.0"
+  }
+  buildFeatures {
+    compose true
   }
 }
 
@@ -22,6 +36,9 @@ dependencies {
   // v0.8 §4.2: pairing by the desktop's QR code. Google's code scanner runs in Play services: no camera permission,
   // no camera code in the app.
   implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+  // v0.7.7.7 (SPEC §5): the home-screen widgets. Size buckets, the system's corners, lazy lists and check boxes.
+  implementation 'androidx.glance:glance-appwidget:1.2.0'
+  implementation 'androidx.glance:glance-material3:1.2.0'
 }
 
 // v0.8: the file-class table runs the same fixtures as vault-sync's sync-core (JVM unit test, CI native.yml).

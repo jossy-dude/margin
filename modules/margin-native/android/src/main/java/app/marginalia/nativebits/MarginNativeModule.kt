@@ -1,7 +1,5 @@
 package app.marginalia.nativebits
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -150,14 +148,11 @@ class MarginNativeModule : Module() {
     }
     /** Tasks ticked on the widget since JS last asked (v0.8 §4.3), as a JSON array of task ids; each is returned once. */
     Function("widgetTicks") { org.json.JSONArray(WidgetTicks.take(context).toList()).toString() }
-    /** Is at least one Margin widget on a home screen? */
+    /** Is at least one Marrow widget on a home screen? */
     Function("hasWidgets") { Widgets.any(context) }
-    /** Asks the launcher to add a widget ("next", "today" or "tasks"). False when this launcher cannot. */
-    Function("pinWidget") { kind: String ->
-      if (Build.VERSION.SDK_INT < 26) return@Function false
-      val mgr = AppWidgetManager.getInstance(context)
-      if (!mgr.isRequestPinAppWidgetSupported) return@Function false
-      try { mgr.requestPinAppWidget(ComponentName(context, BoardWidget::class.java), null, null) } catch (e: Exception) { false }
-    }
+    /** Asks the launcher to add a widget ("now"; "class" and "tasks" from 0.7.7.8). False when this launcher cannot. */
+    Function("pinWidget") { kind: String -> if (Build.VERSION.SDK_INT < 26) false else Widgets.pin(context, kind) }
+    /** v0.7.7.7 (SPEC §5): redraw the widgets after a task, timetable or skin change, without waiting for a tick. */
+    Function("refreshWidgets") { Widgets.refresh(context); true }
   }
 }
