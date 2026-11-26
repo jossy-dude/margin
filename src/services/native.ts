@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
 import type { SyncHold } from '../domain/syncHold';
+import type { SyncError } from '../domain/syncView';
 
 /**
  * Margin's own Android module (`modules/margin-native`), seen from JS.
@@ -27,6 +28,7 @@ interface MarginNative {
   syncTimer(json: string): boolean;
   syncNow(): boolean;
   syncClearErrors(): boolean;
+  syncDismissError(at: number): boolean;
   syncHold(op: string): boolean;
   syncInbox(): string;
   setLook(json: string): boolean;
@@ -89,7 +91,7 @@ export interface SyncStatus {
   deviceId: string; lastOk: number; cursor: number; outbox: number; presence: { deviceId: string; role: string; name?: string }[];
   lastError: string | null; vault: boolean; fast: boolean;
   /** v0.7.1: newest first, last 20; absent on older builds */
-  errors?: { at: number; msg: string }[];
+  errors?: SyncError[];
   /** hub clock − phone clock, ms (timer maths) */
   offset?: number; hubOnline?: boolean;
   scanAt?: number; scanMs?: number; scanFiles?: number; pushedAt?: number; sending?: number;
@@ -120,6 +122,8 @@ export function onSyncEvent(name: 'onSyncTimer' | 'onSyncStatus' | 'onVaultChang
 /** Send the phone vault's changes now; false on builds before 0.7.1. */
 export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
+/** Hide one card on the "What went wrong" page (a clash you have looked at). */
+export const syncDismissError = (at: number) => safe((m) => m.syncDismissError(at), false);
 /** Answer the big-delete question: apply = delete everywhere, cancel = keep the files. */
 export const syncHold = (op: 'apply' | 'cancel') => safe((m) => m.syncHold(op), false);
 /** Rows the service received while JS was not running; each is returned once. */

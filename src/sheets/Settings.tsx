@@ -37,12 +37,13 @@ import { APP_VERSION } from '../domain/version';
 import { AboutPage } from './AboutPage';
 import { AlarmsPage, WidgetsPage } from './Alarms';
 import { ObsidianPage } from './Obsidian';
+import { ProblemsPage } from './Problems';
 import type { Settings } from '../domain/types';
 
 /* The page id and the sheet title used to disagree on purpose: `about` was titled *Reset* and held the
    erase button, the version line and the Updates block. Splitting them means the id says what the page
    is — `about` is About, `reset` is the one destructive page — and the title follows the id. */
-const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian & sync', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
+const TITLES: Record<string, string> = { appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders', alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian & sync', problems: 'What went wrong', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time', ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters', focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset' };
 
 /**
  * One Settings page change, as paper pushed sideways.
@@ -317,6 +318,7 @@ export function SettingsSheet() {
   if (page === 'alarms') body = <AlarmsPage />;
   if (page === 'widgets') body = <WidgetsPage />;
   if (page === 'obsidian') body = <ObsidianPage />;
+  if (page === 'problems') body = <ProblemsPage />;
   if (page === 'ncls') body = (<>
     <Toggle label="Class starting soon" value={n.classSoon} onChange={(v) => act.setNotif({ classSoon: v })} />
     <Labelled label="Lead time"><NumberField label="Lead time" value={n.classLeadMin} min={0} max={60} unit="min" onChange={(v) => act.setNotif({ classLeadMin: v ?? 0 })} /></Labelled>

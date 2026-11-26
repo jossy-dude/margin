@@ -10,28 +10,64 @@ export interface SyncFacts {
   path?: string | null; addr?: string | null; lastOk: number; lastPath?: string | null;
   presence: { role: string; name?: string }[];
   stage?: string; stageDone?: number; stageOf?: number; pending?: number; outbox?: number;
-  errors?: { at: number; msg: string }[];
+  errors?: SyncError[];
   skipped?: { p: string; reason: string; at: number }[];
   hold?: unknown;
 }
 export type Dot = 'on' | 'off' | 'unknown';
 export interface DeviceRow { name: string; dot: Dot; note: string }
-export type Action = 'folder' | 'retry' | 'hub' | 'pair' | 'clear';
-export interface Problem { cause: string; affects: string; action: Action; label: string; at: number }
+export type Action = 'folder' | 'retry' | 'hub' | 'pair' | 'clear' | 'update' | 'show' | 'review' | 'open';
+export type Side = 'phone' | 'desktop';
+/** One row of the sync service's error list (SyncEngine.fail). `code`, `side`, `action`, `arg` and `fixed` come
+ *  with v0.7.8; older rows carry only `at` and `msg` and are read by their words (`problemOf`). */
+export interface SyncError { at: number; msg: string; code?: string; side?: string; action?: string; arg?: string; fixed?: number }
+export interface Problem { code: string; side: Side; cause: string; affects: string; action: Action; label: string; at: number; arg?: string; fixed?: number }
 export interface SyncView { devices: DeviceRow[]; connection: string; stage: { text: string; done: number; of: number } | null; problems: Problem[]; ok: boolean }
 
 const host = (a?: string | null) => (a ?? '').split(':')[0] ?? '';
-const ACTION_LABEL: Record<Action, string> = { folder: 'Choose the folder again', retry: 'Try again', hub: 'How to start the desktop hub', pair: 'Pair again', clear: 'Dismiss' };
 
+/**
+ * v0.7.8 (SPEC §8 G3): what each code means for you and its one button. The codes are SyncEngine.kt's `Err`
+ * (sync-errors test holds the two lists together).
+ */
+export const ERR: Record<string, { side: Side; action: Action; label: string; affects: string }> = {
+  'E-AWAY': { side: 'desktop', action: 'retry', label: 'Try now', affects: 'Changes wait on each device and go when the desktop is back.' },
+  'E-PAIR': { side: 'phone', action: 'pair', label: 'Pair', affects: 'The desktop refuses this phone until it is paired again.' },
+  'E-VERSION': { side: 'desktop', action: 'update', label: 'How to update', affects: 'Nothing syncs until both sides run the same version.' },
+  'E-SEAL': { side: 'desktop', action: 'pair', label: 'Pair again', affects: 'Marrow will not talk to a desktop it cannot check.' },
+  'E-PERM': { side: 'phone', action: 'folder', label: 'Pick folder', affects: 'Nothing syncs until Marrow can read the vault folder.' },
+  'E-BIG': { side: 'phone', action: 'show', label: 'Show file', affects: 'This file stays on this phone; the rest syncs.' },
+  'E-HELD': { side: 'desktop', action: 'review', label: 'Review', affects: 'Sync waits until you say yes or no.' },
+  'E-CLASH': { side: 'desktop', action: 'open', label: 'Open', affects: 'Both versions are kept; nothing was lost.' },
+  'E-WRITE': { side: 'phone', action: 'retry', label: 'Retry', affects: 'One file did not go through; the rest of sync carries on.' },
+  'E-REFUSED': { side: 'desktop', action: 'update', label: 'How to fix', affects: 'Phone changes wait on the phone.' },
+  'E-HICCUP': { side: 'phone', action: 'retry', label: 'Try now', affects: 'One task failed; the rest of sync carries on.' },
+};
+
+/** A row from a build before the codes: told apart by its words. */
 export function problemOf(msg: string, at: number): Problem {
   const m = msg.toLowerCase();
-  const p = (cause: string, affects: string, action: Action): Problem => ({ cause, affects, action, label: ACTION_LABEL[action], at });
-  if (/vault folder|pick the vault|choose the folder|couldn't read the phone vault|looks empty/.test(m)) return p(msg, 'Nothing syncs until Marrow can read the vault folder.', 'folder');
-  if (/not found on this network|did not answer|is bone-syncd running/.test(m)) return p(msg, 'Changes wait on each device and go when the desktop is back.', 'hub');
-  if (/does not know this phone|pair again|bad-proof|different vault/.test(m)) return p(msg, 'The desktop refuses this phone until it is paired again.', 'pair');
-  if (/older than this margin|seal 2|different version/.test(m)) return p(msg, 'Update vault-sync on the desktop; nothing syncs until then.', 'hub');
-  if (/old margin bridge/.test(m)) return p(msg, 'Phone Obsidian still works; its file sending is ignored.', 'clear');
-  return p(msg, 'One change did not go through; the rest of sync carries on.', 'retry');
+  const p = (code: string): Problem => ({ code, ...ERR[code]!, cause: msg, at });
+  if (/vault folder|pick the vault|choose the folder|couldn't read the phone vault|looks empty/.test(m)) return p('E-PERM');
+  if (/not found on this network|did not answer|is bone-syncd running/.test(m)) return p('E-AWAY');
+  if (/does not know this phone|pair again|bad-proof|different vault/.test(m)) return p('E-PAIR');
+  if (/older than this margin|seal 2|different version|old margin bridge/.test(m)) return p('E-VERSION');
+  if (/over (20|100) mb/.test(m)) return p('E-BIG');
+  return p('E-WRITE');
+}
+
+export function problemFrom(e: SyncError): Problem {
+  const k = e.code && ERR[e.code];
+  if (!k) return { ...problemOf(e.msg, e.at), ...(e.fixed ? { fixed: e.fixed } : {}) };
+  return { code: e.code!, ...k, cause: e.msg, at: e.at, ...(e.arg ? { arg: e.arg } : {}), ...(e.fixed ? { fixed: e.fixed } : {}) };
+}
+
+/** The "What went wrong" page: open problems first, newest first, then the fixed ones; split by the device. */
+export function problemGroups(list: Problem[]): { side: Side; title: string; items: Problem[] }[] {
+  const order = (a: Problem, b: Problem) => (a.fixed ? 1 : 0) - (b.fixed ? 1 : 0) || b.at - a.at;
+  return (['phone', 'desktop'] as const)
+    .map((side) => ({ side, title: side === 'phone' ? 'This phone' : 'The desktop', items: list.filter((p) => p.side === side).sort(order) }))
+    .filter((g) => g.items.length > 0);
 }
 
 export function syncView(s: SyncFacts | null, now: number, hour12: boolean): SyncView {
@@ -54,7 +90,7 @@ export function syncView(s: SyncFacts | null, now: number, hour12: boolean): Syn
   else if (s.live && (s.pending ?? 0) > 0) stage = { text: `Receiving ${s.pending} change${s.pending === 1 ? '' : 's'}`, done: 0, of: 0 };
   else if (s.live) stage = { text: `Up to date · ${fmtTime(s.lastOk || now, hour12)}`, done: 0, of: 0 };
   const seenMsg = new Set<string>();
-  const problems = (s.errors ?? []).filter((e) => !seenMsg.has(e.msg) && !!seenMsg.add(e.msg)).slice(0, 4).map((e) => problemOf(e.msg, e.at));
-  if (s.paired && !s.vault && !problems.some((p) => p.action === 'folder')) problems.unshift(problemOf('Choose the vault folder so Marrow can sync it.', now));
-  return { devices, connection, stage, problems, ok: s.live && problems.length === 0 && !s.hold };
+  const problems = (s.errors ?? []).filter((e) => !seenMsg.has(e.msg) && !!seenMsg.add(e.msg)).map(problemFrom);
+  if (s.paired && !s.vault && !problems.some((p) => p.action === 'folder' && !p.fixed)) problems.unshift(problemOf('Choose the vault folder so Marrow can sync it.', now));
+  return { devices, connection, stage, problems, ok: s.live && !problems.some((p) => !p.fixed) && !s.hold };
 }

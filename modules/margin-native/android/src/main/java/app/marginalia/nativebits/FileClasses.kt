@@ -25,6 +25,7 @@ object FileClasses {
   val DEFAULTS: String = buildString {
     append("local .obsidian/workspace*.json\nlocal .obsidian/app.json\nlocal **/*.local.json\nlocal .margin/obsidian.json\n")
     append("local .obsidian/plugins/*/data.json\n")
+    append("file **/*.excalidraw.md\n") // v0.7.8 G1: drawings are compressed data; a clash keeps both
     for (p in SHARED_PLUGIN_DATA) append("shared .obsidian/plugins/").append(p).append('\n')
     append("single:phone **/*.phone.json\nsingle:desktop **/*.desktop.json\n")
     for (p in MARGIN_FILES) append("single:phone ").append(p).append('\n')

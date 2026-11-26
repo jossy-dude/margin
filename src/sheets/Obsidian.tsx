@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Share, View } from 'react-native';
+import { Linking, Share, View } from 'react-native';
 import { Btn, Field, HandBox, Txt } from '../ui/kit';
 import { useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
@@ -7,6 +7,7 @@ import { obsidianNow, obsidianStatus, onObsidian } from '../store/obsidian';
 import { leafOf, pickVault, vaultAvailable } from '../services/vaultFiles';
 import { nativeAvailable, onSyncEvent, scanQr, syncClearErrors, syncConfigure, syncEvents, syncForget, syncHold, syncNow, syncPair, syncStatus, type SyncStatus } from '../services/native';
 import { syncView, type Action } from '../domain/syncView';
+import { obsidianLink } from './Problems';
 import { holdQuestion } from '../domain/syncHold';
 import { DEFAULT_TRACKED } from '../domain/vaultTasks';
 import { fmtTime } from '../domain/time';
@@ -36,15 +37,17 @@ export function ObsidianPage() {
   const choose = async () => { const picked = await pickVault(); if (picked) { syncConfigure(picked, leafOf(picked)); act.setSettings({ vaultUri: picked }); sync(); } };
   const pairWith = (t: string) => { const err = syncPair(t); setMsg(err ?? 'Paired. Marrow finds the desktop on your Wi-Fi, the hotspot or Tailscale.'); if (!err) setText(''); refresh(); };
   const scan = async () => { const r = await scanQr(); if (!r) return; if (r.startsWith('error:')) { setMsg(`The scanner is not available (${r.slice(6)}). Paste the text instead.`); return; } pairWith(r); };
-  const doAction = (a: Action) => {
+  const vaultName = st?.vaultName ?? (uri ? leafOf(uri) : null);
+  const doAction = (a: Action, arg?: string) => {
     if (a === 'folder') void choose();
-    else if (a === 'retry') { syncClearErrors(); sync(); }
+    else if (a === 'retry') sync();
     else if (a === 'clear') { syncClearErrors(); refresh(); }
     else if (a === 'pair') { syncForget(); refresh(); }
-    else setMsg('On the desktop: systemctl --user enable --now bone-syncd. Then the computer and the phone on the same Wi-Fi (or the phone\'s hotspot, or Tailscale).');
+    else if (a === 'review') return; // the held-deletes card is on this page, just above
+    else if ((a === 'open' || a === 'show') && arg) void Linking.openURL(obsidianLink(vaultName, arg)).catch(() => setMsg(`Open ${arg} in Obsidian.`));
+    else act.settingsPush('problems');
   };
   if (!can) return <Txt f="serif" s={16} c="mut">The vault link and sync need the Android app.</Txt>;
-  const vaultName = st?.vaultName ?? (uri ? leafOf(uri) : null);
   return (
     <View style={{ gap: 12 }}>
       {/* the devices */}
@@ -80,14 +83,22 @@ export function ObsidianPage() {
           </HandBox></View>
         );
       })() : null}
-      {/* problems: the plain cause, what it affects, one action */}
-      {v.problems.map((p) => (
-        <View key={p.at + p.cause} testID="sync-problem"><HandBox seed={`sy-p-${p.at}`} fill={c.card} stroke={c.warn} style={{ padding: 12, gap: 6 }}>
-          <Txt f="bold" s={16} selectable>{p.cause}</Txt>
-          <Txt f="serif" s={14.5} c="mut">{p.affects} · {fmtTime(p.at, hour12)}</Txt>
-          <Btn small kind="ghost" label={p.label} onPress={() => doAction(p.action)} />
-        </HandBox></View>
-      ))}
+      {/* problems (v0.7.8): the newest open one here with its button; all of them on "What went wrong" */}
+      {(() => {
+        const open = v.problems.filter((p) => !p.fixed), top = open[0];
+        if (!top) return <Btn small kind="ghost" label={v.problems.length ? 'What went wrong (all fixed)' : 'What went wrong'} testID="sync-problems" onPress={() => act.settingsPush('problems')} />;
+        return (
+          <View testID="sync-problem"><HandBox seed={`sy-p-${top.at}`} fill={c.card} stroke={c.warn} style={{ padding: 12, gap: 6 }}>
+            <Txt f="type" s={13} c="warn">{top.code} · {fmtTime(top.at, hour12)}</Txt>
+            <Txt f="bold" s={16} selectable>{top.cause}</Txt>
+            <Txt f="serif" s={14.5} c="mut">{top.affects}</Txt>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <Btn kind="ink" label={top.label} onPress={() => doAction(top.action, top.arg)} />
+              <Btn kind="ghost" label={open.length > 1 ? `What went wrong · ${open.length}` : 'What went wrong'} testID="sync-problems" onPress={() => act.settingsPush('problems')} />
+            </View>
+          </HandBox></View>
+        );
+      })()}
       {st?.skipped?.length ? (
         <View style={{ gap: 4 }} testID="sync-skipped">
           <Txt f="bold" s={17}>Files that could not land</Txt>

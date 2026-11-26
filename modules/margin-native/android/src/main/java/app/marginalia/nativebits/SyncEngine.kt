@@ -41,7 +41,7 @@ object SyncEngine {
       pool.execute {
         try { r.run() } catch (t: Throwable) {
           Log.e(TAG, "sync task failed", t)
-          if (t !is org.java_websocket.exceptions.WebsocketNotConnectedException) try { fail("Sync hiccup (${t.javaClass.simpleName}); carrying on") } catch (e2: Throwable) { }
+          if (t !is org.java_websocket.exceptions.WebsocketNotConnectedException) try { fail(Err.HICCUP, "Sync hiccup (${t.javaClass.simpleName}); carrying on") } catch (e2: Throwable) { }
         }
       }
     } catch (e: java.util.concurrent.RejectedExecutionException) { Log.w(TAG, "sync executor is shut down") }
@@ -114,6 +114,7 @@ object SyncEngine {
   fun setVault(uri: String, name: String?) {
     prefs.edit().putString("vaultUri", uri).putString("vaultName", name).apply()
     event("vault", "vault folder set${name?.let { " ($it)" } ?: ""}")
+    fixed(Err.PERM)
     status("vault")
   }
   /** Kotlin's pref is missing but Android still holds a grant (an update, cleared app prefs): adopt it. */
@@ -171,7 +172,7 @@ object SyncEngine {
   private fun tryDial(list: List<SyncDiscovery.Cand>, i: Int) {
     if (i >= list.size) {
       dialing = false
-      fail("The desktop was not found on this network (tried ${list.joinToString { it.addr }}). Is bone-syncd running and the computer awake?")
+      fail(Err.AWAY, "The desktop was not found on this network (tried ${list.joinToString { it.addr }}). Is bone-syncd running and the computer awake?")
       retryLater(); return
     }
     val c = list[i]
@@ -281,10 +282,10 @@ object SyncEngine {
         val wantHub = l.pendHub ?: hubId
         val want = Seal.proof(key, nonce, m.optString("hub"), vault)
         if (!Seal.sameHex(m.optString("proof"), want) || m.optString("hub") != wantHub) {
-          Log.w(TAG, "hub failed its proof"); store.count("err", 1, "hub failed its proof"); l.close(); dropHub("hub failed its proof"); return
+          Log.w(TAG, "hub failed its proof"); fail(Err.SEAL, "The link failed its security check (the desktop did not prove itself)."); l.close(); dropHub("hub failed its proof"); return
         }
         if (!m.optBoolean("sealed") || m.optInt("seal") != Seal.SEAL_VERSION) {
-          fail("The desktop's bone-syncd is older than this Marrow (no seal 2). Update vault-sync on the desktop.")
+          fail(Err.VERSION, "The desktop's bone-syncd is older than this Marrow (no seal 2). Update vault-sync on the desktop.")
           l.close(); dropHub("unsealed"); return
         }
         if (l.pendKey != null) {
@@ -300,6 +301,7 @@ object SyncEngine {
         if (m.optLong("head") < store.cursor) { store.resetCursor(); event("link", "the desktop's history was reset; comparing every file") }
         prefs.edit().putLong("lastOk", System.currentTimeMillis()).putString("lastAddr", l.addr).putString("path", l.path).apply()
         retryStep = 0; lastError = null
+        fixed(Err.AWAY, Err.PAIR, Err.VERSION, Err.SEAL, Err.HICCUP)
         l.pingTask = sched.scheduleWithFixedDelay(Runnable { exec.execute { if (hub === l && l.ready) sendPing(l) } }, PING_MS, PING_MS, TimeUnit.MILLISECONDS)
         event("link", "connected · ${l.path} · desktop at ${l.addr.substringBefore(':')}")
         status("live")
@@ -312,12 +314,12 @@ object SyncEngine {
   }
   private fun onBye(l: Link, m: JSONObject, preauth: Boolean = false) {
     val r = m.optString("reason")
-    fail(when (r) {
-      "bad-proof" -> "The desktop does not know this phone any more. Pair again (Settings → Obsidian & sync)."
-      "other-vault" -> "This phone is paired with a different vault than the desktop's."
-      "version" -> "The desktop's bone-syncd speaks a different version. Update both."
-      else -> "The desktop closed the link ($r)."
-    })
+    when (r) {
+      "bad-proof" -> fail(Err.PAIR, "The desktop does not know this phone any more. Pair again (Settings → Obsidian & sync).")
+      "other-vault" -> fail(Err.PAIR, "This phone is paired with a different vault than the desktop's.")
+      "version" -> fail(Err.VERSION, "The desktop's bone-syncd speaks a different version. Update both.")
+      else -> fail(Err.AWAY, "The desktop closed the link ($r).")
+    }
     if (!preauth && (r == "bad-proof" || r == "other-vault")) wantLive = false
     l.close()
   }
@@ -346,7 +348,11 @@ object SyncEngine {
       }
       "presence" -> { prefs.edit().putString("presence", m.optJSONArray("peers")?.toString() ?: "[]").apply(); SyncLocal.toObsidian(m); status("presence") }
       "conflict" -> {
-        if (m.optString("resolution") == "conflicts-note") event("conflict", "clash in ${m.optString("p")}: the other version is in ${m.optString("file")}")
+        val cp = m.optString("p")
+        when (m.optString("resolution")) {
+          "conflicts-note" -> m.optString("file").let { f -> event("conflict", "clash in $cp: the other version is in $f"); fail(Err.CLASH, "$cp changed on both sides. The other version is in $f.", f) }
+          "copy" -> m.optString("copy").let { f -> event("conflict", "clash in $cp: both kept, the other is $f"); fail(Err.CLASH, "$cp changed on both sides. Both are kept: the other is $f.", f) }
+        }
         SyncLocal.toObsidian(m)
       }
       "hold" -> SyncFiles.onHold(m)
@@ -365,23 +371,63 @@ object SyncEngine {
     }
   }
 
-  /** Something went wrong: remember it for the sync page (last 20, newest first) and tell JS. */
-  internal fun fail(msg: String) {
+  /**
+   * v0.7.8 (SPEC §8 G3): every sync error has a code, the side it is about, and ONE action for its card on the
+   * "What went wrong" page. The sentence is written where the error happens (it names the file or the time); the
+   * code decides the button. JS reads the same names (`domain/syncView.ts` ERR_ACTION).
+   */
+  enum class Err(val side: String, val action: String) {
+    AWAY("desktop", "retry"),       // the desktop isn't reachable
+    PAIR("phone", "pair"),          // this phone isn't paired (or the desktop forgot it)
+    VERSION("desktop", "update"),   // the desktop's bone-syncd (or margin-bridge) is a different version
+    SEAL("desktop", "pair"),        // the link failed its security check
+    PERM("phone", "folder"),        // Marrow lost access to the vault folder
+    BIG("phone", "show"),           // a file is too big to sync from the phone
+    HELD("desktop", "review"),      // deletes are waiting for the owner
+    CLASH("desktop", "open"),       // a note changed on both sides
+    WRITE("phone", "retry"),        // couldn't write or fetch a file
+    REFUSED("desktop", "update"),   // the desktop refused a change (read-only hub, or an error there)
+    HICCUP("phone", "retry");       // anything else: one task failed, sync carries on
+    val code get() = "E-$name"
+  }
+
+  /** Something went wrong: remember it for the sync page (last 20, newest first) and tell JS. `arg` is the file
+   *  the action opens (Show file, Open), when there is one. */
+  internal fun fail(err: Err, msg: String, arg: String? = null) {
     lastError = msg
-    Log.w(TAG, msg)
+    Log.w(TAG, "${err.code} $msg")
     if (!::app.isInitialized) return
-    store.count("err", 1, msg); store.event("problem", msg)
+    store.count("err", 1, msg); store.event("problem", "${err.code} $msg")
     val old = try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { JSONArray() }
-    val out = JSONArray().put(JSONObject().put("at", System.currentTimeMillis()).put("msg", msg))
+    val row = JSONObject().put("at", System.currentTimeMillis()).put("msg", msg).put("code", err.code).put("side", err.side).put("action", err.action)
+    if (arg != null) row.put("arg", arg)
+    val out = JSONArray().put(row)
     for (i in 0 until minOf(old.length(), 19)) { val o = old.optJSONObject(i) ?: continue; if (o.optString("msg") != msg) out.put(o) }
     prefs.edit().putString("errors", out.toString()).apply()
     status("error")
+  }
+
+  /** These problems are over (the link came up, the folder was picked): their cards grey out with "Fixed 14:20". */
+  internal fun fixed(vararg errs: Err) {
+    if (!::app.isInitialized) return
+    val codes = errs.map { it.code }.toSet()
+    val list = try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { return }
+    var n = 0; val now = System.currentTimeMillis()
+    for (i in 0 until list.length()) { val o = list.optJSONObject(i) ?: continue; if (o.optString("code") in codes && !o.has("fixed")) { o.put("fixed", now); n++ } }
+    if (n > 0) { prefs.edit().putString("errors", list.toString()).apply(); status("fixed") }
+  }
+  /** The owner dismissed one card (a clash they have looked at). */
+  fun dismissError(at: Long) = exec.execute {
+    val list = try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { return@execute }
+    val out = JSONArray()
+    for (i in 0 until list.length()) { val o = list.optJSONObject(i) ?: continue; if (o.optLong("at") != at) out.put(o) }
+    prefs.edit().putString("errors", out.toString()).apply(); status("dismissed")
   }
   internal fun event(kind: String, msg: String) { if (::app.isInitialized) store.event(kind, msg) }
   fun clearErrors() = exec.execute { lastError = null; SyncFiles.tries.clear(); prefs.edit().remove("errors").apply(); status("errors cleared") }
 
   fun timer(json: String) = exec.execute {
-    val fr = try { frame("timer", JSONObject(json)) } catch (e: Exception) { fail("Bad timer message from the app"); return@execute }
+    val fr = try { frame("timer", JSONObject(json)) } catch (e: Exception) { fail(Err.HICCUP, "Bad timer message from the app"); return@execute }
     if (hub?.ready == true) sendHub(fr) else { store.enqueue(fr.getString("id"), fr.toString()); status("timer queued") }
     SyncLocal.toObsidian(fr)
   }

@@ -70,7 +70,7 @@ import java.util.Calendar
  *  - Now (2×1): the class on now or next, its countdown and a bar.
  *  - Class (4×1 to 4×3): the same with its room, what comes after, and from 4×3 the one task that most needs you.
  *  - Tasks (4×2 to 4×4, v0.7.7.9): what is due, most urgent first, ticked right there (`TickAction` → `TaskTick`).
- *  - BoardWidget: the old widget's one-release stub (D4).
+ *  (The old widget's "Replaced" stub, D4, lived for one release and went at 0.7.8.)
  *
  * Nothing here starts the JS engine. `Surfaces.refresh` (a new agenda, a skin change, a class boundary, a reboot)
  * calls `Widgets.refresh`. That bumps `version`, which every running Glance session collects, so a widget already on
@@ -95,7 +95,6 @@ object Widgets {
       try { NowWidget().updateAll(app) } catch (e: Exception) { }
       try { ClassWidget().updateAll(app) } catch (e: Exception) { }
       try { TasksWidget().updateAll(app) } catch (e: Exception) { }
-      try { ReplacedWidget().updateAll(app) } catch (e: Exception) { }
     }
   }
 
@@ -379,26 +378,4 @@ private fun TasksContent() {
       else { for (t in all.take(WidgetModel.taskRows(effectiveHeight()))) TaskRow(p, t, d) }
     }
   }
-}
-
-/* ── the old widget's stub (D4) ──────────────────────────────────────────────────────────────────── */
-
-/**
- * Kept for one release so a placed copy says what happened instead of "Can't load widget". Its receiver keeps the old
- * class name (`BoardWidget`), which is what the launcher remembers. Gone at 0.7.8.
- */
-class ReplacedWidget : GlanceAppWidget() {
-  override suspend fun provideGlance(context: Context, id: GlanceId) {
-    provideContent {
-      GlanceTheme {
-        val m = GlanceTheme.colors
-        Card(Paint(GlanceModifier.background(m.widgetBackground), m.onSurface, m.onSurfaceVariant, m.primary, m.surfaceVariant, m.error, m.onPrimary), "marrow://today", 12) {
-          Text("Replaced. Long-press to add the new Marrow widget.", style = style(m.onSurface, 14), maxLines = 2)
-        }
-      }
-    }
-  }
-}
-class BoardWidget : GlanceAppWidgetReceiver() {
-  override val glanceAppWidget: GlanceAppWidget = ReplacedWidget()
 }

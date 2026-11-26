@@ -55,7 +55,7 @@ internal object SyncFiles {
   private fun want(paths: List<String>) { for (chunk in paths.chunked(500)) E.sendHub(E.frame("want", JSONObject().put("paths", JSONArray(chunk)))) }
   /** Ask the hub again; after MAX_ASKS the change is skipped with its reason and the cursor moves past it. */
   private fun ask(p: String, seq: Long, why: String) {
-    if (E.store.expect(p, seq) > MAX_ASKS) { E.store.skip(p, seq, why); E.fail("$p did not arrive after $MAX_ASKS tries ($why); skipped. Sync now asks again."); return }
+    if (E.store.expect(p, seq) > MAX_ASKS) { E.store.skip(p, seq, why); E.fail(SyncEngine.Err.WRITE, "$p did not arrive after $MAX_ASKS tries ($why); skipped. Sync now asks again."); return }
     want(listOf(p))
   }
 
@@ -69,7 +69,7 @@ internal object SyncFiles {
   /** Want what changed there, settle what is the same, leave what changed on both sides to the push (the hub
    *  merges it against the base we send). The cursor moves in sync.db as each change lands. */
   fun onManifest(m: JSONObject) {
-    val v = E.vault() ?: run { E.fail("Pick the vault folder in Settings → Obsidian & sync so Marrow can sync it."); return }
+    val v = E.vault() ?: run { E.fail(SyncEngine.Err.PERM, "Pick the vault folder in Settings → Obsidian & sync so Marrow can sync it."); return }
     E.setStage("Comparing files")
     val scanned = refreshLocalSafe(v)
     if (E.hub?.mode == "read-only") {
@@ -179,7 +179,7 @@ internal object SyncFiles {
       E.prefs.edit().putLong("scanAt", System.currentTimeMillis()).putLong("scanMs", System.currentTimeMillis() - t0).putInt("scanFiles", entries.size).apply()
       true
     } catch (e: Exception) {
-      E.fail("Couldn't read the phone vault: ${e.message ?: e.javaClass.simpleName}. Choose the folder again in Settings → Obsidian & sync.")
+      E.fail(SyncEngine.Err.PERM, "Couldn't read the phone vault: ${e.message ?: e.javaClass.simpleName}. Choose the folder again in Settings → Obsidian & sync.")
       false
     }
   }
@@ -209,7 +209,7 @@ internal object SyncFiles {
   }
   private fun pushLocal(v: SyncVault, p: String, row: SyncStore.FileRow, withBase: Boolean = false): Boolean {
     if (!syncsHere(p) || !mayPush(p)) return false
-    if (row.size > MAX_FILE_BYTES) { if (tries[p] == null) { tries[p] = MAX_TRIES; E.fail("$p is over 20 MB, too big to sync from the phone.") }; return false }
+    if (row.size > MAX_FILE_BYTES) { if (tries[p] == null) { tries[p] = MAX_TRIES; E.fail(SyncEngine.Err.BIG, "$p is over 20 MB, too big to sync from the phone.", p) }; return false }
     val bytes = v.read(p) ?: return false
     val h = Seal.hash(bytes)
     val f = JSONObject().put("p", p).put("h", h).put("base", row.base ?: JSONObject.NULL).put("s", bytes.size).put("m", row.mtime)
@@ -275,7 +275,7 @@ internal object SyncFiles {
     }
     val chunk = Base64.decode(m.optString("body"), Base64.NO_WRAP)
     x.size += chunk.size
-    if (x.size > MAX_IN_BYTES) { x.file.delete(); inParts.remove(xfer); E.store.skip(p, m.optLong("seq"), "over 100 MB"); E.fail("$p is over 100 MB, too big to sync."); return null }
+    if (x.size > MAX_IN_BYTES) { x.file.delete(); inParts.remove(xfer); E.store.skip(p, m.optLong("seq"), "over 100 MB"); E.fail(SyncEngine.Err.BIG, "$p is over 100 MB, too big to sync.", p); return null }
     x.file.appendBytes(chunk); x.next++
     if (x.next < x.parts) return null
     inParts.remove(xfer)
@@ -342,8 +342,8 @@ internal object SyncFiles {
   private fun failWrite(p: String, seq: Long, ref: String, why: String) {
     val n = (tries[p] ?: 0) + 1; tries[p] = n
     E.sendHub(E.frame("ack", JSONObject().put("ref", ref).put("ok", false).put("err", "write-failed")))
-    if (n < MAX_TRIES) { E.fail("$p $why on the phone; asking again."); ask(p, seq, why) }
-    else { E.store.skip(p, seq, "could not be written: $why"); E.fail("$p could not be written on the phone ($why); skipped. Sync now tries again.") }
+    if (n < MAX_TRIES) { E.fail(SyncEngine.Err.WRITE, "$p $why on the phone; asking again."); ask(p, seq, why) }
+    else { E.store.skip(p, seq, "could not be written: $why"); E.fail(SyncEngine.Err.WRITE, "$p could not be written on the phone ($why); skipped. Sync now tries again.") }
   }
   private fun ackPut(ref: String, seq: Long, h: String) = E.sendHub(E.frame("ack", JSONObject().put("ref", ref).put("ok", true).put("seq", seq).put("h", h)))
 
@@ -396,8 +396,8 @@ internal object SyncFiles {
     if (!syncsHere(from) || !syncsHere(to)) { E.store.settle(to, seq); return }
     val v = E.vault() ?: return
     val bytes = v.read(from) ?: run { ask(to, seq, "moved file missing here"); return }
-    try { v.write(to, bytes) } catch (e: Exception) { E.fail("Couldn't move $from to $to: ${e.message}"); ask(to, seq, "move failed"); return }
-    if (v.hashOf(to) != Seal.hash(bytes)) { E.fail("Moving $from to $to did not save; asking again."); ask(to, seq, "move did not save"); return }
+    try { v.write(to, bytes) } catch (e: Exception) { E.fail(SyncEngine.Err.WRITE, "Couldn't move $from to $to: ${e.message}"); ask(to, seq, "move failed"); return }
+    if (v.hashOf(to) != Seal.hash(bytes)) { E.fail(SyncEngine.Err.WRITE, "Moving $from to $to did not save; asking again."); ask(to, seq, "move did not save"); return }
     v.delete(from)
     if (E.store.file(from) != null) E.store.moveFile(from, to)
     val st = v.stat(to); val h = Seal.hash(bytes)
@@ -424,9 +424,9 @@ internal object SyncFiles {
     }
     val err = m.optString("err")
     E.store.acked(ref)
-    if (inf == null) { if (err != "read-only") E.fail("The desktop refused a change: $err"); return }
+    if (inf == null) { if (err != "read-only") E.fail(SyncEngine.Err.REFUSED, "The desktop refused a change: $err"); return }
     when (err) {
-      "read-only" -> E.fail("The desktop hub is in read-only mode, so phone changes wait. Set \"mode\": \"live\" in ~/.config/bone-sync/config.json.")
+      "read-only" -> E.fail(SyncEngine.Err.REFUSED, "The desktop hub is in read-only mode, so phone changes wait. Set \"mode\": \"live\" in ~/.config/bone-sync/config.json.")
       "edited", "held" -> {}
       "ignored", "one-way" -> { tries[inf.path] = MAX_TRIES; E.event("refused", "${inf.path}: the desktop keeps its own copy ($err)") }
       // the hub no longer has the base this edit was made on: send it along so the merge has the real ancestor
@@ -436,7 +436,7 @@ internal object SyncFiles {
   }
   private fun retry(inf: Inflight, err: String) {
     val n = (tries[inf.path] ?: 0) + 1; tries[inf.path] = n
-    if (n >= MAX_TRIES) { E.fail("${inf.path} did not sync after $n tries ($err). It stays on the phone; Sync now tries again."); return }
+    if (n >= MAX_TRIES) { E.fail(SyncEngine.Err.WRITE, "${inf.path} did not sync after $n tries ($err). It stays on the phone; Sync now tries again."); return }
     val v = E.vault() ?: return
     val row = E.store.file(inf.path) ?: return
     if (inf.kind == "put" && row.h != null) pushLocal(v, inf.path, row) else if (inf.kind == "del" && row.base != null) sendDel(inf.path, row.base)
@@ -460,12 +460,15 @@ internal object SyncFiles {
       "held" -> {
         val first = JSONObject(E.prefs.getString("hold", "{}")!!).optString("holdId") != m.optString("holdId")
         E.prefs.edit().putString("hold", m.toString()).apply()
-        if (first) { holdNote(m.optInt("count"), if (m.optString("src") == "desktop") "on the desktop" else "on the phone"); E.event("hold", "${m.optInt("count")} files deleted ${m.optString("src")}: waiting for your answer") }
+        if (first) {
+          holdNote(m.optInt("count"), if (m.optString("src") == "desktop") "on the desktop" else "on the phone"); E.event("hold", "${m.optInt("count")} files deleted ${m.optString("src")}: waiting for your answer")
+          E.fail(SyncEngine.Err.HELD, "${m.optInt("count")} deletes are waiting for you.")
+        }
         E.status("hold")
       }
       "done" -> {
         if (JSONObject(E.prefs.getString("hold", "{}")!!).optString("holdId") == m.optString("holdId")) E.prefs.edit().remove("hold").apply()
-        cancelHoldNote(); E.status("hold done")
+        cancelHoldNote(); E.fixed(SyncEngine.Err.HELD); E.status("hold done")
       }
     }
   }

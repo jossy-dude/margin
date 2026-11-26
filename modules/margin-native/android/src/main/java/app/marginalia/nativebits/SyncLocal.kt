@@ -160,7 +160,7 @@ internal object SyncLocal {
         if (E.hub?.ready == true) E.sendHub(m) else E.store.enqueue(m.optString("id"), m.toString())
       }
       // a margin-bridge from before v0.8 still sends files: Margin is the only writer now, so they are dropped
-      "put", "del", "mv", "want", "manifest", "bridge" -> if (!oldPluginNoted) { oldPluginNoted = true; E.fail("Phone Obsidian runs an old Margin Bridge that still sends files. Update margin-bridge to 0.8 on the desktop; it reaches the phone by sync.") }
+      "put", "del", "mv", "want", "manifest", "bridge" -> if (!oldPluginNoted) { oldPluginNoted = true; E.fail(SyncEngine.Err.VERSION, "Phone Obsidian runs an old Margin Bridge that still sends files. Update margin-bridge to 0.8 on the desktop; it reaches the phone by sync.") }
       "bye" -> conn.close()
     }
   }

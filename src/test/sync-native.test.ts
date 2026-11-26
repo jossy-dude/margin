@@ -26,7 +26,7 @@ describe('sync service wiring (SYNC_ANDROID.md §2)', () => {
 });
 
 describe('widgets do not wake the phone on a timer (PLAN N7, found issue F4)', () => {
-  it.each(['mg_widget_now.xml', 'mg_widget_board.xml'])('%s: updatePeriodMillis is 0; TICK at class boundaries and data changes redraw it instead', (f) => {
+  it.each(['mg_widget_now.xml', 'mg_widget_class.xml', 'mg_widget_tasks.xml'])('%s: updatePeriodMillis is 0; TICK at class boundaries and data changes redraw it instead', (f) => {
     const xml = readFileSync(join(MOD, 'src', 'main', 'res', 'xml', f), 'utf8');
     expect(xml).toContain('android:updatePeriodMillis="0"');
   });

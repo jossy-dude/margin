@@ -8,7 +8,7 @@
 /** The pages, as `Settings.tsx` titles them. */
 export const PAGES: Record<string, string> = {
   appearance: 'Look & feel', theme: 'Theme & palette', paper: 'Paper & texture', bar: 'Progress bar', pen: 'Accent pen', notifications: 'Reminders',
-  alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian & sync', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time',
+  alarms: 'Alarms', widgets: 'Widgets', obsidian: 'Obsidian & sync', problems: 'What went wrong', ncls: 'Classes', ntask: 'Tasks & exams', nhours: 'Hours & quiet time',
   ncourse: 'Per-subject lead time', nstatus: 'Delivery status', sound: 'Sound & haptics', attendance: 'Attendance & semester', semesters: 'Semesters',
   focus: 'Focus & breaks', data: 'Data & export', import: 'Import', diagnostics: 'Diagnostics', tour: 'The introduction', about: 'About', reset: 'Reset',
 };
@@ -34,6 +34,7 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
   e('Alarms', ['alarms'], ['alarms'], ['wake', 'alarm sound']),
   e('Widgets', ['widgets'], undefined, ['home screen']),
   e('Obsidian', ['obsidian'], ['vaultUri', 'trackedTags'], ['vault', 'sync', 'notes', 'tags', 'school tag', 'tracked tags']),
+  e('What went wrong', ['obsidian'], undefined, ['errors', 'sync problems', 'clash', 'conflict', 'not syncing']),
   e('Sound & haptics', ['sound'], undefined, ['volume', 'vibration']),
   e('Attendance & semester', ['attendance'], ['semesterStart', 'semesterEnd'], ['term', 'semester dates', 'start of term', 'end of term']),
   e('Semesters', ['semesters'], undefined, ['past terms', 'archive']),
