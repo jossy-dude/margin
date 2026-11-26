@@ -21,6 +21,7 @@ import type { OnboardDoor } from '../store/session';
 import * as notifs from '../services/notifications';
 import { fx } from '../services/fx';
 import { Legend } from './Legend';
+import { SkinScene } from './Scenes';
 import { PAPER, hexA, makeTheme } from '../tokens/theme';
 import { SKY as DAY_SKY, V2 } from '../tokens/v2';
 import { Sky as DaySky } from '../ui/Sky';
@@ -151,7 +152,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
   /* Each page clips its own collage: a piece drifting with the swipe never wanders onto the next page. */
   const pageShell = (i: number, art: React.ReactNode, body: React.ReactNode) => (
     <View key={i} style={{ width: W, height: H, overflow: 'hidden' }}>
-      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : null}</Drift>
+      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : <SkinScene i={i} W={W} H={H} bottom={FOOT + ins.bottom + 8} />}</Drift>
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: ins.top + 62, paddingHorizontal: 24, paddingBottom: FOOT + ins.bottom + 12, minHeight: H }}>
         <Words x={x} i={i} W={W}>{body}</Words>
       </ScrollView>
@@ -161,7 +162,7 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
      the art — the reference's hero, cut the same way. */
   const heroShell = (i: number, top: number, art: React.ReactNode, body: React.ReactNode) => (
     <View key={i} style={{ width: W, height: H, overflow: 'hidden' }}>
-      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : <Halo cx={anchors[i]!.cx} cy={anchors[i]!.cy} r={(SZH * anchors[i]!.s) * 0.62} />}</Drift>
+      <Drift x={x} i={i} W={W}>{cut === 'collage' ? art : <><SkinScene i={i} W={W} H={H} /><Halo cx={anchors[i]!.cx} cy={anchors[i]!.cy} r={(SZH * anchors[i]!.s) * 0.62} /></>}</Drift>
       <Animated.ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEventThrottle={16} onScroll={i === 0 ? onY0 : onY4} contentContainerStyle={{ minHeight: H }}>
         <View style={{ height: top }} />
         <Sheet i={i}>
@@ -282,7 +283,8 @@ export function Onboarding({ firstRun }: { firstRun: boolean }) {
 
 /* ── pieces ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-const Kicker = ({ children, style }: { children: string; style?: object }) => <Txt f="type" s={13} c="acc" maxFontSizeMultiplier={FS} accessibilityRole="header" style={[{ letterSpacing: 2.4, textTransform: 'uppercase', marginBottom: 8 }, style]}>{children}</Txt>;
+/* v0.7.8.17: a heading in sentence case, not a letter-spaced uppercase eyebrow (the craft floor's one ban) */
+const Kicker = ({ children, style }: { children: string; style?: object }) => <Txt f="bold" s={18} maxFontSizeMultiplier={FS} accessibilityRole="header" style={[{ marginBottom: 8 }, style]}>{children}</Txt>;
 const Title = ({ children, style }: { children: React.ReactNode; style?: object }) => <Txt f="marker" s={44} maxFontSizeMultiplier={1.3} accessibilityRole="header" style={[{ lineHeight: 50 }, style]}>{children}</Txt>;
 
 /** One thing a reminder is sent for: an icon on a tile and one word. */
