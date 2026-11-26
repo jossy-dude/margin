@@ -109,3 +109,28 @@ export function tornEdge(w: number, seed: number, depth = 6): { face: [number, n
   }
   return { face, core };
 }
+
+/* ── E3 (D2a, v0.7.8.8): edges cached by seed + rounded size ─────────────────────────────────────────────────
+ * A card's edge depends only on its size, corners, seed and amplitude, so it is traced once per shape and shared:
+ * a card that mounts again (a virtualised list row, a page coming back, a sheet reopening) takes its path from
+ * here instead of re-running the wobble. Sizes round to whole dp, so sub-pixel layout passes reuse the same path.
+ * A small LRU keeps memory flat on long lists. */
+const EDGE_MAX = 800;
+const edges = new Map<string, string>(), torns = new Map<string, { face: string; core: string }>();
+function lru<T>(m: Map<string, T>, k: string, make: () => T): T {
+  const hit = m.get(k);
+  if (hit !== undefined) { m.delete(k); m.set(k, hit); return hit; }
+  const v = make();
+  m.set(k, v);
+  if (m.size > EDGE_MAX) m.delete(m.keys().next().value as string);
+  return v;
+}
+export function handPathCached(w: number, h: number, c: Corners, seed: number, amp = 1.1): string {
+  const W = Math.round(w), H = Math.round(h);
+  return lru(edges, `${W}|${H}|${seed}|${amp}|${c.h.join(',')}|${c.v.join(',')}`, () => handPath(W, H, c, seed, amp));
+}
+export function tornPathsCached(w: number, h: number, seed: number): { face: string; core: string } {
+  const W = Math.round(w), H = Math.round(h);
+  return lru(torns, `${W}|${H}|${seed}`, () => tornPaths(W, H, seed));
+}
+export const edgeCacheSize = () => edges.size + torns.size;

@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollVi
 import Animated, { Easing, interpolate, interpolateColor, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { RG, RS, TAPE, PAPER, hexA, type Colors, type FontKey, type TypeMap } from '../tokens/theme';
-import { handPath, hashSeed, tornPaths, tornTape, type Corners } from './hand';
+import { handPathCached, hashSeed, tornPathsCached, tornTape, type Corners } from './hand';
 import { FADE_START, STRIP_FADE, stripHasMore } from './fit';
 import { useReduceMotion, useTheme } from './theme-context';
 import { fx } from '../services/fx';
@@ -139,8 +139,8 @@ export function HandBox({ children, style, fill, stroke, seed = 1, corners = RG,
   /* Scissors round a WIDE control into a pill (a button, a chip); a squarer box (a timetable block, a day
      cell, a check box) only has its corners softened, or it turns into a bubble. */
   const pillR = sz.w >= sz.h * 1.6 ? Math.min(sz.h / 2, 22) : Math.min(8, sz.h / 4, sz.w / 4), pill = useMemo(() => ({ h: [pillR, pillR, pillR, pillR], v: [pillR, pillR, pillR, pillR] }), [pillR]);
-  const d = useMemo(() => (mode === 'torn' ? '' : handPath(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
-  const torn = useMemo(() => (mode === 'torn' ? tornPaths(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
+  const d = useMemo(() => (mode === 'torn' ? '' : handPathCached(sz.w, sz.h, mode === 'cut' ? pill : corners, sd, mode === 'cut' ? 0.55 : amp)), [sz.w, sz.h, corners, sd, amp, mode, pill]);
+  const torn = useMemo(() => (mode === 'torn' ? tornPathsCached(sz.w, sz.h, sd) : null), [mode, sz.w, sz.h, sd]);
   const onLayout = (e: { nativeEvent: { layout: { width: number; height: number } } }) => { const { width, height } = e.nativeEvent.layout; if (Math.abs(width - sz.w) > 0.5 || Math.abs(height - sz.h) > 0.5) setSz({ w: width, h: height }); };
   if (edge === 'hairline' || edge === 'glass') {
     /* Plain: no drawing at all — a rounded view, a hairline, a soft native shadow. A coloured stroke is still a
