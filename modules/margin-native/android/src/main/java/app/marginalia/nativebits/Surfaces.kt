@@ -40,7 +40,11 @@ object Ticker {
 
   fun arm(c: Context, a: Agenda, now: Long) {
     val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    val at = a.nextBoundary(now)
+    /* v0.7.7.8: Daylight's widget wears the sky of the hour, so it also wakes (without waking the phone's screen) at
+       the next keyframe edge. */
+    val look = Look.read(c)
+    val skyEdge = if (look.daylight && look.sky == "live" && !look.phone) now + WidgetModel.nextSkyEdge(Widgets.minutesOfDay(now)) * 60_000L else Long.MAX_VALUE
+    val at = minOf(a.nextBoundary(now), skyEdge)
     val hard = pi(c, ACTION_TICK, 41)
     try {
       if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, hard)

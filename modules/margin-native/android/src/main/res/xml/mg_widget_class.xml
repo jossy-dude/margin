@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.7.7.8 (SPEC §5): Class. 4×2 by default (state, name, room, countdown, bar); 4×1 is the name and countdown, 4×3
+     adds what comes after and the one task that most needs you. No timer: TICK at class boundaries redraws it. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="250dp" android:minHeight="110dp"
+  android:minResizeWidth="180dp" android:minResizeHeight="50dp"
+  android:targetCellWidth="4" android:targetCellHeight="2"
+  android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
+  android:updatePeriodMillis="0"
+  android:initialLayout="@layout/glance_default_loading_layout"
+  android:previewImage="@drawable/mg_preview_class"
+  android:description="@string/mg_widget_class_desc"/>

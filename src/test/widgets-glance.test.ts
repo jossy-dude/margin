@@ -5,6 +5,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { widgetBar } from '../tokens/widget';
 
 const MOD = join(__dirname, '..', '..', 'modules', 'margin-native', 'android');
 const MAIN = join(MOD, 'src', 'main');
@@ -42,10 +43,32 @@ describe('the widgets in the manifest', () => {
       expect(xml).not.toMatch(/mg_widget_card|mg_widget_preview/);
     }
   });
+  it('declares Class (4×2 by default)', () => {
+    expect(manifest).toContain('app.marginalia.nativebits.ClassWidgetReceiver');
+    const xml = read(MAIN, 'res', 'xml', 'mg_widget_class.xml');
+    expect(xml).toContain('android:targetCellWidth="4"');
+    expect(xml).toContain('android:targetCellHeight="2"');
+    expect(xml).toContain('android:updatePeriodMillis="0"');
+  });
+  it.each([['mg_widget_now.xml', 'mg_preview_now'], ['mg_widget_class.xml', 'mg_preview_class']])('%s has a static preview that exists (%s)', (f, img) => {
+    expect(read(MAIN, 'res', 'xml', f)).toContain(`android:previewImage="@drawable/${img}"`);
+    expect(existsSync(join(MAIN, 'res', 'drawable-nodpi', `${img}.png`))).toBe(true);
+  });
   it('Now is 2×1', () => {
     const xml = read(MAIN, 'res', 'xml', 'mg_widget_now.xml');
     expect(xml).toContain('android:targetCellWidth="2"');
     expect(xml).toContain('android:targetCellHeight="1"');
+  });
+});
+
+describe('the skin reaches the widget (setLook, v0.7.7.8)', () => {
+  const ctx = readFileSync(join(__dirname, '..', 'ui', 'theme-context.tsx'), 'utf8');
+  it('sends the bar, late ink, sky mode and D3 choice', () => {
+    for (const k of ['barLight:', 'barDark:', 'badLight:', 'badDark:', 'sky: skyMode', 'widget: widgetColors']) expect(ctx).toContain(k);
+  });
+  it('Look reads them back', () => {
+    const l = read(KT, 'Look.kt');
+    for (const k of ['"bar$k"', '"bad$k"', '"sky"', '"widget"']) expect(l).toContain(k);
   });
 });
 
@@ -87,6 +110,38 @@ describe('Widgets.kt', () => {
     expect(read(MAIN, 'res', 'values-v31', 'mg_dimens.xml')).toContain('@android:dimen/system_app_widget_background_radius');
   });
   it('pins only kinds it knows', () => {
-    expect(w).toContain('mapOf("now" to NowWidgetReceiver::class.java)');
+    expect(w).toContain('mapOf("now" to NowWidgetReceiver::class.java, "class" to ClassWidgetReceiver::class.java)');
   });
+  it('running sessions recompose from fresh data: a version flow, not Glance state (v0.7.7.8)', () => {
+    expect(w).toContain('val version = MutableStateFlow(0L)');
+    expect(w).toContain('val v by Widgets.version.collectAsState()');
+    expect(w).toContain('remember(v) { Data(Look.read(c), Agenda.read(c), System.currentTimeMillis()) }');
+  });
+  it('the countdown is a system Chronometer counting down, sized per layout', () => {
+    expect(w).toContain('rv.setChronometerCountDown(R.id.mg_chrono, true)');
+    const x = read(MAIN, 'res', 'layout', 'mg_chrono.xml');
+    expect(x).toContain('<Chronometer');
+    expect(x).toContain('android:fontFeatureSettings="tnum"');
+  });
+  it('D3: skin colours, Material You for "phone" and for a never-opened install', () => {
+    expect(w).toContain('if (l.phone || d.agenda.writtenAt == 0L)');
+    expect(w).toContain('GlanceModifier.background(ImageProvider(skyRes(l.dark, key)))');
+  });
+  it('lays out by height over the font scale, so 1.3× text never clips', () => {
+    expect(w).toContain('LocalSize.current.height.value / LocalContext.current.resources.configuration.fontScale');
+    expect(w).toContain('override val sizeMode: SizeMode = SizeMode.Exact');
+  });
+  it('no text under 12 sp', () => {
+    const sizes = [...w.matchAll(/style\(p\.\w+, (\d+)/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(5);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe('widgetBar: the bar shows on the widget surface (v0.7.7.8)', () => {
+  it('Daylight keeps the now amber', () => { expect(widgetBar('#E8961E', '#2B3038', '#F4F5F7', true)).toBe('#E8961E'); });
+  it('a paper accent that vanishes on its deck falls back to the deck ink', () => {
+    expect(widgetBar('#8A4B27', '#2A241C', '#FAF4E6', false)).toBe('#FAF4E6');
+  });
+  it('an accent with 3:1 on the deck stays', () => { expect(widgetBar('#9BBBE0', '#17181A', '#ECEBE7', false)).toBe('#9BBBE0'); });
 });

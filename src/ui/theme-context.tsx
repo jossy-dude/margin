@@ -2,6 +2,8 @@ import React, { createContext, useContext, useDeferredValue, useEffect, useState
 import { AccessibilityInfo, useColorScheme } from 'react-native';
 import { makeTheme, palettes, type Theme } from '../tokens/theme';
 import { nextSkyChange, skyFor, type SkyKey } from '../tokens/v2';
+import { NOW } from '../tokens/skins/daylight';
+import { widgetBar } from '../tokens/widget';
 import { useStore } from '../store/store';
 import { setLook } from '../services/native';
 
@@ -45,6 +47,7 @@ function useSkyKey(on: boolean, dark: boolean): SkyKey {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const sys = useColorScheme() === 'dark', theme = useStore((s) => s.settings.theme), palette = useStore((s) => s.settings.palette), pen = useStore((s) => s.settings.pen);
+  const skyMode = useStore((s) => s.settings.sky) ?? 'live', widgetColors = useStore((s) => s.settings.widgetColors) ?? 'skin';
   const skyKey = useSkyKey(palette === 'daylight', theme === 'auto' ? sys : theme === 'dark');
   const now = themeFor({ theme, palette, pen }, sys, skyKey);
   /* The switch is a transition: the tap that chose the skin commits at once and the re-skin of the tree follows,
@@ -53,12 +56,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   /* The splash, the widget and the alarm page wear the skin too: its papers and inks go to the native side, read
      at the next launch (MainActivity) and on every widget redraw. */
   useEffect(() => {
-    const p = palettes[palette] ?? palettes.collage;
+    const p = palettes[palette] ?? palettes.collage, sky = palette === 'daylight';
     setLook({ mode: theme, palette, paperLight: p.light.paper, paperDark: p.dark.paper, cardLight: p.light.card.slice(0, 7), cardDark: p.dark.card.slice(0, 7),
       inkLight: p.light.ink, inkDark: p.dark.ink, mutLight: p.light.mut, mutDark: p.dark.mut, accLight: now.dark ? p.light.acc : now.c.acc, accDark: now.dark ? now.c.acc : p.dark.acc,
       deckLight: p.light.deck, deckDark: p.dark.deck, deckInkLight: p.light.deckInk, deckInkDark: p.dark.deckInk, deckMutLight: p.light.deckMut, deckMutDark: p.dark.deckMut,
-      deckBadLight: onDeckBad(p.light.deck, p), deckBadDark: onDeckBad(p.dark.deck, p), look: now.look });
-  }, [theme, palette, now]);
+      deckBadLight: onDeckBad(p.light.deck, p), deckBadDark: onDeckBad(p.dark.deck, p), look: now.look,
+      /* v0.7.7.8 (SPEC §5): the widget's bar and its "late" ink on the card, the sky mode (Daylight's widget follows the
+         clock natively), and D3's Skin / Phone choice */
+      barLight: widgetBar(sky ? NOW.light : p.light.acc, p.light.deck, p.light.deckInk, sky), barDark: widgetBar(sky ? NOW.dark : p.dark.acc, p.dark.deck, p.dark.deckInk, sky),
+      badLight: p.light.bad, badDark: p.dark.bad, sky: skyMode, widget: widgetColors });
+  }, [theme, palette, now, skyMode, widgetColors]);
   return <Ctx.Provider value={t}>{children}</Ctx.Provider>;
 }
 /** The OS "remove animations" switch combined with the in-app override. */

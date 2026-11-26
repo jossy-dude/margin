@@ -173,14 +173,15 @@ function Note({ text, action, onPress }: { text: string; action: string; onPress
 }
 
 const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
-  { kind: 'now', name: 'Now', line: 'The class on now or next. 2×1.' },
+  { kind: 'now', name: 'Now', line: 'The class on now or next, counting down. 2×1.' },
+  { kind: 'class', name: 'Class', line: 'Adds the room and what comes after; at 4×3, the task that most needs you. 4×1 to 4×3.' },
 ];
-/** Settings → Widgets: the one widget, what it shows, and a button that asks the launcher to place it. */
+/** Settings → Widgets (v0.7.7.8): each widget with a button that asks the launcher to place it, and D3's colours. */
 export function WidgetsPage() {
-  const { c } = useTheme(), has = native.nativeAvailable();
+  const { c } = useTheme(), has = native.nativeAvailable(), colors = useStore((s) => s.settings.widgetColors) ?? 'skin';
   return (
     <View style={{ gap: 12 }}>
-      <Txt f="serif" s={16} c="mut">{has ? 'One home screen widget. It updates when Marrow is closed.' : 'Widgets need the Android app.'}</Txt>
+      {!has && <Txt f="serif" s={16} c="mut">Widgets need the Android app.</Txt>}
       {WIDGETS.map((w) => (
         <HandBox key={w.kind} seed={`wd-${w.kind}`} fill={c.card} style={{ padding: 14, gap: 8 }}>
           <Txt f="bold" s={21}>{w.name}</Txt>
@@ -188,7 +189,13 @@ export function WidgetsPage() {
           {has && <Btn small kind="ink" icon="plus" label="Add to home screen" a11y={`Add the ${w.name} widget to the home screen`} onPress={() => { if (!native.pinWidget(w.kind)) toast('Long-press your home screen, choose Widgets, then Marrow.'); }} />}
         </HandBox>
       ))}
-      <Txt f="serif" s={14.5} c="mut">Or long-press the home screen, then Widgets.</Txt>
+      <View style={{ gap: 6 }}>
+        <Label>Colours</Label>
+        <Row>
+          <Chip label="My skin" on={colors === 'skin'} onPress={() => act.setSettings({ widgetColors: 'skin' })} />
+          <Chip label="My phone" on={colors === 'phone'} onPress={() => act.setSettings({ widgetColors: 'phone' })} />
+        </Row>
+      </View>
     </View>
   );
 }

@@ -17,25 +17,9 @@ mkdirSync(OUT, { recursive: true });
 const tmp = join(tmpdir(), `marrow-sky-${process.pid}`);
 mkdirSync(tmp, { recursive: true });
 
-/* [top, middle, bottom], the glow's colour and opacity, its height as a fraction of the screen, cloud opacity, stars */
-const SKIES = {
-  light: {
-    dawn: { stops: ['#E9A994', '#F5D2BD', '#FCEEE2'], glow: ['#FFE1B8', 0.85], y: 0.40, cloud: 0.14, stars: 0 },
-    morning: { stops: ['#8DBDEB', '#C6DFF5', '#EEF5FB'], glow: ['#FFF6DE', 0.75], y: 0.26, cloud: 0.15, stars: 0 },
-    noon: { stops: ['#74AEE6', '#B9D9F4', '#F1F7FC'], glow: ['#FFFFFF', 0.80], y: 0.12, cloud: 0.13, stars: 0 },
-    afternoon: { stops: ['#9EC0E6', '#D5E1EE', '#F5ECDF'], glow: ['#FFF0D2', 0.70], y: 0.24, cloud: 0.12, stars: 0 },
-    dusk: { stops: ['#8D7DC4', '#CFA2C2', '#F2D6CB'], glow: ['#FFD2B0', 0.75], y: 0.40, cloud: 0.10, stars: 0 },
-    night: { stops: ['#4F6699', '#7F95C0', '#B8C5DE'], glow: ['#E8EEFF', 0.55], y: 0.18, cloud: 0.08, stars: 18 },
-  },
-  dark: {
-    dawn: { stops: ['#1A1F3D', '#43365A', '#6A4A58'], glow: ['#F2A982', 0.35], y: 0.40, cloud: 0.08, stars: 6 },
-    morning: { stops: ['#112039', '#233859', '#355079'], glow: ['#BFD6F5', 0.25], y: 0.26, cloud: 0.09, stars: 0 },
-    noon: { stops: ['#10213A', '#213859', '#2E4B71'], glow: ['#D6E4F7', 0.22], y: 0.12, cloud: 0.09, stars: 0 },
-    afternoon: { stops: ['#172137', '#2E3552', '#48435F'], glow: ['#E8CDB0', 0.22], y: 0.24, cloud: 0.08, stars: 0 },
-    dusk: { stops: ['#181530', '#3B294B', '#5C3951'], glow: ['#E59A8E', 0.30], y: 0.40, cloud: 0.08, stars: 10 },
-    night: { stops: ['#060A17', '#121A32', '#1D2546'], glow: ['#C9D6FF', 0.28], y: 0.18, cloud: 0.06, stars: 70 },
-  },
-};
+/* [top, middle, bottom], the glow's colour and opacity, its height as a fraction of the screen, cloud opacity, stars.
+   v0.7.7.8: kept in assets/sky/skies.json, which the widgets' sky gradients are built from too (widget-sky.test.ts). */
+const SKIES = JSON.parse(readFileSync('assets/sky/skies.json', 'utf8'));
 
 /* a small seeded random, so the stars and clouds never move between builds */
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; }; }

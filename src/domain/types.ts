@@ -146,6 +146,8 @@ export interface Settings {
    *  out of layout, so a revisit rebuilds its views; `keep` leaves it laid out at opacity 0. Ship `keep` as the default
    *  only if the A51 shows it costs under +40 MB. */
   hiddenPages?: 'drop' | 'keep';
+  /** v0.7.7.8 (SPEC §5, D3): the widgets wear the app's skin (default) or the phone's Material You colours. */
+  widgetColors?: 'skin' | 'phone';
   /** v0.7.6.4: credit hours per subject id, for the GPA. Absent = not counted until set. */
   credits?: Record<string, number>;
   /** v0.7.6.4: results from earlier terms, typed in from the transcript. */

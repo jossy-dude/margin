@@ -5,15 +5,29 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
+import android.util.TypedValue
+import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.LinearProgressIndicator
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -22,33 +36,49 @@ import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 /**
- * v0.7.7.7 (SPEC §5): the home-screen widgets, in Jetpack Glance. This release only proves the toolchain: one empty
- * Now widget that says "Marrow", and the old widget's stub. Now and Class fill in at 0.7.7.8, Tasks at 0.7.7.9.
+ * v0.7.7.7–.8 (SPEC §5): the home-screen widgets, in Jetpack Glance.
+ *  - Now (2×1): the class on now or next, its countdown and a bar.
+ *  - Class (4×1 to 4×3): the same with its room, what comes after, and from 4×3 the one task that most needs you.
+ *  - BoardWidget: the old widget's one-release stub (D4).
  *
- * Nothing here starts the JS engine. `Surfaces.refresh` (a new agenda, a class boundary, a reboot) calls
- * `Widgets.refresh`, which redraws every placed widget from what the app already wrote.
+ * Nothing here starts the JS engine. `Surfaces.refresh` (a new agenda, a skin change, a class boundary, a reboot)
+ * calls `Widgets.refresh`. That bumps `version`, which every running Glance session collects, so a widget already on
+ * screen recomposes from fresh data (Glance's own `update` only refreshes Glance state, which these widgets don't use),
+ * and `updateAll` starts a session for any widget that has none.
  */
 object Widgets {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  val version = MutableStateFlow(0L)
 
   /** The receiver for each kind `pinWidget` accepts. */
-  private val RECEIVERS = mapOf("now" to NowWidgetReceiver::class.java)
+  private val RECEIVERS = mapOf("now" to NowWidgetReceiver::class.java, "class" to ClassWidgetReceiver::class.java)
 
   fun refresh(c: Context) {
     val app = c.applicationContext
+    version.value = version.value + 1
     scope.launch {
       try { NowWidget().updateAll(app) } catch (e: Exception) { }
+      try { ClassWidget().updateAll(app) } catch (e: Exception) { }
       try { ReplacedWidget().updateAll(app) } catch (e: Exception) { }
     }
   }
@@ -70,49 +100,215 @@ object Widgets {
   /** Opens the app at one of its pages (`marrow://today`, `…/tasks`). */
   fun open(c: Context, link: String): Intent =
     Intent(Intent.ACTION_VIEW, Uri.parse(link)).setPackage(c.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+  fun minutesOfDay(now: Long): Int { val k = Calendar.getInstance(); k.timeInMillis = now; return k.get(Calendar.HOUR_OF_DAY) * 60 + k.get(Calendar.MINUTE) }
 }
 
-/** The card every widget sits on: the system's corner radius (API 31+, `mg_widget_radius`), a tap opens Today. */
+/* ── what a widget is drawn from ─────────────────────────────────────────────────────────────────── */
+
+private class Data(val look: Look, val agenda: Agenda, val now: Long)
+
+/** The agenda and the skin, read again whenever `Widgets.version` moves. */
 @Composable
-private fun Card(c: Context, content: @Composable () -> Unit) {
+private fun rememberData(): Data {
+  val c = LocalContext.current
+  val v by Widgets.version.collectAsState()
+  return remember(v) { Data(Look.read(c), Agenda.read(c), System.currentTimeMillis()) }
+}
+
+/**
+ * The widget's colours (D3). Skin: a paper skin's deck, or Daylight's sky as an opaque gradient (the sky's stops under
+ * the app's pane, `mg_sky_*`, built by widget-sky.test.ts). Phone: Material You. A never-opened install also gets the
+ * phone's neutral colours, since there is no skin yet.
+ */
+private class Paint(val fill: GlanceModifier, val ink: ColorProvider, val mut: ColorProvider, val bar: ColorProvider, val track: ColorProvider, val bad: ColorProvider)
+
+private fun fixed(argb: Int, alpha: Float = 1f) = ColorProvider(Color(argb).copy(alpha = alpha))
+
+@Composable
+private fun paint(d: Data): Paint {
+  val l = d.look
+  if (l.phone || d.agenda.writtenAt == 0L) {
+    val m = GlanceTheme.colors
+    return Paint(GlanceModifier.background(m.widgetBackground), m.onSurface, m.onSurfaceVariant, m.primary, m.surfaceVariant, m.error)
+  }
+  if (l.daylight) {
+    val key = WidgetModel.skyFor(l.sky, l.dark, Widgets.minutesOfDay(d.now))
+    return Paint(GlanceModifier.background(ImageProvider(skyRes(l.dark, key))), fixed(l.ink), fixed(l.mut), fixed(l.bar), fixed(l.ink, 0.18f), fixed(l.bad))
+  }
+  return Paint(GlanceModifier.background(fixed(l.deck)), fixed(l.deckInk), fixed(l.deckMut), fixed(l.bar), fixed(l.deckInk, 0.22f), fixed(l.deckBad))
+}
+
+private fun skyRes(dark: Boolean, key: String): Int = if (dark) when (key) {
+  "dawn" -> R.drawable.mg_sky_dark_dawn; "morning" -> R.drawable.mg_sky_dark_morning; "noon" -> R.drawable.mg_sky_dark_noon
+  "afternoon" -> R.drawable.mg_sky_dark_afternoon; "dusk" -> R.drawable.mg_sky_dark_dusk; else -> R.drawable.mg_sky_dark_night
+} else when (key) {
+  "dawn" -> R.drawable.mg_sky_light_dawn; "morning" -> R.drawable.mg_sky_light_morning; "noon" -> R.drawable.mg_sky_light_noon
+  "afternoon" -> R.drawable.mg_sky_light_afternoon; "dusk" -> R.drawable.mg_sky_light_dusk; else -> R.drawable.mg_sky_light_night
+}
+
+/* ── shared pieces ───────────────────────────────────────────────────────────────────────────────── */
+
+private fun style(color: ColorProvider, size: Int, strong: Boolean = false) =
+  TextStyle(color = color, fontSize = size.sp, fontWeight = if (strong) FontWeight.Medium else FontWeight.Normal)
+
+/** The height the layout is chosen by: dp over the font scale, so larger text picks a roomier layout's smaller sibling. */
+@Composable
+private fun effectiveHeight(): Float = LocalSize.current.height.value / LocalContext.current.resources.configuration.fontScale.coerceAtLeast(1f)
+
+/** The card: the system's corner radius (API 31+; `mg_widget_radius`), the skin's surface, a tap opens `link`. */
+@Composable
+private fun Card(p: Paint, link: String, pad: Int, content: @Composable () -> Unit) {
+  val c = LocalContext.current
   Box(
-    modifier = GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(R.dimen.mg_widget_radius)
-      .background(GlanceTheme.colors.widgetBackground).padding(12.dp)
-      .clickable(actionStartActivity(Widgets.open(c, "marrow://today"))),
+    modifier = p.fill.fillMaxSize().appWidgetBackground().cornerRadius(R.dimen.mg_widget_radius).padding(pad.dp)
+      .clickable(actionStartActivity(Widgets.open(c, link))),
     contentAlignment = Alignment.CenterStart,
   ) { content() }
 }
 
-/** Now (2×1): the class on now or next. In 0.7.7.7 it only says "Marrow", to prove the Glance build. */
+/** The countdown: a system Chronometer counting to `target` (Glance has none of its own). */
+@Composable
+private fun Countdown(target: Long, now: Long, size: Float, color: ColorProvider) {
+  val c = LocalContext.current
+  val rv = RemoteViews(c.packageName, R.layout.mg_chrono)
+  rv.setChronometer(R.id.mg_chrono, SystemClock.elapsedRealtime() + (target - now), null, true)
+  rv.setChronometerCountDown(R.id.mg_chrono, true)
+  rv.setTextColor(R.id.mg_chrono, color.getColor(c).toArgb())
+  rv.setTextViewTextSize(R.id.mg_chrono, TypedValue.COMPLEX_UNIT_SP, size)
+  AndroidRemoteViews(rv)
+}
+
+@Composable
+private fun Bar(p: Paint, progress: Float, thick: Int) {
+  LinearProgressIndicator(progress = progress, modifier = GlanceModifier.fillMaxWidth().height(thick.dp).cornerRadius((thick / 2).dp), color = p.bar, backgroundColor = p.track)
+}
+
+@Composable
+private fun EmptyState(p: Paint, size: Int) {
+  Text(WidgetModel.EMPTY_LINE, style = style(p.ink, size), maxLines = 2)
+}
+
+/* ── Now (2×1) ───────────────────────────────────────────────────────────────────────────────────── */
+
 class NowWidget : GlanceAppWidget() {
+  override val sizeMode: SizeMode = SizeMode.Exact
   override suspend fun provideGlance(context: Context, id: GlanceId) {
-    provideContent {
-      GlanceTheme {
-        Card(context) {
-          Text("Marrow", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-        }
-      }
-    }
+    provideContent { GlanceTheme { NowContent() } }
   }
 }
 class NowWidgetReceiver : GlanceAppWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = NowWidget()
 }
 
+@Composable
+private fun NowContent() {
+  val d = rememberData(); val p = paint(d); val v = WidgetModel.classView(d.agenda, d.now)
+  Card(p, "marrow://today", 12) {
+    when (v.kind) {
+      WidgetModel.Kind.EMPTY -> EmptyState(p, 14)
+      WidgetModel.Kind.NONE -> Column {
+        Text(v.state, style = style(p.ink, 16, strong = true), maxLines = 1)
+        if (v.footer.isNotEmpty()) Text(v.footer, style = style(p.mut, 12), maxLines = 1)
+      }
+      else -> if (WidgetModel.nowStacked(effectiveHeight())) Column(modifier = GlanceModifier.fillMaxWidth()) {
+        Text(v.state, style = style(p.mut, 12), maxLines = 1)
+        Text(v.title, style = style(p.ink, 16, strong = true), maxLines = 1)
+        Countdown(v.target, d.now, 22f, p.ink)
+        v.progress?.let { Spacer(GlanceModifier.height(6.dp)); Bar(p, it, 4) }
+      } else Column(modifier = GlanceModifier.fillMaxWidth()) {
+        /* the name gets the whole width; the bar (or "Next · 10:55") shares the second line with the countdown */
+        Text(v.title, style = style(p.ink, 14, strong = true), maxLines = 1)
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Box(modifier = GlanceModifier.defaultWeight()) {
+            val prog = v.progress
+            if (prog != null) Bar(p, prog, 4) else Text(v.state, style = style(p.mut, 12), maxLines = 1)
+          }
+          Spacer(GlanceModifier.width(8.dp))
+          Countdown(v.target, d.now, 18f, p.ink)
+        }
+      }
+    }
+  }
+}
+
+/* ── Class (4×1, 4×2, 4×3) ───────────────────────────────────────────────────────────────────────── */
+
+class ClassWidget : GlanceAppWidget() {
+  override val sizeMode: SizeMode = SizeMode.Exact
+  override suspend fun provideGlance(context: Context, id: GlanceId) {
+    provideContent { GlanceTheme { ClassContent() } }
+  }
+}
+class ClassWidgetReceiver : GlanceAppWidgetReceiver() {
+  override val glanceAppWidget: GlanceAppWidget = ClassWidget()
+}
+
+@Composable
+private fun ClassContent() {
+  val d = rememberData(); val p = paint(d); val v = WidgetModel.classView(d.agenda, d.now)
+  val lay = WidgetModel.classLayout(effectiveHeight())
+  Card(p, "marrow://today", 14) {
+    if (v.kind == WidgetModel.Kind.EMPTY) { EmptyState(p, 14); return@Card }
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
+      if (v.kind == WidgetModel.Kind.NONE) {
+        Text(v.state, style = style(p.ink, if (lay.big) 20 else 18, strong = true), maxLines = 1)
+        if (v.footer.isNotEmpty()) Text(v.footer, style = style(p.mut, 14), maxLines = 1)
+      } else {
+        if (lay.state) {
+          /* the name gets the whole width (a big countdown beside it cut "Database Systems" at 250 dp); state and
+             room sit beside the countdown */
+          Text(v.title, style = style(p.ink, if (lay.big) 20 else 18, strong = true), maxLines = 1)
+          Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = GlanceModifier.defaultWeight()) {
+              Text(v.state, style = style(p.mut, 12), maxLines = 1)
+              if (lay.place && v.place.isNotEmpty()) Text(v.place, style = style(p.mut, 14), maxLines = 1)
+            }
+            Spacer(GlanceModifier.width(12.dp))
+            Countdown(v.target, d.now, if (lay.big) 28f else 22f, p.ink)
+          }
+        } else Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Text(v.title, style = style(p.ink, 16, strong = true), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+          Spacer(GlanceModifier.width(8.dp))
+          Countdown(v.target, d.now, 20f, p.ink)
+        }
+        v.progress?.let { Spacer(GlanceModifier.height(8.dp)); Bar(p, it, if (lay.big) 6 else 4) }
+        if (lay.footer) { Spacer(GlanceModifier.height(8.dp)); Text(v.footer, style = style(p.mut, 14), maxLines = 1) }
+      }
+      if (lay.task) WidgetModel.urgent(d.agenda, d.now, WidgetTicks.pending(LocalContext.current)).firstOrNull()?.let { t ->
+        Spacer(GlanceModifier.height(8.dp))
+        TaskRow(p, t, d)
+      }
+    }
+  }
+}
+
+/** One task, 48 dp: its title and due line; a tap opens To-do. (The tick arrives with the Tasks widget, 0.7.7.9.) */
+@Composable
+private fun TaskRow(p: Paint, t: Todo, d: Data) {
+  val c = LocalContext.current
+  Column(
+    modifier = GlanceModifier.fillMaxWidth().height(48.dp).clickable(actionStartActivity(Widgets.open(c, "marrow://tasks"))),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(t.title, style = style(p.ink, 16), maxLines = 1)
+    Text(WidgetModel.dueLine(t, d.now, d.agenda.hour12), style = style(if (t.due < d.now) p.bad else p.mut, 12), maxLines = 1)
+  }
+}
+
+/* ── the old widget's stub (D4) ──────────────────────────────────────────────────────────────────── */
+
 /**
- * D4: the old widget, kept for one release so a placed copy says what happened instead of "Can't load widget".
- * Its receiver keeps the old class name (`BoardWidget`), which is what the launcher remembers. Gone at 0.7.8.
+ * Kept for one release so a placed copy says what happened instead of "Can't load widget". Its receiver keeps the old
+ * class name (`BoardWidget`), which is what the launcher remembers. Gone at 0.7.8.
  */
 class ReplacedWidget : GlanceAppWidget() {
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     provideContent {
       GlanceTheme {
-        Card(context) {
-          Text(
-            "Replaced. Long-press to add the new Marrow widget.",
-            style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp),
-            maxLines = 2,
-          )
+        val m = GlanceTheme.colors
+        Card(Paint(GlanceModifier.background(m.widgetBackground), m.onSurface, m.onSurfaceVariant, m.primary, m.surfaceVariant, m.error), "marrow://today", 12) {
+          Text("Replaced. Long-press to add the new Marrow widget.", style = style(m.onSurface, 14), maxLines = 2)
         }
       }
     }

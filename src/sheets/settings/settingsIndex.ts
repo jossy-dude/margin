@@ -109,6 +109,7 @@ export const ELSEWHERE: Record<string, string> = {
   taskFilter: 'To-do page: Open / Done', taskSort: 'To-do page: sort', taskSubject: 'To-do page: subject filter',
   teacherAbsent: 'Grades page: the teacher\'s count per subject',
   hiddenPages: 'Settings → Diagnostics: the speed A/B for hidden pages',
+  widgetColors: 'Settings → Widgets: Skin or Phone colours',
   labSplitNo: 'Grades page: the "No" on a subject\'s "Track the lab separately?" offer',
   credits: 'Grades → GPA: credit hours per subject', pastGrades: 'Grades → GPA: earlier terms from the transcript',
   reminders: 'reminder rules (R9); their page comes with D-19',

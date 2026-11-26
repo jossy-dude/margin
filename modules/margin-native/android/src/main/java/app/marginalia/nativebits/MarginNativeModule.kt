@@ -150,7 +150,7 @@ class MarginNativeModule : Module() {
     Function("widgetTicks") { org.json.JSONArray(WidgetTicks.take(context).toList()).toString() }
     /** Is at least one Marrow widget on a home screen? */
     Function("hasWidgets") { Widgets.any(context) }
-    /** Asks the launcher to add a widget ("now"; "class" and "tasks" from 0.7.7.8). False when this launcher cannot. */
+    /** Asks the launcher to add a widget ("now", "class"; "tasks" from 0.7.7.9). False when this launcher cannot. */
     Function("pinWidget") { kind: String -> if (Build.VERSION.SDK_INT < 26) false else Widgets.pin(context, kind) }
     /** v0.7.7.7 (SPEC §5): redraw the widgets after a task, timetable or skin change, without waiting for a tick. */
     Function("refreshWidgets") { Widgets.refresh(context); true }
