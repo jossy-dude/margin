@@ -72,17 +72,25 @@ function PageHeader({ title, sub, right, face }: { title: string; sub?: string; 
   const gear = useAnimatedStyle(() => ({ transform: [{ scale: gp.get() }] }));
   /* The tour's third step rings this gear. Every page renders this header, so one ref covers all six. */
   return (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
-          {/* `minWidth: 0` lets the title column actually shrink: without it a flex child keeps its widest
-              word and pushes the right-hand cluster off a 320 dp screen. The sub-line wraps instead. */}
-          <View style={{ flex: 1, minWidth: 0 }}><Txt f="marker" s={32} numberOfLines={2} accessibilityRole="header">{title}</Txt>{sub ? <Txt f="serif" s={16} c="mut">{sub}</Txt> : null}</View>
-          {face && skin.instruments.mascot ? <TopFace rest={face} /> : null}
-          {right}
-          <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
-            onPressIn={() => gp.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => gp.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
-            android_ripple={{ color: hexA(c.ink, 0.18) }} hitSlop={6} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}>
-            <Animated.View style={gear}><Icon name="gear" size={26} /></Animated.View>
-          </Pressable>
+        <View style={{ gap: 2 }}>
+          {/* v0.7.8.18 (SPEC §7.3): two rows. The title shares its row only with the face and the 48 dp gear, so it never
+              wraps ("Grad / es" in Plain); the subtitle gets its own line with the page's actions at its end. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Txt f="marker" s={32} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} accessibilityRole="header" style={{ flex: 1, minWidth: 0 }}>{title}</Txt>
+            {face && skin.instruments.mascot ? <TopFace rest={face} /> : null}
+            <Pressable testID="open-settings" accessibilityRole="button" accessibilityLabel="Settings" onPress={() => act.open({ t: 'settings' })}
+              onPressIn={() => gp.set(reduce ? 1 : withTiming(0.95, { duration: BEAT, easing: EASE }))} onPressOut={() => gp.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}
+              android_ripple={{ color: hexA(c.ink, 0.18) }} hitSlop={1} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Animated.View style={gear}><Icon name="gear" size={26} /></Animated.View>
+            </Pressable>
+          </View>
+          {sub || right ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: right ? 44 : undefined }}>
+              {/* `minWidth: 0` lets the subtitle shrink and wrap instead of pushing the actions off a 320 dp screen */}
+              <View style={{ flex: 1, minWidth: 0 }}>{sub ? <Txt f="serif" s={14} c="mut" numberOfLines={2}>{sub}</Txt> : null}</View>
+              {right}
+            </View>
+          ) : null}
         </View>
   );
 }
