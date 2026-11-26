@@ -254,5 +254,47 @@ export function addBlockIds(text: string, path: string, trackedTags: readonly st
   return { text: given.size ? lines.join('\n') : text, given };
 }
 
+/* ── Life lines (v0.7.8.3, SPEC §9.1–9.2, D5) ─────────────────────────────────────────────────── */
+/** Folders whose untagged (Life) lines stay out, on top of EXCLUDED_DIRS. */
+export const LIFE_EXCLUDED = ['Archive/'];
+/** Does a line carry a date, a time or a ring: the D5 rule for what reaches the phone. */
+export const isDated = (t: Pick<VaultTask, 'due' | 'scheduled' | 'time' | 'raw'>) => !!(t.due || t.scheduled || t.time || /🔔/u.test(t.raw));
+/** A Life line that is not Marrow's to track: open, dated, outside Archive/, no tracked tag. */
+export const isLifeLine = (t: VaultTask, trackedTags: readonly string[]) =>
+  isOpen(t.status) && isDated(t) && !tracked(t, trackedTags) && !LIFE_EXCLUDED.some((d) => t.path.startsWith(d));
+/** FNV-1a, 32 bit, base 36: a short stable hash with no I/O. */
+function fnv(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
+}
+/** What a line says, without its status and fields: the part that stays when it is ticked, re-dated or re-timed. */
+const coreOf = (t: VaultTask) => `${t.title}|${t.tags.map(norm).sort().join(' ')}`;
+/**
+ * A Life line's key, read-only (no `^id` written just for reading it, D5 §9.2): `lf` + a hash of its note and what it
+ * says without fields, `n` telling apart identical lines in one note. When Marrow first changes the line, this key is
+ * written as its `^id`, so the task keeps the same identity from then on.
+ */
+export const lifeKey = (path: string, t: VaultTask, n = 0) => `lf${fnv(`${path}\n${coreOf(t)}`)}${n ? `-${n}` : ''}`;
+/** Every line of a note by its key: its `^id`, or its Life key when it has none. */
+export function keysOf(text: string, path: string): Map<string, VaultTask> {
+  const out = new Map<string, VaultTask>(), seen = new Map<string, number>();
+  for (const t of parseNote(text, path)) {
+    if (t.blockId) { out.set(t.blockId, t); continue; }
+    const base = lifeKey(path, t), n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    out.set(n ? lifeKey(path, t, n) : base, t);
+  }
+  return out;
+}
+/** The line of `key` in a note (by `^id`, else by Life key), or -1. */
+export function findLine(text: string, path: string, key: string): number {
+  const i = lineIndexOf(text.split('\n'), key);
+  if (i >= 0 || !key.startsWith('lf')) return i;
+  return keysOf(text, path).get(key)?.line ?? -1;
+}
+/** The first change Marrow makes to a Life line also gives it its key as a `^id`. */
+export const withId = (line: string, key: string) => (ID_RE.test(line) ? line : `${line.replace(/\s+$/, '')} ^${key}`);
+
 export const ymdOf = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 export const hmOf = (ms: number) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };

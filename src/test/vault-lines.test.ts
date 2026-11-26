@@ -93,7 +93,7 @@ describe('B6: the line is found by ID_RE', () => {
   it('the push uses it, not endsWith', () => {
     const src = readFileSync(join(__dirname, '..', 'store', 'obsidian.ts'), 'utf8');
     expect(src).not.toContain('endsWith(`^${bid}`)');
-    expect(src).toContain('lineIndexOf(ls, bid)');
+    expect(src).toContain('findLine(txt, line.p, bid)');
   });
 });
 

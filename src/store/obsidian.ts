@@ -23,8 +23,8 @@ import { timerActions } from './actions/timer';
 import { buildEnvelope, prioToBone } from '../domain/bridge';
 import { effective, isCancelled as occCancelled } from '../domain/attendance';
 import {
-  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, hmOf, isDone, isOpen, lineIndexOf, newLine,
-  parseLine, parseNote, patchLine, replaceLine, subjectTag, tracked, withTasksHead, ymdOf, type LinePatch,
+  DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, findLine, hmOf, isDone, isLifeLine, isOpen, keysOf, newLine,
+  parseLine, parseNote, patchLine, subjectTag, tracked, withId, withTasksHead, ymdOf, type LinePatch,
 } from '../domain/vaultTasks';
 import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
 import { startOfDay } from '../domain/time';
@@ -115,15 +115,17 @@ async function ingest(files: VaultFile[], gone: string[], full: boolean): Promis
       const r = await vaultEdit(f.p, h, ids.text);
       if (r.startsWith('ok:')) { text = ids.text; h = r.slice(3); }
     }
-    const lines = parseNote(text, f.p).filter((t) => t.blockId && (tracked(t, all) || byExt.has(t.blockId) || byOwn.has(t.blockId)));
-    c.ids[f.p] = lines.map((t) => t.blockId!);
+    /* v0.7.8.3 (D5): School lines (a tracked tag) as before, with a ^id; and every open Life line with a date, time
+       or ring, known by its read-only Life key until Marrow first changes it (no ^id spam, §9.2). A line already
+       known keeps coming in when it closes, so a tick in Obsidian reaches the phone. */
+    const lines = [...keysOf(text, f.p)].filter(([k, t]) => (t.blockId ? tracked(t, all) || byOwn.has(k) : false) || byExt.has(k) || isLifeLine(t, all));
+    c.ids[f.p] = lines.map(([k]) => k);
     c.known[f.p] = h;
-    for (const t of lines) {
-      const bid = t.blockId!;
+    for (const [bid, t] of lines) {
       c.lines[bid] = { p: f.p, raw: t.raw };
       const prev = byExt.get(bid) ?? byOwn.get(bid);
       if (prev && pending.has(prev.id)) continue;   // changed in Margin since: that change goes out first
-      const next = taskFromLine(t, prev, s.courses, own, now);
+      const next = taskFromLine({ ...t, blockId: bid }, prev, s.courses, own, now);
       if (prev && same(prev, next)) continue;
       writes.push(next); if (prev) changed++; else added++;
     }
@@ -252,14 +254,15 @@ async function pushOut(): Promise<void> {
     const line = c.lines[bid];
     if (!t) {
       // deleted in Margin: its line leaves the note it is in
-      if (line && !(await editNote(line.p, (txt) => replaceLine(txt, bid, null)))) failed.push(id); else delete c.lines[bid];
+      if (line && !(await editNote(line.p, (txt) => { const ls = txt.split('\n'), i = findLine(txt, line.p, bid); if (i < 0) return null; ls.splice(i, 1); return ls.join('\n'); }))) failed.push(id); else delete c.lines[bid];
       continue;
     }
     if (line) {
       const d = diff(line.raw, wanted(t, line.p === TASKS_NOTE));
       if (!d) continue;
       // B6: the line is found by ID_RE, as the parser finds it (a trailing space no longer hides it)
-      if (!(await editNote(line.p, (txt) => { const ls = txt.split('\n'), i = lineIndexOf(ls, bid); if (i < 0) return null; return replaceLine(txt, bid, patchLine(ls[i]!, d)); }))) failed.push(id);
+      // a Life line gets its key as its ^id with this first change (§9.2), so it is found the same way from now on
+      if (!(await editNote(line.p, (txt) => { const ls = txt.split('\n'), i = findLine(txt, line.p, bid); if (i < 0) return null; ls[i] = withId(patchLine(ls[i]!, d), bid); return ls.join('\n'); }))) failed.push(id);
       continue;
     }
     // a new school task: one line in Margin/Tasks.md, with the subject's tag and its kind tags

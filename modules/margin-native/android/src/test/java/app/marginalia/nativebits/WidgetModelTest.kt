@@ -136,4 +136,14 @@ class WidgetModelTest {
     assertEquals(60, WidgetModel.nextSkyEdge(6 * 60))
     assertEquals(480, WidgetModel.nextSkyEdge(1260)) // 21:00 → 05:00 the next day
   }
+
+  @Test fun tasksWidgetListsSchoolFirst() {
+    val now = at(12, 0)
+    val a = agenda(emptyList(), listOf(
+      Todo("life-late", "Run", at(8, 0), "", "", life = true),
+      Todo("school", "Lab report", at(18, 0), "Database Systems", ""),
+    ))
+    assertEquals(listOf("life-late", "school"), WidgetModel.urgent(a, now, n = 2).map { it.id })
+    assertEquals(listOf("school", "life-late"), WidgetModel.urgent(a, now, n = 2, schoolFirst = true).map { it.id })
+  }
 }

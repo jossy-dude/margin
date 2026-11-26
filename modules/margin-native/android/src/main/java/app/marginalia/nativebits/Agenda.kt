@@ -16,7 +16,9 @@ import java.util.Calendar
 class Lesson(val key: String, val start: Long, val end: Long, val title: String, val room: String, val who: String)
 class Todo(val id: String, val title: String, val due: Long, val subject: String, val kind: String, val priority: Int = 0,
   /** v0.7.7.9: the block id and note path of a task that lives in a note ("" otherwise), for the native tick. */
-  val block: String = "", val note: String = "") {
+  val block: String = "", val note: String = "",
+  /** v0.7.8.3: a Life task (no subject, no tracked tag); the Tasks widget lists School first. */
+  val life: Boolean = false) {
   /** v0.7.6: how soon this needs you, smaller first. Late tasks come before every task still due; within each group the
    *  due time is pulled earlier by priority, each step ("important" is worth two) counting as six hours. */
   fun urgency(now: Long): Long = due - priority * 6 * 3_600_000L - (if (due < now) 1_000L * Agenda.DAY else 0L)
@@ -87,7 +89,7 @@ class Agenda(
       val ts = arr(o, "tasks")
       for (i in 0 until ts.length()) {
         val x = ts.optJSONObject(i) ?: continue
-        todos.add(Todo(x.optString("id", "t$i"), x.optString("t", "Task"), x.optLong("d", 0L), x.optString("s", ""), x.optString("k", ""), x.optInt("p", 0), x.optString("b", ""), x.optString("n", "")))
+        todos.add(Todo(x.optString("id", "t$i"), x.optString("t", "Task"), x.optLong("d", 0L), x.optString("s", ""), x.optString("k", ""), x.optInt("p", 0), x.optString("b", ""), x.optString("n", ""), x.optInt("l", 0) == 1))
       }
       val alarms = ArrayList<AlarmRule>()
       val al = arr(o, "alarms")

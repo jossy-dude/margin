@@ -9,13 +9,14 @@ import { Empty, Page, TaskCard, type PageRow } from './common';
 import { addDays, startOfDay } from '../domain/time';
 import { emptyFace, pageFace } from '../ui/mascot/moments';
 import { sortTasks } from '../domain/taskOrder';
+import { inScope } from '../domain/taskScope';
 import type { Task } from '../domain/types';
 
 /** How many task cards one "page" of the list draws. */
 export const PAGE_ROWS = 60;
 
 export function TasksScreen() {
-  const tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), subj = useStore((s) => s.settings.taskSubject), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
+  const tracked = useStore((s) => s.settings.trackedTags), tasks = useStore((s) => s.tasks), taskFilter = useStore((s) => s.settings.taskFilter), subj = useStore((s) => s.settings.taskSubject), taskSort = useStore((s) => s.settings.taskSort), courses = useStore((s) => s.courses);
   const st = { tasks, courses };
   /* The day groups and the cards' overdue marks only move at day granularity, so the list re-sorts on
      the wall clock twice a minute while it is under your finger — and does not tick at all while it is
@@ -24,14 +25,14 @@ export function TasksScreen() {
   const now = useLiveNow(30_000), [q, setQ] = useState('');
   /* The subject choice is a setting now (BUGS #7: it was component state, reset on every visit). A subject that
      was deleted since reads as "all". */
-  const cid: string | null | 'all' = subj === 'personal' ? null : subj && courses.some((c) => c.id === subj) ? subj : 'all';
+  const scope = subj === 'school' || subj === 'life' ? subj : subj === 'personal' ? 'life' : subj && courses.some((c) => c.id === subj) ? subj : '';
   const [pick, setPick] = useState(false);
   const list = useMemo(() => {
-    const f = st.tasks.filter((t) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2) && (cid === 'all' || t.courseId === cid) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
+    const f = st.tasks.filter((t) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2) && inScope(t, scope, tracked ?? undefined) && (!q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase())));
     /* Done is the archive: newest finished first, whatever the sort says. */
     if (taskFilter === 'done') return [...f].sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt));
     return sortTasks(f, taskSort);
-  }, [st.tasks, taskFilter, taskSort, cid, q]);
+  }, [st.tasks, taskFilter, taskSort, scope, tracked, q]);
   const groups = useMemo(() => {
     const t0 = startOfDay(now), g: { title: string; items: Task[] }[] = [{ title: 'Late', items: [] }, { title: 'Today', items: [] }, { title: 'Tomorrow', items: [] }, { title: 'This week', items: [] }, { title: 'Later', items: [] }, { title: 'No date', items: [] }, { title: 'Done', items: [] }];
     for (const t of list) { const i = t.status === 2 ? 6 : t.dueAt === null ? 5 : t.dueAt < now ? 0 : t.dueAt < addDays(t0, 1) ? 1 : t.dueAt < addDays(t0, 2) ? 2 : t.dueAt < addDays(t0, 7) ? 3 : 4; (g[i] as { items: Task[] }).items.push(t); }
@@ -48,7 +49,7 @@ export function TasksScreen() {
      paper slip, and drawing a thousand of them made the first visit (and every refocus, which rebuilds
      the page's layout) cost seconds on a mid-range phone. The cap resets when the question changes. */
   const [more, setMore] = useState({ key: '', n: PAGE_ROWS });
-  const askKey = `${q}|${cid}|${taskFilter}|${taskSort}`;
+  const askKey = `${q}|${scope}|${taskFilter}|${taskSort}`;
   const shown = more.key === askKey ? more.n : PAGE_ROWS;
   let budget = shown;
   const capped = groups.map((g) => { const items = g.items.slice(0, Math.max(0, budget)); budget -= items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
@@ -70,18 +71,19 @@ export function TasksScreen() {
       <Row style={{ flexWrap: 'nowrap', gap: 8, alignItems: 'center' }}>
         <Segmented label="Show" value={taskFilter} options={[{ value: 'open', label: 'Open' }, { value: 'done', label: 'Done' }]} onChange={(v) => act.setSettings({ taskFilter: v })} />
         <View style={{ flex: 1 }} />
-        <DropChip label={cid === 'all' ? 'All subjects' : cid === null ? 'Personal' : courses.find((c) => c.id === cid)?.name ?? 'All subjects'} chosen={cid !== 'all'}
+        <DropChip label={scope === '' ? 'All' : scope === 'school' ? 'School' : scope === 'life' ? 'Life' : courses.find((c) => c.id === scope)?.name ?? 'All'} chosen={scope !== ''}
           onPress={() => setPick((x) => !x)} onClear={() => act.setSettings({ taskSubject: '' })} />
         {taskFilter === 'open' ? <Btn small kind="ghost" icon="sort" label={taskSort === 'due' ? 'Due' : taskSort === 'priority' ? 'Priority' : 'Newest'} a11y={`Sort: ${taskSort === 'due' ? 'due date' : taskSort === 'priority' ? 'priority' : 'newest'}. Tap to change.`}
           onPress={() => act.setSettings({ taskSort: taskSort === 'due' ? 'priority' : taskSort === 'priority' ? 'created' : 'due' })} /> : null}
       </Row>
       {pick ? (
         <View testID="subject-menu" style={{ gap: 2 }}>
-          {[{ id: '', name: 'All subjects' }, { id: 'personal', name: 'Personal' }, ...courses.map((c) => ({ id: c.id, name: c.name }))].map((o) => {
+          {/* D9: All / School / Life first, then each subject */}
+          {[{ id: '', name: 'All' }, { id: 'school', name: 'School' }, { id: 'life', name: 'Life' }, ...courses.map((c) => ({ id: c.id, name: c.name }))].map((o) => {
             // counts for the segment being shown (phone test #11: Done showed the open counts)
             const inSeg = (t: Task) => (taskFilter === 'done' ? t.status === 2 : t.status !== 2);
-            const n = tasks.filter((t) => inSeg(t) && (o.id === '' || (o.id === 'personal' ? t.courseId === null : t.courseId === o.id))).length;
-            return <Btn key={o.id || 'all'} small kind={(subj || '') === o.id ? 'primary' : 'ghost'} label={`${o.name} · ${n}`} onPress={() => { act.setSettings({ taskSubject: o.id }); setPick(false); }} />;
+            const n = tasks.filter((t) => inSeg(t) && inScope(t, o.id, tracked ?? undefined)).length;
+            return <Btn key={o.id || 'all'} small kind={scope === o.id ? 'primary' : 'ghost'} label={`${o.name} · ${n}`} onPress={() => { act.setSettings({ taskSubject: o.id }); setPick(false); }} />;
           })}
         </View>
       ) : null}

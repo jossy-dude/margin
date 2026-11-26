@@ -33,6 +33,42 @@ const settle = () => new Promise((r) => setTimeout(r, 20));
 async function fresh() { vault.clear(); resetObsidianCache(); let t = NOW; const repo = new MemoryRepository(() => t++); await hydrate(repo); return repo; }
 
 describe('the vault through the store', () => {
+  /* v0.7.8.3 (SPEC §9.1–9.2, D5): every open dated line reaches the phone; untagged ones are Life and get no ^id just
+     for being read. */
+  it('a Life line with a date arrives without a ^id; a tick from Marrow writes its key as the ^id and ticks it', async () => {
+    await fresh();
+    const note = '# Thu\n- [ ] Plan and execute the week 📅 2026-11-25 ⏰ 15:15-16:45\n- [ ] Buy milk\n- [x] Old done ✅ 2026-11-01 📅 2026-11-01\n';
+    vault.set('Daily/Nov 25.md', note);
+    await refreshVault();
+    const life = getState().tasks.filter((x) => x.origin === 'obsidian');
+    expect(life.map((x) => x.title)).toEqual(['Plan and execute the week']);
+    expect(life[0]!.extId).toMatch(/^lf[0-9a-z]+$/);
+    expect(vault.get('Daily/Nov 25.md')).toBe(note); // read-only: nothing written
+    await refreshVault();
+    expect(getState().tasks.filter((x) => x.origin === 'obsidian')).toHaveLength(1);
+    act.saveTask({ ...life[0]!, status: 2, completedAt: NOW });
+    await settle(); await obsidianNow();
+    expect(vault.get('Daily/Nov 25.md')).toBe(`# Thu\n- [x] Plan and execute the week 📅 2026-11-25 ⏰ 15:15-16:45 ✅ 2026-11-20 ^${life[0]!.extId}\n- [ ] Buy milk\n- [x] Old done ✅ 2026-11-01 📅 2026-11-01\n`);
+    await refreshVault();
+    const after = getState().tasks.filter((x) => x.origin === 'obsidian');
+    expect(after.map((x) => [x.id, x.status])).toEqual([[life[0]!.id, 2]]);
+  });
+  it('a Life line ticked in Obsidian closes on the phone; Archive/ lines and quotes stay out', async () => {
+    await fresh();
+    vault.set('Life.md', '- [ ] Call the bank 📅 2026-11-24 ⏰ 10:00\n> - [ ] In a quote 📅 2026-11-24\n');
+    vault.set('Archive/Old.md', '- [ ] Archived 📅 2026-11-24\n');
+    await refreshVault();
+    expect(getState().tasks.filter((x) => x.origin === 'obsidian').map((x) => x.title)).toEqual(['Call the bank']);
+    vault.set('Life.md', '- [x] Call the bank 📅 2026-11-24 ⏰ 10:00 ✅ 2026-11-24\n> - [ ] In a quote 📅 2026-11-24\n');
+    await refreshVault();
+    expect(getState().tasks.filter((x) => x.origin === 'obsidian').map((x) => [x.title, x.status])).toEqual([['Call the bank', 2]]);
+  });
+  it('a failed (~) day-plan block reads as closed', async () => {
+    await fresh();
+    vault.set('Plan.md', '- [~] Morning run 📅 2026-11-24 ⏰ 06:30-07:00\n');
+    await refreshVault();
+    expect(getState().tasks.filter((x) => x.origin === 'obsidian')).toHaveLength(0); // closed before Marrow knew it: not brought in
+  });
   it('an Obsidian #school task arrives with its ⏰ reminder; an untagged one does not; a re-read changes nothing', async () => {
     await fresh();
     vault.set('Daily/Nov 20.md', '# Log\n- [ ] Revise joins #school ⏫ 📅 2026-11-22 ⏰ 17:00\n- [ ] Buy milk\n');

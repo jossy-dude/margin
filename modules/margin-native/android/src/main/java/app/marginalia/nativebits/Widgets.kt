@@ -362,7 +362,7 @@ private fun TasksContent() {
   val d = rememberData(); val p = paint(d); val c = LocalContext.current
   Card(p, "marrow://tasks", 14) {
     if (d.agenda.writtenAt == 0L) { EmptyState(p, 14); return@Card }
-    val all = WidgetModel.urgent(d.agenda, d.now, hidden(c), n = Int.MAX_VALUE)
+    val all = WidgetModel.urgent(d.agenda, d.now, hidden(c), n = Int.MAX_VALUE, schoolFirst = true)
     Column(modifier = GlanceModifier.fillMaxSize()) {
       /* header 32 dp: "To do · 5" (the count replaces a "+N more" line, which cost a row's room) and "+" */
       Row(modifier = GlanceModifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -55,9 +55,10 @@ object WidgetModel {
     return "Then ${after.title} ${Fmt.time(after.start, h12)}${if (after.room.isNotEmpty()) " · ${after.room}" else ""}"
   }
 
-  /** The tasks that most need you, most urgent first (late, then due time pulled earlier by priority). */
-  fun urgent(a: Agenda, now: Long, skip: Set<String> = emptySet(), n: Int = 1): List<Todo> =
-    a.todos.filter { it.id !in skip }.sortedBy { it.urgency(now) }.take(n)
+  /** The tasks that most need you, most urgent first (late, then due time pulled earlier by priority). The Tasks
+   *  widget lists School before Life (v0.7.8.3, SPEC §9.12). */
+  fun urgent(a: Agenda, now: Long, skip: Set<String> = emptySet(), n: Int = 1, schoolFirst: Boolean = false): List<Todo> =
+    a.todos.filter { it.id !in skip }.sortedWith(compareBy<Todo>({ if (schoolFirst && it.life) 1 else 0 }, { it.urgency(now) })).take(n)
 
   /** A task's due line, absolute so it never goes stale: "16:00", "Tue 09:00", "Late · Mon 23:59". */
   fun dueLine(t: Todo, now: Long, h12: Boolean): String {
