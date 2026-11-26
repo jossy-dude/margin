@@ -13,6 +13,8 @@ export interface SyncFacts {
   errors?: SyncError[];
   skipped?: { p: string; reason: string; at: number }[];
   hold?: unknown;
+  /** hub clock − phone clock, ms */
+  offset?: number;
 }
 export type Dot = 'on' | 'off' | 'unknown';
 export interface DeviceRow { name: string; dot: Dot; note: string }
@@ -22,7 +24,8 @@ export type Side = 'phone' | 'desktop';
  *  with v0.7.8; older rows carry only `at` and `msg` and are read by their words (`problemOf`). */
 export interface SyncError { at: number; msg: string; code?: string; side?: string; action?: string; arg?: string; fixed?: number }
 export interface Problem { code: string; side: Side; cause: string; affects: string; action: Action; label: string; at: number; arg?: string; fixed?: number }
-export interface SyncView { devices: DeviceRow[]; connection: string; stage: { text: string; done: number; of: number } | null; problems: Problem[]; ok: boolean }
+export interface SyncClash { at: number; p: string; file: string; how: 'note' | 'copy' }
+export interface SyncView { devices: DeviceRow[]; connection: string; stage: { text: string; done: number; of: number } | null; problems: Problem[]; ok: boolean; skew: string | null }
 
 const host = (a?: string | null) => (a ?? '').split(':')[0] ?? '';
 
@@ -43,6 +46,19 @@ export const ERR: Record<string, { side: Side; action: Action; label: string; af
   'E-REFUSED': { side: 'desktop', action: 'update', label: 'How to fix', affects: 'Phone changes wait on the phone.' },
   'E-HICCUP': { side: 'phone', action: 'retry', label: 'Try now', affects: 'One task failed; the rest of sync carries on.' },
 };
+
+/** v0.7.8.1: the desktop's clock more than 2 minutes off this phone's (from the hello frame). Timers and "due"
+ *  times are worked out on the hub's clock, so a big gap shows on the sync page. */
+export function skewOf(offsetMs: number): string | null {
+  const min = Math.round(Math.abs(offsetMs) / 60_000);
+  if (Math.abs(offsetMs) <= 120_000) return null;
+  const amount = min >= 120 ? `${Math.round(min / 60)} h` : `${min} min`;
+  return `The desktop's clock is ${amount} ${offsetMs > 0 ? 'ahead of' : 'behind'} this phone's. Set both to automatic time.`;
+}
+
+/** The clash list, newest first: what it is and where the other version went. */
+export const clashNote = (c: SyncClash) => (c.how === 'copy' ? `Both kept · ${leaf(c.file)}` : `Other version in ${c.file}`);
+const leaf = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 /** A row from a build before the codes: told apart by its words. */
 export function problemOf(msg: string, at: number): Problem {
@@ -71,7 +87,7 @@ export function problemGroups(list: Problem[]): { side: Side; title: string; ite
 }
 
 export function syncView(s: SyncFacts | null, now: number, hour12: boolean): SyncView {
-  if (!s) return { devices: [], connection: 'This build cannot sync.', stage: null, problems: [], ok: false };
+  if (!s) return { devices: [], connection: 'This build cannot sync.', stage: null, problems: [], ok: false, skew: null };
   const deskObs = s.presence.some((p) => p.role === 'desktop-obsidian');
   const seen = s.lastOk ? `seen ${fmtTime(s.lastOk, hour12)}` : 'not yet';
   const devices: DeviceRow[] = [
@@ -92,5 +108,5 @@ export function syncView(s: SyncFacts | null, now: number, hour12: boolean): Syn
   const seenMsg = new Set<string>();
   const problems = (s.errors ?? []).filter((e) => !seenMsg.has(e.msg) && !!seenMsg.add(e.msg)).map(problemFrom);
   if (s.paired && !s.vault && !problems.some((p) => p.action === 'folder' && !p.fixed)) problems.unshift(problemOf('Choose the vault folder so Marrow can sync it.', now));
-  return { devices, connection, stage, problems, ok: s.live && !problems.some((p) => !p.fixed) && !s.hold };
+  return { devices, connection, stage, problems, ok: s.live && !problems.some((p) => !p.fixed) && !s.hold, skew: s.live ? skewOf(s.offset ?? 0) : null };
 }

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
 import type { SyncHold } from '../domain/syncHold';
-import type { SyncError } from '../domain/syncView';
+import type { SyncClash, SyncError } from '../domain/syncView';
 
 /**
  * Margin's own Android module (`modules/margin-native`), seen from JS.
@@ -29,6 +29,7 @@ interface MarginNative {
   syncNow(): boolean;
   syncClearErrors(): boolean;
   syncDismissError(at: number): boolean;
+  syncClashDone(at: number): boolean;
   syncHold(op: string): boolean;
   syncInbox(): string;
   setLook(json: string): boolean;
@@ -92,6 +93,8 @@ export interface SyncStatus {
   lastError: string | null; vault: boolean; fast: boolean;
   /** v0.7.1: newest first, last 20; absent on older builds */
   errors?: SyncError[];
+  /** v0.7.8.1: the hub's `conflict` frames, newest first; `file` holds the other version (a Conflicts/ note or a dated copy) */
+  clashes?: SyncClash[];
   /** hub clock − phone clock, ms (timer maths) */
   offset?: number; hubOnline?: boolean;
   scanAt?: number; scanMs?: number; scanFiles?: number; pushedAt?: number; sending?: number;
@@ -124,6 +127,8 @@ export const syncNow = () => safe((m) => m.syncNow(), false);
 export const syncClearErrors = () => safe((m) => m.syncClearErrors(), false);
 /** Hide one card on the "What went wrong" page (a clash you have looked at). */
 export const syncDismissError = (at: number) => safe((m) => m.syncDismissError(at), false);
+/** A clash the owner has looked at: it leaves the list (v0.7.8.1). */
+export const syncClashDone = (at: number) => safe((m) => m.syncClashDone(at), false);
 /** Answer the big-delete question: apply = delete everywhere, cancel = keep the files. */
 export const syncHold = (op: 'apply' | 'cancel') => safe((m) => m.syncHold(op), false);
 /** Rows the service received while JS was not running; each is returned once. */

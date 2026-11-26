@@ -271,24 +271,26 @@ internal object SyncLocal {
    * "changed:<hash>" (re-read and patch again), "deferred" (phone Obsidian is typing in it; try after the next
    * vault event) or "error:<why>". The write goes out to the desktop at once.
    */
-  fun vaultEdit(p: String, expect: String, text: String): String = onSync {
-    val v = E.vault() ?: return@onSync "error:no vault folder"
+  fun vaultEdit(p: String, expect: String, text: String): String = onSync { editNow(p, expect, text) }
+  /** vaultEdit's body, for code already on the sync thread (the phone's sync log, v0.7.8.1). */
+  internal fun editNow(p: String, expect: String, text: String): String {
+    val v = E.vault() ?: return "error:no vault folder"
     val k = SyncFiles.klass(p)
-    if (k.cls != "note" && k.cls != "single" && k.cls != "file") return@onSync "error:not a note"
-    if (excluded(p) || p.contains("..")) return@onSync "error:bad path"
-    if (isEditing(p)) return@onSync "deferred"
+    if (k.cls != "note" && k.cls != "single" && k.cls != "file") return "error:not a note"
+    if (excluded(p) || p.contains("..")) return "error:bad path"
+    if (isEditing(p)) return "deferred"
     val cur = v.read(p); val curH = cur?.let { Seal.hash(it) }
-    if (expect != "*" && expect != (curH ?: "")) return@onSync "changed:${curH ?: ""}"
+    if (expect != "*" && expect != (curH ?: "")) return "changed:${curH ?: ""}"
     val bytes = text.toByteArray()
     val h = Seal.hash(bytes)
-    if (h == curH) return@onSync "ok:$h"
-    try { v.write(p, bytes) } catch (e: Exception) { return@onSync "error:${e.message ?: "write failed"}" }
-    if (v.hashOf(p) != h) return@onSync "error:did not save"
+    if (h == curH) return "ok:$h"
+    try { v.write(p, bytes) } catch (e: Exception) { return "error:${e.message ?: "write failed"}" }
+    if (v.hashOf(p) != h) return "error:did not save"
     val st = v.stat(p); val row = E.store.file(p)
     E.store.putFile(SyncStore.FileRow(p, h, row?.base, st?.size ?: bytes.size.toLong(), st?.mtime ?: System.currentTimeMillis(), row?.seq ?: 0))
     obsidian?.let { sendO(it, JSONObject().put("v", SyncEngine.V).put("t", "changed").put("id", E.ulid()).put("p", p)) }
     SyncFiles.scanPath(p)
-    "ok:$h"
+    return "ok:$h"
   }
   fun vaultChanges(): String = JSONArray(E.store.takeVaultChanges()).toString()
 }

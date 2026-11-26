@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { ERR, problemFrom, problemGroups, syncView, problemOf } from '../domain/syncView';
+import { ERR, clashNote, problemFrom, problemGroups, skewOf, syncView, problemOf } from '../domain/syncView';
 
 const NOW = new Date(2026, 10, 20, 20, 31).getTime();
 const base = { paired: true, live: true, obsidian: false, vault: true, lastOk: NOW, presence: [{ role: 'desktop-obsidian' }], path: 'Wi-Fi', addr: '192.168.1.11:7428' };
@@ -77,5 +77,39 @@ describe('error codes and "What went wrong" (v0.7.8, SPEC §8 G3)', () => {
   it('a clash from the hub becomes an E-CLASH card that opens the other version', () => {
     expect(kt).toMatch(/"conflicts-note" -> .*fail\(Err\.CLASH, .*, f\)/);
     expect(kt).toMatch(/"copy" -> .*fail\(Err\.CLASH, .*, f\)/);
+  });
+});
+
+describe('clashes, the phone log and clock skew (v0.7.8.1, SPEC §8 G2, G4)', () => {
+  const dir = join(__dirname, '..', '..', 'modules', 'margin-native', 'android', 'src', 'main', 'java', 'app', 'marginalia', 'nativebits');
+  const kt = readFileSync(join(dir, 'SyncEngine.kt'), 'utf8');
+  it('skew over 2 minutes shows, in words', () => {
+    expect(skewOf(90_000)).toBeNull();
+    expect(skewOf(-120_000)).toBeNull();
+    expect(skewOf(3 * 60_000)).toBe("The desktop's clock is 3 min ahead of this phone's. Set both to automatic time.");
+    expect(skewOf(-5 * 3600_000)).toBe("The desktop's clock is 5 h behind this phone's. Set both to automatic time.");
+    expect(syncView({ ...base, offset: 600_000 }, NOW, false).skew).toContain('10 min ahead');
+    expect(syncView({ ...base, live: false, offset: 600_000 }, NOW, false).skew).toBeNull();
+  });
+  it('a clash row says where the other version is', () => {
+    expect(clashNote({ at: 1, p: 'Week.md', file: 'Conflicts/2026-11-26.md', how: 'note' })).toBe('Other version in Conflicts/2026-11-26.md');
+    expect(clashNote({ at: 1, p: 'D/Plan.excalidraw.md', file: 'D/Plan (phone 2026-11-26 1252).excalidraw.md', how: 'copy' })).toBe('Both kept · Plan (phone 2026-11-26 1252).excalidraw.md');
+  });
+  it('the hub\'s conflict frames fill the clash list; Done removes it and greys its card', () => {
+    expect(kt).toContain('clash(cp, f, "note")');
+    expect(kt).toContain('clash(cp, f, "copy")');
+    expect(kt).toContain('.put("clashes", ');
+    expect(kt).toMatch(/fun clashDone\(at: Long\)[\s\S]*it\.put\("fixed"/);
+  });
+  it('the phone writes its last 200 events to .margin/sync-log.phone.json, once a minute at most, only when new', () => {
+    expect(kt).toContain('LOG_PATH = ".margin/sync-log.phone.json"');
+    expect(kt).toContain('LOG_MS = 60_000L');
+    expect(kt).toContain('if (id == loggedId) return');
+    expect(kt).toContain('SyncLocal.editNow(LOG_PATH, "*", ');
+    expect(readFileSync(join(dir, 'SyncStore.kt'), 'utf8')).toContain('WHERE kind <> ?');
+  });
+  it('the log is single:phone, so it goes to the PC one way', () => {
+    const fx = JSON.parse(readFileSync(join(__dirname, '..', '..', 'modules', 'margin-native', 'android', 'src', 'test', 'resources', 'classes.json'), 'utf8'));
+    expect(fx.cases).toContainEqual({ p: '.margin/sync-log.phone.json', cls: 'single', writer: 'phone' });
   });
 });

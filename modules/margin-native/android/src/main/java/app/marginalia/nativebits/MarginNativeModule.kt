@@ -71,6 +71,7 @@ class MarginNativeModule : Module() {
     Function("syncNow") { SyncEngine.init(context); SyncService.ensure(context); SyncFiles.scanNow(); true }
     Function("syncClearErrors") { SyncEngine.init(context); SyncEngine.clearErrors(); true }
     Function("syncDismissError") { at: Double -> SyncEngine.init(context); SyncEngine.dismissError(at.toLong()); true }
+    Function("syncClashDone") { at: Double -> SyncEngine.init(context); SyncEngine.clashDone(at.toLong()); true }
     Function("syncHold") { op: String -> SyncEngine.init(context); SyncFiles.answerHold(if (op == "apply") "apply" else "cancel"); true }
     /** Rows that arrived while JS was not running: [{kind, json}], removed once read. */
     Function("syncInbox") {

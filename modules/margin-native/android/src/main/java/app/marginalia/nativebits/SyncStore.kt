@@ -176,6 +176,10 @@ class SyncStore private constructor(c: Context) : SQLiteOpenHelper(c.application
       db.execSQL("DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - $EVENTS_KEEP")
     }
   }
+  /** The newest event that is not a "sending N changes" line: the phone log is rewritten only when this moves, so
+   *  sending the log itself never makes it change again. */
+  fun lastEventId(exceptKind: String = "send"): Long =
+    readableDatabase.rawQuery("SELECT COALESCE(MAX(id), 0) FROM events WHERE kind <> ?", arrayOf(exceptKind)).use { if (it.moveToFirst()) it.getLong(0) else 0L }
   fun eventsJson(limit: Int = EVENTS_KEEP): String {
     val arr = org.json.JSONArray()
     readableDatabase.rawQuery("SELECT at, kind, msg FROM events ORDER BY id DESC LIMIT $limit", null).use {

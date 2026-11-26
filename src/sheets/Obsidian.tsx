@@ -5,8 +5,8 @@ import { useTheme } from '../ui/theme-context';
 import { act, useStore } from '../store/store';
 import { obsidianNow, obsidianStatus, onObsidian } from '../store/obsidian';
 import { leafOf, pickVault, vaultAvailable } from '../services/vaultFiles';
-import { nativeAvailable, onSyncEvent, scanQr, syncClearErrors, syncConfigure, syncEvents, syncForget, syncHold, syncNow, syncPair, syncStatus, type SyncStatus } from '../services/native';
-import { syncView, type Action } from '../domain/syncView';
+import { nativeAvailable, onSyncEvent, scanQr, syncClashDone, syncClearErrors, syncConfigure, syncEvents, syncForget, syncHold, syncNow, syncPair, syncStatus, type SyncStatus } from '../services/native';
+import { clashNote, syncView, type Action } from '../domain/syncView';
 import { obsidianLink } from './Problems';
 import { holdQuestion } from '../domain/syncHold';
 import { DEFAULT_TRACKED } from '../domain/vaultTasks';
@@ -60,6 +60,7 @@ export function ObsidianPage() {
           </View>
         ))}
         <Txt f="serif" s={15} c={st?.live ? 'mut' : 'bad'} testID="sync-status">{v.connection}</Txt>
+        {v.skew ? <Txt f="serif" s={14} c="warn" testID="sync-skew">{v.skew}</Txt> : null}
       </HandBox></View>
       {/* what is happening now */}
       {v.stage ? (
@@ -99,6 +100,22 @@ export function ObsidianPage() {
           </HandBox></View>
         );
       })()}
+      {/* clashes (v0.7.8.1, SPEC §8 G2): a note changed on both sides; open the other version, then Done */}
+      {st?.clashes?.length ? (
+        <View style={{ gap: 8 }} testID="sync-clashes">
+          <Txt f="bold" s={17}>Clashes</Txt>
+          {st.clashes.slice(0, 10).map((k) => (
+            <HandBox key={`${k.at}${k.p}`} seed={`sy-c-${k.at}`} fill={c.card} style={{ padding: 12, gap: 6 }}>
+              <Txt f="bold" s={16} numberOfLines={2} selectable>{k.p}</Txt>
+              <Txt f="serif" s={14} c="mut" numberOfLines={2}>{clashNote(k)} · {fmtTime(k.at, hour12)}</Txt>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Btn kind="ink" icon="note" label="Open in Obsidian" testID="sync-clash-open" onPress={() => { void Linking.openURL(obsidianLink(vaultName, k.file)).catch(() => setMsg(`Open ${k.file} in Obsidian.`)); }} />
+                <Btn kind="ghost" icon="check" label="Done" testID="sync-clash-done" onPress={() => { syncClashDone(k.at); refresh(); }} />
+              </View>
+            </HandBox>
+          ))}
+        </View>
+      ) : null}
       {st?.skipped?.length ? (
         <View style={{ gap: 4 }} testID="sync-skipped">
           <Txt f="bold" s={17}>Files that could not land</Txt>

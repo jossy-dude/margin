@@ -22,6 +22,11 @@
    "cls": "file"
   },
   {
+   "p": ".margin/sync-log.phone.json",
+   "cls": "single",
+   "writer": "phone"
+  },
+  {
    "p": "Margin/Tasks.md",
    "cls": "note"
   },

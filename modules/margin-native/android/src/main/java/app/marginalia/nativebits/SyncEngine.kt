@@ -65,6 +65,29 @@ object SyncEngine {
     if (::app.isInitialized) return
     app = c.applicationContext
     try { adoptVault() } catch (e: Exception) { Log.w(TAG, "adopt vault: ${e.message}") }
+    sched.scheduleWithFixedDelay(Runnable { exec.execute { writeLog() } }, LOG_MS, LOG_MS, TimeUnit.MILLISECONDS)
+  }
+
+  /**
+   * v0.7.8.1 (SPEC §8 G4): the phone's last 200 sync events, as `.margin/sync-log.phone.json` in the vault, so the
+   * PC can read what happened here. At most once a minute and only when something new happened. The class rule
+   * `single:phone **/*.phone.json` sends it to the desktop, one way.
+   */
+  internal const val LOG_PATH = ".margin/sync-log.phone.json"
+  private const val LOG_MS = 60_000L
+  private var loggedId = -1L
+  internal fun writeLog() {
+    if (!paired || vaultUri() == null) return
+    val id = store.lastEventId()
+    if (id == loggedId) return
+    val events = JSONArray(store.eventsJson())
+    val iso = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+    val lines = JSONArray()
+    for (i in 0 until events.length()) { val e = events.optJSONObject(i) ?: continue; lines.put("${iso.format(java.util.Date(e.optLong("at")))} ${e.optString("kind")}: ${e.optString("msg")}") }
+    val doc = JSONObject().put("device", "phone").put("app", "Marrow").put("written", iso.format(java.util.Date()))
+      .put("state", state).put("lastError", lastError ?: JSONObject.NULL).put("events", lines)
+    val r = SyncLocal.editNow(LOG_PATH, "*", doc.toString(1) + "\n")
+    if (r.startsWith("ok:")) loggedId = id
   }
   internal val prefs get() = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
   internal val store get() = SyncStore.get(app)
@@ -350,8 +373,8 @@ object SyncEngine {
       "conflict" -> {
         val cp = m.optString("p")
         when (m.optString("resolution")) {
-          "conflicts-note" -> m.optString("file").let { f -> event("conflict", "clash in $cp: the other version is in $f"); fail(Err.CLASH, "$cp changed on both sides. The other version is in $f.", f) }
-          "copy" -> m.optString("copy").let { f -> event("conflict", "clash in $cp: both kept, the other is $f"); fail(Err.CLASH, "$cp changed on both sides. Both are kept: the other is $f.", f) }
+          "conflicts-note" -> m.optString("file").let { f -> event("conflict", "clash in $cp: the other version is in $f"); clash(cp, f, "note"); fail(Err.CLASH, "$cp changed on both sides. The other version is in $f.", f) }
+          "copy" -> m.optString("copy").let { f -> event("conflict", "clash in $cp: both kept, the other is $f"); clash(cp, f, "copy"); fail(Err.CLASH, "$cp changed on both sides. Both are kept: the other is $f.", f) }
         }
         SyncLocal.toObsidian(m)
       }
@@ -416,6 +439,27 @@ object SyncEngine {
     for (i in 0 until list.length()) { val o = list.optJSONObject(i) ?: continue; if (o.optString("code") in codes && !o.has("fixed")) { o.put("fixed", now); n++ } }
     if (n > 0) { prefs.edit().putString("errors", list.toString()).apply(); status("fixed") }
   }
+  /** v0.7.8.1 (SPEC §8 G2): the clashes list on the sync page, from the hub's `conflict` frames (last 30, newest
+   *  first). `file` is where the other version is: a Conflicts/ note, or the dated copy beside the file. */
+  private fun clash(p: String, file: String, how: String) {
+    val old = try { JSONArray(prefs.getString("clashes", "[]")) } catch (e: Exception) { JSONArray() }
+    val out = JSONArray().put(JSONObject().put("at", System.currentTimeMillis()).put("p", p).put("file", file).put("how", how))
+    for (i in 0 until minOf(old.length(), 29)) old.optJSONObject(i)?.let { if (it.optString("file") != file || it.optString("p") != p) out.put(it) }
+    prefs.edit().putString("clashes", out.toString()).apply()
+  }
+  /** Done: the owner has looked at this clash. It leaves the list, and its E-CLASH card greys out as fixed. */
+  fun clashDone(at: Long) = exec.execute {
+    val list = try { JSONArray(prefs.getString("clashes", "[]")) } catch (e: Exception) { return@execute }
+    val out = JSONArray(); var file: String? = null
+    for (i in 0 until list.length()) { val o = list.optJSONObject(i) ?: continue; if (o.optLong("at") == at) file = o.optString("file") else out.put(o) }
+    prefs.edit().putString("clashes", out.toString()).apply()
+    file?.let { f ->
+      val errs = try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { JSONArray() }
+      for (i in 0 until errs.length()) errs.optJSONObject(i)?.let { if (it.optString("arg") == f && !it.has("fixed")) it.put("fixed", System.currentTimeMillis()) }
+      prefs.edit().putString("errors", errs.toString()).apply()
+    }
+    status("clash done")
+  }
   /** The owner dismissed one card (a clash they have looked at). */
   fun dismissError(at: Long) = exec.execute {
     val list = try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { return@execute }
@@ -451,6 +495,7 @@ object SyncEngine {
     .put("vault", vaultUri() != null).put("vaultName", prefs.getString("vaultName", null)).put("fast", vault()?.fast == true)
     .put("stats", JSONArray(store.statsJson()))
     .put("errors", try { JSONArray(prefs.getString("errors", "[]")) } catch (e: Exception) { JSONArray() })
+    .put("clashes", try { JSONArray(prefs.getString("clashes", "[]")) } catch (e: Exception) { JSONArray() })
     .put("offset", hub?.offset ?: 0L).put("hubOnline", hub?.ready == true)
     .put("path", if (hub?.ready == true) hub?.path else null).put("addr", if (hub?.ready == true) hub?.addr else null)
     .put("lastPath", prefs.getString("path", null)).put("lastAddr", prefs.getString("lastAddr", null))
