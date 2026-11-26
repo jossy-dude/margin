@@ -194,6 +194,17 @@ describe('the vault through the store', () => {
     await obsidianNow();
     expect(vault.get('.margin/margin.json')).toBe(snap);
   });
+  it('v0.7.8.14 (ask 9): the snapshot carries the notice board for bone-calendar: pinned and dated, no archived or sample', async () => {
+    await fresh();
+    const due = Date.now() + 2 * 86_400_000; // the snapshot keeps dated notices from the real today on
+    act.saveNotice({ id: 'n1', courseId: null, text: 'DB midterm\nroom L-4', dueAt: due, priority: 2, demo: false });
+    act.saveNotice({ id: 'n2', courseId: null, text: 'Bring the lab coat', dueAt: null, priority: 0, demo: false, pinned: true });
+    act.saveNotice({ id: 'n3', courseId: null, text: 'Old', dueAt: null, priority: 0, demo: false, archived: true });
+    await settle(); await obsidianNow();
+    const j = JSON.parse(vault.get('.margin/margin.json')!);
+    expect(j.notices.map((n: { id: string }) => n.id)).toEqual(['n2', 'n1']);
+    expect(j.notices[1]).toMatchObject({ text: 'DB midterm', urgent: true, pinned: false, at: due });
+  });
   it('a line deleted in Obsidian removes its task', async () => {
     await fresh();
     vault.set('N.md', '- [ ] A #school ^a1\n');

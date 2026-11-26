@@ -27,7 +27,7 @@ import {
   DEFAULT_TRACKED, TASKS_NOTE, TASKS_NOTE_HEAD, addBlockIds, appendLine, blockIdOf, findLine, nextOccurrence, hmOf, isDone, isLifeLine, isOpen, keysOf, newLine,
   parseLine, parseNote, patchLine, subjectTag, tracked, withId, withTasksHead, ymdOf, type LinePatch,
 } from '../domain/vaultTasks';
-import { noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
+import { noticeOrder, noticesNote, subjectsNote, timetableNote } from '../domain/vaultNotes';
 import { startOfDay } from '../domain/time';
 import { bellFor, lineRingTimes, ringTimes, taskFromLine } from '../domain/vaultMap';
 import type { Course, Task } from '../domain/types';
@@ -317,6 +317,10 @@ async function writeGenerated() {
     // D6 (v0.7.8.4): the task rings the phone rings in the next two days, stamped with the day so the desktop knows
     // it is fresh (< 1 day); bone-tasks skips its own pop-up for each. Digests stay on the desktop.
     phoneRingsDay: ymdOf(now), phoneRings: phoneRingsNow().filter((r) => r.at > now && r.at < now + 2 * 86_400_000),
+    // v0.7.8.14 (owner's ask 9): the notice board, for bone-calendar's month view: pinned ones and every dated one
+    // from today on, in the board's order (urgent, soonest, pin order)
+    notices: noticeOrder(s.notices.filter((n) => !n.demo && !n.archived && (n.pinned || (n.dueAt != null && n.dueAt >= startOfDay(now)))))
+      .slice(0, 30).map((n) => ({ id: n.id, text: n.text.split('\n')[0]!.slice(0, 120), at: n.dueAt ?? null, course: s.courses.find((x) => x.id === n.courseId)?.name ?? null, pinned: !!n.pinned, urgent: n.priority >= 2 })),
   };
   const out: [string, string][] = [
     ['Margin/Timetable.md', timetableNote(env.events)],
