@@ -205,7 +205,7 @@ export function SettingsSheet() {
    *  the paragraph explaining it are gone, and `toured()` still reads `undefined` as "not seen" — which is
    *  what a settings row written before the tour existed holds. */
   const onboarded = s.onboarded, replay = (v: number) => act.setSettings({ onboarded: v });
-  const [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false), [surePurge, setSurePurge] = useState(false);
+  const [xf, setXf] = useState<ExportFormat>('xlsx'), [busy, setBusy] = useState<string | null>(null), [sure, setSure] = useState(false), [surePurge, setSurePurge] = useState(false);
   /* The action test really writes — that is the point of it — so it asks twice, like Reset and the
    * boot screen's reset do. The window is owned by an effect so closing the sheet cannot leave a timer
    * to fire against an unmounted component. */
@@ -425,10 +425,10 @@ export function SettingsSheet() {
     <Txt f="serif" s={15.5} c="mut">Pauses the main clock. Unlocks after 5 minutes of focus. Nudges you {nudgeWord(s.breakMin * 60_000)}.</Txt>
   </>);
   if (page === 'data') body = (<>
-    <Txt f="serif" s={15.5} c="mut">Everything in the app, named by export date.</Txt>
-    {(['xlsx', 'csv', 'json'] as ExportFormat[]).map((f) => (
-      <View key={f} style={{ gap: 4 }}><Txt f="bold" s={20}>{f === 'xlsx' ? 'Excel workbook (.xlsx)' : f === 'csv' ? 'CSV, one file per table (.zip)' : 'JSON (.json)'}</Txt>
-        <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(f, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(f, 'share')} />{busy?.startsWith(f) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row></View>))}
+    {/* v0.7.8.10 (owner's ask 3): one format picker and two buttons, not three headed blocks of the same two */}
+    <Label>Export everything</Label>
+    <Seg value={xf} opts={[['xlsx', 'Excel'], ['csv', 'CSV (.zip)'], ['json', 'JSON']]} onChange={(v) => setXf(v as ExportFormat)} />
+    <Row><Btn small label="Save to folder…" icon="export" disabled={!!busy} onPress={() => void doExport(xf, 'folder')} /><Btn small kind="ghost" label="Share…" disabled={!!busy} onPress={() => void doExport(xf, 'share')} />{busy?.startsWith(xf) ? <Txt f="serif" s={15} c="mut">working…</Txt> : null}</Row>
     <Hair />
     {/* A class's timetable, without anything personal: the file a classmate imports to have the whole week at
         once, and the file a built-in class timetable is made from (domain/packs). */}
@@ -478,7 +478,7 @@ export function SettingsSheet() {
   if (page === 'about') body = <AboutPage />;
   /* v0.8 §4.1 (U1): a full page with its own header, not a half-height sheet; Back walks one page out, then closes */
   const closeAll = () => { act.close(); clearSettingsPath(); };
-  return <FullPage title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onBack={back ?? closeAll} testID="settings"><PageSwap depth={path.length}>{body}</PageSwap></FullPage>;
+  return <FullPage title={path.length ? TITLES[page] ?? 'Settings' : 'Settings'} onBack={back ?? closeAll} testID="settings" scrollKey={page}><PageSwap depth={path.length}>{body}</PageSwap></FullPage>;
 
   /** The one irreversible action, guarded by the same double tap the boot-failure screen uses: the first tap
    *  arms it and the second one, within the window, does it. The timer is owned by an effect so closing the

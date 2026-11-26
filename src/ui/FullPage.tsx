@@ -42,7 +42,10 @@ export function PageStack({ depth, children }: { depth: number; children: React.
   return <Animated.View key={depth} entering={enter} exiting={exit} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}>{children}</Animated.View>;
 }
 
-export function FullPage({ title, sub, onBack, right, children, testID, scroll = true, still = false }: {
+export function FullPage({ title, sub, onBack, right, children, testID, scroll = true, still = false, scrollKey }: {
+  /** v0.7.8.10 (owner's ask 3): a page that swaps sub-pages (Settings) gives each its own key, so a sub-page opens at
+   *  its top instead of at the offset the page before it was scrolled to (Data & export opened at its bottom). */
+  scrollKey?: string;
   title: string; sub?: string; onBack: () => void; right?: React.ReactNode; children: React.ReactNode; testID?: string; scroll?: boolean; still?: boolean;
 }) {
   const ins = useSafeAreaInsets(), { c } = useTheme(), motion = usePageMotion(still);
@@ -65,7 +68,7 @@ export function FullPage({ title, sub, onBack, right, children, testID, scroll =
       <PaperBg />
       {head}
       {scroll
-        ? <ScrollView {...fabScrollProps} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 12 }}>{children}</ScrollView>
+        ? <ScrollView key={scrollKey ?? 'page'} {...fabScrollProps} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: pageBottomPad(ins.bottom), gap: 12 }}>{children}</ScrollView>
         : <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: ins.bottom + 12 }}>{children}</View>}
     </Animated.View>
   );
