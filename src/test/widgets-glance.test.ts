@@ -176,3 +176,13 @@ describe('the native tick (v0.7.7.9, SPEC §5 "Tick from the widget")', () => {
     expect(w).toContain('"To do · ${all.size}"');
   });
 });
+
+describe('widget previews in the app (v0.7.8.11, owner\'s ask 6)', () => {
+  const page = readFileSync(join(__dirname, '..', 'sheets', 'Alarms.tsx'), 'utf8');
+  it.each(['now', 'class', 'tasks'])('%s: Settings → Widgets shows the picker\'s picture', (k) => {
+    expect(existsSync(join(__dirname, '..', '..', 'assets', 'widgets', `${k}.png`))).toBe(true);
+    expect(page).toContain(`${k}: require('../../assets/widgets/${k}.png')`);
+    // the same picture as the launcher's
+    expect(readFileSync(join(__dirname, '..', '..', 'assets', 'widgets', `${k}.png`))).toEqual(readFileSync(join(MAIN, 'res', 'drawable-nodpi', `mg_preview_${k}.png`)));
+  });
+});

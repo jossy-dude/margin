@@ -3,12 +3,13 @@
 // sizes, weights, bar) in the default skin's deck colours, at xxhdpi (3×).
 //   node tools/widget-previews.mjs   → modules/margin-native/…/res/drawable-nodpi/mg_preview_{now,class,tasks}.png
 //                                      docs/v077/widgets/{now,class,tasks}.png
+//                                      assets/widgets/{now,class,tasks}.png (Settings → Widgets shows them, v0.7.8.11)
 import { chromium } from 'playwright';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
 const RES = 'modules/margin-native/android/src/main/res/drawable-nodpi';
-const DOCS = 'docs/v077/widgets';
-mkdirSync(RES, { recursive: true }); mkdirSync(DOCS, { recursive: true });
+const DOCS = 'docs/v077/widgets', APP = 'assets/widgets';
+mkdirSync(RES, { recursive: true }); mkdirSync(DOCS, { recursive: true }); mkdirSync(APP, { recursive: true });
 
 /* Collage light's deck (the default skin), as Look.kt's defaults */
 const K = { deck: '#2A241C', ink: '#FAF4E6', mut: '#D9CDB4', bar: '#FAF4E6', track: 'rgba(250,244,230,0.22)' };
@@ -68,6 +69,7 @@ for (const [name, w] of Object.entries(WIDGETS)) {
   const out = `${RES}/mg_preview_${name}.png`;
   await p.screenshot({ path: out, omitBackground: true });
   copyFileSync(out, `${DOCS}/${name}.png`);
+  copyFileSync(out, `${APP}/${name}.png`);
   console.log(out);
 }
 await b.close();

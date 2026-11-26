@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View, type ImageSourcePropType } from 'react-native';
 import { Btn, Chip, Field, HandBox, Row, Toggle, Txt } from '../ui/kit';
 import { NumberField, TimeField } from '../ui/fields';
 import { Label } from '../ui/Sheet';
@@ -198,6 +198,12 @@ const WIDGETS: { kind: native.WidgetKind; name: string; line: string }[] = [
   { kind: 'tasks', name: 'Tasks', line: 'What is due, most urgent first. Tick it there, even with Marrow closed. 4×2 to 4×4.' },
 ];
 /** Settings → Widgets (v0.7.7.8): each widget with a button that asks the launcher to place it, and D3's colours. */
+/** The picker's previews (tools/widget-previews.mjs draws them from the layout numbers). Metro needs literal requires. */
+const PREVIEW: Record<native.WidgetKind, ImageSourcePropType> = {
+  now: require('../../assets/widgets/now.png'),
+  class: require('../../assets/widgets/class.png'),
+  tasks: require('../../assets/widgets/tasks.png'),
+};
 export function WidgetsPage() {
   const { c } = useTheme(), has = native.nativeAvailable(), colors = useStore((s) => s.settings.widgetColors) ?? 'skin';
   return (
@@ -206,6 +212,9 @@ export function WidgetsPage() {
       {WIDGETS.map((w) => (
         <HandBox key={w.kind} seed={`wd-${w.kind}`} fill={c.card} style={{ padding: 14, gap: 8 }}>
           <Txt f="bold" s={21}>{w.name}</Txt>
+          {/* v0.7.8.11 (owner's ask 6): see it before adding it: the same picture the launcher's picker shows */}
+          <Image testID={`widget-preview-${w.kind}`} fadeDuration={0} source={PREVIEW[w.kind]} accessibilityLabel={`Preview of the ${w.name} widget`} resizeMode="contain"
+            style={{ width: '100%', height: w.kind === 'now' ? 72 : 120, alignSelf: 'center' }} />
           <Txt f="serif" s={15} c="mut">{w.line}</Txt>
           {has && <Btn small kind="ink" icon="plus" label="Add to home screen" a11y={`Add the ${w.name} widget to the home screen`} onPress={() => { if (!native.pinWidget(w.kind)) toast('Long-press your home screen, choose Widgets, then Marrow.'); }} />}
         </HandBox>
