@@ -146,7 +146,7 @@ function BookView({ initialRouteName, children, screenOptions, id }: { initialRo
             <HandBox seed="nav" fill={sky ? V2[dark ? 'dark' : 'light'].glassStrong : c.card} sw={2} amp={1.6} style={[{ flexDirection: 'row', minHeight: NAV_BODY, paddingVertical: 4, paddingHorizontal: 4 }, sky ? { borderRadius: 28, boxShadow: `0 8px 24px ${hexA(SHADOW, 0.14)}` } : null]}>
               {TABS.map((t) => { const on = cur === t.name; return (
                 <Pressable key={t.name} testID={`tab-${t.name.toLowerCase()}`} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label} onPressIn={() => { act.go(t.name); navigation.navigate(t.name as never); }} android_ripple={{ color: hexA(c.ink, 0.14), borderless: true }} style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? (sky ? V2[dark ? 'dark' : 'light'].fill : hexA(c.acc, 0.2)) : 'transparent', borderWidth: on && !sky ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on && !sky ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
+                  <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? (sky ? hexA(c.acc, 0.16) : hexA(c.acc, 0.2)) : 'transparent', borderWidth: on && !sky ? 1.5 : 0, borderColor: c.acc }}><Icon name={t.icon} size={23} color={on && !sky ? c.acc : c.ink} sw={on ? 2.2 : 1.8} /></View>
                   <Txt f="bold" s={14.5} c={sky ? (on ? 'ink' : 'mut') : on ? 'acc' : 'mut'}>{t.label}</Txt>
                 </Pressable>); })}
             </HandBox>

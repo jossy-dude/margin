@@ -1,4 +1,6 @@
 import type { Settings } from '../domain/types';
+import type { Face, Skin } from './skins/types';
+import { DAY_FACES, daylightSkin, type SkyKey } from './skins/daylight';
 
 /** Single source of colour truth. `refined` = the cream/warm pass; `original` = v10's oklch tokens converted to sRGB. */
 export interface Colors {
@@ -153,9 +155,7 @@ export const FONT = { hand: 'Caveat_500Medium', handBold: 'Caveat_700Bold', seri
 /** `num` (v0.7.7.1): typed numbers in fields. A printed numeral face in every look, never the hand: Caveat's
  *  digits lean past their own box and landed on the field's edge. */
 export type FontKey = 'hand' | 'bold' | 'serif' | 'serifB' | 'marker' | 'type' | 'script' | 'num';
-/** `tnum`: tabular figures, so a ticking number never shifts its neighbours (the plain look's numerals).
- *  `slant`: the face leans right past its advance width; a right-aligned field gives it 3 dp more room. */
-export interface Face { fam: string; k: number; track: number; tnum?: boolean; w?: '400' | '500' | '600' | '700'; slant?: boolean }
+export type { Face };
 export type TypeMap = Record<FontKey, Face>;
 const INK_TYPE: TypeMap = {
   hand: { fam: FONT.hand, k: 1, track: 0 }, bold: { fam: FONT.handBold, k: 1, track: 0 }, serif: { fam: FONT.serif, k: 1, track: 0 }, serifB: { fam: FONT.serifB, k: 1, track: 0 },
@@ -177,10 +177,11 @@ const PLAIN_TYPE: TypeMap = {
 /** Daylight: the platform grotesque the v2 Today and Week pages are set in (D-1 names Inter; until its files
  *  ship, the system face at Inter's weights), the italic serif kept for the mascot's voice (D-1 "Voice"), and
  *  tabular figures everywhere. An empty family is the system face; `w` carries the weight it cannot. */
+/* v0.7.7.5 (SPEC §1): Hanken Grotesk for every role, no italic anywhere (the voice lines are the regular weight in
+   ink2, which the callers already ask for as `mut`). The roles map onto the skin's six faces. */
 const DAY_TYPE: TypeMap = {
-  hand: { fam: '', k: 0.86, track: 0, w: '400' }, bold: { fam: '', k: 0.84, track: 0, w: '600' }, serif: { fam: FONT.serif, k: 0.96, track: 0 }, serifB: { fam: FONT.serifB, k: 0.96, track: 0 },
-  marker: { fam: '', k: 0.86, track: -0.35, w: '600' }, type: { fam: '', k: 0.86, track: 0, tnum: true, w: '500' }, script: { fam: '', k: 0.86, track: 0, w: '500' },
-  num: { fam: FONT.plainSemi, k: 0.9, track: 0, tnum: true },
+  hand: DAY_FACES.body, bold: DAY_FACES.title, serif: DAY_FACES.voice, serifB: DAY_FACES.label,
+  marker: DAY_FACES.display, type: DAY_FACES.num, script: DAY_FACES.label, num: DAY_FACES.num,
 };
 /** v10 hand-drawn radii (--rg, --r) as CSS-style elliptical corners */
 export const RG = { h: [255, 14, 225, 14], v: [14, 225, 14, 255] } as const;
@@ -190,12 +191,22 @@ export const RS = { h: [30, 12, 26, 10], v: [10, 24, 12, 30] } as const;
  *  `collage` = torn coloured paper with a white core along the tear and a soft lift shadow, `plain` = a clean
  *  rounded card with a hairline and a soft shadow, on smooth stock. */
 export type Look = 'ink' | 'collage' | 'plain';
-/** `sky`: Daylight. The look is still `plain` (rounded, no drawing), but the page is the sky and a card is glass. */
-export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints; sky?: boolean }
-export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean): Theme {
+/** `sky`: Daylight. The look is still `plain` (rounded, no drawing), but the page is the sky and a card is glass.
+ *  `skin` (v0.7.7.5): the skin object; Daylight has one now, the paper skins get theirs in release B. */
+export interface Theme { c: Colors; dark: boolean; font: typeof FONT; look: Look; type: TypeMap; tints: Tints; sky?: boolean; skin?: Skin }
+/** `skyKey`: the sky on screen (Daylight's panes and accent follow it); ignored by the other skins. */
+export function makeTheme(s: Pick<Settings, 'theme' | 'palette' | 'pen'>, systemDark: boolean, skyKey: SkyKey = 'noon'): Theme {
   const dark = s.theme === 'auto' ? systemDark : s.theme === 'dark', mode = dark ? 'dark' : 'light';
   const pal = palettes[s.palette] ? s.palette : 'collage', base = palettes[pal][mode], sky = pal === 'daylight';
-  const acc = (PENS[s.pen] ?? PENS.denim)[mode], look: Look = pal === 'collage' ? 'collage' : pal === 'plain' || sky ? 'plain' : 'ink';
-  return { c: { ...base, acc }, dark, font: FONT, look, type: sky ? DAY_TYPE : look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode], sky };
+  const look: Look = pal === 'collage' ? 'collage' : pal === 'plain' || sky ? 'plain' : 'ink';
+  if (sky) {
+    /* Daylight's colours come from its skin, for the sky on screen: the pane, the accent (never your pen, D1), the deck */
+    const skin = daylightSkin(mode, skyKey), k = skin.ink;
+    const c: Colors = { ...base, card: skin.surface.fill, ink: k.ink, mut: k.ink2, acc: k.accent, onAcc: k.onAccent, ok: k.ok, warn: k.warn, bad: k.bad,
+      deck: k.deck, deckInk: k.deckInk, deckMut: k.deckMut, slab: k.deck, slabInk: k.deckInk, slabMut: k.deckMut, rule: skin.surface.ring };
+    return { c, dark, font: FONT, look, type: DAY_TYPE, tints: TINTS[mode], sky, skin };
+  }
+  const acc = (PENS[s.pen] ?? PENS.denim)[mode];
+  return { c: { ...base, acc }, dark, font: FONT, look, type: look === 'collage' ? COLLAGE_TYPE : look === 'plain' ? PLAIN_TYPE : INK_TYPE, tints: TINTS[mode], sky };
 }
 export const hexA = (hex: string, a: number) => `${hex.slice(0, 7)}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

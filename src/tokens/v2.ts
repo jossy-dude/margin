@@ -1,7 +1,7 @@
 /**
  * v0.7 "Daylight sheet" tokens (docs/v07/DESIGN.md §3, D-1…D-5). The sky is the ground; every surface is glass
  * over it; one reserved amber means *now*. Additive: nothing reads these until the v2 screens land (Phase 5),
- * v0.8 P5: the glass is near-opaque (cards 0.86–0.88, sheets 0.97), so what is behind a sheet (a task list) never
+ * v0.8 P5: the glass is near-opaque (cards 0.86–0.88, sheets 0.97; v0.7.7.5: sheets and the nav island 0.94, the spec's strong fill), so what is behind a sheet (a task list) never
  * shows through its words. `src/test/tokens-v2.test.ts` holds every text token to 4.5:1 on the glass over the brightest and darkest
  * sky of its theme.
  */
@@ -17,13 +17,13 @@ export interface V2Colors {
 }
 export const V2: Record<Scheme, V2Colors> = {
   light: {
-    glass: 'rgba(255,255,255,0.88)', glassStrong: 'rgba(255,255,255,0.97)', ring: 'rgba(17,24,33,0.10)', highlight: 'rgba(255,255,255,0.65)', fill: 'rgba(17,24,33,0.06)',
+    glass: 'rgba(255,255,255,0.88)', glassStrong: 'rgba(255,255,255,0.94)', ring: 'rgba(17,24,33,0.10)', highlight: 'rgba(255,255,255,0.65)', fill: 'rgba(17,24,33,0.06)',
     ink: '#1A1E24', ink2: '#48505B', ink3: '#5F6773',
     now: '#E8961E', onNow: '#1F1405', present: '#2B3038', absent: '#C4344C',
     ok: '#287A4E', warn: '#946115', bad: '#C4344C', flat: '#F4F5F7',
   },
   dark: {
-    glass: 'rgba(16,20,27,0.86)', glassStrong: 'rgba(20,24,31,0.97)', ring: 'rgba(255,255,255,0.10)', highlight: 'rgba(255,255,255,0.06)', fill: 'rgba(255,255,255,0.07)',
+    glass: 'rgba(16,20,27,0.86)', glassStrong: 'rgba(20,24,31,0.94)', ring: 'rgba(255,255,255,0.10)', highlight: 'rgba(255,255,255,0.06)', fill: 'rgba(255,255,255,0.07)',
     ink: '#ECEEF1', ink2: '#B5BBC4', ink3: '#9A9CA6',
     now: '#F4B04A', onNow: '#1F1405', present: '#E3E6EA', absent: '#F2768A',
     ok: '#5CC48A', warn: '#E0A64A', bad: '#F2768A', flat: '#0E1116',
@@ -47,6 +47,13 @@ export function skyAt(minutes: number): SkyKey {
   if (m < 840) return 'noon';
   if (m < 1050) return 'afternoon';
   return 'dusk';
+}
+/** Which sky is on screen: the clock's keyframe when `live`; noon (light) or night (dark) when `still` or `off`
+ *  (`off` draws no sky, but Daylight's panes and accent still need one to be tuned for). */
+export function skyFor(mode: 'live' | 'still' | 'off', scheme: Scheme, minutes: number): SkyKey | null {
+  if (mode === 'off') return null;
+  if (mode === 'still') return scheme === 'dark' ? 'night' : 'noon';
+  return skyAt(minutes);
 }
 /** The next keyframe change after `minutes` (for one cross-fade timer instead of a ticking sky). */
 export function nextSkyChange(minutes: number): number {

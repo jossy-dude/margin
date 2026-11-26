@@ -109,8 +109,9 @@ function SubjectTab({ label, on, tint, now, onPress }: { label: string; on: bool
 
 /** One slip on the desk: dealt in when the sheet opens, lifted when touched, shaken when it cannot go yet. */
 function SlipCard({ slip, i, bg, ink, sub, locked, pulse, onPress }: { slip: Slip; i: number; bg: string; ink: string; sub: string; locked: boolean; pulse: boolean; onPress: () => void }) {
-  const { c, tints } = useTheme(), reduce = useReduceMotion(), deal = useSharedValue(reduce ? 1 : 0), lift = useSharedValue(0), shake = useSharedValue(0);
-  const rot = (i % 2 ? 1 : -1) * (0.8 + (i % 3) * 0.5);
+  const { c, tints, skin } = useTheme(), reduce = useReduceMotion(), deal = useSharedValue(reduce ? 1 : 0), lift = useSharedValue(0), shake = useSharedValue(0);
+  /* v0.7.7.5: Daylight's tiles are glass panes with an icon — upright, no tape, no index-card rule */
+  const pane = skin?.instruments.addTile === 'pane', rot = pane ? 0 : (i % 2 ? 1 : -1) * (0.8 + (i % 3) * 0.5);
   useEffect(() => { if (!reduce) deal.set(withDelay(40 + i * 38, withSpring(1, { duration: 460, dampingRatio: 0.74 }))); }, [reduce, i, deal]);
   useEffect(() => { if (pulse && !reduce) shake.set(withSequence(withTiming(1, { duration: 60 }), withTiming(-1, { duration: 90 }), withTiming(0.6, { duration: 80 }), withSpring(0, { duration: 220 }))); }, [pulse, reduce, shake]);
   const st = useAnimatedStyle(() => ({ transform: [
@@ -123,13 +124,13 @@ function SlipCard({ slip, i, bg, ink, sub, locked, pulse, onPress }: { slip: Sli
       <Pressable testID={`add-${slip.id}`} accessibilityRole="button" accessibilityLabel={locked ? `Add ${slip.label}: needs a subject first` : `Add ${slip.label}`} accessibilityState={{ disabled: locked }}
         onPressIn={() => { aIn(); lift.set(reduce ? 0 : withTiming(1, { duration: 110, easing: Easing.out(Easing.quad) })); }} onPress={aLift}
         onPressOut={() => lift.set(reduce ? 0 : withSpring(0, { duration: 260, dampingRatio: 0.6 }))}>
-        <HandBox seed={`slip-${slip.id}`} fill={bg} cut="torn" style={{ minHeight: 96, padding: 12, gap: 3, opacity: locked ? 0.5 : 1 }}>
-          {slip.tape ? <Tape w={46} rot={i % 2 ? 8 : -7} style={{ top: -9, right: 14 }} /> : null}
+        <HandBox seed={`slip-${slip.id}`} fill={pane ? c.card : bg} cut="torn" style={{ minHeight: 96, padding: 12, gap: 3, opacity: locked ? 0.5 : 1 }}>
+          {slip.tape && !pane ? <Tape w={46} rot={i % 2 ? 8 : -7} style={{ top: -9, right: 14 }} /> : null}
           {/* An index card: one red rule under its heading line. */}
-          {slip.id === 'class' ? <View pointerEvents="none" style={{ position: 'absolute', left: 8, right: 8, top: 41, height: 1.2, backgroundColor: hexA(tints.tomato, 0.55) }} /> : null}
-          <Icon name={slip.icon} size={24} color={ink === 'deckInk' ? c.deckInk : c.ink} />
-          <Txt f="bold" s={19} c={ink} maxFontSizeMultiplier={FS}>{slip.label}</Txt>
-          <Txt f="serif" s={13.5} c={sub} numberOfLines={2} maxFontSizeMultiplier={FS}>{locked ? 'Needs a subject first' : slip.line}</Txt>
+          {slip.id === 'class' && !pane ? <View pointerEvents="none" style={{ position: 'absolute', left: 8, right: 8, top: 41, height: 1.2, backgroundColor: hexA(tints.tomato, 0.55) }} /> : null}
+          <Icon name={slip.icon} size={24} color={pane ? c.acc : ink === 'deckInk' ? c.deckInk : c.ink} />
+          <Txt f="bold" s={19} c={pane ? 'ink' : ink} maxFontSizeMultiplier={FS}>{slip.label}</Txt>
+          <Txt f="serif" s={13.5} c={pane ? 'mut' : sub} numberOfLines={2} maxFontSizeMultiplier={FS}>{locked ? 'Needs a subject first' : slip.line}</Txt>
         </HandBox>
       </Pressable>
     </Animated.View>
@@ -138,11 +139,11 @@ function SlipCard({ slip, i, bg, ink, sub, locked, pulse, onPress }: { slip: Sli
 
 /** Focus is not a form: a strip of kraft across the bottom of the desk. */
 function FocusStrip({ label, onPress }: { label: string; onPress: () => void }) {
-  const { c, tints } = useTheme(), [aIn, aLift] = usePressIn(onPress);
+  const { c, tints, skin } = useTheme(), [aIn, aLift] = usePressIn(onPress);
   return (
     <Pressable testID="add-focus" accessibilityRole="button" accessibilityLabel="Start a focus session" accessibilityHint={label} onPressIn={aIn} onPress={aLift} style={{ marginTop: 4 }}>
-      <HandBox seed="add-focus" fill={tints.kraft} cut="torn" style={{ minHeight: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={21} color={c.paper} /></View>
+      <HandBox seed="add-focus" fill={skin ? c.card : tints.kraft} cut="torn" style={{ minHeight: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: skin ? c.acc : c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="timer" size={21} color={skin ? c.onAcc : c.paper} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Txt f="bold" s={19} numberOfLines={1} maxFontSizeMultiplier={FS}>{label}</Txt>
           <Txt f="serif" s={13.5} c="ink" style={{ opacity: 0.75 }} maxFontSizeMultiplier={FS}>A quiet timer for study</Txt>

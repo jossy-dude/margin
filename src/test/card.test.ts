@@ -526,7 +526,7 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     // the three lines the clock row is made of, in order. The clock now lives inside the
     // `periods.length > 0` branch and is taped to the deck's corner, so the slice runs to the
     // card it is taped to. There is one face now (v0.7), so it is the `ClockFace` leaf itself.
-    const clock = s.slice(s.indexOf('<LiveClockFace size={CLOCK}'), s.indexOf('<ActiveCard periods'));
+    const at = s.indexOf('<LiveClockFace size={CLOCK}'), clock = s.slice(at, s.indexOf('<ActiveCard periods', at)); // v0.7.7.5: Daylight's deck (no paper clock) comes first
     expect(clock).toContain("cur ? 'In class' : next ? 'Next up'");
     // the time line is the one that survives: a wall clock, which the deck's duration is not. W4 threads
     // the user's clock into it and, for the next class, routes through `nextWhen` so a class that is
@@ -555,7 +555,7 @@ describe('the class name is stated once, not twice ~120px apart', () => {
     /* The deck is now taped to the clock's corner, so the branch that mounts it is a conditional
        expression rather than a `&&`, and the card sits one level deeper inside the wrapper that
        carries the overlap. The property is unchanged: classes present, card mounted. */
-    expect(s).toContain('{periods.length > 0 ? (');
+    expect(s).toContain(') : periods.length > 0 ? ('); // v0.7.7.5: after Daylight's ring-clock branch
     expect(s).toContain('<ActiveCard periods={periods}');
     // bearing 8, trimmed from 14: the header's widest state (`First class · Period 1 of 4 · B-12`)
     // was over budget by ~20 px and every candidate for them is defended in `src/screens/Today.tsx`.

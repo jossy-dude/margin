@@ -27,8 +27,9 @@ export function PaperBg({ card = false }: { card?: boolean }) {
 }
 
 function DayGround({ card, mode }: { card: boolean; mode: 'live' | 'still' | 'off' }) {
-  const { dark } = useTheme(), scheme = dark ? 'dark' as const : 'light' as const;
-  if (card) return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].glassStrong }]} />;
+  const { dark, skin } = useTheme(), scheme = dark ? 'dark' as const : 'light' as const;
+  /* a sheet is strong glass (0.94): it hides the page behind it (v0.7.7.5, the task sheet bled through at 0.88) */
+  if (card) return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: skin?.surface.fillStrong ?? V2[scheme].glassStrong }]} /></>;
   return <><View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} /><Sky mode={mode} scheme={scheme} /></>;
 }
 

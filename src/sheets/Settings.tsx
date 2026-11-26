@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Linking, Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
 import { Btn, Chip, EASE, Field, HandBox, Hair, Icon, Row, Toggle, Txt } from '../ui/kit';
@@ -76,9 +76,11 @@ function PageSwap({ depth, children }: { depth: number; children: React.ReactNod
 const Nav = ({ label, hint, icon, to }: { label: string; hint?: string; icon: string; to: string }) => <SettingsLink label={label} hint={hint} icon={icon} onPress={() => act.settingsPush(to)} />;
 /** A Settings row that opens something other than a Settings page (v0.8: the Subjects pages, the Notice board). */
 const SettingsLink = ({ label, hint, icon, onPress }: { label: string; hint?: string; icon: string; onPress: () => void }) => {
-  const { c } = useTheme();
+  const { c, skin } = useTheme();
+  /* v0.7.7.5: in Daylight every row is a glass pane over the sky (it was text straight on the sky, critique A2.13) */
+  const pane = skin ? { backgroundColor: c.card, borderRadius: 14, paddingHorizontal: 12, marginBottom: 6, borderWidth: StyleSheet.hairlineWidth, borderColor: skin.surface.ring, borderTopColor: skin.surface.rim ?? skin.surface.ring } : { borderBottomWidth: 1, borderColor: c.rule };
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}. ${hint ?? ''}`} onPress={onPress} android_ripple={{ color: c.rule }} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: c.rule }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}. ${hint ?? ''}`} onPress={onPress} android_ripple={{ color: c.rule }} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, ...pane }}>
       <Icon name={icon} size={24} color={c.acc} /><View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} numberOfLines={2}>{label}</Txt>{hint ? <Txt f="serif" s={14.5} c="mut" numberOfLines={2}>{hint}</Txt> : null}</View><Icon name="chevron" size={20} color={c.mut} />
     </Pressable>
   );

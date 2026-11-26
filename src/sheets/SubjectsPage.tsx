@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Empty } from '../screens/common';
 import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, HandBox, Row, Txt } from '../ui/kit';
 import { FullPage } from '../ui/FullPage';
@@ -33,7 +34,7 @@ export function SubjectsPage({ id }: { id?: string }) {
   return (
     <FullPage title="Subjects" sub={`${cards.filter((c) => !c.archived).length} this term`} onBack={act.closePage} testID="subjects" still
       right={<Btn small kind="primary" icon="plus" a11y="New subject" onPress={() => act.open({ t: 'course' })} />}>
-      {cards.length === 0 ? <Txt f="serif" s={17} c="mut">No subjects yet. Add one and its classes, marks and tasks gather here.</Txt> : null}
+      {cards.length === 0 ? <Empty icon="grad" face="happy" text="No subjects yet. Each one gathers its classes, marks and tasks." action={{ label: 'Add a subject', onPress: () => act.open({ t: 'course' }) }} /> : null}
       {cards.map((c) => <SubjectRow key={c.id} c={c} />)}
     </FullPage>
   );

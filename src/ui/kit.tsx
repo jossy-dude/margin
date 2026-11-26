@@ -418,8 +418,11 @@ export function Field({ label, style, multiline, ...p }: TextInputProps & { labe
     <View style={style as StyleProp<ViewStyle>}>
       {label ? <Txt f="serif" s={14.5} c="mut" style={{ marginBottom: 2 }}>{label}</Txt> : null}
       <TextInput {...p} testID={tid(label ?? p.placeholder)} multiline={multiline} accessibilityLabel={label ?? p.placeholder} placeholderTextColor={c.mut} selectionColor={c.acc} onFocus={(e) => { setFocus(true); p.onFocus?.(e); }} onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
-        style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', borderBottomWidth: 1.4, borderBottomColor: c.ink }} />
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />
+        style={{ ...faceOf(th, 'bold', 24), color: c.ink, paddingVertical: 6, paddingHorizontal: 2, minHeight: multiline ? 78 : 46, textAlignVertical: multiline ? 'top' : 'center', ...(th.skin?.instruments.field === 'box'
+          /* v0.7.7.5: Daylight's field is a box — 14 radius, a hairline, the strong glass — not a hand-ruled underline */
+          ? { borderRadius: 14, borderWidth: focus ? 1.5 : StyleSheet.hairlineWidth, borderColor: focus ? c.acc : hexA(c.ink, 0.25), backgroundColor: th.skin.surface.fillStrong, paddingHorizontal: 12, ...faceOf(th, 'hand', 20) }
+          : { borderBottomWidth: 1.4, borderBottomColor: c.ink }) }} />
+      {th.skin?.instruments.field === 'box' ? null : <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 2, right: 2, bottom: 0, height: 2.2, borderRadius: 2, backgroundColor: c.acc, transformOrigin: 'left center' }, rule]} />}
     </View>
   );
 }

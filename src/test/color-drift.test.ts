@@ -19,7 +19,7 @@ import { palettes } from '../tokens/theme';
 const SRC = join(__dirname, '..');
 
 /** The only files allowed to contain colour literals: the palette, and v0.7's Daylight tokens (`tokens/v2.ts`). */
-const TOKEN_FILES = ['tokens/theme.ts', 'tokens/v2.ts'];
+const TOKEN_FILES = ['tokens/theme.ts', 'tokens/v2.ts', 'tokens/skins/daylight.ts']; // v0.7.7.5: a skin file is a token file
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

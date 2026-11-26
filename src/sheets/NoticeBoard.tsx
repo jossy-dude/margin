@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Empty } from '../screens/common';
 import { Pressable, View } from 'react-native';
 import { Btn, HandBox, Icon, Txt } from '../ui/kit';
 import { FullPage } from '../ui/FullPage';
@@ -24,7 +25,7 @@ export function NoticeBoard() {
     <FullPage title="Notice board" sub={live.length ? `${live.filter((n) => n.pinned).length} pinned · ${live.filter((n) => n.dueAt != null).length} dated` : 'Nothing pinned'}
       onBack={act.closePage} testID="notices"
       right={<Btn small kind="primary" icon="plus" a11y="New notice" onPress={() => act.open({ t: 'notice' })} />}>
-      {live.length === 0 ? <Txt f="serif" s={17} c="mut">An exam date, a heads-up from class, something to bring: pin it here and it shows on Today.</Txt> : null}
+      {live.length === 0 ? <Empty icon="note" face="happy" text="An exam date, a heads-up, something to bring: pin it and it shows on Today." action={{ label: 'Pin a notice', onPress: () => act.open({ t: 'notice' }) }} /> : null}
       {live.map((n) => (
         <SwipeCard key={n.id} doneLabel={n.pinned ? 'Unpin' : 'Pin'}
           onComplete={() => save({ ...n, pinned: !n.pinned }, n.pinned ? 'Unpinned' : 'Pinned', n)}

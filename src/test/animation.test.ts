@@ -241,7 +241,7 @@ describe('reduce-motion collapses every new animation', () => {
 describe('nothing animates while off-screen', () => {
   it('the page placement, the crumple and the sheet are all still gated by reduce-motion', () => {
     expect(swipe).toContain('duration: reduce ? 180 : 1100');
-    expect(sheet).toContain('y.set(reduce ? 0 : withTiming(0,');
+    expect(sheet).toContain('y.set(reduce ? 0 : skin?.motion.sheet === \'glass\' ? withSpring(0,'); // v0.7.7.5: a glass sheet springs; both gated
   });
 });
 

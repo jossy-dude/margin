@@ -1,5 +1,6 @@
 /** v0.7 U3 — which sky is drawn for each setting (DESIGN.md D-3). */
-import { Sky, skyFor } from '../ui/Sky';
+import { Sky } from '../ui/Sky';
+import { skyFor } from '../tokens/v2';
 jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { View: 'View' }, useSharedValue: (v: number) => ({ get: () => v, set: () => {} }), useAnimatedStyle: () => ({}), withTiming: (v: number) => v }));
 jest.mock('../ui/theme-context', () => ({ useReduceMotion: () => false }));
 

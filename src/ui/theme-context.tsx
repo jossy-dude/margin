@@ -1,16 +1,18 @@
 import React, { createContext, useContext, useDeferredValue, useEffect, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
 import { makeTheme, palettes, type Theme } from '../tokens/theme';
+import { nextSkyChange, skyFor, type SkyKey } from '../tokens/v2';
 import { useStore } from '../store/store';
 import { setLook } from '../services/native';
 
 /* v0.8 §2.1: one Theme object per skin × mode × pen, made once and kept, so switching back to a skin hands every
    leaf the SAME object (a memoised row with unchanged props does not re-render) and costs no allocation. */
 const made = new Map<string, Theme>();
-export function themeFor(s: Parameters<typeof makeTheme>[0], sys: boolean): Theme {
-  const k = `${s.palette}|${s.theme === 'auto' ? (sys ? 'dark' : 'light') : s.theme}|${s.pen}`;
+export function themeFor(s: Parameters<typeof makeTheme>[0], sys: boolean, skyKey: SkyKey = 'noon'): Theme {
+  /* Daylight's panes and accent follow the sky on screen, so its theme is one per sky as well (v0.7.7.5) */
+  const k = `${s.palette}|${s.theme === 'auto' ? (sys ? 'dark' : 'light') : s.theme}|${s.pen}${s.palette === 'daylight' ? `|${skyKey}` : ''}`;
   let t = made.get(k);
-  if (!t) { t = makeTheme(s, sys); made.set(k, t); }
+  if (!t) { t = makeTheme(s, sys, skyKey); made.set(k, t); }
   return t;
 }
 
@@ -29,9 +31,22 @@ export function ThemeHold({ on, children }: { on: boolean; children: React.React
   return <Ctx.Provider value={on ? t : held}>{children}</Ctx.Provider>;
 }
 
+const minutesNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+/** The sky Daylight is tuned for: the clock's keyframe, moved by ONE timer at the next keyframe (as `Sky` does). */
+function useSkyKey(on: boolean, dark: boolean): SkyKey {
+  const mode = useStore((s) => s.settings.sky), [stamp, setStamp] = useState(minutesNow);
+  useEffect(() => {
+    if (!on || mode !== 'live') return;
+    const t = setTimeout(() => setStamp(minutesNow()), nextSkyChange(minutesNow()) * 60_000 + 1000);
+    return () => clearTimeout(t);
+  }, [on, mode, stamp]);
+  return (on ? skyFor(mode === 'off' ? 'still' : mode, dark ? 'dark' : 'light', stamp) : null) ?? (dark ? 'night' : 'noon');
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const sys = useColorScheme() === 'dark', theme = useStore((s) => s.settings.theme), palette = useStore((s) => s.settings.palette), pen = useStore((s) => s.settings.pen);
-  const now = themeFor({ theme, palette, pen }, sys);
+  const skyKey = useSkyKey(palette === 'daylight', theme === 'auto' ? sys : theme === 'dark');
+  const now = themeFor({ theme, palette, pen }, sys, skyKey);
   /* The switch is a transition: the tap that chose the skin commits at once and the re-skin of the tree follows,
      interruptible, so a second tap during it is never dropped (P2: a 650 ms frame and a lost tap). */
   const t = useDeferredValue(now);

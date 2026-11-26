@@ -1,0 +1,66 @@
+{
+  "light": {
+    "dawn": {
+      "darkest": "#E9A994",
+      "lightest": "#FCEEE2",
+      "top": "#E9A994"
+    },
+    "morning": {
+      "darkest": "#8DBCEA",
+      "lightest": "#EEF5FB",
+      "top": "#8DBDEB"
+    },
+    "noon": {
+      "darkest": "#74AEE6",
+      "lightest": "#F1F7FC",
+      "top": "#74AEE6"
+    },
+    "afternoon": {
+      "darkest": "#9EBFE5",
+      "lightest": "#F5ECDF",
+      "top": "#9EC0E6"
+    },
+    "dusk": {
+      "darkest": "#8D7DC4",
+      "lightest": "#F2D6CB",
+      "top": "#8D7DC4"
+    },
+    "night": {
+      "darkest": "#4F6699",
+      "lightest": "#B8C5DE",
+      "top": "#4F6699"
+    }
+  },
+  "dark": {
+    "dawn": {
+      "darkest": "#1A1F3D",
+      "lightest": "#785A63",
+      "top": "#1A1F3D"
+    },
+    "morning": {
+      "darkest": "#112039",
+      "lightest": "#465875",
+      "top": "#112039"
+    },
+    "noon": {
+      "darkest": "#10213A",
+      "lightest": "#3F5069",
+      "top": "#10213A"
+    },
+    "afternoon": {
+      "darkest": "#172137",
+      "lightest": "#4D4E5B",
+      "top": "#172137"
+    },
+    "dusk": {
+      "darkest": "#181530",
+      "lightest": "#67475A",
+      "top": "#181530"
+    },
+    "night": {
+      "darkest": "#060A17",
+      "lightest": "#414960",
+      "top": "#060A17"
+    }
+  }
+}

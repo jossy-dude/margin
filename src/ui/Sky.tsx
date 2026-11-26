@@ -1,37 +1,36 @@
-import React, { useEffect, useId, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { SKY, V2, nextSkyChange, skyAt, type Scheme, type SkyKey } from '../tokens/v2';
+import { V2, nextSkyChange, skyFor, type Scheme, type SkyKey } from '../tokens/v2';
 import { useReduceMotion } from './theme-context';
+
 
 /**
  * v0.7 U3 — the sky behind everything (DESIGN.md D-3). It follows the clock in six keyframes and changes by ONE
  * timer set for the next keyframe (nothing ticks in between); the change is a 60 s cross-fade (a cut with reduced
- * motion). `still` keeps one sky per theme (noon / night); `off` is the flat ground. Drawn as two gradients; the
- * baked WebP skies replace the gradient later without changing this component's contract.
+ * motion). `still` keeps one sky per theme (noon / night); `off` is the flat ground.
+ *
+ * v0.7.7.5 (SPEC §1 A): each keyframe is a baked image (`assets/sky`, made by `tools/sky.mjs`) with a sun or moon
+ * glow, a haze band, soft clouds and stars at night — something for the glass panes to be glass over. The old
+ * two-stop gradient had nothing in it to see through a pane.
  */
+const IMG: Record<Scheme, Record<SkyKey, ImageSourcePropType>> = {
+  light: {
+    dawn: require('../../assets/sky/light-dawn.webp'), morning: require('../../assets/sky/light-morning.webp'), noon: require('../../assets/sky/light-noon.webp'),
+    afternoon: require('../../assets/sky/light-afternoon.webp'), dusk: require('../../assets/sky/light-dusk.webp'), night: require('../../assets/sky/light-night.webp'),
+  },
+  dark: {
+    dawn: require('../../assets/sky/dark-dawn.webp'), morning: require('../../assets/sky/dark-morning.webp'), noon: require('../../assets/sky/dark-noon.webp'),
+    afternoon: require('../../assets/sky/dark-afternoon.webp'), dusk: require('../../assets/sky/dark-dusk.webp'), night: require('../../assets/sky/dark-night.webp'),
+  },
+};
 /* v0.7.7 (SPEC §6): the first sky of a session fades in over 200 ms onto the splash's mid-sky window colour, so
    Daylight never cuts from flat colour to sky. Later skies (other pages) appear at once. */
 let firstSky = true;
 const minutesNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
-export function skyFor(mode: 'live' | 'still' | 'off', scheme: Scheme, minutes: number): SkyKey | null {
-  if (mode === 'off') return null;
-  if (mode === 'still') return scheme === 'dark' ? 'night' : 'noon';
-  return skyAt(minutes);
-}
 
-function Gradient({ scheme, k }: { scheme: Scheme; k: SkyKey }) {
-  const [top, bottom] = SKY[scheme][k];
-  /* per instance: Today and Week both draw a sky and every page stays mounted, so a shared id made the web build
-     resolve `url(#…)` to the hidden page's gradient and draw nothing */
-  const id = `sky-${scheme}-${k}-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  return (
-    <Svg width="100%" height="100%" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
-      <Defs><LinearGradient id={id} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={top} /><Stop offset="1" stopColor={bottom} /></LinearGradient></Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
-  );
+function Baked({ scheme, k }: { scheme: Scheme; k: SkyKey }) {
+  return <Image source={IMG[scheme][k]} resizeMode="cover" fadeDuration={0} style={StyleSheet.absoluteFill} accessibilityIgnoresInvertColors />;
 }
 
 export function Sky({ mode, scheme }: { mode: 'live' | 'still' | 'off'; scheme: Scheme }) {
@@ -61,8 +60,8 @@ export function Sky({ mode, scheme }: { mode: 'live' | 'still' | 'off'; scheme: 
   if (!k) return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: V2[scheme].flat }]} />;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {prev ? <Gradient scheme={scheme} k={prev} /> : null}
-      <Animated.View style={[StyleSheet.absoluteFill, top]}><Gradient scheme={scheme} k={k} /></Animated.View>
+      {prev ? <Baked scheme={scheme} k={prev} /> : null}
+      <Animated.View style={[StyleSheet.absoluteFill, top]}><Baked scheme={scheme} k={k} /></Animated.View>
     </View>
   );
 }

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import { V2 } from '../tokens/v2';
+import { DAY_INK } from '../tokens/skins/daylight';
 import { ClockFace } from '../ui/clock/ClockFace';
 import { DayBar, type AnyBarKind } from '../ui/DayBar';
 import { Btn, HandBox, HStrip, Icon, Row, Txt } from '../ui/kit';
@@ -225,6 +227,30 @@ const RANGE_COL_24 = 92, RANGE_COL_12 = 114, RANGE_SIZE_24 = 20, RANGE_SIZE_12 =
  *  than as the countdown's frame. */
 const DISC = { h: [28, 28, 28, 28], v: [28, 28, 28, 28] } as const;
 
+/** v0.7.7.5 (SPEC §1): Daylight's clock — a 56 dp ring (1.5 dp) with two hands, no face. It sits inside the deck
+ *  and follows the minute; it never hangs over the deck's edge the way the paper clock did. */
+function RingClock({ ink, rim }: { ink: string; rim: string }) {
+  const now = new Date(useLiveNow(60_000, 60_000)), S = 56, C = S / 2;
+  const hand = (turn: number, len: number) => { const a = turn * 2 * Math.PI - Math.PI / 2; return `M${C} ${C}L${(C + Math.cos(a) * len).toFixed(2)} ${(C + Math.sin(a) * len).toFixed(2)}`; };
+  return (
+    <Svg width={S} height={S} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Circle cx={C} cy={C} r={C - 1} fill="none" stroke={rim} strokeWidth={1.5} />
+      <Path d={hand(((now.getHours() % 12) + now.getMinutes() / 60) / 12, 14)} stroke={ink} strokeWidth={2.4} strokeLinecap="round" />
+      <Path d={hand(now.getMinutes() / 60, 21)} stroke={ink} strokeWidth={1.6} strokeLinecap="round" />
+      <Circle cx={C} cy={C} r={2} fill={ink} />
+    </Svg>
+  );
+}
+/** v0.7.7.5 (SPEC §1): Daylight's progress — a 6 dp capsule with a filled part, no ticks and no ruler. */
+function CapsuleBar({ frac, track, fill }: { frac: number; track: string; fill: string }) {
+  const f = Math.max(0, Math.min(1, frac));
+  return (
+    <View testID="deck-capsule" accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(f * 100) }} style={{ height: 6, borderRadius: 3, backgroundColor: track, overflow: 'hidden', marginTop: 6 }}>
+      <View style={{ width: `${f * 100}%`, height: 6, borderRadius: 3, backgroundColor: fill }} />
+    </View>
+  );
+}
+
 /** A ticking clock, laid out one fixed advance per glyph so the same-length neighbour can never move —
  *  see `COUNT_DIGIT_W`. The digits are the card's readout, so they stay the `type` face at 42; the
  *  letterSpacing the reference used (−.04em, resolved to −1.7) is gone, because at 42 it closed the
@@ -291,7 +317,10 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
    *  corner and the state pill has to start clear of it. */
   headPad?: number;
 }) {
-  const { c, look } = useTheme();
+  const { c, look, skin, dark } = useTheme();
+  /* v0.7.7.5 (SPEC §1): Daylight's instruments — a 56 dp ring clock inside the deck, a 6 dp capsule for progress,
+     no dashed rule, no tilt, and the state pill in amber only while a class is on */
+  const ring = skin?.instruments.clock === 'ring', capsule = skin?.instruments.bar === 'capsule';
   /* v0.7.7.4 (SPEC §2 E5): the card follows the minute (classes start and end on one); the ticking digits and the
      start disc are leaves with their own 1 Hz clocks */
   const live = useScreenLive(), t = useLiveNow(60_000, 60_000);
@@ -342,11 +371,16 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
             `minWidth: 0` and the subtitle's own `flexShrink: 1` stay, so a larger system font still
             truncates gracefully instead of pushing the room tag off the card. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          {skin ? (
+            <View style={{ borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3, backgroundColor: d.state === 'live' ? skin.ink.now : skin.ink.deckInk }}>
+              <Txt f="bold" s={18} maxFontSizeMultiplier={FS} style={{ color: d.state === 'live' ? V2[dark ? 'dark' : 'light'].onNow : DAY_INK.light.ink }}>{d.word}</Txt>
+            </View>
+          ) : (
           <View style={{ transform: [{ rotate: '-2deg' }] }}>
             <HandBox seed={`deck-pill-${d.word}`} fill={c.deckInk} stroke={c.deckInk} corners={RS} shadow={false} sw={1.6} amp={0.8}>
               <Txt f="bold" s={22} c={c.deck} maxFontSizeMultiplier={FS} style={{ paddingHorizontal: 10, paddingVertical: 1 }}>{d.word}</Txt>
             </HandBox>
-          </View>
+          </View>)}
           {/* On a narrow phone with two classes in the slot, the tabs below already say it; the header
               line would only be clipped to "+…". */}
           {!(many && w < 300) && <Txt f="serif" s={14} c={c.deckMut} maxFontSizeMultiplier={FS} numberOfLines={1} style={{ flexShrink: 1 }}>{d.position}</Txt>}
@@ -405,14 +439,21 @@ export const ActiveCard = React.memo(function ActiveCard({ periods, occ, courses
           subject down and hollowed the slab's left half. It is now a small sticker taped over the
           card's right edge, tilted the way the state pill and the room tag already are, so it reads
           as the same kind of annotation. The digits above stay the thing actually read. */}
-      {soon && (
+      {soon && !ring && (
         <View pointerEvents="none" style={{ position: 'absolute', right: DECK_PAD_X - 10, top: 86, transform: [{ rotate: '-8deg' }] }}>
           <StartCircle start={d.period!.start} gapMs={gapMs} />
         </View>
       )}
-      <DayBar kind={bar} periods={shown} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />
-      {/* `.aft` — a dashed rule, then what the day does next. */}
-      <View style={{ marginTop: 10, borderTopWidth: 2.5, borderStyle: 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
+      {ring && (
+        <View pointerEvents="none" testID="deck-ring-clock" style={{ position: 'absolute', right: DECK_PAD_X, top: 62 }}>
+          <RingClock ink={c.deckInk} rim={c.deckMut} />
+        </View>
+      )}
+      {capsule
+        ? <CapsuleBar frac={d.period ? (soon ? 1 - Math.max(0, d.period.start - t) / gapMs : (t - d.period.start) / Math.max(1, d.period.end - d.period.start)) : isToday && d.total > 0 ? 1 : 0} track={hexA(c.deckInk, 0.2)} fill={d.state === 'live' && skin ? skin.ink.now : c.acc} />
+        : <DayBar kind={bar} periods={shown} now={t} ink={c.deckInk} bg={c.deck} w={w} h={DECK_BAR_H} live={live} />}
+      {/* `.aft` — a dashed rule, then what the day does next (Daylight: a hairline, no dashes). */}
+      <View style={{ marginTop: 10, borderTopWidth: capsule ? StyleSheet.hairlineWidth : 2.5, borderStyle: capsule ? 'solid' : 'dashed', borderTopColor: c.deckMut, paddingTop: 8, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
         <Txt f="bold" s={20} maxFontSizeMultiplier={FS} style={{ color: c.deckInk }}>After</Txt>
         <Txt f="serif" s={17} maxFontSizeMultiplier={FS} style={{ color: c.deckMut, flexShrink: 1 }}>{afterText}</Txt>
       </View>
@@ -445,7 +486,7 @@ export function TodayScreen() {
   /* `live` for this page comes from the navigator context, not `s.route`: every page stays mounted now,
      so a store subscription here would re-render the whole of Today on every tap anywhere in the app —
      including the taps that have nothing to do with it. */
-  const { c } = useTheme(), { width } = useWindowDimensions(), now = useLiveNow(30_000, 60_000), today = startOfDay(now);
+  const { c, skin } = useTheme(), { width } = useWindowDimensions(), now = useLiveNow(30_000, 60_000), today = startOfDay(now);
   /* The day block — strip, class list, "Mark day" — is ONE day, chosen by the user and otherwise the
      live today; the title, clock and "in class / next up" line above it stay about now, so they read
      the live day instead. Both come from `dayBlock`, so they cannot drift apart. */
@@ -471,7 +512,10 @@ export function TodayScreen() {
           plus a gap, so the state pill starts clear of the bezel — the gap is 8, trimmed from 14 when
           the header's widest state (`First class · Period 1 of 4 · B-12`) clipped without it. On a day
           with nothing on it there is no card to attach to, so the clock stands alone with its status line. */}
-      {periods.length > 0 ? (
+      {periods.length > 0 && skin?.instruments.clock === 'ring' ? (
+        <ActiveCard periods={periods} occ={selOcc} courses={st.courses} variants={st.variants} isToday={sel === today} bar={bar as AnyBarKind} w={width - 32 - DECK_PAD_X * 2} hour12={hour12}
+          doneLine={sel === today ? attendanceSummary(classesOn(sel, { now, meetings, courses, variants: variants ?? [], attendance, dayMarks, hour12, moves })) : undefined} />
+      ) : periods.length > 0 ? (
         <View style={{ marginTop: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: -26, position: 'relative', zIndex: 2 }}>
             <View testID="clock-face"><LiveClockFace size={CLOCK} arcs={arcs} /></View>
@@ -517,7 +561,7 @@ export function TodayScreen() {
                 {/* v0.6: start over end. One line truncated to "08:30–09…" at phone width, hiding the end of the class. */}
                 <View style={{ width: hour12 ? RANGE_COL_12 : RANGE_COL_24 }} accessibilityLabel={range}><Txt f="bold" s={hour12 ? RANGE_SIZE_12 : RANGE_SIZE_24} numberOfLines={1}>{fmtTime(a, hour12)}</Txt><Txt f="type" s={hour12 ? RANGE_SIZE_12 - 2 : RANGE_SIZE_24 - 2} c="mut" numberOfLines={1}>{fmtTime(b, hour12)}</Txt></View>
                 <View style={{ flex: 1, minWidth: 0 }}><Txt f="bold" s={22} style={isCancelled(e) ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>{course?.name}</Txt><Txt f="serif" s={15} c="mut">{[partLabel(meeting.courseId, meeting.variantId, st.variants), roomOf(meeting, course, st.variants), course?.teacher].filter(Boolean).join(' · ')}</Txt></View>
-                <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: e.inferred || !e.status ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
+                <View style={{ width: 40, height: 40, borderRadius: 10, borderWidth: e.inferred || !e.status ? 1.4 : 2, borderStyle: (e.inferred || !e.status) && !skin ? 'dashed' : 'solid', borderColor: e.status ? col : hexA(c.ink, 0.3), alignItems: 'center', justifyContent: 'center' }}>{e.status ? <Txt f="marker" s={20} maxFontSizeMultiplier={FS} style={{ color: col, opacity: e.inferred ? 0.55 : 1 }}>{STATUS_GLYPH[e.status]}</Txt> : <Icon name="plus" size={18} color={c.mut} />}</View>
               </HandBox>
             </Pressable>);
         })}
