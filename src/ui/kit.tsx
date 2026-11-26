@@ -312,8 +312,8 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
         const on = o.value === value;
         return (
           <Pressable key={o.value} testID={`seg-${tid(o.label)}`} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={o.label}
-            onPress={() => { if (!on) { fx.select(); onChange(o.value); } }} hitSlop={6}
-            style={{ paddingHorizontal: 14, minHeight: 34, justifyContent: 'center', borderRadius: 999, backgroundColor: on ? c.acc : 'transparent' }}>
+            onPress={() => { if (!on) { fx.select(); onChange(o.value); } }} hitSlop={4}
+            style={{ paddingHorizontal: 14, minHeight: 40, justifyContent: 'center', borderRadius: 999, backgroundColor: on ? c.acc : 'transparent' }}>
             <Txt f="bold" s={15} c={on ? c.onAcc : c.ink}>{o.label}</Txt>
           </Pressable>
         );
@@ -326,12 +326,12 @@ export function DropChip({ label, chosen, onPress, onClear }: { label: string; c
   const { c } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 999, borderWidth: 1, borderColor: chosen ? c.acc : c.rule, backgroundColor: chosen ? c.acc : 'transparent', flexShrink: 1 }}>
-      <Pressable testID="drop-chip" accessibilityRole="button" accessibilityLabel={`${label}. Choose a subject`} onPress={() => { fx.select(); onPress(); }} hitSlop={6}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 12, paddingRight: chosen && onClear ? 2 : 10, minHeight: 34, flexShrink: 1 }}>
+      <Pressable testID="drop-chip" accessibilityRole="button" accessibilityLabel={`${label}. Choose a subject`} onPress={() => { fx.select(); onPress(); }} hitSlop={4}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 12, paddingRight: chosen && onClear ? 2 : 10, minHeight: 40, flexShrink: 1 }}>
         <Txt f="bold" s={15} c={chosen ? c.onAcc : c.ink} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
         {!chosen ? <Icon name="down" size={16} color={c.mut} /> : null}
       </Pressable>
-      {chosen && onClear ? <Pressable accessibilityRole="button" accessibilityLabel="Show all subjects" onPress={() => { fx.select(); onClear(); }} hitSlop={8} style={{ paddingHorizontal: 8, minHeight: 34, justifyContent: 'center' }}><Icon name="x" size={14} color={c.onAcc} /></Pressable> : null}
+      {chosen && onClear ? <Pressable accessibilityRole="button" accessibilityLabel="Show all subjects" onPress={() => { fx.select(); onClear(); }} hitSlop={4} style={{ paddingHorizontal: 12, minHeight: 40, justifyContent: 'center' }}><Icon name="x" size={14} color={c.onAcc} /></Pressable> : null}
     </View>
   );
 }
@@ -349,13 +349,13 @@ export function Chip({ label, on, onPress, icon, tone, small }: { label: string;
   const face = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }));
   const [actIn, actLift] = usePressIn(() => { fx.select(); onPress?.(); });
   return (
-    /* top/bottom slop is 5 and not 4 because a small chip is 34 dp tall: 34 + 10 is the 44 dp touch
-       target, and HStrip now pads its strips 6 so the slop lands inside the strip's own bounds rather
-       than being clipped away by the ScrollView it sits in. */
-    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={{ top: 5, bottom: 5, left: 2, right: 2 }} {...focusProps} style={ring}
+    /* v0.7.8.6 (SPEC §7.1): 48 dp to the finger. A small chip is 40 dp with 4 dp of slop above and below, a full one
+       42 with 3; HStrip pads its strips 6 so the slop lands inside the strip's own bounds rather than being
+       clipped away by the ScrollView it sits in. */
+    <Pressable testID={tid(label)} accessibilityRole="button" accessibilityState={{ selected: !!on }} accessibilityLabel={label} hitSlop={small ? { top: 4, bottom: 4, left: 2, right: 2 } : { top: 3, bottom: 3, left: 2, right: 2 }} {...focusProps} style={ring}
       onPress={actLift} onPressIn={() => { actIn(); s.set(reduce ? 1 : withTiming(0.96, { duration: BEAT, easing: EASE })); }} onPressOut={() => s.set(reduce ? 1 : withSpring(1, { duration: 190, dampingRatio: 0.7 }))}>
-      <Animated.View style={[{ minHeight: small ? 34 : 42 }, face]}>
-        <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 34 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+      <Animated.View style={[{ minHeight: small ? 40 : 42 }, face]}>
+        <HandBox seed={label} fill={bg} corners={RS} shadow={false} sw={on ? 1.8 : 1.3} style={{ minHeight: small ? 40 : 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           {icon ? <Icon name={icon} size={16} color={fg} /> : null}
           <Txt f="bold" s={small ? 17 : 19} c={fg}>{label}</Txt>
         </HandBox>

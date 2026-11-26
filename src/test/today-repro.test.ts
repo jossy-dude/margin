@@ -127,7 +127,7 @@ describe('S1: Today with the cases that broke it', () => {
 
   it('a cancelled earlier class does not make the count read "Period 3 of 2"', () => {
     const d = deckOf(block(CANCEL_FIRST).periods, new Date(2026, 9, 5, 13, 30).getTime(), true); // in the 13:00 class
-    const [, at, of] = /Period (\d+) of (\d+)/.exec(d.position) ?? [];
+    const [, at, of] = /^(\d+) of (\d+)$/.exec(d.position) ?? [];
     expect(Number(at)).toBeLessThanOrEqual(Number(of));
   });
 

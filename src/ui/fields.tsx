@@ -90,7 +90,7 @@ export function NumberField({ value, onChange, min, max, decimals = 0, unit, emp
         keyboardType={decimals > 0 || min < 0 ? 'numeric' : 'number-pad'} returnKeyType="done" selectTextOnFocus
         placeholder={emptyLabel} placeholderTextColor={c.mut} selectionColor={c.acc} maxLength={8}
         accessibilityLabel={`${label}${value === null ? (emptyLabel ? `, ${emptyLabel}` : '') : `, ${shown}${unit ? ` ${unit}` : ''}`}`} testID={`num-${tid(label)}`}
-        maxFontSizeMultiplier={FS} style={[{ flex: 1, minWidth: 0, ...faceOf(th, 'num', 24), fontWeight: num.w, color: c.ink, paddingVertical: 4, includeFontPadding: false },
+        maxFontSizeMultiplier={FS} style={[{ flex: 1, minWidth: 0, ...faceOf(th, 'num', 24), fontWeight: num.w, color: c.ink, paddingVertical: 4, minHeight: 48, includeFontPadding: false },
           unit ? { textAlign: 'right', paddingLeft: 12, paddingRight: 4 + (num.slant ? 3 : 0) } : { textAlign: 'center', paddingHorizontal: 12 },
           num.tnum ? { fontVariant: ['tabular-nums'] } : null]}
       />

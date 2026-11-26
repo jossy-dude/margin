@@ -84,7 +84,9 @@ export function Overlay() {
      them before the first moving frame, and the overlay + FAB subtree came with it (audit M6). The
      selector returns a PRIMITIVE, so `useSyncExternalStore`'s `Object.is` comparison means a tap that
      does not change this boolean does not re-render the unit at all. */
-  const fabAllowed = useStore((s) => !s.sheet && !s.page && s.route !== 'Focus'), page = useStore((s) => s.page);
+  /* v0.7.8.6 (SPEC §7.6): no + on Grades and Stats: it covered the curve field and Lock, and their adds live on the page
+     (each subject's "+ Mark"). */
+  const fabAllowed = useStore((s) => !s.sheet && !s.page && s.route !== 'Focus' && s.route !== 'Grades' && s.route !== 'Stats'), page = useStore((s) => s.page);
   /* The + button floats over the page and covers whatever card is under it. While the keyboard is up
      the visible strip is about half the screen and the button lands squarely on a task's text, and
      neither it nor the nav can be used without dismissing the keyboard first. */

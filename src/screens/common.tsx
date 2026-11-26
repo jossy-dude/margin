@@ -237,12 +237,12 @@ export function AttCell({ status, why, inferred, future, locked, onTap, onHold, 
   /* A stamp presses like a stamp — the cell dips 0.95 on the way down and springs back, on the same
      `sc` value the stamp pulse rides past, so a tap reads as a mark landing even before the grid
      changes. It rides the same value rather than a second one so the two can never fight over one
-     transform, and it is gated on reduce-motion like every other dip in the kit. The slop is 6 up and
-     down and 1 across: Grades' strip gives 6 + 28 + 6, which is where a 40 dp row target comes from,
-     but the 3 dp horizontal gutter means any bigger side slop would hand the same tap to a neighbour. */
+     transform, and it is gated on reduce-motion like every other dip in the kit. The slop is 10 up and
+     down and 1 across (v0.7.8.6, SPEC §7.1): 10 + 28 + 10 is a 48 dp target, while the 3 dp horizontal
+     gutter means any bigger side slop would hand the same tap to a neighbour. */
   return (
     <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={locked ? 'Locked. Unlock the grid to change.' : inferred || !status ? 'Tap to mark. After that, long press to change.' : 'Long press to change.'}
-      onPress={() => { if (locked) return deny(); if (!status || inferred) onTap(); else deny(); }} onLongPress={() => { if (locked) return deny(); onHold(); }} delayLongPress={380} hitSlop={{ top: 6, bottom: 6, left: 1, right: 1 }}
+      onPress={() => { if (locked) return deny(); if (!status || inferred) onTap(); else deny(); }} onLongPress={() => { if (locked) return deny(); onHold(); }} delayLongPress={380} hitSlop={{ top: 10, bottom: 10, left: 1, right: 1 }}
       onPressIn={() => { if (!reduce) sc.value = withTiming(0.95, { duration: BEAT, easing: EASE }); }} onPressOut={() => { if (!reduce) sc.value = withSpring(1, { duration: 190, dampingRatio: 0.7 }); }}>
       <Animated.View style={[{ width: 28, height: 28, borderRadius: 7, borderWidth: inferred || future ? 1.2 : 1.9, borderColor: future ? hexA(c.ink, 0.25) : col, borderStyle: (inferred || future) && skin.instruments.check === 'dashed' ? 'dashed' : 'solid', backgroundColor: status && !inferred && !future ? hexA(col, 0.12) : 'transparent', alignItems: 'center', justifyContent: 'center' }, st]}>
         {status && <Txt f="marker" s={status === 'p' ? 16 : 15} maxFontSizeMultiplier={FS} style={{ color: col, opacity: inferred ? 0.55 : 1, lineHeight: 20 }}>{glyphOf(status, why)}</Txt>}

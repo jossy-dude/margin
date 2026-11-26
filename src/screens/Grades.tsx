@@ -175,7 +175,7 @@ export function GradesScreen() {
           <View style={{ gap: 8 }}>
             {marks.map((m) => (
               <Pressable key={m.id} accessibilityRole="button" accessibilityLabel={`${m.name}, ${m.score === null ? 'not marked' : m.score + ' percent'}, weight ${m.weight}${m.on ? '' : ', not counted'}. Edit.`} onPress={() => act.open({ t: 'mark', courseId: course.id, id: m.id })} android_ripple={{ color: c.rule }}>
-                <Row style={{ flexWrap: 'nowrap', minHeight: 40 }}><Txt f="bold" s={20} style={{ flex: 1, textDecorationLine: m.on ? 'none' : 'line-through', color: m.on ? c.ink : c.mut }}>{m.name}</Txt><Txt f="serif" s={15} c="mut">{m.weight}%</Txt>
+                <Row style={{ flexWrap: 'nowrap', minHeight: 48 }}><Txt f="bold" s={20} style={{ flex: 1, textDecorationLine: m.on ? 'none' : 'line-through', color: m.on ? c.ink : c.mut }}>{m.name}</Txt><Txt f="serif" s={15} c="mut">{m.weight}%</Txt>
                   <View style={{ minWidth: 62, alignItems: 'flex-end' }}>{m.score === null ? <Txt f="serif" s={16} c="mut">to do</Txt> : <Txt f="marker" s={20}>{m.score}</Txt>}</View></Row>
               </Pressable>))}
             <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}><Btn small kind="ghost" icon="plus" label="Mark" onPress={() => act.open({ t: 'mark', courseId: course.id })} /><Row style={{ flexWrap: 'nowrap', gap: 6 }}><Txt f="serif" s={14} c="mut">curve</Txt><NumberField label={`${course.name} curve`} value={adj} min={-20} max={20} decimals={1} unit="pts" width={112} onChange={(v) => act.setAdjust(course.id, v ?? 0)} /></Row></Row>

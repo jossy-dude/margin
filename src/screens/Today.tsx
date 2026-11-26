@@ -161,7 +161,9 @@ export function deckOf(periods: Period[], t: number, isToday: boolean, h12 = fal
       /* Beside the "Now" / "Next up" pill, so it reads "Now +1 more". Short on purpose: at 320 dp the
          header row has about 50 dp for this line once the clock, the pill and the room have theirs. */
       : many ? `+${slotOf.length - 1} more`
-      : state === 'soon' ? `${ps.length - rank} of ${ps.length} left` : `Period ${rank + 1} of ${ps.length}`,
+      /* v0.7.8.6 (SPEC §7, the Plain chip): beside the pill, the shortest words that still read: "1 of 4" while a class
+         is on, "3 left" before one. "Period 1 of 4" / "1 of 3 left" clipped in Plain and at 320 dp. */
+      : state === 'soon' ? `${ps.length - rank} left` : `${rank + 1} of ${ps.length}`,
   };
 }
 

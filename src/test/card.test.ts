@@ -62,7 +62,7 @@ function deckOf(periods: Period[], t: number, isToday: boolean, h12 = false) {
     countdown: target === null || !period ? '--:--' : isToday ? fmtClock((target - t) / 1000) : `${fmtTime(period.start, h12)}–${fmtTime(period.end, h12)}`,
     unit: cur ? 'min left' : next ? (isToday ? 'until it starts' : 'first bell') : 'nothing on',
     position: !period ? (ps.length ? 'Day complete' : 'No classes')
-      : state === 'soon' ? `${ps.length - rank} of ${ps.length} left` : `Period ${rank + 1} of ${ps.length}`,
+      : state === 'soon' ? `${ps.length - rank} left` : `${rank + 1} of ${ps.length}`,
   };
 }
 
@@ -219,14 +219,14 @@ describe('the card has the reference\'s four states, and each says a different t
     const d = deckOf(TUE_CLASSES, at('09:24'), true);
     expect(d).toMatchObject({ state: 'live', word: 'Now', unit: 'min left', countdown: '26:00', at: 0, total: 3 });
     expect(d.period?.label).toBe('Computer Programming');
-    expect(d.position).toBe('Period 1 of 3');
+    expect(d.position).toBe('1 of 3');
   });
 
   it('soon: Next up, counting down to the start of a class that has not begun', () => {
     const d = deckOf(TUE_CLASSES, at('10:00'), true);
     expect(d).toMatchObject({ state: 'soon', word: 'Next up', unit: 'until it starts', countdown: '55:00', at: 1 });
     expect(d.period?.label).toBe('Intro to Economics');
-    expect(d.position).toBe('2 of 3 left');
+    expect(d.position).toBe('2 left');
   });
 
   it('first: on a day that is not today it names the first class and prints its window, not just its start', () => {
@@ -234,7 +234,7 @@ describe('the card has the reference\'s four states, and each says a different t
     // W4: a day you are only looking at has no "now" to count down to, so the slot prints `start–end`.
     expect(d).toMatchObject({ state: 'first', word: 'First class', unit: 'first bell', countdown: '09:00–09:50', at: 0 });
     expect(d.period?.label).toBe('Computer Programming');
-    expect(d.position).toBe('Period 1 of 3');
+    expect(d.position).toBe('1 of 3');
     // …and the same window in the user's 12-hour clock, unpadded with AM/PM.
     expect(deckOf(TUE_CLASSES, at('09:24'), false, true).countdown).toBe('9:00 AM–9:50 AM');
   });
@@ -378,9 +378,9 @@ describe('Today.tsx wiring — the card above cannot see the file', () => {
     expect(src).toContain('>After</Txt>'); // the one label that is JSX text rather than a string
   });
 
-  it('the day-position caption keeps the two sentences the app already used here', () => {
-    expect(src).toContain('`Period ${rank + 1} of ${ps.length}`');
-    expect(src).toContain('`${ps.length - rank} of ${ps.length} left`');
+  it('the day-position caption is the short pair (v0.7.8.6: "Period 1 of 4" clipped in Plain)', () => {
+    expect(src).toContain('`${rank + 1} of ${ps.length}`');
+    expect(src).toContain('`${ps.length - rank} left`');
   });
 
   it('a class title is capped at two lines, like every other course name on the page', () => {
@@ -570,7 +570,7 @@ describe('period numbering skips cancelled classes (F7)', () => {
       { start: at('09:30'), end: at('10:20'), label: 'B', cancelled: false },
       { start: at('10:30'), end: at('11:20'), label: 'C', cancelled: false },
     ];
-    expect(deckOf(ps, at('09:40'), true)).toMatchObject({ state: 'live', at: 1, total: 2, position: 'Period 1 of 2' });
-    expect(deckOf(ps, at('09:25'), true)).toMatchObject({ state: 'soon', position: '2 of 2 left' });
+    expect(deckOf(ps, at('09:40'), true)).toMatchObject({ state: 'live', at: 1, total: 2, position: '1 of 2' });
+    expect(deckOf(ps, at('09:25'), true)).toMatchObject({ state: 'soon', position: '2 left' });
   });
 });
